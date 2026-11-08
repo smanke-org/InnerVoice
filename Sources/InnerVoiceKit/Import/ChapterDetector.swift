@@ -81,7 +81,7 @@ public enum ChapterDetector {
             if isHeading(block) {
                 if current.paragraphs.isEmpty, pendingSubtitle {
                     // Two headings in a row ("Part One", then "Chapter 1") make one title.
-                    current.title += " · " + titleCase(block.text)
+                    current.title += (looksLikeHeading(block.text) ? " · " : ": ") + titleCase(block.text)
                 } else {
                     if !current.paragraphs.isEmpty { chapters.append(current) }
                     current = Chapter(title: titleCase(block.text), paragraphs: [])
