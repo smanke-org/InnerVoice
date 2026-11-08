@@ -147,7 +147,7 @@ enum SeedData {
         for i in project.characters.indices {
             project.characters[i].narratorID = [mara, edda].contains(project.characters[i].id) ? jane.id : sam.id
         }
-        PronunciationFinder.refresh(&project, isKnownWord: { ["the", "and"].contains($0) || $0.count < 3 })
+        PronunciationFinder.refresh(&project, isKnownWord: SpellCheck.isKnown)
         for i in project.pronunciations.indices {
             switch project.pronunciations[i].term {
             case "Penhallow": project.pronunciations[i].sayItAs = "pen-HAL-oh"; project.pronunciations[i].confirmed = true
