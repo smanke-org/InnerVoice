@@ -91,7 +91,11 @@ enum SeedData {
                                           fileName: "Penhallow.docx")
         // Make sure the four main characters exist with good colors.
         func id(_ name: String) -> UUID {
-            if let c = project.characters.first(where: { $0.name == name || $0.allNames.contains(name) }) { return c.id }
+            let first = String(name.split(separator: " ").first ?? "")
+            if let i = project.characters.firstIndex(where: { $0.name == name || $0.allNames.contains(name) || $0.name == first }) {
+                project.characters[i].name = name
+                return project.characters[i].id
+            }
             let c = BookCharacter(name: name, colorHex: CharacterPalette.next(used: project.characters.map(\.colorHex)))
             project.characters.append(c)
             return c.id

@@ -150,8 +150,9 @@ import SwiftUI
     func voiceCue(for character: BookCharacter) -> String {
         let order: [FactKind] = [.age, .gender, .accent, .voice]
         let parts = order.compactMap { kind in character.facts.first { $0.kind == kind }?.text }
-        let cue = ([character.voiceNotes].filter { !$0.isEmpty } + parts).joined(separator: " · ")
-        return cue
+        var cue = ([character.voiceNotes].filter { !$0.isEmpty } + parts)
+        if cue.isEmpty, let any = FactKind.narratorOrder.lazy.compactMap({ k in character.facts.first { $0.kind == k }?.text }).first { cue = [any] }
+        return cue.joined(separator: " · ")
     }
 }
 

@@ -66,7 +66,9 @@ enum Snapshot {
                     workspace.page = .manuscript
                     workspace.pendingAssign = red.id
                     try? await Task.sleep(for: .seconds(1))
-                    if let w = window() { capture(w, "\(dir)/assign-popover-\(mode).png", includePopovers: true) }
+                    if let pop = NSApp.windows.first(where: { $0.isVisible && String(describing: type(of: $0)).contains("Popover") }) {
+                        capture(pop, "\(dir)/assign-popover-\(mode).png")
+                    }
                     PopoverPresenter.shared.close()
                 }
                 await shot("exchange-banner") {

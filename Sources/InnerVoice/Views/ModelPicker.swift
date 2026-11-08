@@ -25,7 +25,8 @@ struct ModelPicker: View {
             }
             let sorted = ModelCatalog.all.sorted { a, b in
                 let fa = ModelCatalog.advice(for: a, memoryGB: mem).fit, fb = ModelCatalog.advice(for: b, memoryGB: mem).fit
-                return fa == fb ? a.bytes < b.bytes : fa < fb
+                if fa != fb { return fa < fb }
+                return a.quality == b.quality ? a.speed > b.speed : a.quality > b.quality
             }
             let visible = showAll ? sorted : sorted.filter { ModelCatalog.advice(for: $0, memoryGB: mem).fit != .tooLarge }
             VStack(spacing: Space.sm) {

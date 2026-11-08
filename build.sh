@@ -38,13 +38,9 @@ cp "$bindir/$name" "$app/Contents/MacOS/$name"
 # release.sh sets BUILD_NUMBER to the version, so a release reads "v1.0.0", not "v1.0.0 (2026…)".
 sed -e "s/__BUILD__/${BUILD_NUMBER:-$(date +%Y%m%d%H%M)}/" "$here/Info.plist.in" > "$app/Contents/Info.plist"
 ditto "$here/Frameworks/llama.xcframework/macos-arm64_x86_64/llama.framework" "$app/Contents/Frameworks/llama.framework"
-if [[ -d "$here/Icon/AppIcon.icon" ]]; then
-  car="$here/Resources/Assets.car"
-  if [[ ! -f "$car" || -n "$(find "$here/Icon/AppIcon.icon" -newer "$car" | head -1)" ]]; then
-    "$here/tools/make_icon.sh"
-  fi
-  cp -X "$car" "$here/Resources/AppIcon.icns" "$app/Contents/Resources/"
-fi
+# The icon: Tools/make_icns.sh renders Resources/AppIcon.icns (house element-tile style).
+[[ -f "$here/Resources/AppIcon.icns" ]] || "$here/Tools/make_icns.sh"
+cp -X "$here/Resources/AppIcon.icns" "$app/Contents/Resources/"
 [[ -d "$here/Resources/Help" ]] && ditto "$here/Resources/Help" "$app/Contents/Resources/Help"
 xattr -cr "$app"
 

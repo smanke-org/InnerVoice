@@ -84,3 +84,31 @@ public extension Project {
         paragraph(line.paragraphID, index: index)?.substring(line.range) ?? ""
     }
 }
+
+/// Characters that are probably the same person ("Mara" and "Mara Quinn").
+public enum Duplicates {
+    public struct Pair: Hashable, Sendable {
+        /// The shorter name, to merge into `keep`.
+        public var merge: UUID
+        public var keep: UUID
+    }
+
+    public static func pairs(in project: Project) -> [Pair] {
+        func words(_ c: BookCharacter) -> Set<String> {
+            Set(c.name.split(separator: " ").map(String.init).filter { !Names.titles.contains($0) })
+        }
+        var out: [Pair] = []
+        for a in project.characters {
+            for b in project.characters where a.id != b.id {
+                let wa = words(a), wb = words(b)
+                // a's name is the first name of b ("Mara" / "Mara Quinn").
+                if wa.count == 1, wb.count > 1, let w = wa.first, b.name.split(separator: " ").first.map(String.init) == w {
+                    out.append(Pair(merge: a.id, keep: b.id))
+                } else if b.aliases.contains(a.name) {
+                    out.append(Pair(merge: a.id, keep: b.id))
+                }
+            }
+        }
+        return out
+    }
+}

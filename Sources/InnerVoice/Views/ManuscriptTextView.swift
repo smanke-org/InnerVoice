@@ -125,6 +125,7 @@ struct ManuscriptTextView: NSViewRepresentable {
             c.builtTags = document.tagRevision
             c.builtSelection = workspace.selectedLines
             c.textView?.needsDisplay = true
+            c.textView?.margin.needsDisplay = true
         }
         if let pending = workspace.pendingAssign {
             DispatchQueue.main.async {
@@ -228,6 +229,7 @@ struct ManuscriptTextView: NSViewRepresentable {
             container.size = NSSize(width: measure, height: CGFloat.greatestFiniteMagnitude)
             textView.frame.size.width = width
             textView.needsDisplay = true
+            textView.margin.needsDisplay = true
         }
 
         @objc func didScroll() {
@@ -409,8 +411,53 @@ final class ReadingTextView: NSTextView {
         super.keyDown(with: event)
     }
 
-    override func setSelectedRange(_ charRange: NSRange, affinity: NSSelectionAffinity, stillSelecting: Bool) {
-        super.setSelectedRange(charRange, affinity: affinity, stillSelecting: stillSelecting)
+    let margin = MarginOverlay()
+
+    override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        if margin.superview == nil {
+            margin.textView = self
+            margin.frame = bounds
+            margin.autoresizingMask = [.width, .height]
+            addSubview(margin)
+        }
+    }
+
+    override func setNeedsDisplay(_ invalidRect: NSRect) {
+        super.setNeedsDisplay(invalidRect)
+        margin.setNeedsDisplay(invalidRect)
+    }
+}
+
+/// The speaker's initials (or "?" when the narrator is needed) in the left margin. A
+/// subview, because the text view's own drawing sits under its text layers.
+final class MarginOverlay: NSView {
+    weak var textView: ReadingTextView?
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard let tv = textView, let c = tv.coordinator, let lm = tv.layoutManager, let tc = tv.textContainer else { return }
+        let project = c.project
+        let origin = tv.textContainerOrigin
+        let glyphs = lm.glyphRange(forBoundingRect: dirtyRect.offsetBy(dx: -origin.x, dy: -origin.y).insetBy(dx: -400, dy: -20), in: tc)
+        let chars = lm.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
+        let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        var drawn = Set<Int>()
+        for entry in c.layout.entries(in: chars) where entry.lineIndex < project.lines.count {
+            let line = project.lines[entry.lineIndex]
+            let needs = project.needsYou(line)
+            guard project.settings.showInitials || needs else { continue }
+            let firstGlyphs = lm.glyphRange(forCharacterRange: NSRange(location: entry.range.location, length: min(1, entry.range.length)), actualCharacterRange: nil)
+            let first = lm.boundingRect(forGlyphRange: firstGlyphs, in: tc)
+            let y = Int(first.minY)
+            guard !drawn.contains(y) else { continue }
+            drawn.insert(y)
+            let speaker = project.character(line.speakerID)
+            let color = needs ? NSColor.attention : NSColor(hexString: speaker?.colorHex ?? "#888888")
+            LineLayoutManager.drawMarker(needs ? "?" : (speaker?.initials ?? ""), color: color,
+                                         at: NSPoint(x: origin.x - 40, y: origin.y + first.midY), dark: dark)
+        }
     }
 }
 
@@ -434,8 +481,6 @@ nonisolated final class LineLayoutManager: NSLayoutManager {
         let dark = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
         let style = project.settings.style
         let selected = Set(c.parent.workspace.selectedLines)
-        let showInitials = project.settings.showInitials
-        var initialsDrawn = Set<Int>()
 
         for entry in c.layout.entries(in: chars) {
             guard entry.lineIndex < project.lines.count else { continue }
@@ -474,16 +519,10 @@ nonisolated final class LineLayoutManager: NSLayoutManager {
                     ring.stroke()
                 }
             }
-            // Margin marker: the speaker's initials, or "?" when the narrator is needed.
-            if showInitials || needs, let first = rects.first, !initialsDrawn.contains(Int(first.minY)) {
-                initialsDrawn.insert(Int(first.minY))
-                let label = needs ? "?" : (speaker?.initials ?? "")
-                drawMarker(label, color: color, at: NSPoint(x: origin.x - 44, y: first.midY), dark: dark)
-            }
         }
     }
 
-    @MainActor private func drawMarker(_ text: String, color: NSColor, at center: NSPoint, dark: Bool) {
+    @MainActor static func drawMarker(_ text: String, color: NSColor, at center: NSPoint, dark: Bool) {
         guard !text.isEmpty else { return }
         let font = NSFont.systemFont(ofSize: 10, weight: .bold)
         let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: dark ? color.blended(withFraction: 0.35, of: .white) ?? color : color.blended(withFraction: 0.25, of: .black) ?? color]

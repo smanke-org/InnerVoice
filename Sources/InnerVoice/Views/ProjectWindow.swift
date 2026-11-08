@@ -56,7 +56,8 @@ struct ProjectWindow: View {
             detail
                 .toolbar { toolbar }
         }
-        .inspector(isPresented: $workspace.showInspector) {
+        .inspector(isPresented: Binding(get: { workspace.showInspector && workspace.page == .manuscript },
+                                        set: { workspace.showInspector = $0 })) {
             ProjectInspector(document: document, workspace: workspace)
                 .inspectorColumnWidth(min: 260, ideal: 300, max: 400)
                 .toolbar {

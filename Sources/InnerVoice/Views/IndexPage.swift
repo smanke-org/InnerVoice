@@ -9,6 +9,8 @@ struct IndexPage: View {
     @Environment(\.undoManager) private var undoManager
     @State private var narrator: UUID?
     @State private var filter = ""
+    /// Chapters folded by the narrator ("character|chapter"); everything starts open.
+    @State private var collapsed: Set<String> = []
 
     var body: some View {
         HSplitView {
@@ -101,7 +103,10 @@ struct IndexPage: View {
                             let lines = project.lines.filter { $0.speakerID == c.id }
                             let byChapter = Dictionary(grouping: lines) { index.positions[$0.paragraphID]?.chapter ?? 0 }
                             ForEach(byChapter.keys.sorted(), id: \.self) { ch in
-                                DisclosureGroup {
+                                let key = "\(c.id)|\(ch)"
+                                DisclosureGroup(isExpanded: Binding(get: { !collapsed.contains(key) }, set: { open in
+                                    if open { collapsed.remove(key) } else { collapsed.insert(key) }
+                                })) {
                                     ForEach(byChapter[ch] ?? []) { line in
                                         IndexLineRow(document: document, line: line, workspace: workspace)
                                     }

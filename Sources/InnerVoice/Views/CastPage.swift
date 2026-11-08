@@ -7,7 +7,7 @@ struct CastPage: View {
     @Bindable var workspace: Workspace
     @Environment(\.undoManager) private var undoManager
     @State private var sort: Sort = .lines
-    @State private var mergeSource: UUID?
+    @State private var showNarrators = false
 
     enum Sort: String, CaseIterable { case lines = "Most Lines", name = "Name", appearance = "First Appearance" }
 
@@ -47,6 +47,7 @@ struct CastPage: View {
             }
         } else {
             ScrollView {
+                duplicates
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 260, maximum: 360), spacing: Space.lg)], spacing: Space.lg) {
                     ForEach(sorted) { c in
                         NavigationLink(value: c.id) {
@@ -59,6 +60,11 @@ struct CastPage: View {
                 .padding(Space.margin)
             }
             .toolbar {
+                ToolbarItem {
+                    Button("Narrators", systemImage: "person.wave.2") { showNarrators = true }
+                        .help("Add narrators and cast characters to them")
+                        .popover(isPresented: $showNarrators) { NarratorsEditor(document: document).padding(Space.lg).frame(width: 340) }
+                }
                 ToolbarItem {
                     Picker("Sort", selection: $sort) {
                         ForEach(Sort.allCases, id: \.self) { Text($0.rawValue).tag($0) }
@@ -89,6 +95,36 @@ struct CastPage: View {
                     .background(.bar)
                 }
             }
+        }
+    }
+
+    /// "Mara" and "Mara Quinn" are probably one person: offer to merge.
+    @ViewBuilder
+    private var duplicates: some View {
+        let pairs = Duplicates.pairs(in: document.project)
+        if !pairs.isEmpty {
+            VStack(alignment: .leading, spacing: Space.sm) {
+                Label("These may be the same character", systemImage: "person.2.badge.gearshape")
+                    .font(.headline)
+                ForEach(pairs, id: \.self) { pair in
+                    if let m = document.project.character(pair.merge), let k = document.project.character(pair.keep) {
+                        HStack(spacing: Space.sm) {
+                            Avatar(character: m, size: 22)
+                            Text(m.name)
+                            Image(systemName: "arrow.right").foregroundStyle(.secondary)
+                            Avatar(character: k, size: 22)
+                            Text(k.name)
+                            Spacer()
+                            Button("Merge") { document.merge(m.id, into: k.id, undoManager: undoManager) }
+                                .help("Give all of \(m.name)'s lines to \(k.name) and keep “\(m.name)” as another name")
+                        }
+                    }
+                }
+            }
+            .padding(Space.lg)
+            .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.orange.opacity(0.3)))
+            .padding([.horizontal, .top], Space.margin)
         }
     }
 
@@ -168,5 +204,50 @@ struct CastCard: View {
             Text(value).font(.callout.weight(.semibold).monospacedDigit())
             Text(label).font(.caption).foregroundStyle(.secondary)
         }
+    }
+}
+
+/// Narrators for a multi-narrator production, and who reads whom.
+struct NarratorsEditor: View {
+    @ObservedObject var document: InnerVoiceDocument
+    @Environment(\.undoManager) private var undoManager
+    @State private var name = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.md) {
+            Text("Narrators").font(.headline)
+            if document.project.narrators.isEmpty {
+                Text("For a production with more than one narrator, add each one, then pick a narrator on each character's page.")
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            ForEach(document.project.narrators) { n in
+                HStack {
+                    Image(systemName: "person.wave.2").foregroundStyle(.secondary)
+                    Text(n.name)
+                    Spacer()
+                    Text(document.project.characters.filter { $0.narratorID == n.id }.map(\.name).joined(separator: ", "))
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Button {
+                        document.change("Remove Narrator", undoManager: undoManager) { p in
+                            p.narrators.removeAll { $0.id == n.id }
+                            for i in p.characters.indices where p.characters[i].narratorID == n.id { p.characters[i].narratorID = nil }
+                        }
+                    } label: { Image(systemName: "minus.circle") }
+                        .buttonStyle(.borderless)
+                        .help("Remove \(n.name)")
+                }
+            }
+            HStack {
+                TextField("Narrator's name", text: $name).onSubmit(add)
+                Button("Add", action: add).disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+    }
+
+    private func add() {
+        let n = name.trimmingCharacters(in: .whitespaces)
+        guard !n.isEmpty else { return }
+        document.change("Add Narrator", undoManager: undoManager) { $0.narrators.append(Narrator(name: n)) }
+        name = ""
     }
 }
