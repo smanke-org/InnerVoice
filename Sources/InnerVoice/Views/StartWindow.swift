@@ -84,9 +84,6 @@ struct StartWindow: View {
         .frame(height: 400)
         .noInitialFocus()
         .onAppear { recents = NSDocumentController.shared.recentDocumentURLs }
-        .onReceive(NotificationCenter.default.publisher(for: .innerVoiceAction)) { note in
-            if note.object as? String == "newFromManuscript" { Importer.newFromManuscript(newDocument: newDocument) }
-        }
     }
 
     private func open(_ url: URL) {

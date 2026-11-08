@@ -35,7 +35,8 @@ app="$here/.build/app/$display.app"
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$app/Contents/Frameworks"
 cp "$bindir/$name" "$app/Contents/MacOS/$name"
-sed -e "s/__BUILD__/$(date +%Y%m%d%H%M)/" "$here/Info.plist.in" > "$app/Contents/Info.plist"
+# release.sh sets BUILD_NUMBER to the version, so a release reads "v1.0.0", not "v1.0.0 (2026…)".
+sed -e "s/__BUILD__/${BUILD_NUMBER:-$(date +%Y%m%d%H%M)}/" "$here/Info.plist.in" > "$app/Contents/Info.plist"
 ditto "$here/Frameworks/llama.xcframework/macos-arm64_x86_64/llama.framework" "$app/Contents/Frameworks/llama.framework"
 if [[ -d "$here/Icon/AppIcon.icon" ]]; then
   car="$here/Resources/Assets.car"

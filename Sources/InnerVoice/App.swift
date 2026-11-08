@@ -23,6 +23,8 @@ struct InnerVoiceApp: App {
         .defaultSize(width: 1280, height: 820)
         .windowToolbarStyle(.unified)
         .commands {
+            SystemAppCommands()
+            SystemHelpCommands()
             SidebarCommands()
             ToolbarCommands()
             InspectorCommands()
@@ -57,14 +59,17 @@ struct WindowOpener: View {
     var body: some View {
         Color.clear.frame(width: 0, height: 0).onAppear {
             AppState.openWindow = openWindow
+            AppState.newDocument = newDocument
             Snapshot.newDocument = newDocument
             Snapshot.openSettings = openSettings
+            SystemHooks.settingsOpener = { openSettings() }
         }
     }
 }
 
 enum AppState {
     static var openWindow: OpenWindowAction?
+    static var newDocument: NewDocumentAction?
 
     static func showStart() {
         openWindow?(id: "start")
@@ -80,6 +85,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        SystemHooks.busyReason = { TaggingController.busyReason }
+        SystemHooks.didFinishLaunching()
+        NotificationCenter.default.addObserver(forName: SystemHooks.newFromManuscript, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated {
+                if let new = AppState.newDocument { Importer.newFromManuscript(newDocument: new) }
+            }
+        }
         if Snapshot.requested || SelfTest.requested {
             NSApp.setActivationPolicy(.regular)
             NSApp.activate()
@@ -90,12 +102,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { false }
 
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        SystemHooks.shouldTerminate(sender)
+    }
+
+    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? { SystemHooks.dockMenu() }
+
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
         if !hasVisibleWindows { AppState.showStart() }
         return true
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        SystemHooks.willTerminate()
         ModelManager.shared.unloadNow()
         if SelfTest.requested { exit(SelfTest.exitCode) }
     }

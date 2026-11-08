@@ -22,8 +22,7 @@ struct SettingsView: View {
             ScrollView {
                 ModelPicker().padding(Space.xl)
             }
-            .frame(width: 620)
-            .frame(minHeight: 420, idealHeight: 640)
+            .frame(minWidth: 620, idealWidth: 620, maxWidth: .infinity, minHeight: 280, idealHeight: 640, maxHeight: .infinity)
         default:
             Form {
                 switch tab {
@@ -35,8 +34,8 @@ struct SettingsView: View {
                 }
             }
             .formStyle(.grouped)
-            .fitsContent()
-            .frame(width: 560)
+            // Settings scroll and can be dragged bigger (house rule).
+            .frame(minWidth: 560, idealWidth: 560, maxWidth: .infinity, minHeight: 280, idealHeight: 560, maxHeight: .infinity)
         }
     }
 }
@@ -69,7 +68,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 
 struct GeneralSettings: View {
     var body: some View {
-        SystemSettingsSections()
+        SystemGeneralSettings()
     }
 }
 

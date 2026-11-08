@@ -14,7 +14,19 @@ final class TaggingController {
         var message: String
     }
 
-    private(set) var status: Status?
+    private(set) var status: Status? {
+        didSet {
+            if oldValue == nil, status != nil { Self.running += 1 }
+            if oldValue != nil, status == nil { Self.running -= 1 }
+            if let s = status { Self.lastJob = s.job }
+        }
+    }
+    private static var running = 0
+    private static var lastJob: Job = .tagging
+    /// For the quit question and the updater: what any project is busy with.
+    static var busyReason: String? {
+        running > 0 ? (lastJob == .tagging ? "tagging speakers" : "building summaries") : nil
+    }
     /// The last run's result, shown in a banner until dismissed.
     var finished: String?
     var failure: String?

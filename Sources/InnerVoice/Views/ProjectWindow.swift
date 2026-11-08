@@ -32,16 +32,20 @@ struct ProjectWindow: View {
         .sheet(item: Binding(get: { workspace.rehearse.map(RehearseTarget.init) }, set: { workspace.rehearse = $0?.id })) { target in
             RehearseView(document: document, characterID: target.id, workspace: workspace)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .innerVoiceAction)) { note in
-            guard NSApp.keyWindow?.isMainWindow == true, let action = note.object as? String else { return }
-            switch action {
-            case "tag": TagCommand.run(document: document, workspace: workspace, undoManager: undoManager)
-            case "record": workspace.page = .record
-            default: break
-            }
+        .onReceive(NotificationCenter.default.publisher(for: SystemHooks.tagSpeakers)) { _ in
+            if isFrontProject { TagCommand.run(document: document, workspace: workspace, undoManager: undoManager) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: SystemHooks.record)) { _ in
+            if isFrontProject { workspace.page = .record }
         }
         .task { Snapshot.attach(document: document, workspace: workspace) }
         .noInitialFocus()
+    }
+
+    /// The project whose window is in front, for actions from ToolHUD's menu.
+    private var isFrontProject: Bool {
+        guard let doc = NSDocumentController.shared.currentDocument ?? NSDocumentController.shared.documents.first else { return false }
+        return doc.fileURL == fileURL || NSDocumentController.shared.documents.count == 1
     }
 
     private var split: some View {
