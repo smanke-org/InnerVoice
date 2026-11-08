@@ -180,9 +180,16 @@ public enum RuleAttribution {
     }
 
     static func containsWord(_ text: String, _ word: String) -> Bool {
-        guard !word.isEmpty else { return false }
-        let pattern = "(?<![\\p{L}])" + NSRegularExpression.escapedPattern(for: word) + "(?![\\p{L}])"
-        return text.range(of: pattern, options: .regularExpression) != nil
+        guard !word.isEmpty, text.contains(word) else { return false }
+        // Only check word boundaries when the plain search found it.
+        var search = text.startIndex..<text.endIndex
+        while let r = text.range(of: word, range: search) {
+            let before = r.lowerBound > text.startIndex ? text[text.index(before: r.lowerBound)] : " "
+            let after = r.upperBound < text.endIndex ? text[r.upperBound] : " "
+            if !before.isLetter && !after.isLetter { return true }
+            search = r.upperBound..<text.endIndex
+        }
+        return false
     }
 
     /// Finds the character a name refers to, or adds one.
