@@ -64,11 +64,11 @@ public enum RuleAttribution {
     static let titleGroup = "(?:(?:" + Names.titles.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|") + ")\\s+)?"
     static let nameGroup = "(" + titleGroup + "\\p{Lu}[\\p{L}’'\\-]+(?:\\s+\\p{Lu}[\\p{L}’'\\-]+){0,2})"
 
-    static let afterVerbName = try! NSRegularExpression(pattern: "^[\\s,.;:—–!?…]*" + verbGroup + "\\s+" + nameGroup)
-    static let afterNameVerb = try! NSRegularExpression(pattern: "^[\\s,.;:—–!?…]*" + nameGroup + "\\s+(?:\\p{Ll}+ly\\s+)?" + verbGroup + "\\b")
-    static let afterPronoun = try! NSRegularExpression(pattern: "^[\\s,.;:—–!?…]*(?:(I|he|she)\\s+(?:\\p{Ll}+ly\\s+)?" + verbGroup + "\\b|" + verbGroup + "\\s+(I|he|she)\\b)", options: [.caseInsensitive])
-    static let beforeNameVerb = try! NSRegularExpression(pattern: nameGroup + "\\s+(?:\\p{Ll}+ly\\s+)?" + verbGroup + "[^.!?\"“”]{0,40}[,:]\\s*$")
-    static let beforePronoun = try! NSRegularExpression(pattern: "\\b(I|he|she)\\s+(?:\\p{Ll}+ly\\s+)?" + verbGroup + "[^.!?\"“”]{0,40}[,:]\\s*$", options: [.caseInsensitive])
+    static let afterVerbName = try! NSRegularExpression(pattern: "^[\\s,.;:—–!?…”“\"’‘«»]*" + verbGroup + "\\s+" + nameGroup)
+    static let afterNameVerb = try! NSRegularExpression(pattern: "^[\\s,.;:—–!?…”“\"’‘«»]*" + nameGroup + "\\s+(?:\\p{Ll}+ly\\s+)?" + verbGroup + "\\b")
+    static let afterPronoun = try! NSRegularExpression(pattern: "^[\\s,.;:—–!?…”“\"’‘«»]*(?:(I|he|she)\\s+(?:\\p{Ll}+ly\\s+)?" + verbGroup + "\\b|" + verbGroup + "\\s+(I|he|she)\\b)", options: [.caseInsensitive])
+    static let beforeNameVerb = try! NSRegularExpression(pattern: nameGroup + "\\s+(?:\\p{Ll}+ly\\s+)?" + verbGroup + "[^.!?\"“”]{0,40}[,:]\\s*[“\"‘'«]?\\s*$")
+    static let beforePronoun = try! NSRegularExpression(pattern: "\\b(I|he|she)\\s+(?:\\p{Ll}+ly\\s+)?" + verbGroup + "[^.!?\"“”]{0,40}[,:]\\s*[“\"‘'«]?\\s*$", options: [.caseInsensitive])
 
     /// A hint the rules found but could not settle: a pronoun.
     public enum Hint: Hashable, Sendable { case pronoun(String) }

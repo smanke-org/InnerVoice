@@ -195,7 +195,7 @@ final class ModelManager {
         engine.cancel()
         loadedPath = nil
         loadState = .none
-        engine.queue.async { [engine] in engine.unload() }
+        engine.queue.async { [engine] in engine.unloadOnQueue() }
     }
 
     /// Frees GPU memory before the app quits; ggml aborts if it's freed during exit.

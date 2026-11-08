@@ -107,6 +107,9 @@ nonisolated final class LlamaEngine: @unchecked Sendable {
 
     func unload() { queue.sync { unloadLocked() } }
 
+    /// Unloads from code already running on `queue`.
+    func unloadOnQueue() { unloadLocked() }
+
     private func unloadLocked() {
         if let ctx { llama_free(ctx) }
         if let lora { llama_adapter_lora_free(lora) }

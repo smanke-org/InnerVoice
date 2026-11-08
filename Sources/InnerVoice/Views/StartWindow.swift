@@ -16,7 +16,7 @@ struct StartWindow: View {
     @Environment(\.openDocument) private var openDocument
     @Environment(\.dismissWindow) private var dismissWindow
     @State private var state = StartWindowState.shared
-    @State private var recents: [URL] = NSDocumentController.shared.recentDocumentURLs
+    private var recents: [URL] { RecentProjects.shared.urls }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -83,7 +83,7 @@ struct StartWindow: View {
         }
         .frame(height: 400)
         .noInitialFocus()
-        .onAppear { recents = NSDocumentController.shared.recentDocumentURLs }
+        .onAppear { if AppState.launched { RecentProjects.shared.refresh() } }
     }
 
     private func open(_ url: URL) {

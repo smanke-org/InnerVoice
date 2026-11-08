@@ -67,9 +67,18 @@ struct WindowOpener: View {
     }
 }
 
+/// Recent projects, read only after launch (see FileCommands).
+@Observable
+final class RecentProjects {
+    static let shared = RecentProjects()
+    private(set) var urls: [URL] = []
+    func refresh() { urls = NSDocumentController.shared.recentDocumentURLs }
+}
+
 enum AppState {
     static var openWindow: OpenWindowAction?
     static var newDocument: NewDocumentAction?
+    static var launched = false
 
     static func showStart() {
         openWindow?(id: "start")
@@ -79,12 +88,18 @@ enum AppState {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    func applicationWillFinishLaunching(_ notification: Notification) {
+    override init() {
         // The Welcome window replaces the open panel macOS shows at launch for document apps.
         UserDefaults.standard.register(defaults: ["NSShowAppCentricOpenPanelInsteadOfUntitledFile": false])
+        super.init()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AppState.launched = true
+        RecentProjects.shared.refresh()
+        NotificationCenter.default.addObserver(forName: NSWindow.didBecomeMainNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { RecentProjects.shared.refresh() }
+        }
         SystemHooks.busyReason = { TaggingController.busyReason }
         SystemHooks.didFinishLaunching()
         NotificationCenter.default.addObserver(forName: SystemHooks.newFromManuscript, object: nil, queue: .main) { _ in
@@ -133,13 +148,18 @@ struct FileCommands: Commands {
             Button("Open…") { NSDocumentController.shared.openDocument(nil) }
                 .keyboardShortcut("o")
             Menu("Open Recent") {
-                ForEach(NSDocumentController.shared.recentDocumentURLs, id: \.self) { url in
+                // Never touch NSDocumentController.shared while menus are first built: SwiftUI
+                // must create the shared controller itself, or it crashes at launch.
+                ForEach(RecentProjects.shared.urls, id: \.self) { url in
                     Button(url.deletingPathExtension().lastPathComponent) {
                         NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { _, _, _ in }
                     }
                 }
                 Divider()
-                Button("Clear Menu") { NSDocumentController.shared.clearRecentDocuments(nil) }
+                Button("Clear Menu") {
+                    NSDocumentController.shared.clearRecentDocuments(nil)
+                    RecentProjects.shared.refresh()
+                }
             }
         }
         CommandGroup(after: .saveItem) {

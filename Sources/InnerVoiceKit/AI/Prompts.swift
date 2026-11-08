@@ -168,7 +168,7 @@ public enum AttributionPrompt {
                   needsModel(project.lines[i]) else { continue }
             before.append(project.lines[i])
             let name = reply.speaker.trimmingCharacters(in: .whitespacesAndNewlines)
-            let unknown = ["?", "", "unknown", "none", "n/a", "narrator", "unclear", "nobody"].contains(name.lowercased())
+            let unknown = ["?", "", "unknown", "none", "n/a", "narrator", "unclear", "nobody", "spoken", "thought", "written"].contains(name.lowercased())
             var speaker: UUID? = nil
             if !unknown { speaker = RuleAttribution.resolve(name, in: &project, create: true) }
             var confidence = min(1, max(0, (reply.confidence ?? 60) / 100))

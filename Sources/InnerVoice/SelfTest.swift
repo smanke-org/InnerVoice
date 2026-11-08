@@ -54,7 +54,7 @@ enum SelfTest {
         check("a quote across paragraphs continues", freshLine("She was his sister")?.continuesPrevious == true)
         check("italic text is a thought", line("He hasn't asked")?.kind == .thought)
         check("a block quote is written text", line("My dear girl")?.kind == .written)
-        check("dash dialogue in a paragraph is still found", line("Da says if")?.kind == .spoken)
+        check("dash dialogue in a paragraph is still found", line("—Da says if")?.kind == .spoken)
         _ = RuleAttribution.apply(to: &fresh)
 
         // Assign, undo, redo.

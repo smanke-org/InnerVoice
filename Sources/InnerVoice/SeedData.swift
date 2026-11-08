@@ -170,12 +170,13 @@ enum SeedData {
             ("Towels are", "tom"), ("Same as always", "mara"), ("He hasn't asked", "mara"), ("Maybe he doesn't", "mara"),
             ("Doctor Voss came", "tom"), ("What did you", "mara"), ("That you'd be", "tom"), ("Miss Quinn!", "pip"),
             ("Slow down", "mara"), ("Da says if", "pip"), ("You have been avoiding", "edda"), ("I've been busy", "mara"),
-            ("Busy.", "edda"), ("Your father wrote", "edda"), ("My dear girl", "mara"), ("Who is Kerensa", "mara"),
+            ("Busy.", "edda"), ("Your father wrote", "edda"), ("Who is Kerensa", "mara"),
             ("Read the rest", "edda"), ("I can't", "mara"), ("You can.", "edda"), ("That's what frightens", "mara"),
             ("Is it treasure", "pip"), ("Out", "edda"), ("Your father and I", "tom"), ("She was his sister", "tom"),
             ("Is she alive", "mara"), ("Aye.", "tom"), ("And you didn't", "mara"), ("I'm telling you", "tom"),
         ]
         let ids = ["tom": tom, "mara": mara, "edda": edda, "pip": pip]
+        let text = text.trimmingCharacters(in: CharacterSet(charactersIn: "—– "))
         for (prefix, who) in table where text.hasPrefix(prefix) { return ids[who] }
         return nil
     }
