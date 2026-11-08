@@ -54,7 +54,7 @@ public enum PronunciationFinder {
             if capitalized {
                 guard midSentenceCapital.contains(word) else { continue }
                 // A name that is also an everyday word ("Will", "Rose") is usually said as written.
-                if isKnownWord(lower) { continue }
+                if isKnownWord(lower) || isKnownWord(word) { continue }
             } else {
                 guard count >= 2, !isKnownWord(lower), counts[word.prefix(1).uppercased() + word.dropFirst()] == nil else { continue }
             }
