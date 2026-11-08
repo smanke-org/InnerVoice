@@ -113,6 +113,11 @@ struct ProjectWindow: View {
             ToolbarSpacer(.fixed)
         }
         ToolbarItem {
+            HelpButton(topic: workspace.page.helpTopic)
+                .help("Inner Voice Help for \(workspace.page.title)")
+        }
+        .sharedBackgroundVisibility(.hidden)
+        ToolbarItem {
             if document.tagging.isRunning {
                 Button("Stop", systemImage: "stop.circle") { document.tagging.stop() }
                     .help("Stop the AI; what it has done so far is kept (⌘.)")

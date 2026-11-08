@@ -38,6 +38,7 @@ struct StartWindow: View {
                     Button("Open Project…") {
                         NSDocumentController.shared.openDocument(nil)
                     }
+                    HelpButton(topic: .openingManuscript)
                     Spacer()
                     Text("Manuscripts stay on this Mac.")
                         .font(.caption)

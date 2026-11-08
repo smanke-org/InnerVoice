@@ -1,52 +1,24 @@
-# InnerVoice
+# Inner Voice — notes for agents
 
-A native macOS app in SwiftUI. It runs on this Mac only, with a local
-SwiftData database and no server.
+Document-based Mac app for audiobook narrators: opens a manuscript, finds every line, tags who speaks it with an on-device model (llama.cpp or Apple's), and builds character summaries. Read `docs/BRIEF.md`, `docs/STORIES.md`, `docs/GLOSSARY.md` (one name per idea; use it in all UI text) and `docs/DESIGN.md` before changing anything.
 
 ## Layout
+- `Sources/InnerVoiceKit/` pure logic with Swift Testing tests: `Project.swift` (the book model), `Import/` (readers for docx, odt, epub, pdf, pages, rtf, html, txt, md; chapter detection), `DialogueFinder`, `RuleAttribution` (+ palette, exchange), `AI/` (prompts, grammars, model catalog + memory advice), `RevisionMerger`, `ProjectBuilder` (+ pronunciation finder), `BookIndex`.
+- `Sources/InnerVoice/` the app: `Document/` (ReferenceFileDocument package `.innervoice`; every edit goes through `change(_:undoManager:)` for undo), `AI/` (LlamaEngine, ModelManager, TaggingController), `Views/` (ManuscriptTextView is TextKit 1 with a custom layout manager for highlights and a MarginOverlay for initials), `Export/`, `System/` (house features: updater, sync, appearance, Dock/menu bar, ToolHUD hub, ShortcutsLens, About, Help; wired through `SystemHooks`).
+- `Frameworks/llama.xcframework` is fetched by `Tools/fetch_llama.sh` (pinned b11205, not committed).
 
-- `Sources/InnerVoice/` the app. `App.swift` has the window, menus, and the database location.
-- `Sources/InnerVoiceKit/` rules and data logic with no SwiftUI. Tests in `Tests/InnerVoiceKitTests/`.
-- `Package.swift` a Swift package. There is no Xcode project.
-- `build.sh` builds, signs, and installs `~/Applications/InnerVoice.app`.
-- `Icon/AppIcon.icon` the app icon, an Icon Composer file (JSON plus SVG layers). `build.sh` compiles it with `tools/make_icon.sh`; `tools/icon_review.sh` renders every look into one PNG.
-- `docs/` the brief, the screen index, and the user stories, when they exist.
+## Rules
+- US spelling, "Settings", "click". Red is reserved for Who's Speaking?/Unsure; character colors come from `CharacterPalette` and never reddish.
+- Never touch `NSDocumentController.shared` before launch finishes (menus included): SwiftUI must create it, or the app crashes in `createDocumentClassIfNeeded`. Use `RecentProjects`.
+- Lines the narrator assigned (`source == .user`) are never changed by the AI or the rules.
+- The model download is the only network use besides updates; manuscripts never leave the Mac.
+- `InnerVoiceDocument` is `nonisolated` (ReferenceFileDocument); its mutation methods are `@MainActor`. @Published can't be used there: send `objectWillChange` by hand.
 
 ## Build and check
-
-- Build and install: `./build.sh`. Add `--open` to restart the app with the new build. The build shows warnings; fix them.
-- Unit tests: `swift test --scratch-path ~/Library/Developer/InnerVoice/test-build`.
-- Self-test (the app's real functions on a /tmp store): `tools/selftest.sh`. Exit 0 when every check passes. Add a check for every story with logic in `SelfTest.swift`.
-- After every UI change, take snapshots with sample data and look at them: `tools/snap.sh`.
-  It writes `/tmp/InnerVoice-shots/<page>-light.png` and `-dark.png` for every sidebar page, and `settings-<tab>-light.png` and `-dark.png` for every Settings tab, then quits. `APP_SNAPSHOT_PAGES=all,settings tools/snap.sh` limits the pages.
-  For a panel, sheet, or popover, add a capture to `Snapshot.swift` like the Settings loop.
-- Snapshots, seed data, and the self-test refuse to run without `APP_STORE` in /tmp.
-- Never test against the real database in `~/Library/Application Support/InnerVoice/`.
-- Then check the grid: `tools/grid-lint.sh` and `swift tools/check-layout.swift /tmp/InnerVoice-shots/*-layout.json`. Both print PASS.
-- A change is done when the build has no errors, the grid checks pass, and you looked at the light and dark snapshots.
-
-## Design rules
-
-- Use Apple's controls and system styles. Only the accent color is custom: `UI/Theme.swift` (`ThemeStore.defaultID`). People change it, and light or dark mode, in Settings > Appearance.
-- Views use `.tint`, `Palette.accent`, `Palette.accentText` (accent-colored text), and `Palette.onAccent` (text on an accent fill). Never hard-code colors, radii, or durations in views.
-- Compare accents: add `APP_ACCENT=<id>` to the snapshot command.
-- Spacing comes from `Space` in `UI/Grid.swift`, on a 4 pt grid. Mark custom pages and cards with `.gridArea` and `.gridProbe`.
-- Windows open calm: `.noInitialFocus()` on every window and sheet (no focus ring or selected text on open), `.fitsContent()` on sheets and Settings tabs (no scroll bar with nothing to scroll). System scroll bars. Both in `UI/WindowBehavior.swift`.
-- Settings: one tab per topic in `SettingsView.swift`, one grouped Form per tab. Add a case to `SettingsTab` for a new tab.
-- Window chrome (title bar, toolbar, sidebar, menus, sheets) stays system. Buttons use system styles, like `.borderedProminent`.
-- Colors: `.primary`, `.secondary`, `.tint`, and system colors. Never fixed grays or white for text.
-- Every action has a menu bar item and a keyboard shortcut.
-- `Label` for icon and text pairs. SF Symbols for icons.
-- `ContentUnavailableView` for empty states.
-- Liquid Glass belongs to floating controls only, never to content.
-
-## Skills
-
-The bama plugin has a skill for each step: `mac-design` (design rules),
-`design-system` (accent and tokens), `layout-grid`, `ux-design`,
-`swift-swiftui`, `os-integrations`, `performance`, `build-and-verify`,
-`test-mac-app`, `app-icon`, `user-stories`, and `improve-loop`. Use them.
-
-## Git
-
-- Commit after each working change, with a message that says what the user can now do.
+- `./build.sh --debug` → `.build/app/Inner Voice.app` (Developer ID, hardened runtime). `--install` replaces /Applications (quits the running copy).
+- `swift test` — Kit tests, including real files made with textutil, ditto and CoreGraphics.
+- `tools/selftest.sh` — in-app checks on the sample book (SeedData). `APP_SELFTEST_MODEL=<gguf>` also tags the sample with a real model and prints a score (Gemma 4 E2B: 27/28 in 18 s).
+- `tools/snap.sh` — light and dark PNGs of every page, popover, sheet and Settings tab in /tmp/InnerVoice-shots. Look at them after UI changes.
+- Test runs (APP_SNAPSHOT, --selftest, APP_STORE) start no menu bar item, sync, updater or quit question, and never save a project.
+- Never capture the live screen; snapshot mode captures only its own windows.
+- Release: `./release.sh` (see the script; version rules in the user's memory). Don't release or push without the user's OK.

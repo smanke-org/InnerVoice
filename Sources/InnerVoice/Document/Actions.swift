@@ -184,6 +184,16 @@ final class Workspace {
             case .revisions: "doc.badge.clock"
             }
         }
+        var helpTopic: HelpTopic {
+            switch self {
+            case .manuscript: .fixingLines
+            case .cast: .castAndSummaries
+            case .index: .indexAndRehearse
+            case .pronunciations: .pronunciations
+            case .record, .retakes: .record
+            case .revisions: .revisedManuscripts
+            }
+        }
         var shortcut: KeyEquivalent? {
             switch self {
             case .manuscript: "1"

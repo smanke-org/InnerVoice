@@ -289,6 +289,7 @@ struct ExportSheet: View {
             .formStyle(.grouped)
             if let error { Text(error).font(.callout).foregroundStyle(.orange) }
             HStack {
+                HelpButton(topic: .narratorsAndScripts)
                 Spacer()
                 Button("Cancel") { isPresented = false }.keyboardShortcut(.cancelAction)
                 Button("Export…") { export() }.keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent)

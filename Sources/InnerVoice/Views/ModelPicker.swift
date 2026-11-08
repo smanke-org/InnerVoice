@@ -39,6 +39,7 @@ struct ModelPicker: View {
                         .buttonStyle(.link)
                 }
                 Spacer()
+                HelpButton(topic: .choosingModel)
                 Button("Choose a Model File…") { manager.chooseFile() }
                     .help("Use a GGUF model you already have")
             }
