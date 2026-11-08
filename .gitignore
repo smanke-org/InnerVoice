@@ -7,4 +7,5 @@ xcuserdata/
 .env*
 /shots/
 Frameworks/
-.claude/
+.claude/*
+!.claude/skills/

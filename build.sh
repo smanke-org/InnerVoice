@@ -59,6 +59,9 @@ if [[ " $* " == *" --install "* || " $* " == *" --open "* ]]; then
   pkill -x "$name" 2>/dev/null && sleep 1 || true
   rsync -a --delete "$app/" "/Applications/$display.app/"
   echo "installed /Applications/$display.app"
+  # The agent CLI: the app binary under a short name on PATH (Agent/AgentCLI.swift).
+  mkdir -p "$HOME/.local/bin"
+  ln -sf "/Applications/$display.app/Contents/MacOS/$name" "$HOME/.local/bin/innervoice"
   [[ " $* " == *" --open "* ]] && open "/Applications/$display.app"
 fi
 exit 0

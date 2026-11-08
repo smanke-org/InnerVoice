@@ -8,8 +8,8 @@ import SwiftUI
 //   InnerVoice --selftest              run the self-test on the sample book and quit with 0 or 1 (tools/selftest.sh)
 //   APP_MODELS=<dir>                   keep downloaded models somewhere else (tests)
 //   APP_ACCENT=<id>                    run with another accent from Theme.all (UI/Theme.swift)
+//   innervoice <command>               the agent CLI (Agent/AgentCLI.swift); Main.swift starts it or the app
 
-@main
 struct InnerVoiceApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
@@ -102,6 +102,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         SystemHooks.busyReason = { TaggingController.busyReason }
         SystemHooks.didFinishLaunching()
+        if AgentSocket.shouldListen {
+            AgentSocket.listen { await AgentRouter.handle($0) }
+            AgentDemo.openIfRequested()
+        }
         NotificationCenter.default.addObserver(forName: SystemHooks.newFromManuscript, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated {
                 if let new = AppState.newDocument { Importer.newFromManuscript(newDocument: new) }

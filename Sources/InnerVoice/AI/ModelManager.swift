@@ -100,7 +100,9 @@ final class ModelManager {
     private(set) var downloaded: Set<String> = []
     var selection: String {
         didSet {
-            UserDefaults.standard.set(selection, forKey: "ai.model")
+            // A test copy (APP_STORE, agent CLI tests) shares the real app's preferences: its
+            // choice lasts only until it quits.
+            if !SystemHooks.isTestRun { UserDefaults.standard.set(selection, forKey: "ai.model") }
             unload()
         }
     }

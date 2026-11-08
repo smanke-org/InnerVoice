@@ -39,6 +39,10 @@ struct ProjectWindow: View {
             if isFrontProject { workspace.page = .record }
         }
         .task { Snapshot.attach(document: document, workspace: workspace) }
+        // The agent CLI finds open projects through OpenProjects (Agent/AgentCommands.swift).
+        .task(id: fileURL) { OpenProjects.register(document, workspace: workspace, undoManager: undoManager, fileURL: fileURL) }
+        .onChange(of: undoManager) { OpenProjects.register(document, workspace: workspace, undoManager: undoManager, fileURL: fileURL) }
+        .onDisappear { OpenProjects.unregister(workspace) }
         .noInitialFocus()
     }
 

@@ -21,4 +21,5 @@ Document-based Mac app for audiobook narrators: opens a manuscript, finds every 
 - `tools/snap.sh` — light and dark PNGs of every page, popover, sheet and Settings tab in /tmp/InnerVoice-shots. Look at them after UI changes.
 - Test runs (APP_SNAPSHOT, --selftest, APP_STORE) start no menu bar item, sync, updater or quit question, and never save a project.
 - Never capture the live screen; snapshot mode captures only its own windows.
+- Agent CLI: drive the app with `innervoice` (the app binary; `Sources/InnerVoice/Agent/`, `Main.swift`). See `.claude/skills/innervoice/SKILL.md`. Commands find windows through `OpenProjects` (registered by ProjectWindow) and edit with the window's undo manager. Test with a Debug build and `APP_STORE=/tmp/iv-cli INNERVOICE_DEMO=1` (sample book; /tmp projects only; `pkill -x InnerVoice` closes it without saving); `~/.claude/skills/agent-cli/scripts/check-agent-cli.sh <binary>` with `INNERVOICE_DEMO=1` prints PASS agent CLI.
 - Release: `./release.sh` (see the script; version rules in the user's memory). Don't release or push without the user's OK.
