@@ -1,44 +1,42 @@
 #!/bin/zsh
-# Builds InnerVoice and installs it to ~/Applications/InnerVoice.app.
-# Build products live in ~/Library/Developer/InnerVoice, outside the repo
-# (and outside Dropbox or iCloud, which would try to sync them).
+# Builds Inner Voice into .build/app/Inner Voice.app (Developer ID when available,
+# hardened runtime, not sandboxed) with the pinned llama.framework embedded.
 #
-# Usage: ./build.sh            release build, install
-#        ./build.sh --debug    debug build, install
-#        ./build.sh --open     install, then quit the running copy and open the new one
+# Usage: ./build.sh            release build (arm64)
+#        ./build.sh --debug    debug build
+#        ./build.sh --install  also replace /Applications/Inner Voice.app (quits the running copy)
+#        ./build.sh --open     install, then open it
+#        ./build.sh --universal  arm64 + x86_64 (release.sh uses this)
 set -euo pipefail
 here=${0:A:h}
 name="InnerVoice"
-scratch="$HOME/Library/Developer/$name/build"
+display="Inner Voice"
+bundle="com.smanke.InnerVoice"
 config=release
 [[ " $* " == *" --debug "* ]] && config=debug
+args=(-c $config --package-path "$here")
+[[ " $* " == *" --universal "* ]] && args+=(--arch arm64 --arch x86_64)
 
-# Sign with your Apple Development certificate when you have one (Xcode >
-# Settings > Accounts). Otherwise sign ad hoc, which is fine for your own Mac.
-identity="${SIGN_IDENTITY:-}"
-if [[ -z "$identity" ]]; then
-  identity=$(security find-identity -v -p codesigning 2>/dev/null | grep -m1 -o '"Apple Development: [^"]*"' | tr -d '"' || true)
-fi
-[[ -n "$identity" ]] || identity=-
+[[ -d "$here/Frameworks/llama.xcframework" ]] || "$here/Tools/fetch_llama.sh"
 
-swift build -c $config --package-path "$here" --scratch-path "$scratch" 2>&1 | grep -E "error|warning|Build complete" | grep -v "^\[" || true
-bin="$scratch/$config/$name"
-[[ -x "$bin" ]] || { echo "build failed"; exit 1; }
-# swift build can report success while an edited file failed to compile. Catch that.
-stale=$(find "$here/Sources" -name '*.swift' -newer "$bin" | head -1)
-if [[ -n "$stale" ]]; then
-  echo "build failed: binary is older than $stale"
-  swift build -c $config --package-path "$here" --scratch-path "$scratch" 2>&1 | grep -E "error" | head -20
+# Ask SwiftPM where the product goes (Swift 6.4 moved it), delete it, and require the
+# build to write it again, so the packaged binary is provably from this build.
+bindir="$(swift build "${args[@]}" --show-bin-path)"
+rm -f "$bindir/$name"
+marker=$(mktemp); trap 'rm -f "$marker"' EXIT; sleep 1
+swift build "${args[@]}" 2>&1 | grep -E "error|warning: |Compiling|Build complete" | grep -v "^\[" | grep -v Compiling || true
+if [[ ! -x "$bindir/$name" || ! "$bindir/$name" -nt "$marker" ]]; then
+  echo "build failed: no fresh $bindir/$name"
+  swift build "${args[@]}" 2>&1 | grep -E "error" | head -30
   exit 1
 fi
 
-app="$HOME/Applications/$name.app"
-mkdir -p "$HOME/Applications"
+app="$here/.build/app/$display.app"
 rm -rf "$app"
-mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-cp "$bin" "$app/Contents/MacOS/$name"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$app/Contents/Frameworks"
+cp "$bindir/$name" "$app/Contents/MacOS/$name"
 sed -e "s/__BUILD__/$(date +%Y%m%d%H%M)/" "$here/Info.plist.in" > "$app/Contents/Info.plist"
-# The icon: Icon/AppIcon.icon -> Resources/Assets.car + AppIcon.icns, rebuilt when it changed.
+ditto "$here/Frameworks/llama.xcframework/macos-arm64_x86_64/llama.framework" "$app/Contents/Frameworks/llama.framework"
 if [[ -d "$here/Icon/AppIcon.icon" ]]; then
   car="$here/Resources/Assets.car"
   if [[ ! -f "$car" || -n "$(find "$here/Icon/AppIcon.icon" -newer "$car" | head -1)" ]]; then
@@ -46,12 +44,24 @@ if [[ -d "$here/Icon/AppIcon.icon" ]]; then
   fi
   cp -X "$car" "$here/Resources/AppIcon.icns" "$app/Contents/Resources/"
 fi
+[[ -d "$here/Resources/Help" ]] && ditto "$here/Resources/Help" "$app/Contents/Resources/Help"
 xattr -cr "$app"
-codesign --force --sign "$identity" "$app" 2>&1 | grep -v "replacing existing signature" || true
-echo "installed $app (signed: ${identity})"
 
-if [[ " $* " == *" --open "* ]]; then
-  osascript -e "quit app \"$name\"" 2>/dev/null || true
-  sleep 0.5
-  open "$app"
+identity="${SIGN_IDENTITY:-}"
+[[ -n "$identity" ]] || identity=$(security find-identity -v -p codesigning 2>/dev/null | grep -m1 -o '"Developer ID Application: [^"]*"' | tr -d '"' || true)
+[[ -n "$identity" ]] || identity=$(security find-identity -v -p codesigning 2>/dev/null | grep -m1 -o '"Apple Development: [^"]*"' | tr -d '"' || true)
+[[ -n "$identity" ]] || identity=-
+ts=(--timestamp); [[ "$identity" == "-" ]] && ts=()
+codesign --force --options runtime $ts --sign "$identity" "$app/Contents/Frameworks/llama.framework"
+codesign --force --options runtime $ts --identifier "$bundle" \
+  --entitlements "$here/Resources/InnerVoice.entitlements" --sign "$identity" "$app"
+codesign --verify --deep --strict "$app"
+echo "built $app ($config, signed: $identity)"
+
+if [[ " $* " == *" --install "* || " $* " == *" --open "* ]]; then
+  pkill -x "$name" 2>/dev/null && sleep 1 || true
+  rsync -a --delete "$app/" "/Applications/$display.app/"
+  echo "installed /Applications/$display.app"
+  [[ " $* " == *" --open "* ]] && open "/Applications/$display.app"
 fi
+exit 0
