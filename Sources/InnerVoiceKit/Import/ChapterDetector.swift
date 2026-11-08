@@ -3,13 +3,13 @@ import Foundation
 /// One block of text as a reader found it, before chapters are formed.
 public struct RawBlock: Hashable, Sendable {
     public var text: String
-    public var italic: [TextRange]
+    public var italic: [TextSpan]
     /// 1 = title or chapter heading, 2 = section; nil for body text.
     public var headingLevel: Int?
     public var isBlockQuote: Bool
     public var isCentered: Bool
 
-    public init(text: String, italic: [TextRange] = [], headingLevel: Int? = nil,
+    public init(text: String, italic: [TextSpan] = [], headingLevel: Int? = nil,
                 isBlockQuote: Bool = false, isCentered: Bool = false) {
         self.text = text
         self.italic = italic

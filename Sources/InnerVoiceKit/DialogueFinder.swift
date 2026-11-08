@@ -13,7 +13,7 @@ public struct DialogueFinder: Sendable {
     }
 
     public struct Found: Hashable, Sendable {
-        public var range: TextRange
+        public var range: TextSpan
         public var kind: LineKind
         public var continuesPrevious: Bool
     }
@@ -61,7 +61,7 @@ public struct DialogueFinder: Sendable {
             if search.location != NSNotFound { end = search.location }
             let start = 1 + (text.substring(with: NSRange(location: 1, length: min(2, length - 1))).hasPrefix(" ") ? 1 : 0)
             if end > start {
-                return ([Found(range: TextRange(location: start, length: end - start), kind: .spoken, continuesPrevious: false)], false)
+                return ([Found(range: TextSpan(location: start, length: end - start), kind: .spoken, continuesPrevious: false)], false)
             }
         }
 
@@ -79,7 +79,7 @@ public struct DialogueFinder: Sendable {
             if let start = openAt {
                 if isClose(c, at: i, chars) {
                     if i > start + 1 || i > start {
-                        found.append(Found(range: TextRange(location: start + 1, length: i - start - 1), kind: .spoken,
+                        found.append(Found(range: TextSpan(location: start + 1, length: i - start - 1), kind: .spoken,
                                            continuesPrevious: continues && found.isEmpty))
                     }
                     openAt = nil
@@ -91,7 +91,7 @@ public struct DialogueFinder: Sendable {
         }
         var endsOpen = false
         if let start = openAt, start + 1 < length {
-            found.append(Found(range: TextRange(location: start + 1, length: length - start - 1), kind: .spoken,
+            found.append(Found(range: TextSpan(location: start + 1, length: length - start - 1), kind: .spoken,
                                continuesPrevious: continues && found.isEmpty))
             endsOpen = true
         }
@@ -102,7 +102,7 @@ public struct DialogueFinder: Sendable {
         }
 
         if found.isEmpty, paragraph.style == .blockQuote {
-            return ([Found(range: TextRange(location: 0, length: length), kind: .written, continuesPrevious: false)], false)
+            return ([Found(range: TextSpan(location: 0, length: length), kind: .written, continuesPrevious: false)], false)
         }
         // Italic runs outside quotes, three words or more, read as thoughts.
         for run in paragraph.italic {
@@ -126,7 +126,7 @@ public struct DialogueFinder: Sendable {
             r.length -= 1
         }
         var out = f
-        out.range = TextRange(r)
+        out.range = TextSpan(r)
         return out
     }
 

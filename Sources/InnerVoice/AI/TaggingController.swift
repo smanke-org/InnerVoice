@@ -1,0 +1,210 @@
+import AppKit
+import InnerVoiceKit
+import Observation
+
+/// Runs the AI over one document: Tag Speakers and Build Summaries. Results show up
+/// chapter by chapter while the narrator keeps reading; Stop keeps what is done.
+@Observable
+final class TaggingController {
+    enum Job: Equatable { case tagging, summaries }
+
+    struct Status: Equatable {
+        var job: Job
+        var progress: Double
+        var message: String
+    }
+
+    private(set) var status: Status?
+    /// The last run's result, shown in a banner until dismissed.
+    var finished: String?
+    var failure: String?
+
+    @ObservationIgnored private weak var document: InnerVoiceDocument?
+    @ObservationIgnored private var task: Task<Void, Never>?
+    @ObservationIgnored private var model: TextModel?
+
+    init(document: InnerVoiceDocument) { self.document = document }
+
+    var isRunning: Bool { status != nil }
+
+    func stop() {
+        model?.cancel()
+        task?.cancel()
+    }
+
+    // MARK: Tag Speakers
+
+    /// Tags every line the narrator and the rules haven't settled. With `chapters`, only those.
+    func tagSpeakers(undoManager: UndoManager?, chapters: [Int]? = nil) {
+        guard let document, !isRunning else { return }
+        failure = nil
+        finished = nil
+        status = Status(job: .tagging, progress: 0, message: "Loading the model…")
+        task = Task { [weak self] in
+            guard let self else { return }
+            var changed: [UUID: Line] = [:] // line id → before
+            var newCharacters: [UUID] = []
+            let charactersBefore = Set(document.project.characters.map(\.id))
+            defer {
+                self.status = nil
+                self.model = nil
+                self.registerUndo(changed: changed, document: document, undoManager: undoManager, charactersBefore: charactersBefore)
+            }
+            do {
+                let model = try await ModelManager.shared.model()
+                self.model = model
+                let hints = self.hintsFromRules(document)
+                let targets = chapters ?? Array(document.project.chapters.indices)
+                let total = max(1, targets.count)
+                for (n, c) in targets.enumerated() {
+                    try Task.checkCancellation()
+                    let title = document.project.chapters[c].title
+                    self.status = Status(job: .tagging, progress: Double(n) / Double(total),
+                                         message: "Tagging \(title) (\(n + 1) of \(total))…")
+                    let chunks = AttributionPrompt.chunks(project: document.project, index: document.index, chapterIndex: c,
+                                                          hints: hints, maxWords: model.passageWords)
+                    for (k, chunk) in chunks.enumerated() {
+                        try Task.checkCancellation()
+                        let maxTokens = 40 + chunk.labels.count * 34
+                        var replies: [AttributionReply]? = nil
+                        for attempt in 0..<2 where replies == nil {
+                            let text = try await model.complete(chunk.messages, grammar: AttributionPrompt.grammar, maxTokens: maxTokens)
+                            try Task.checkCancellation()
+                            replies = AttributionPrompt.parse(text)
+                            if replies == nil, attempt == 0 { Self.log("unparseable reply: \(text.prefix(300))") }
+                        }
+                        if let replies {
+                            document.applyQuietly { p in
+                                let before = AttributionPrompt.apply(replies, chunk: chunk, to: &p)
+                                for l in before where changed[l.id] == nil { changed[l.id] = l }
+                            }
+                        }
+                        self.status?.progress = (Double(n) + Double(k + 1) / Double(max(1, chunks.count))) / Double(total)
+                    }
+                }
+                newCharacters = document.project.characters.map(\.id).filter { !charactersBefore.contains($0) }
+                document.applyQuietly { $0.lastTagged = .now }
+                let needs = document.project.linesNeedingYou
+                self.finished = "Tagged \(changed.count.formatted()) lines" + (newCharacters.isEmpty ? "" : " and found \(newCharacters.count) new characters")
+                    + (needs > 0 ? ". \(needs.formatted()) need you." : ".")
+            } catch is CancellationError {
+                self.finished = "Stopped. Tag Speakers continues from there."
+            } catch {
+                if Task.isCancelled {
+                    self.finished = "Stopped. Tag Speakers continues from there."
+                } else {
+                    self.failure = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    /// Pronoun hints for the prompt ("she said"), from the rules.
+    private func hintsFromRules(_ document: InnerVoiceDocument) -> [UUID: RuleAttribution.Hint] {
+        var copy = document.project
+        // Rules on a copy: only to read hints; assignments were made at import.
+        return RuleAttribution.apply(to: &copy)
+    }
+
+    private func registerUndo(changed: [UUID: Line], document: InnerVoiceDocument, undoManager: UndoManager?, charactersBefore: Set<UUID>) {
+        guard !changed.isEmpty else { return }
+        let afterLines = Dictionary(document.project.lines.filter { changed[$0.id] != nil }.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let added = document.project.characters.filter { !charactersBefore.contains($0.id) }
+        document.registerRunUndo("Tag Speakers", undoManager: undoManager, restore: { p in
+            // Put back only lines the AI still owns; the narrator's later fixes stay.
+            for i in p.lines.indices {
+                if let old = changed[p.lines[i].id], p.lines[i].source == .ai { p.lines[i] = old }
+            }
+            let used = Set(p.lines.compactMap(\.speakerID))
+            let addedIDs = Set(added.map(\.id))
+            p.characters.removeAll { addedIDs.contains($0.id) && !used.contains($0.id) }
+        }, redo: { p in
+            let existing = Set(p.characters.map(\.id))
+            p.characters += added.filter { !existing.contains($0.id) }
+            for i in p.lines.indices {
+                if let new = afterLines[p.lines[i].id], p.lines[i].source != .user { p.lines[i] = new }
+            }
+        })
+    }
+
+    /// Lets the AI decide the AI's own lines again in these chapters (after a revision or a bad run).
+    func retag(chapters: [Int], undoManager: UndoManager?) {
+        guard let document else { return }
+        document.change("Reset AI Tags", undoManager: undoManager) { p in
+            let ids = Set(chapters.flatMap { p.chapters[$0].paragraphs.map(\.id) })
+            for i in p.lines.indices where ids.contains(p.lines[i].paragraphID) && p.lines[i].source == .ai {
+                p.lines[i].source = .none
+                p.lines[i].speakerID = nil
+                p.lines[i].confidence = 0
+            }
+            RuleAttribution.apply(to: &p)
+        }
+        tagSpeakers(undoManager: undoManager, chapters: chapters)
+    }
+
+    // MARK: Build Summaries
+
+    func buildSummaries(undoManager: UndoManager?, only: [UUID]? = nil) {
+        guard let document, !isRunning else { return }
+        failure = nil
+        finished = nil
+        status = Status(job: .summaries, progress: 0, message: "Loading the model…")
+        let factsBefore = Dictionary(document.project.characters.map { ($0.id, $0.facts) }, uniquingKeysWith: { a, _ in a })
+        task = Task { [weak self] in
+            guard let self else { return }
+            var added = 0
+            defer {
+                self.status = nil
+                self.model = nil
+                if added > 0 {
+                    let after = Dictionary(document.project.characters.map { ($0.id, $0.facts) }, uniquingKeysWith: { a, _ in a })
+                    document.registerRunUndo("Build Summaries", undoManager: undoManager, restore: { p in
+                        for i in p.characters.indices { if let f = factsBefore[p.characters[i].id] { p.characters[i].facts = f } }
+                    }, redo: { p in
+                        for i in p.characters.indices { if let f = after[p.characters[i].id] { p.characters[i].facts = f } }
+                    })
+                }
+            }
+            do {
+                let model = try await ModelManager.shared.model()
+                self.model = model
+                // Most-heard characters first; tiny walk-ons are skipped unless asked for.
+                let index = document.index
+                var cast = document.project.characters.sorted { (index.stats[$0.id]?.lines ?? 0) > (index.stats[$1.id]?.lines ?? 0) }
+                if let only { cast = cast.filter { only.contains($0.id) } }
+                for (n, character) in cast.enumerated() {
+                    try Task.checkCancellation()
+                    self.status = Status(job: .summaries, progress: Double(n) / Double(max(1, cast.count)),
+                                         message: "Reading about \(character.name) (\(n + 1) of \(cast.count))…")
+                    let chunks = SummaryPrompt.chunks(for: character, project: document.project, index: document.index,
+                                                      maxWords: model.passageWords + 200)
+                    for chunk in chunks.prefix(4) {
+                        try Task.checkCancellation()
+                        let text = try await model.complete(chunk.messages, grammar: SummaryPrompt.grammar, maxTokens: 700)
+                        guard let replies = SummaryPrompt.parse(text) else { continue }
+                        document.applyQuietly { p in
+                            added += SummaryPrompt.merge(replies, chunk: chunk, characterID: character.id, into: &p, index: document.index)
+                        }
+                    }
+                }
+                document.applyQuietly { $0.summariesBuilt = .now }
+                self.finished = added == 0 ? "No new facts found." : "Added \(added) facts to the cast's summaries."
+            } catch {
+                if Task.isCancelled || error is CancellationError {
+                    self.finished = "Stopped. Facts found so far are kept."
+                } else {
+                    self.failure = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    /// Shows a status without running anything (snapshot mode).
+    func debugStatus(_ message: String?, _ progress: Double) {
+        status = message.map { Status(job: .tagging, progress: progress, message: $0) }
+    }
+
+    static func log(_ s: String) {
+        NSLog("InnerVoice tagging: %@", s)
+    }
+}

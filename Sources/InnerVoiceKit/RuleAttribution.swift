@@ -211,6 +211,10 @@ public enum Exchange {
     public struct Proposal: Hashable, Sendable {
         public var lineID: UUID
         public var speakerID: UUID
+        public init(lineID: UUID, speakerID: UUID) {
+            self.lineID = lineID
+            self.speakerID = speakerID
+        }
     }
 
     /// After the narrator gives the line `lineID` to a new speaker, proposes the alternating

@@ -116,7 +116,7 @@ enum XHTMLBlocks {
     final class Delegate: NSObject, XMLParserDelegate {
         var blocks: [RawBlock] = []
         private var text = ""
-        private var italic: [TextRange] = []
+        private var italic: [TextSpan] = []
         private var italicDepth = 0
         private var italicStart = 0
         private var level: Int?
@@ -129,7 +129,7 @@ enum XHTMLBlocks {
             let leading = text.prefix(while: { $0.isWhitespace }).utf16.count
             let trimmed = text.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmed.isEmpty {
-                let shifted = italic.map { TextRange(location: max(0, $0.location - leading), length: $0.length) }
+                let shifted = italic.map { TextSpan(location: max(0, $0.location - leading), length: $0.length) }
                 blocks.append(RawBlock(text: trimmed, italic: AttributedReader.mergeRanges(shifted, limit: (trimmed as NSString).length),
                                        headingLevel: level, isBlockQuote: quoteDepth > 0))
             }
@@ -170,7 +170,7 @@ enum XHTMLBlocks {
                 italicDepth -= 1
                 if italicDepth == 0 {
                     let end = (text as NSString).length
-                    if end > italicStart { italic.append(TextRange(location: italicStart, length: end - italicStart)) }
+                    if end > italicStart { italic.append(TextSpan(location: italicStart, length: end - italicStart)) }
                 }
             }
             if Self.blockTags.contains(tag) {
@@ -210,7 +210,7 @@ enum PDFReader {
         var rect: CGRect
         var page: Int
         var fontSize: CGFloat
-        var italic: [TextRange]
+        var italic: [TextSpan]
         var bold: Bool
     }
 
@@ -231,7 +231,7 @@ enum PDFReader {
                 let text = raw.replacingOccurrences(of: "\u{00AD}", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !text.isEmpty else { continue }
                 var size: CGFloat = 0
-                var italic: [TextRange] = []
+                var italic: [TextSpan] = []
                 var bold = true
                 if let attr = lineSel.attributedString {
                     let leading = (attr.string.prefix(while: { $0.isWhitespace }) as Substring).utf16.count
@@ -242,7 +242,7 @@ enum PDFReader {
                         let traits = font.fontDescriptor.symbolicTraits
                         if !(traits.contains(.bold) || name.contains("bold") || name.contains("black") || name.contains("heavy")) { bold = false }
                         if traits.contains(.italic) || name.contains("italic") || name.contains("oblique") {
-                            italic.append(TextRange(location: max(0, range.location - leading), length: range.length))
+                            italic.append(TextSpan(location: max(0, range.location - leading), length: range.length))
                         }
                     }
                 }
@@ -301,7 +301,7 @@ enum PDFReader {
 
         var blocks: [RawBlock] = []
         var text = ""
-        var italic: [TextRange] = []
+        var italic: [TextSpan] = []
         var level: Int?
         var centered = false
         func flush() {
@@ -349,7 +349,7 @@ enum PDFReader {
             }
             let offset = (text as NSString).length
             text += piece
-            italic += line.italic.map { TextRange(location: $0.location + offset, length: $0.length) }
+            italic += line.italic.map { TextSpan(location: $0.location + offset, length: $0.length) }
             piece = ""
         }
         flush()

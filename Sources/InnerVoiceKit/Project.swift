@@ -2,7 +2,7 @@ import Foundation
 
 /// A range of UTF-16 code units inside one paragraph's text, so it maps straight onto
 /// `NSString` and `NSTextView` ranges.
-public struct TextRange: Codable, Hashable, Sendable {
+public struct TextSpan: Codable, Hashable, Sendable {
     public var location: Int
     public var length: Int
     public init(location: Int, length: Int) {
@@ -21,16 +21,16 @@ public struct Paragraph: Codable, Identifiable, Hashable, Sendable {
     public var text: String
     public var style: Style
     /// Italic runs, used to find thoughts.
-    public var italic: [TextRange]
+    public var italic: [TextSpan]
 
-    public init(id: UUID = UUID(), text: String, style: Style = .body, italic: [TextRange] = []) {
+    public init(id: UUID = UUID(), text: String, style: Style = .body, italic: [TextSpan] = []) {
         self.id = id
         self.text = text
         self.style = style
         self.italic = italic
     }
 
-    public func substring(_ range: TextRange) -> String {
+    public func substring(_ range: TextSpan) -> String {
         let ns = text as NSString
         let safe = NSIntersectionRange(range.ns, NSRange(location: 0, length: ns.length))
         return ns.substring(with: safe)
@@ -85,7 +85,7 @@ public enum AssignmentSource: String, Codable, Sendable {
 public struct Line: Codable, Identifiable, Hashable, Sendable {
     public var id: UUID
     public var paragraphID: UUID
-    public var range: TextRange
+    public var range: TextSpan
     public var kind: LineKind
     public var speakerID: UUID?
     /// 0…1. Lines below the project's threshold show as Unsure.
@@ -94,7 +94,7 @@ public struct Line: Codable, Identifiable, Hashable, Sendable {
     /// A quote that carries on from the previous paragraph (no closing mark there).
     public var continuesPrevious: Bool
 
-    public init(id: UUID = UUID(), paragraphID: UUID, range: TextRange, kind: LineKind = .spoken,
+    public init(id: UUID = UUID(), paragraphID: UUID, range: TextSpan, kind: LineKind = .spoken,
                 speakerID: UUID? = nil, confidence: Double = 0, source: AssignmentSource = .none,
                 continuesPrevious: Bool = false) {
         self.id = id

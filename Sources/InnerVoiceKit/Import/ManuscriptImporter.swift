@@ -126,9 +126,9 @@ enum PlainTextReader {
     }
 
     /// Removes *italic*, _italic_ and **bold** markers and returns the italic ranges.
-    static func stripEmphasis(_ text: String) -> (String, [TextRange]) {
+    static func stripEmphasis(_ text: String) -> (String, [TextSpan]) {
         var out = ""
-        var italic: [TextRange] = []
+        var italic: [TextSpan] = []
         var italicStart: Int?
         let chars = Array(text)
         var i = 0
@@ -143,7 +143,7 @@ enum PlainTextReader {
                 if c == "_" && prevIsLetter && nextIsLetter { out.append(c); i += 1; continue }
                 let pos = (out as NSString).length
                 if let start = italicStart {
-                    if pos > start { italic.append(TextRange(location: start, length: pos - start)) }
+                    if pos > start { italic.append(TextSpan(location: start, length: pos - start)) }
                     italicStart = nil
                 } else if nextIsLetter || (i + 1 < chars.count && !chars[i + 1].isWhitespace) {
                     italicStart = pos
@@ -200,7 +200,7 @@ enum AttributedReader {
             let trimmedLeading = raw.prefix(while: { $0 == " " || $0 == "\t" }).utf16.count
             let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { continue }
-            var italic: [TextRange] = []
+            var italic: [TextSpan] = []
             var allBold = true
             var maxSize: CGFloat = 0
             attributed.enumerateAttribute(.font, in: range) { value, sub, _ in
@@ -211,7 +211,7 @@ enum AttributedReader {
                 if !traits.contains(.bold), !segment.isEmpty { allBold = false }
                 if traits.contains(.italic) {
                     let loc = sub.location - range.location - trimmedLeading
-                    let r = TextRange(location: max(0, loc), length: sub.length + min(0, loc))
+                    let r = TextSpan(location: max(0, loc), length: sub.length + min(0, loc))
                     if r.length > 0 { italic.append(r) }
                 }
             }
@@ -227,12 +227,12 @@ enum AttributedReader {
         return blocks
     }
 
-    static func mergeRanges(_ ranges: [TextRange], limit: Int) -> [TextRange] {
-        let sorted = ranges.map { r -> TextRange in
+    static func mergeRanges(_ ranges: [TextSpan], limit: Int) -> [TextSpan] {
+        let sorted = ranges.map { r -> TextSpan in
             let end = min(r.end, limit)
-            return TextRange(location: min(r.location, limit), length: max(0, end - min(r.location, limit)))
+            return TextSpan(location: min(r.location, limit), length: max(0, end - min(r.location, limit)))
         }.filter { $0.length > 0 }.sorted { $0.location < $1.location }
-        var out: [TextRange] = []
+        var out: [TextSpan] = []
         for r in sorted {
             if let last = out.last, r.location <= last.end + 1 {
                 out[out.count - 1].length = max(last.end, r.end) - last.location
@@ -304,7 +304,7 @@ enum DocxReader {
         var blocks: [RawBlock] = []
         let styleNames: [String: String]
         private var text = ""
-        private var italic: [TextRange] = []
+        private var italic: [TextSpan] = []
         private var inParagraph = false
         private var inRunProps = false
         private var runItalic = false
@@ -355,7 +355,7 @@ enum DocxReader {
                 if let last = italic.last, last.end == start {
                     italic[italic.count - 1].length += len
                 } else {
-                    italic.append(TextRange(location: start, length: len))
+                    italic.append(TextSpan(location: start, length: len))
                 }
             }
         }
@@ -370,7 +370,7 @@ enum DocxReader {
                 let leading = text.prefix(while: { $0.isWhitespace }).utf16.count
                 let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty else { return }
-                let shifted = italic.map { TextRange(location: max(0, $0.location - leading), length: $0.length) }
+                let shifted = italic.map { TextSpan(location: max(0, $0.location - leading), length: $0.length) }
                 var level: Int?
                 if paragraphStyle == "title" || paragraphStyle.hasPrefix("heading 1") || paragraphStyle == "heading1" { level = 1 }
                 else if paragraphStyle.hasPrefix("heading") || paragraphStyle == "subtitle" { level = 2 }
@@ -406,7 +406,7 @@ enum OdtReader {
         private var currentStyle: String?
         private var depth = 0
         private var text = ""
-        private var italic: [TextRange] = []
+        private var italic: [TextSpan] = []
         private var spanItalic: [Bool] = []
         private var level: Int?
         private var centered = false
@@ -447,7 +447,7 @@ enum OdtReader {
             let start = (text as NSString).length
             text += s
             if spanItalic.last == true {
-                italic.append(TextRange(location: start, length: (s as NSString).length))
+                italic.append(TextSpan(location: start, length: (s as NSString).length))
             }
         }
 
@@ -464,7 +464,7 @@ enum OdtReader {
                 let leading = text.prefix(while: { $0.isWhitespace }).utf16.count
                 let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty else { return }
-                let shifted = italic.map { TextRange(location: max(0, $0.location - leading), length: $0.length) }
+                let shifted = italic.map { TextSpan(location: max(0, $0.location - leading), length: $0.length) }
                 blocks.append(RawBlock(text: trimmed, italic: AttributedReader.mergeRanges(shifted, limit: (trimmed as NSString).length),
                                        headingLevel: level, isCentered: centered))
             default: break
