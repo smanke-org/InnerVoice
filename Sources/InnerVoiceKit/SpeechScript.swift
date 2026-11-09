@@ -1,4 +1,5 @@
 import Foundation
+import NaturalLanguage
 
 /// One piece of the book to say aloud: a line in its character's voice, or narration in
 /// the narrator's.
@@ -16,6 +17,9 @@ public struct SpeechSegment: Hashable, Identifiable, Sendable {
     public var pauseAfter: Double
     /// A sigh, laugh or gasp the speech tag asks for.
     public var sound: VocalSound?
+    /// What kind of gap follows, so the player can use the narrator's current pause
+    /// settings (Settings › Voices) without remaking the script.
+    public var pause: PauseKind = .line
 
     public init(id: String, paragraphID: UUID, lineID: UUID? = nil, speakerID: UUID? = nil, text: String,
                 tone: Tone = .neutral, kind: LineKind? = nil, pauseAfter: Double = 0.3, sound: VocalSound? = nil) {
@@ -34,19 +38,95 @@ public struct SpeechSegment: Hashable, Identifiable, Sendable {
 /// Turns paragraphs into what is said aloud: each line in its speaker's voice and tone,
 /// and (when asked) the narration around them in the narrator's voice. Pronunciations
 /// from the guide replace the words they cover.
+/// The gap after a piece of speech.
+public enum PauseKind: String, Codable, CaseIterable, Sendable {
+    /// Between sentences in the same line or piece of narration.
+    case sentence
+    /// Between a line and the narration around it ("…,” she said.).
+    case line
+    case paragraph, sceneBreak, heading, chapter
+    /// No gap (a single sample line).
+    case none
+}
+
+/// How long each pause is, in seconds at normal speed. Settings › Voices › Pauses.
+public struct PauseSettings: Codable, Hashable, Sendable {
+    public var sentence: Double
+    public var line: Double
+    public var paragraph: Double
+    public var sceneBreak: Double
+    public var heading: Double
+    public var chapter: Double
+    /// Speak one sentence at a time, so the gap between sentences is `sentence` exactly
+    /// rather than whatever the voice does on its own.
+    public var splitSentences: Bool
+
+    public init(sentence: Double = 0.35, line: Double = 0.25, paragraph: Double = 0.7, sceneBreak: Double = 1.5,
+                heading: Double = 1.0, chapter: Double = 2.5, splitSentences: Bool = true) {
+        self.sentence = sentence
+        self.line = line
+        self.paragraph = paragraph
+        self.sceneBreak = sceneBreak
+        self.heading = heading
+        self.chapter = chapter
+        self.splitSentences = splitSentences
+    }
+
+    public static let standard = PauseSettings()
+    /// The narrator's settings (the app sets this from Settings › Voices › Pauses); scripts
+    /// use it unless they're given others.
+    nonisolated(unsafe) public static var current = PauseSettings()
+    public static let tight = PauseSettings(sentence: 0.2, line: 0.12, paragraph: 0.45, sceneBreak: 1.0, heading: 0.7, chapter: 1.5)
+    public static let relaxed = PauseSettings(sentence: 0.55, line: 0.4, paragraph: 1.1, sceneBreak: 2.2, heading: 1.4, chapter: 3.5)
+
+    public func seconds(_ kind: PauseKind) -> Double {
+        switch kind {
+        case .sentence: sentence
+        case .line: line
+        case .paragraph: paragraph
+        case .sceneBreak: sceneBreak
+        case .heading: heading
+        case .chapter: chapter
+        case .none: 0
+        }
+    }
+}
+
+/// Turns paragraphs into what is said aloud: each line in its speaker's voice and tone,
+/// and (when asked) the narration around them in the narrator's voice. Pronunciations
+/// from the guide replace the words they cover. With `splitSentences`, every sentence is
+/// its own segment, so the pause between sentences is exactly as set.
 public enum SpeechScript {
-    public static let paragraphPause = 0.6
-    public static let chapterPause = 2.0
+    public static var paragraphPause: Double { PauseSettings.standard.paragraph }
+    public static var chapterPause: Double { PauseSettings.standard.chapter }
+
+    /// Sentences of a piece of text (one, when it has no sentence break).
+    static func sentences(_ text: String) -> [String] {
+        let tokenizer = NLTokenizer(unit: .sentence)
+        tokenizer.string = text
+        var out: [String] = []
+        tokenizer.enumerateTokens(in: text.startIndex..<text.endIndex) { r, _ in
+            let s = text[r].trimmingCharacters(in: .whitespacesAndNewlines)
+            if !s.isEmpty { out.append(s) }
+            return true
+        }
+        return out.isEmpty ? [text] : out
+    }
 
     public static func segments(for paragraph: Paragraph, project: Project, index: BookIndex,
-                                includeNarration: Bool, only speaker: UUID? = nil) -> [SpeechSegment] {
+                                includeNarration: Bool, only speaker: UUID? = nil, pauses: PauseSettings = .current) -> [SpeechSegment] {
         let say = sayings(project)
         switch paragraph.style {
         case .sceneBreak:
-            return includeNarration ? [SpeechSegment(id: "\(paragraph.id)-0", paragraphID: paragraph.id, text: "", pauseAfter: 1.2)] : []
+            guard includeNarration else { return [] }
+            var seg = SpeechSegment(id: "\(paragraph.id)-0", paragraphID: paragraph.id, text: "", pauseAfter: pauses.sceneBreak)
+            seg.pause = .sceneBreak
+            return [seg]
         case .heading:
             guard includeNarration, speaker == nil else { return [] }
-            return [SpeechSegment(id: "\(paragraph.id)-0", paragraphID: paragraph.id, text: apply(say, to: paragraph.text), pauseAfter: 1.0)]
+            var seg = SpeechSegment(id: "\(paragraph.id)-0", paragraphID: paragraph.id, text: apply(say, to: paragraph.text), pauseAfter: pauses.heading)
+            seg.pause = .heading
+            return [seg]
         case .body, .blockQuote:
             break
         }
@@ -55,12 +135,25 @@ public enum SpeechScript {
         var out: [SpeechSegment] = []
         var cursor = 0
         var n = 0
+        /// One piece (narration or a line), split into sentences when asked.
+        func add(_ text: String, make: (String, Bool) -> SpeechSegment) {
+            let parts = pauses.splitSentences ? sentences(text) : [text]
+            for (k, part) in parts.enumerated() {
+                var seg = make(part, k == 0)
+                let last = k == parts.count - 1
+                seg.pause = last ? .line : .sentence
+                seg.pauseAfter = pauses.seconds(seg.pause)
+                out.append(seg)
+                n += 1
+            }
+        }
         func narration(upTo end: Int) {
             guard end > cursor else { return }
             let piece = clean(ns.substring(with: NSRange(location: cursor, length: end - cursor)))
             if includeNarration, speaker == nil, !piece.isEmpty {
-                out.append(SpeechSegment(id: "\(paragraph.id)-\(n)", paragraphID: paragraph.id, text: apply(say, to: piece), pauseAfter: 0.25))
-                n += 1
+                add(apply(say, to: piece)) { text, _ in
+                    SpeechSegment(id: "\(paragraph.id)-\(n)", paragraphID: paragraph.id, text: text)
+                }
             }
         }
         for line in lines {
@@ -69,31 +162,38 @@ public enum SpeechScript {
             narration(upTo: r.location)
             let text = clean(ns.substring(with: r))
             if !text.isEmpty, speaker == nil || line.speakerID == speaker {
-                out.append(SpeechSegment(id: "\(paragraph.id)-\(n)", paragraphID: paragraph.id, lineID: line.id, speakerID: line.speakerID,
-                                         text: apply(say, to: text), tone: line.tone ?? .neutral, kind: line.kind, pauseAfter: 0.25,
-                                         sound: ToneRules.sound(for: line, in: paragraph, linesInParagraph: lines)))
-                n += 1
+                let sound = ToneRules.sound(for: line, in: paragraph, linesInParagraph: lines)
+                add(apply(say, to: text)) { part, first in
+                    SpeechSegment(id: "\(paragraph.id)-\(n)", paragraphID: paragraph.id, lineID: line.id, speakerID: line.speakerID,
+                                  text: part, tone: line.tone ?? .neutral, kind: line.kind, sound: first ? sound : nil)
+                }
             }
             cursor = NSMaxRange(r)
         }
         narration(upTo: ns.length)
-        if !out.isEmpty { out[out.count - 1].pauseAfter = paragraphPause }
+        if !out.isEmpty {
+            out[out.count - 1].pause = .paragraph
+            out[out.count - 1].pauseAfter = pauses.paragraph
+        }
         return out
     }
 
     /// A run of paragraphs, from `start` (a paragraph id) to the end of its chapter, or the
     /// whole chapter. `chapters` > 1 carries on into the following chapters.
     public static func segments(chapter: Int, from start: UUID? = nil, chapters: Int = 1, project: Project, index: BookIndex,
-                                includeNarration: Bool, only speaker: UUID? = nil) -> [SpeechSegment] {
+                                includeNarration: Bool, only speaker: UUID? = nil, pauses: PauseSettings = .current) -> [SpeechSegment] {
         var out: [SpeechSegment] = []
         for c in chapter..<min(project.chapters.count, chapter + chapters) {
             var started = start == nil || c != chapter
             for p in project.chapters[c].paragraphs {
                 if !started, p.id == start { started = true }
                 guard started else { continue }
-                out += segments(for: p, project: project, index: index, includeNarration: includeNarration, only: speaker)
+                out += segments(for: p, project: project, index: index, includeNarration: includeNarration, only: speaker, pauses: pauses)
             }
-            if !out.isEmpty { out[out.count - 1].pauseAfter = chapterPause }
+            if !out.isEmpty {
+                out[out.count - 1].pause = .chapter
+                out[out.count - 1].pauseAfter = pauses.chapter
+            }
         }
         return out
     }

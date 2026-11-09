@@ -88,6 +88,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // The narrator's pause settings, before any script is made.
+        _ = PauseStore.shared
         AppState.launched = true
         RecentProjects.shared.refresh()
         NotificationCenter.default.addObserver(forName: NSWindow.didBecomeMainNotification, object: nil, queue: .main) { _ in

@@ -48,6 +48,28 @@ struct RenderedAudio: @unchecked Sendable {
 nonisolated enum SpeechAudio {
     static let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 24_000, channels: 1, interleaved: false)!
 
+    /// The audio without the silence a voice leaves before and after the words, so the
+    /// pauses between pieces are what the narrator set. Keeps 20 ms at each end.
+    static func trimmed(_ buffer: AVAudioPCMBuffer, threshold: Float = 0.008) -> AVAudioPCMBuffer {
+        guard let data = buffer.floatChannelData, buffer.frameLength > 0 else { return buffer }
+        let n = Int(buffer.frameLength)
+        let x = data[0]
+        var first = 0, last = n - 1
+        while first < n, abs(x[first]) < threshold { first += 1 }
+        while last > first, abs(x[last]) < threshold { last -= 1 }
+        guard first < last else { return buffer }
+        let pad = Int(buffer.format.sampleRate * 0.02)
+        first = max(0, first - pad)
+        last = min(n - 1, last + pad)
+        let count = last - first + 1
+        guard count < n, let out = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: AVAudioFrameCount(count)) else { return buffer }
+        out.frameLength = AVAudioFrameCount(count)
+        for c in 0..<Int(buffer.format.channelCount) {
+            memcpy(out.floatChannelData![c], data[c].advanced(by: first), count * MemoryLayout<Float>.size)
+        }
+        return out
+    }
+
     static func silence(_ seconds: Double) -> AVAudioPCMBuffer {
         let frames = AVAudioFrameCount(max(1, seconds * format.sampleRate))
         let b = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames)!

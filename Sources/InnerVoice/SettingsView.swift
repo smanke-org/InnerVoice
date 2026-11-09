@@ -202,6 +202,7 @@ struct VoicesSettings: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+        PauseSettingsSection()
         Section {
             LabeledContent("Apple Voices") {
                 HStack {
@@ -410,5 +411,117 @@ struct ElevenLabsSetupSheet: View {
         EngineSwitches.shared.set(.elevenlabs, on: true)
         isPresented = false
         Task { try? await eleven.refreshVoices() }
+    }
+}
+
+/// Settings › Voices › Pauses: the gap after each kind of piece, a playback speed, presets,
+/// and Try It, which plays a passage from the front book (or the sample book) over and over
+/// so each change is heard on the next gap.
+struct PauseSettingsSection: View {
+    @Bindable private var store = PauseStore.shared
+    @State private var sampling = false
+    private var player: SpeechPlayer { .shared }
+
+    var body: some View {
+        Section {
+            LabeledContent("Presets") {
+                HStack(spacing: Space.sm) {
+                    ForEach(PauseStore.presets, id: \.0) { name, preset in
+                        Button(name) { store.settings = PauseSettings(sentence: preset.sentence, line: preset.line, paragraph: preset.paragraph,
+                                                                    sceneBreak: preset.sceneBreak, heading: preset.heading, chapter: preset.chapter,
+                                                                    splitSentences: store.settings.splitSentences) }
+                            .buttonStyle(.bordered)
+                            .tint(store.preset == name ? .accentColor : nil)
+                            .help("\(name) pauses")
+                    }
+                }
+            }
+            Toggle("Set the pause between sentences", isOn: $store.settings.splitSentences)
+                .help("Speak one sentence at a time with the pause below. Off: each voice decides the pause between sentences itself.")
+            slider("Between sentences", \.sentence, 0...1.5).disabled(!store.settings.splitSentences)
+            slider("Between a line and the narration", \.line, 0...1.5)
+            slider("Between paragraphs", \.paragraph, 0...3)
+            slider("After a chapter title", \.heading, 0...3)
+            slider("At a scene break", \.sceneBreak, 0...5)
+            slider("Between chapters", \.chapter, 0...8)
+            Picker("Playback speed", selection: $store.speed) {
+                ForEach([0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { Text(Self.speedTitle($0)).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .help("How fast Play plays, pauses included. Export Audio always saves at normal speed.")
+            LabeledContent {
+                Button(sampling && player.isPlaying ? "Stop" : "Try It", systemImage: sampling && player.isPlaying ? "stop.fill" : "play.fill") {
+                    if sampling && player.isPlaying { stopSample() } else { startSample() }
+                }
+                .help("Play a passage over and over while you change the pauses and speed")
+            } label: {
+                Text("Try it")
+                Text(sampleSource).font(.caption).foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("Pauses")
+        } footer: {
+            Text("Seconds at normal speed. Changes apply to the next pause, even while playing, and to Export Audio. Each voice’s own silence before and after the words is trimmed, so these are the pauses you hear.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .onDisappear { stopSample() }
+    }
+
+    static func speedTitle(_ s: Double) -> String {
+        s == 1 ? "1×" : (s.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(s))×" : String(format: "%g×", s))
+    }
+
+    private func slider(_ title: String, _ key: WritableKeyPath<PauseSettings, Double>, _ range: ClosedRange<Double>) -> some View {
+        LabeledContent(title) {
+            HStack(spacing: Space.sm) {
+                Slider(value: Binding(get: { store.settings[keyPath: key] }, set: { store.settings[keyPath: key] = ($0 * 20).rounded() / 20 }), in: range)
+                    .frame(width: 180)
+                Text(String(format: "%.2f s", store.settings[keyPath: key]))
+                    .font(.callout.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 56, alignment: .trailing)
+            }
+        }
+    }
+
+    // MARK: Try It
+
+    private var sampleSource: String {
+        if let doc = OpenProjects.front?.document { return "A passage from “\(doc.project.title)”, in its voices" }
+        return "A passage from the sample book"
+    }
+
+    private func startSample() {
+        let document = OpenProjects.front?.document ?? InnerVoiceDocument(project: SeedData.project())
+        VoiceCastingRun.castIfNeeded(document: document)
+        let project = document.project
+        let index = document.index
+        // About three paragraphs from the first one with dialogue, a chapter title and a
+        // paragraph break included where they fall.
+        guard let c = project.chapters.indices.first(where: { c in project.chapters[c].paragraphs.contains { !(index.linesByParagraph[$0.id] ?? []).isEmpty } }) else { return }
+        let paras = project.chapters[c].paragraphs
+        let start = paras.firstIndex { !(index.linesByParagraph[$0.id] ?? []).isEmpty } ?? 0
+        let pick = paras[max(0, start - 1)..<min(paras.count, start + 3)]
+        let segs = pick.flatMap { SpeechScript.segments(for: $0, project: project, index: index, includeNarration: true) }
+        sampling = true
+        play(segs, resolver: VoiceResolver(project: project))
+    }
+
+    private func play(_ segs: [SpeechSegment], resolver: VoiceResolver) {
+        player.play(segs, resolver: resolver, onFinish: {
+            // Over and over until Stop, so every change is heard soon.
+            guard sampling else { return }
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(PauseSettings.current.paragraph))
+                if sampling { play(segs, resolver: resolver) }
+            }
+        })
+    }
+
+    private func stopSample() {
+        guard sampling else { return }
+        sampling = false
+        player.stop()
     }
 }

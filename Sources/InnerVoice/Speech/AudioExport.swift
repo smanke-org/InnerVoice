@@ -45,12 +45,13 @@ enum AudioExporter {
                 try Task.checkCancellation()
                 progress(done, total, part.name)
                 if let request = resolver.request(for: seg) {
-                    let audio = try await SpeechRenderer.shared.render(request)
+                    let audio = SpeechAudio.trimmed(try await SpeechRenderer.shared.render(request))
                     try write(audio, to: file, converter: converter, format: fileFormat)
                     exported += Double(audio.frameLength) / audio.format.sampleRate
                 }
-                if seg.pauseAfter > 0 {
-                    try write(SpeechAudio.silence(seg.pauseAfter), to: file, converter: converter, format: fileFormat)
+                let gap = seg.pause == .none ? seg.pauseAfter : PauseSettings.current.seconds(seg.pause)
+                if gap > 0 {
+                    try write(SpeechAudio.silence(gap), to: file, converter: converter, format: fileFormat)
                 }
                 done += 1
             }

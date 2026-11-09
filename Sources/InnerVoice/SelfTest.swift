@@ -1,4 +1,5 @@
 import AppKit
+@preconcurrency import AVFoundation
 import InnerVoiceKit
 
 /// Self-test for agents: runs the app's real functions on the sample book (never a real
@@ -85,6 +86,37 @@ enum SelfTest {
                 }
                 undo.undo()
             }
+        }
+
+        // Pauses: exported audio grows by exactly the extra pause time; voices' own silence is trimmed.
+        do {
+            let resolver = VoiceResolver(project: doc.project)
+            let few = Array(SpeechScript.segments(chapter: 0, project: doc.project, index: doc.index, includeNarration: true).prefix(6))
+            let dir = FileManager.default.temporaryDirectory.appending(path: "iv-pause-selftest")
+            try? FileManager.default.removeItem(at: dir)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            func length(_ settings: PauseSettings, _ name: String) async -> Double {
+                PauseStore.shared.settings = settings
+                let urls = (try? await AudioExporter.write([AudioExporter.Part(name: name, segments: few)], to: dir, format: .wav, resolver: resolver) { _, _, _ in }) ?? []
+                guard let u = urls.first, let f = try? AVAudioFile(forReading: u) else { return 0 }
+                return Double(f.length) / f.processingFormat.sampleRate
+            }
+            let tight = await length(.tight, "tight"), relaxed = await length(.relaxed, "relaxed")
+            let expected = few.reduce(0.0) { $0 + PauseSettings.relaxed.seconds($1.pause) - PauseSettings.tight.seconds($1.pause) }
+            check("Export Audio uses the pause settings exactly", tight > 1 && abs((relaxed - tight) - expected) < 0.05,
+                  String(format: "tight %.2f s, relaxed %.2f s, expected +%.2f s", tight, relaxed, expected))
+            PauseStore.shared.settings = .standard
+            try? FileManager.default.removeItem(at: dir)
+            if let seg = few.first(where: { !$0.text.isEmpty }), let req = resolver.request(for: seg), let raw = try? await SpeechRenderer.shared.render(req) {
+                let t = SpeechAudio.trimmed(raw)
+                check("a voice's silence before and after the words is trimmed", t.frameLength < raw.frameLength && t.frameLength > raw.frameLength / 3,
+                      "\(raw.frameLength) → \(t.frameLength) frames")
+            }
+            var finished = false
+            SpeechPlayer.shared.play(Array(few.prefix(1)), resolver: resolver, onFinish: { finished = true })
+            let until = Date().addingTimeInterval(15)
+            while !finished, Date() < until { try? await Task.sleep(for: .milliseconds(100)) }
+            check("Play tells Try It when it reaches the end", finished)
         }
 
         // Activity: reviewing guesses counts kept and changed, per AI model; numbers only.

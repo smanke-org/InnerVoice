@@ -102,12 +102,18 @@ final class SpeechPlayer {
 
     @ObservationIgnored private let engine = AVAudioEngine()
     @ObservationIgnored private let node = AVAudioPlayerNode()
+    /// Play's speed (Settings › Voices › Pauses), without changing the voices' pitch.
+    @ObservationIgnored private let timePitch = AVAudioUnitTimePitch()
+    var speed: Double = 1 { didSet { timePitch.rate = Float(min(2, max(0.5, speed))) } }
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var started = false
 
     private init() {
         engine.attach(node)
-        engine.connect(node, to: engine.mainMixerNode, format: SpeechAudio.format)
+        engine.attach(timePitch)
+        engine.connect(node, to: timePitch, format: SpeechAudio.format)
+        engine.connect(timePitch, to: engine.mainMixerNode, format: SpeechAudio.format)
+        speed = PauseStore.shared.speed
         // Test runs play silently (snapshots open Rehearse, which speaks its cue).
         if SystemHooks.isTestRun, ProcessInfo.processInfo.environment["INNERVOICE_SPEECH_AUDIBLE"] == nil {
             engine.mainMixerNode.outputVolume = 0
@@ -116,7 +122,8 @@ final class SpeechPlayer {
 
     /// Plays the segments. `onSegment` hears each one as it starts (to follow along in the
     /// manuscript).
-    func play(_ segments: [SpeechSegment], resolver: VoiceResolver, onSegment: ((SpeechSegment) -> Void)? = nil) {
+    func play(_ segments: [SpeechSegment], resolver: VoiceResolver, onSegment: ((SpeechSegment) -> Void)? = nil,
+              onFinish: (() -> Void)? = nil) {
         stop()
         guard !segments.isEmpty else { return }
         failure = nil
@@ -129,6 +136,8 @@ final class SpeechPlayer {
                 self.isPlaying = false
                 self.preparing = false
                 self.current = nil
+                // Played to the end (not stopped): Try It in Settings starts over.
+                if !Task.isCancelled, self.failure == nil { onFinish?() }
             }
             do {
                 try self.startEngine()
@@ -145,7 +154,8 @@ final class SpeechPlayer {
                 for i in segments.indices {
                     try Task.checkCancellation()
                     make(i); make(i + 1); make(i + 2)
-                    let buffer = try await made[i]!.value.buffer
+                    // Without the voice's own leading and trailing silence: the pauses are the narrator's.
+                    let buffer = SpeechAudio.trimmed(try await made[i]!.value.buffer)
                     made[i] = nil
                     try Task.checkCancellation()
                     self.preparing = false
@@ -156,8 +166,10 @@ final class SpeechPlayer {
                     await self.node.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack)
                     if !Task.isCancelled { ActivityStore.shared.record(ActivityKey.secondsPlayed, count: Int((Double(buffer.frameLength) / buffer.format.sampleRate).rounded())) }
                     try Task.checkCancellation()
-                    if seg.pauseAfter > 0 {
-                        await self.node.scheduleBuffer(SpeechAudio.silence(seg.pauseAfter), completionCallbackType: .dataPlayedBack)
+                    // Looked up now, so a change in Settings › Voices › Pauses is heard on the next gap.
+                    let gap = seg.pause == .none ? seg.pauseAfter : PauseSettings.current.seconds(seg.pause)
+                    if gap > 0 {
+                        await self.node.scheduleBuffer(SpeechAudio.silence(gap), completionCallbackType: .dataPlayedBack)
                     }
                 }
             } catch is CancellationError {
@@ -274,8 +286,9 @@ enum PlayCommand {
         } else {
             text = "Chapter One. The storm came in off the sea just after dark."
         }
-        let seg = SpeechSegment(id: "audition", paragraphID: UUID(), lineID: character == nil ? nil : UUID(), speakerID: nil,
+        var seg = SpeechSegment(id: "audition", paragraphID: UUID(), lineID: character == nil ? nil : UUID(), speakerID: nil,
                                 text: SpeechScript.apply([], to: text), tone: sampleTone, kind: .spoken, pauseAfter: 0)
+        seg.pause = .none
         var resolver = VoiceResolver(project: project, engine: choice.isNarrator ? nil : choice.engine)
         if !choice.isNarrator { resolver.narrator = choice }
         resolver.characters = [:]

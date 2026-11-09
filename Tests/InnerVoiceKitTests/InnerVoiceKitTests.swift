@@ -792,3 +792,21 @@ private let appleVoices = [
     old.trim(keepDays: 1, now: cal.date(from: DateComponents(year: 2026, month: 12, day: 1))!, calendar: cal)
     #expect(old.days.isEmpty && old.lifetime[ActivityKey.linesAI] == 10)
 }
+
+
+@Test func sentencesGetTheirOwnPauses() {
+    let p = ProjectBuilder.make(from: book([
+        "The tide was in. The boat was gone. “Stay here. Don’t move,” said Tom. Nobody answered.",
+    ]), fileName: "t.txt")
+    let index = BookIndex(p)
+    var settings = PauseSettings.standard
+    let split = SpeechScript.segments(chapter: 0, project: p, index: index, includeNarration: true, pauses: settings)
+    #expect(split.map(\.text).prefix(4) == ["The tide was in.", "The boat was gone.", "Stay here.", "Don’t move"])
+    #expect(split[0].pause == .sentence && split[1].pause == .line)   // narration, then the line starts
+    #expect(split[2].pause == .sentence && split[2].lineID != nil && split[3].lineID == split[2].lineID)
+    #expect(split.last?.pause == .chapter)
+    settings.splitSentences = false
+    let whole = SpeechScript.segments(chapter: 0, project: p, index: index, includeNarration: true, pauses: settings)
+    #expect(whole.count < split.count && whole.first?.text == "The tide was in. The boat was gone.")
+    #expect(PauseSettings.tight.paragraph < PauseSettings.standard.paragraph && PauseSettings.standard.paragraph < PauseSettings.relaxed.paragraph)
+}
