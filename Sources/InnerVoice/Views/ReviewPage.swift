@@ -93,7 +93,7 @@ struct ReviewPage: View {
             }
         }
         .navigationTitle("Review")
-        .navigationSubtitle(needing.isEmpty ? "" : "\(needing.count) lines need you")
+        .pageSubtitle(needing.isEmpty ? "" : "\(needing.count) lines need you")
         .onAppear {
             if let f = workspace.reviewFilter { filterRaw = f; workspace.reviewFilter = nil }
             selectFirstIfNeeded()

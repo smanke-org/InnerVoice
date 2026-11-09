@@ -29,6 +29,7 @@ struct CharacterDetail: View {
                 .frame(maxWidth: .infinity)
             }
             .navigationTitle(c.name)
+            .pageSubtitle()
             .toolbar {
                 ToolbarItemGroup {
                     if document.project.showsNarrationTools {

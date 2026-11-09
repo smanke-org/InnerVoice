@@ -46,6 +46,7 @@ struct RecordPage: View {
         }
         .background(Color(nsColor: .textBackgroundColor))
         .navigationTitle("Record")
+        .pageSubtitle()
         .focusable()
         .focusEffectDisabled()
         .focused($focused)
@@ -309,6 +310,7 @@ struct RetakesPage: View {
             }
         }
         .navigationTitle("Retakes")
+        .pageSubtitle()
         .toolbar {
             ToolbarItem {
                 Toggle("Show Done", systemImage: "checkmark.circle", isOn: $showDone)
@@ -360,6 +362,7 @@ struct RevisionsPage: View {
             }
             .listStyle(.inset)
             .navigationTitle("Revisions")
+            .pageSubtitle()
         } else {
             ContentUnavailableView("No Revisions", systemImage: "doc.badge.clock",
                                    description: Text("Choose File › Import Revised Manuscript… when the author sends a new draft."))

@@ -12,14 +12,18 @@ struct CastPage: View {
     enum Sort: String, CaseIterable { case lines = "Most Lines", name = "Name", appearance = "First Appearance" }
 
     var body: some View {
+        // The background AI bar goes inside the stack, on the cast and on each character's
+        // page: a NavigationStack doesn't show an inset placed around it.
         NavigationStack(path: $workspace.castPath) {
             grid
+                .safeAreaInset(edge: .top, spacing: 0) { BackgroundAIBar(document: document, page: .cast) }
                 .navigationDestination(for: UUID.self) { id in
                     CharacterDetail(document: document, characterID: id, workspace: workspace)
+                        .safeAreaInset(edge: .top, spacing: 0) { BackgroundAIBar(document: document, page: .cast) }
                 }
         }
         .navigationTitle("Cast")
-        .navigationSubtitle("\(document.project.characters.count) characters")
+        .pageSubtitle("\(document.project.characters.count) characters")
     }
 
     private var sorted: [BookCharacter] {

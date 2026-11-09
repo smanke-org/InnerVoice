@@ -514,7 +514,7 @@ public enum VoiceCasting {
         let quality = [pitch].compactMap { $0 } + (timbre.isEmpty && pitch == nil ? ["clear, natural"] : Array(timbre.prefix(3)))
         parts.append("with a \(quality.joined(separator: ", ")) voice")
         if p.paceLean != 0 { parts.append(p.paceLean < 0 ? "speaking slowly" : "speaking quickly") }
-        if let a = p.accent { parts.append("speaking English with a \(a) accent") }
+        if let a = p.accent { parts.append("speaking English with \("AEIOU".contains(a.prefix(1)) ? "an" : "a") \(a) accent") }
         return parts.joined(separator: " ") + "."
     }
 

@@ -29,6 +29,10 @@ struct StartWindow: View {
                         Text("InnerVoice").font(.largeTitle.weight(.semibold))
                         Text("Know every voice before you press record.")
                             .foregroundStyle(.secondary)
+                        Text("Version " + AppInfo.labeledVersion)
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .textSelection(.enabled)
                     }
                 }
                 DropArea(busy: state.busy, error: state.lastError) { url in
@@ -40,7 +44,7 @@ struct StartWindow: View {
                     }
                     HelpButton(topic: .openingManuscript)
                     Spacer()
-                    Text("Manuscripts stay on this Mac.")
+                    Text("Manuscripts stay on this Mac unless you allow ElevenLabs.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

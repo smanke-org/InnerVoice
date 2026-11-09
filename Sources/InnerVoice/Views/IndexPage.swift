@@ -20,6 +20,7 @@ struct IndexPage: View {
                 .frame(minWidth: 380, maxWidth: .infinity)
         }
         .navigationTitle("Index")
+        .pageSubtitle()
         .toolbar {
             if !document.project.narrators.isEmpty {
                 ToolbarItem {

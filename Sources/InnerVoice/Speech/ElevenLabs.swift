@@ -261,6 +261,8 @@ final class ElevenLabs {
         let status = (detail?["status"] as? String ?? "").lowercased()
         let message = detail?["message"] as? String ?? (obj?["detail"] as? String) ?? ""
         switch http.statusCode {
+        // A key without a permission (keys are scoped) says which one: show ElevenLabs' words.
+        case 401 where status.contains("permission"): throw ElevenLabsError.server(401, message)
         case 401: throw status.contains("quota") ? ElevenLabsError.outOfCredits : ElevenLabsError.badKey
         case 402: throw ElevenLabsError.outOfCredits
         case 429: throw ElevenLabsError.busy

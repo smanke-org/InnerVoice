@@ -97,8 +97,13 @@ struct ProjectWindow: View {
                 .navigationSplitViewColumnWidth(min: 200, ideal: 236, max: 320)
         } detail: {
             detail
+                // The version under the book's name on pages that don't set their own line.
+                .pageSubtitle()
                 // The AI working in the background, on every page.
-                .safeAreaInset(edge: .top, spacing: 0) { BackgroundAIBar(document: document, page: workspace.page) }
+                // (The Cast page shows it inside its navigation stack.)
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    if workspace.page != .cast { BackgroundAIBar(document: document, page: workspace.page) }
+                }
                 .toolbar { toolbar }
         }
         .inspector(isPresented: Binding(get: { workspace.showInspector && workspace.page == .manuscript },

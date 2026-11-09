@@ -65,7 +65,16 @@ struct WindowOpener: View {
 final class RecentProjects {
     static let shared = RecentProjects()
     private(set) var urls: [URL] = []
-    func refresh() { urls = NSDocumentController.shared.recentDocumentURLs }
+    func refresh() {
+        // Snapshots and test runs share the person's recent documents: show made-up ones,
+        // so no real book's name ever lands in a screenshot.
+        if SystemHooks.isTestRun {
+            let folder = URL(fileURLWithPath: NSHomeDirectory()).appending(path: "Documents/Audiobooks")
+            urls = ["The Keeper of Penhallow Light", "Saltwater Hymns"].map { folder.appending(path: $0 + ".innervoice") }
+            return
+        }
+        urls = NSDocumentController.shared.recentDocumentURLs
+    }
 }
 
 enum AppState {

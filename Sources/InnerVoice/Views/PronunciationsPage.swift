@@ -38,7 +38,7 @@ struct PronunciationsPage: View {
             }
         }
         .navigationTitle("Pronunciations")
-        .navigationSubtitle("\(document.project.pronunciations.filter { !$0.sayItAs.isEmpty }.count) of \(document.project.pronunciations.filter { !$0.dismissed }.count) done")
+        .pageSubtitle("\(document.project.pronunciations.filter { !$0.sayItAs.isEmpty }.count) of \(document.project.pronunciations.filter { !$0.dismissed }.count) done")
         .searchable(text: $search, placement: .toolbar, prompt: "Find a term")
         .toolbar {
             ToolbarItemGroup {

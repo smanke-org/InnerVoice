@@ -28,7 +28,7 @@ struct VoicesPage: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .navigationTitle("Voices")
-        .navigationSubtitle(subtitle)
+        .pageSubtitle(subtitle)
         .toolbar {
             ToolbarItem {
                 Picker("Engine", selection: Binding(get: { engine }, set: { e in
@@ -222,6 +222,8 @@ struct VoiceChooser: View {
     @State private var filter: VoiceGender?
     @State private var designDraft = ""
     @State private var cloudDesigning = false
+    @State private var loadingCloudVoices = false
+    @State private var cloudVoicesError: String?
     @State private var cloudDesignError: String?
 
     private var engine: VoiceEngine { document.project.engineInUse }
@@ -246,6 +248,7 @@ struct VoiceChooser: View {
                     VoicePackRow(pack: pack)
                 }
             }
+            if ElevenLabs.shared.isSetUp, ElevenLabs.shared.voices.isEmpty, engine == .elevenlabs || engine == .mixed { cloudVoicesMissing }
             suggestions
             if engine == .qwen || (engine == .mixed && EngineSwitches.shared.usable(.qwen)) { design }
             if let c = character, showsCloudDesign { cloudDesign(c) }
@@ -480,6 +483,48 @@ struct VoiceChooser: View {
                     audition(VoiceChoice(engine: .qwen, voiceID: "design", design: designDraft))
                 }
                 .disabled(designDraft.isEmpty)
+            }
+        }
+    }
+
+    // MARK: ElevenLabs voices
+
+    /// No ElevenLabs voices yet (the list never loaded, or loading failed): say so and why,
+    /// rather than showing a missing voice.
+    private var cloudVoicesMissing: some View {
+        HStack(alignment: .top, spacing: Space.sm) {
+            Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text("ElevenLabs voices haven’t loaded, so there’s no ElevenLabs voice to give.").font(.callout)
+                if let cloudVoicesError {
+                    Text(cloudVoicesError).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: Space.sm)
+            if loadingCloudVoices {
+                ProgressView().controlSize(.small)
+            } else {
+                Button("Load Voices", action: loadCloudVoices)
+                    .controlSize(.small)
+                    .help("Get the list of voices in your ElevenLabs account (no book text is sent)")
+            }
+        }
+        .padding(Space.md)
+        .background(.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
+        .task { if cloudVoicesError == nil { loadCloudVoices() } }
+    }
+
+    private func loadCloudVoices() {
+        guard !loadingCloudVoices else { return }
+        loadingCloudVoices = true
+        Task {
+            defer { loadingCloudVoices = false }
+            do {
+                let found = try await ElevenLabs.shared.refreshVoices()
+                cloudVoicesError = found.isEmpty ? "Your ElevenLabs account has no voices. Add some in the Voice Library at elevenlabs.io." : nil
+                if !found.isEmpty { VoiceCastingRun.castIfNeeded(document: document) }
+            } catch {
+                cloudVoicesError = error.localizedDescription
             }
         }
     }

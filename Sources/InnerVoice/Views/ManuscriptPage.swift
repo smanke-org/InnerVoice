@@ -36,7 +36,7 @@ struct ManuscriptPage: View {
             }
         }
         .navigationTitle(document.project.title)
-        .navigationSubtitle(subtitle)
+        .pageSubtitle(subtitle)
     }
 
     private var subtitle: String {

@@ -36,3 +36,13 @@ enum AppInfo {
         AboutWindow.shared.show()
     }
 }
+
+import SwiftUI
+
+extension View {
+    /// The line under the book's name at the top of the window: the page's own words (a
+    /// chapter, "2 of 2 done"), then the version, so it's always clear which InnerVoice is open.
+    func pageSubtitle(_ text: String = "") -> some View {
+        navigationSubtitle(text.isEmpty ? "v" + AppInfo.labeledVersion : text + "  ·  v" + AppInfo.labeledVersion)
+    }
+}
