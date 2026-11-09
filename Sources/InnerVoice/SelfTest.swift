@@ -101,7 +101,7 @@ enum SelfTest {
         check("the last engine that's on stays on", switches.isOn(.orpheus) && !switches.canTurnOff(.orpheus) && switches.enabled == [.orpheus])
         for e in VoiceEngine.engines { switches.set(e, on: true) }
         undo.undo()
-        check("every engine is on again after the test", switches.enabled.count == VoiceEngine.engines.count && doc.project.engineInUse == .apple)
+        check("every engine is on again after the test", switches.enabled.count == VoiceEngine.engines.filter { !$0.isCloud }.count && doc.project.engineInUse == .apple)
         check("Mix Engines is offered when two or more engines are on", switches.choices.contains(.mixed))
 
         // Real speech: one line in its voice, cached the second time.
@@ -281,6 +281,78 @@ enum SelfTest {
         manager.remove(pack)
         let left = (try? FileManager.default.contentsOfDirectory(atPath: VoicePack.folder.path))?.filter { !$0.hasPrefix(".") && $0 != "mlx-audio" } ?? []
         check("Remove takes the pack and its download cache away", !VoicePack.isDownloaded(repo) && left.isEmpty, left.joined(separator: ", "))
+    }
+
+    /// ElevenLabs against a fake server inside the app: setup, voices, the book's permission
+    /// (nothing is sent without it), audio tags, errors.
+    private static func elevenLabs(_ doc: InnerVoiceDocument, undo: UndoManager) async {
+        let eleven = ElevenLabs.shared
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [FakeElevenLabs.self]
+        eleven.session = URLSession(configuration: config)
+        FakeElevenLabs.reset()
+        check("ElevenLabs is off until it's set up", !eleven.isSetUp && !EngineSwitches.shared.isOn(.elevenlabs) && !EngineSwitches.shared.choices.contains(.elevenlabs))
+        let account = try? await eleven.check(key: "test-key")
+        check("Check Key reads the plan, and sends no book text", account?.limit == 100_000 && FakeElevenLabs.speechRequests.isEmpty)
+        eleven.save(key: "test-key", consent: true)
+        EngineSwitches.shared.set(.elevenlabs, on: true)
+        let voices = (try? await eleven.refreshVoices()) ?? []
+        check("ElevenLabs voices are listed with their labels", voices.count == 2 && voices.contains { $0.gender == .female && $0.accent == "British" })
+        check("ElevenLabs is offered once it's set up", EngineSwitches.shared.choices.contains(.elevenlabs))
+
+        // Set up, but this book hasn't allowed it: nothing may be sent.
+        doc.setVoiceEngine(.elevenlabs, undoManager: undo)
+        check("a book that hasn't allowed ElevenLabs uses an engine on this Mac", doc.project.engineInUse != .elevenlabs)
+        let segs = SpeechScript.segments(chapter: 0, project: doc.project, index: doc.index, includeNarration: true)
+        let lines = Array(segs.filter { $0.lineID != nil }.prefix(2))
+        let r0 = VoiceResolver(project: doc.project)
+        for seg in lines { _ = try? await SpeechRenderer.shared.render(r0.request(for: seg)!) }
+        if let v = voices.first {
+            _ = try? await SpeechRenderer.shared.render(SpeechRequest(text: "Test.", choice: v.choice, tone: .neutral, kind: .spoken, cloudAllowed: false))
+        }
+        check("without the book's permission, no text is sent to ElevenLabs", FakeElevenLabs.speechRequests.isEmpty, "\(FakeElevenLabs.speechRequests.count) requests")
+
+        // The book allows it.
+        doc.setCloudVoicesAllowed(true, undoManager: undo)
+        doc.setVoiceEngine(.elevenlabs, undoManager: undo)
+        check("once allowed, the book uses ElevenLabs", doc.project.engineInUse == .elevenlabs)
+        let speaking = doc.project.characters.filter { (doc.index.stats[$0.id]?.lines ?? 0) > 0 }
+        check("casting gives every character an ElevenLabs voice", speaking.allSatisfy { $0.voice(for: .elevenlabs)?.choice.engine == .elevenlabs })
+        SpeechRenderer.shared.clearCache()
+        let r = VoiceResolver(project: doc.project)
+        if let seg = segs.first(where: { $0.lineID != nil && $0.tone != .neutral }) ?? lines.first, let req = r.request(for: seg) {
+            do {
+                let audio = try await SpeechRenderer.shared.render(req)
+                let body = FakeElevenLabs.speechRequests.last ?? [:]
+                let text = body["text"] as? String ?? ""
+                check("a line is sent to eleven_v4 with its tone as an audio tag", body["model_id"] as? String == "eleven_v4"
+                      && (seg.tone == .neutral || text.hasPrefix(seg.tone.audioTag ?? "")), text.prefix(30).description)
+                check("ElevenLabs audio comes back and plays", Double(audio.frameLength) / audio.format.sampleRate > 0.4)
+            } catch {
+                check("a line is sent to eleven_v4", false, error.localizedDescription)
+            }
+        }
+        // Errors say what to do.
+        FakeElevenLabs.status = 401
+        SpeechRenderer.shared.clearCache()
+        if let seg = lines.last, let req = r.request(for: seg) {
+            do { _ = try await SpeechRenderer.shared.render(req); check("a wrong key says so", false) } catch {
+                check("a wrong key says so", error.localizedDescription.contains("API key"), error.localizedDescription)
+            }
+        }
+        FakeElevenLabs.status = 200
+        // Stop sending this book.
+        doc.setCloudVoicesAllowed(false, undoManager: undo)
+        let before = FakeElevenLabs.speechRequests.count
+        SpeechRenderer.shared.clearCache()
+        let r2 = VoiceResolver(project: doc.project)
+        for seg in lines { _ = try? await SpeechRenderer.shared.render(r2.request(for: seg)!) }
+        check("after Stop Sending This Book, nothing more is sent", FakeElevenLabs.speechRequests.count == before && doc.project.engineInUse != .elevenlabs)
+        eleven.disconnect()
+        check("Disconnect turns ElevenLabs off", !eleven.isSetUp && !EngineSwitches.shared.choices.contains(.elevenlabs))
+        doc.setVoiceEngine(.apple, undoManager: undo)
+        eleven.session = .shared
+        SpeechRenderer.shared.clearCache()
     }
 
     private static func run() async {
@@ -474,6 +546,7 @@ enum SelfTest {
         await voices(doc, undo: undo)
         if ProcessInfo.processInfo.environment["APP_SELFTEST_VOICES"] != nil { await modelVoices(doc, undo: undo) }
         if ProcessInfo.processInfo.environment["APP_SELFTEST_DOWNLOAD"] != nil { await voiceDownload() }
+        await elevenLabs(doc, undo: undo)
 
         if let path = ProcessInfo.processInfo.environment["APP_SELFTEST_MODEL"] {
             await liveModel(path: path)
@@ -523,4 +596,52 @@ enum SelfTest {
         check("tones are tagged with a date", p.tonesTagged != nil)
         manager.unloadNow()
     }
+}
+
+
+/// A stand-in for api.elevenlabs.io in the self-test: a plan, two voices, and half a
+/// second of tone for each speech request (whose JSON body is kept for checking).
+nonisolated final class FakeElevenLabs: URLProtocol, @unchecked Sendable {
+    nonisolated(unsafe) static var speechRequests: [[String: Any]] = []
+    nonisolated(unsafe) static var status = 200
+
+    static func reset() { speechRequests = []; status = 200 }
+
+    override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "api.elevenlabs.io" }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        let url = request.url!
+        var body = Data()
+        var code = Self.status
+        if url.path.hasPrefix("/v1/text-to-speech/") {
+            var data = request.httpBody ?? Data()
+            if data.isEmpty, let stream = request.httpBodyStream {
+                stream.open()
+                var buf = [UInt8](repeating: 0, count: 65536)
+                while stream.hasBytesAvailable { let n = stream.read(&buf, maxLength: buf.count); if n <= 0 { break }; data.append(buf, count: n) }
+                stream.close()
+            }
+            Self.speechRequests.append((try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:])
+            if code == 200 {
+                var pcm = Data()
+                for i in 0..<12_000 { var v = Int16(sin(Double(i) / 24_000 * 2 * .pi * 220) * 8000).littleEndian; pcm.append(Data(bytes: &v, count: 2)) }
+                body = pcm
+            } else {
+                body = Data(#"{"detail":{"status":"invalid_api_key","message":"Invalid API key"}}"#.utf8)
+            }
+        } else if url.path == "/v1/user/subscription" {
+            body = Data(#"{"tier":"creator","character_count":1200,"character_limit":100000}"#.utf8)
+        } else if url.path == "/v2/voices" {
+            body = Data(#"{"voices":[{"voice_id":"v1","name":"Alice - clear narrator","labels":{"gender":"female","age":"middle_aged","accent":"british","description":"clear"}},{"voice_id":"v2","name":"Bram","labels":{"gender":"male","age":"old","accent":"american"}}],"has_more":false}"#.utf8)
+        } else {
+            code = 404
+        }
+        let response = HTTPURLResponse(url: url, statusCode: code, httpVersion: "HTTP/1.1", headerFields: nil)!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: body)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
 }

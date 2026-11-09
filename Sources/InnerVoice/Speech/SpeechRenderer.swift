@@ -8,14 +8,16 @@ struct SpeechRequest: Hashable, Sendable {
     var choice: VoiceChoice
     var tone: Tone
     var kind: LineKind?
-    /// A sigh or laugh from the speech tag (Orpheus only).
+    /// A sigh or laugh from the speech tag (Orpheus and ElevenLabs).
     var sound: VocalSound? = nil
+    /// The book allows its text to go to a cloud engine (ElevenLabs). Not part of the cache key.
+    var cloudAllowed = false
 
     /// The file name of the rendered audio in the cache. Version 1 of the rendering.
     var cacheKey: String {
         var parts = ["v1", choice.engine.rawValue, choice.voiceID, choice.design ?? "", String(choice.rate ?? 1), String(choice.pitch ?? 1),
                      tone.rawValue, kind?.rawValue ?? "narration", text]
-        if choice.engine == .orpheus, let sound { parts.append(sound.rawValue) }
+        if choice.engine == .orpheus || choice.engine == .elevenlabs, let sound { parts.append(sound.rawValue) }
         return SHA256.hash(data: Data(parts.joined(separator: "\u{1F}").utf8)).map { String(format: "%02x", $0) }.joined()
     }
 }
@@ -27,7 +29,9 @@ enum SpeechError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .engineUnavailable(let e): "\(e.title) isn’t downloaded yet. Download it in Settings › Voices, or choose another engine on the Voices page."
+        case .engineUnavailable(let e): e.isCloud
+            ? "\(e.title) isn’t set up. Set it up in Settings › Voices, or choose another engine on the Voices page."
+            : "\(e.title) isn’t downloaded yet. Download it in Settings › Voices, or choose another engine on the Voices page."
         case .voiceMissing(let name): "The voice “\(name)” isn’t on this Mac anymore. Choose another on the Voices page."
         case .failed(let why): "Unable to speak the line: \(why)"
         }
@@ -100,6 +104,7 @@ final class SpeechRenderer {
         switch request.choice.engine {
         case .apple: buffer = try await AppleSpeech.render(request)
         case .qwen, .orpheus: buffer = try await ModelSpeech.render(request)
+        case .elevenlabs: buffer = try await ElevenLabs.shared.render(request, allowed: request.cloudAllowed)
         case .mixed: throw SpeechError.engineUnavailable(.mixed)
         }
         Self.write(buffer, to: file)

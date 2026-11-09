@@ -68,13 +68,16 @@ enum VoiceCatalog {
         return Dictionary(uniqueKeysWithValues: female.map { ($0, VoiceGender.female) } + male.map { ($0, VoiceGender.male) })
     }()
 
-    static func voices(for engine: VoiceEngine) -> [VoiceInfo] {
+    /// An engine's voices. Mixing includes ElevenLabs only for a book that allows it.
+    static func voices(for engine: VoiceEngine, project: Project? = nil) -> [VoiceInfo] {
         switch engine {
         case .apple: appleVoices()
         case .orpheus: VoiceInfo.orpheus
         case .qwen: VoiceInfo.qwenPresets
+        case .elevenlabs: ElevenLabs.shared.voices
         // Every engine that's on and ready, best first within each.
-        case .mixed: VoiceEngine.engines.filter { EngineSwitches.shared.usable($0) }.flatMap { voices(for: $0) }
+        case .mixed: VoiceEngine.engines.filter { EngineSwitches.shared.usable($0) && (!$0.isCloud || project?.settings.cloudVoicesAllowed != nil) }
+            .flatMap { voices(for: $0) }
         }
     }
 
@@ -84,6 +87,7 @@ enum VoiceCatalog {
         case .apple: AVSpeechSynthesisVoice(identifier: choice.voiceID).map(info)
         case .orpheus: VoiceInfo.orpheus.first { $0.voiceID == choice.voiceID }
         case .qwen: VoiceInfo.qwenPresets.first { $0.voiceID == choice.voiceID }
+        case .elevenlabs: ElevenLabs.shared.voices.first { $0.voiceID == choice.voiceID }
         case .mixed: nil
         }
     }

@@ -31,9 +31,16 @@ struct VoicesPage: View {
         .navigationSubtitle(subtitle)
         .toolbar {
             ToolbarItem {
-                Picker("Engine", selection: Binding(get: { engine }, set: { document.setVoiceEngine($0, undoManager: undoManager) })) {
+                Picker("Engine", selection: Binding(get: { engine }, set: { e in
+                    // The first time a book uses ElevenLabs, ask before any of its text is sent.
+                    if e.isCloud, document.project.settings.cloudVoicesAllowed == nil {
+                        workspace.askCloudEngine = e
+                    } else {
+                        document.setVoiceEngine(e, undoManager: undoManager)
+                    }
+                })) {
                     ForEach(EngineSwitches.shared.choices) { e in
-                        Text(e.title + (ModelSpeech.isInstalled(e) ? "" : " (Not Downloaded)")).tag(e)
+                        Text(e.title + (e.isCloud ? " (Cloud)" : ModelSpeech.isInstalled(e) ? "" : " (Not Downloaded)")).tag(e)
                     }
                 }
                 .help("The speech engine the project’s voices use. Each engine keeps its own casting.")
@@ -49,7 +56,11 @@ struct VoicesPage: View {
         .onAppear {
             VoiceCastingRun.castIfNeeded(document: document)
             ModelSpeech.prepare(engine)
+            if ElevenLabs.shared.isSetUp, ElevenLabs.shared.voices.isEmpty, engine == .elevenlabs || engine == .mixed {
+                Task { try? await ElevenLabs.shared.refreshVoices() }
+            }
         }
+        .cloudPermissionAlert(document: document, workspace: workspace)
     }
 
     private var subtitle: String {
@@ -139,6 +150,7 @@ struct VoiceTargetDetail: View {
                             .help("Open \(character.name)’s page in Cast")
                     }
                     CastingProfileView(document: document, character: character)
+                    CloudNotice(document: document, workspace: workspace)
                 } else {
                     VStack(alignment: .leading, spacing: Space.xs) {
                         Text("Narrator").font(.title2.weight(.semibold))
@@ -151,6 +163,7 @@ struct VoiceTargetDetail: View {
                         }
                     }
                 }
+                if character == nil { CloudNotice(document: document, workspace: workspace) }
                 VoiceChooser(document: document, characterID: character?.id, compact: false)
             }
             .padding(Space.margin)
@@ -506,6 +519,73 @@ struct PlayStopButton: View {
                 }
             }
             .help("Hear the selected line in its character’s voice (⌥Space). Click the arrow for Play from Here, a table read (⌥⇧Space).")
+        }
+    }
+}
+
+/// Asks before a book's text is first sent to ElevenLabs.
+struct CloudPermissionAlert: ViewModifier {
+    @ObservedObject var document: InnerVoiceDocument
+    @Bindable var workspace: Workspace
+    @Environment(\.undoManager) private var undoManager
+
+    func body(content: Content) -> some View {
+        content.alert("Send This Book to ElevenLabs?", isPresented: Binding(get: { workspace.askCloudEngine != nil }, set: { if !$0 { workspace.askCloudEngine = nil } })) {
+            Button("Send to ElevenLabs") {
+                let e = workspace.askCloudEngine ?? .elevenlabs
+                document.setCloudVoicesAllowed(true, undoManager: undoManager)
+                document.setVoiceEngine(e, undoManager: undoManager)
+                workspace.askCloudEngine = nil
+            }
+            Button("Cancel", role: .cancel) { workspace.askCloudEngine = nil }
+        } message: {
+            Text("ElevenLabs makes its voices on its own servers. Every line of “\(document.project.title)” that an ElevenLabs voice speaks is sent there as text; a table read or an exported book sends the whole manuscript. Allow it only if you have the right to share this book. You can stop it at any time on the Voices page.")
+        }
+    }
+}
+
+extension View {
+    func cloudPermissionAlert(document: InnerVoiceDocument, workspace: Workspace) -> some View {
+        modifier(CloudPermissionAlert(document: document, workspace: workspace))
+    }
+}
+
+/// On the Voices page while a book uses ElevenLabs: a plain reminder that its text goes to
+/// the cloud, and a way to stop. When mixing engines without permission, a way to include it.
+struct CloudNotice: View {
+    @ObservedObject var document: InnerVoiceDocument
+    @Bindable var workspace: Workspace
+    @Environment(\.undoManager) private var undoManager
+
+    var body: some View {
+        let project = document.project
+        let engine = project.engineInUse
+        let allowed = project.settings.cloudVoicesAllowed != nil
+        let elevenOn = EngineSwitches.shared.isOn(.elevenlabs)
+        if allowed, engine == .elevenlabs || (engine == .mixed && elevenOn) {
+            HStack(alignment: .top, spacing: Space.sm) {
+                Image(systemName: "icloud.and.arrow.up").foregroundStyle(.orange)
+                Text(engine == .mixed
+                     ? "ElevenLabs voices are made in the cloud: the lines they speak from this book are sent to ElevenLabs."
+                     : "This book uses ElevenLabs, in the cloud: every line its voices speak is sent to ElevenLabs as text.")
+                    .font(.callout)
+                Spacer(minLength: Space.sm)
+                Button("Stop Sending This Book") { document.setCloudVoicesAllowed(false, undoManager: undoManager) }
+                    .controlSize(.small)
+                    .help("Nothing more from this book goes to ElevenLabs. Its voices switch to an engine on this Mac.")
+            }
+            .padding(Space.md)
+            .background(.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
+        } else if engine == .mixed, elevenOn, !allowed {
+            HStack(alignment: .top, spacing: Space.sm) {
+                Image(systemName: "cloud").foregroundStyle(.secondary)
+                Text("ElevenLabs voices aren’t in the mix: this book hasn’t allowed its text to be sent to ElevenLabs.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: Space.sm)
+                Button("Include ElevenLabs…") { workspace.askCloudEngine = .mixed }
+                    .controlSize(.small)
+            }
         }
     }
 }

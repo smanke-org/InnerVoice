@@ -26,7 +26,10 @@ final class EngineSwitches {
         }
     }
 
-    func isOn(_ engine: VoiceEngine) -> Bool { !off.contains(engine) }
+    /// ElevenLabs counts as on only once it's set up (a key and the narrator's yes).
+    func isOn(_ engine: VoiceEngine) -> Bool {
+        !off.contains(engine) && (!engine.isCloud || ElevenLabs.shared.isSetUp)
+    }
 
     var enabled: [VoiceEngine] { VoiceEngine.engines.filter(isOn) }
 
@@ -59,8 +62,11 @@ final class EngineSwitches {
     /// The engine a project speaks with: its own choice while that's on.
     func inUse(_ project: Project) -> VoiceEngine {
         let chosen = project.settings.engine
+        let local = enabled.filter { !$0.isCloud }
         if chosen == .mixed { return enabled.count > 1 ? .mixed : enabled.first ?? .apple }
-        return isOn(chosen) ? chosen : enabled.first ?? chosen
+        // A cloud engine only for a book that allows it.
+        if chosen.isCloud, project.settings.cloudVoicesAllowed == nil { return local.first ?? .apple }
+        return isOn(chosen) ? chosen : local.first ?? enabled.first ?? chosen
     }
 }
 

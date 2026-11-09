@@ -124,6 +124,11 @@ struct AudioExportSheet: View {
             Text("Each line is read in its character’s voice and tone, with \(document.project.engineInUse.title).")
                 .font(.callout)
                 .foregroundStyle(.secondary)
+            if document.project.settings.cloudVoicesAllowed != nil, document.project.engineInUse == .elevenlabs || document.project.engineInUse == .mixed {
+                Label("ElevenLabs voices are made in the cloud: exporting sends the text they speak to ElevenLabs, and uses your plan’s credits.", systemImage: "icloud.and.arrow.up")
+                    .font(.callout)
+                    .foregroundStyle(.orange)
+            }
             Form {
                 Picker("Export", selection: $scope) {
                     ForEach(Scope.allCases) { Text($0.title).tag($0) }

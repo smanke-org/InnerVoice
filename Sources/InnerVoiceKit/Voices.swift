@@ -38,6 +38,21 @@ public enum Tone: String, Codable, CaseIterable, Identifiable, Sendable {
     /// 1…9: the key that picks the tone in Review.
     public var key: Int { (Self.allCases.firstIndex(of: self) ?? 0) + 1 }
 
+    /// ElevenLabs' audio tag for the tone, put before the line ("[whispers] Not here.").
+    public var audioTag: String? {
+        switch self {
+        case .neutral: nil
+        case .excited: "[excited]"
+        case .confused: "[confused]"
+        case .sad: "[sad]"
+        case .angry: "[angry]"
+        case .whispered: "[whispers]"
+        case .scared: "[scared]"
+        case .tender: "[tenderly]"
+        case .sarcastic: "[sarcastic]"
+        }
+    }
+
     /// How a speech engine that takes directions is told to say it.
     public var direction: String {
         switch self {
@@ -58,6 +73,9 @@ public enum Tone: String, Codable, CaseIterable, Identifiable, Sendable {
 /// them out.
 public enum VocalSound: String, Codable, CaseIterable, Sendable {
     case laugh, chuckle, sigh, gasp, groan, sniffle, yawn, cough
+
+    /// ElevenLabs' audio tag for the sound ("[sighs]").
+    public var audioTag: String { "[\(rawValue)s]" }
 }
 
 /// Who decided a line's tone. The narrator's choice is never changed by the rules or the AI.
@@ -68,6 +86,9 @@ public enum ToneSource: String, Codable, Sendable {
 /// A text-to-speech engine. All of them run on the Mac.
 public enum VoiceEngine: String, Codable, CaseIterable, Identifiable, Sendable {
     case apple, qwen, orpheus
+    /// ElevenLabs, in the cloud: the only engine that sends text off the Mac. Off until the
+    /// narrator sets it up, and each book must allow it.
+    case elevenlabs
     /// Not an engine itself: each character can have a voice from any engine that's on.
     /// A voice's own `VoiceChoice.engine` is always a real one.
     case mixed
@@ -75,13 +96,17 @@ public enum VoiceEngine: String, Codable, CaseIterable, Identifiable, Sendable {
     public var id: String { rawValue }
 
     /// The engines that make sound (everything but `.mixed`).
-    public static let engines: [VoiceEngine] = [.apple, .qwen, .orpheus]
+    public static let engines: [VoiceEngine] = [.apple, .qwen, .orpheus, .elevenlabs]
+
+    /// Sends the book's text to a company's servers to make the audio.
+    public var isCloud: Bool { self == .elevenlabs }
 
     public var title: String {
         switch self {
         case .apple: "Apple Voices"
         case .qwen: "Qwen3-TTS"
         case .orpheus: "Orpheus"
+        case .elevenlabs: "ElevenLabs"
         case .mixed: "Mix Engines"
         }
     }

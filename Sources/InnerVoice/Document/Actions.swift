@@ -240,6 +240,9 @@ final class Workspace {
     var reveal: Reveal?
     /// Character opened in the Cast page.
     var castPath: [UUID] = []
+    /// The engine to switch to once the narrator allows this book's text to go to
+    /// ElevenLabs (the Voices page asks).
+    var askCloudEngine: VoiceEngine?
     /// The narrator or character chosen on the Voices page.
     var voiceTarget: VoiceTarget = .narrator
     var showAudioExport = false

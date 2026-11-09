@@ -1,0 +1,274 @@
+@preconcurrency import AVFoundation
+import Foundation
+import InnerVoiceKit
+import Observation
+import Security
+
+/// ElevenLabs, the one cloud voice engine (eleven_v4). Unlike everything else in InnerVoice,
+/// it sends text off the Mac: each line or piece of narration it speaks goes to ElevenLabs'
+/// servers. So it's off until the narrator sets it up (an API key and a clear yes), and each
+/// book must allow it too (`ProjectSettings.cloudVoicesAllowed`). Nothing is sent otherwise.
+@Observable
+@MainActor
+final class ElevenLabs {
+    static let shared = ElevenLabs()
+
+    static let model = "eleven_v4"
+    static let host = URL(string: "https://api.elevenlabs.io")!
+    static let keysPage = URL(string: "https://elevenlabs.io/app/settings/api-keys")!
+    static let signUpPage = URL(string: "https://elevenlabs.io/sign-up")!
+    static let privacyPage = URL(string: "https://elevenlabs.io/privacy-policy")!
+    private static let consentKey = "elevenlabs.consent"
+    private static let voicesKey = "elevenlabs.voices"
+
+    /// The account's voices (premade and the person's own), from the last fetch.
+    private(set) var voices: [VoiceInfo] = []
+    /// Bumped when the key or consent changes.
+    private(set) var revision = 0
+
+    /// Requests go through this session; the self-test swaps in a fake server.
+    @ObservationIgnored var session: URLSession = .shared
+    /// Test runs keep the key in memory and never touch the person's keychain.
+    @ObservationIgnored private var testKey: String?
+
+    private init() {
+        if let data = UserDefaults.standard.data(forKey: Self.voicesKey), !SystemHooks.isTestRun,
+           let saved = try? JSONDecoder().decode([SavedVoice].self, from: data) {
+            voices = saved.map(\.info)
+        }
+    }
+
+    // MARK: Setup
+
+    /// Set up: a key, and the narrator's yes to sending text to ElevenLabs.
+    var isSetUp: Bool {
+        _ = revision
+        return apiKey != nil && consented != nil
+    }
+
+    var consented: Date? {
+        _ = revision
+        if SystemHooks.isTestRun { return testConsent }
+        return UserDefaults.standard.object(forKey: Self.consentKey) as? Date
+    }
+
+    @ObservationIgnored private var testConsent: Date?
+
+    var apiKey: String? {
+        _ = revision
+        if SystemHooks.isTestRun { return testKey }
+        return Keychain.read(account: "elevenlabs")
+    }
+
+    func save(key: String, consent: Bool) {
+        let key = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        if SystemHooks.isTestRun {
+            testKey = key.isEmpty ? nil : key
+            testConsent = consent ? .now : nil
+        } else {
+            if key.isEmpty { Keychain.delete(account: "elevenlabs") } else { Keychain.write(key, account: "elevenlabs") }
+            UserDefaults.standard.set(consent ? Date() : nil, forKey: Self.consentKey)
+        }
+        revision += 1
+    }
+
+    /// Forgets the key, the yes and the voice list. Books keep their permission, but nothing
+    /// is sent until ElevenLabs is set up again.
+    func disconnect() {
+        save(key: "", consent: false)
+        voices = []
+        UserDefaults.standard.removeObject(forKey: Self.voicesKey)
+    }
+
+    // MARK: Account
+
+    struct Account: Sendable {
+        var tier: String
+        var used: Int
+        var limit: Int
+    }
+
+    /// Checks a key and returns the plan's credits. Sends no text from the book.
+    func check(key: String) async throws -> Account {
+        var req = URLRequest(url: Self.host.appending(path: "v1/user/subscription"))
+        req.setValue(key.trimmingCharacters(in: .whitespacesAndNewlines), forHTTPHeaderField: "xi-api-key")
+        let (data, response) = try await send(req)
+        try Self.throwIfFailed(response, data)
+        let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        return Account(tier: obj["tier"] as? String ?? "", used: obj["character_count"] as? Int ?? 0, limit: obj["character_limit"] as? Int ?? 0)
+    }
+
+    /// Fetches the account's voices (names and labels only; no book text is sent).
+    @discardableResult
+    func refreshVoices() async throws -> [VoiceInfo] {
+        guard let key = apiKey else { throw SpeechError.engineUnavailable(.elevenlabs) }
+        var found: [VoiceInfo] = []
+        var token: String?
+        repeat {
+            var c = URLComponents(url: Self.host.appending(path: "v2/voices"), resolvingAgainstBaseURL: false)!
+            c.queryItems = [URLQueryItem(name: "page_size", value: "100")] + (token.map { [URLQueryItem(name: "next_page_token", value: $0)] } ?? [])
+            var req = URLRequest(url: c.url!)
+            req.setValue(key, forHTTPHeaderField: "xi-api-key")
+            let (data, response) = try await send(req)
+            try Self.throwIfFailed(response, data)
+            let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+            for v in obj["voices"] as? [[String: Any]] ?? [] {
+                if let info = Self.voice(from: v) { found.append(info) }
+            }
+            token = (obj["has_more"] as? Bool ?? false) ? obj["next_page_token"] as? String : nil
+        } while token != nil && found.count < 1000
+        voices = found.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        if !SystemHooks.isTestRun, let data = try? JSONEncoder().encode(voices.map(SavedVoice.init)) {
+            UserDefaults.standard.set(data, forKey: Self.voicesKey)
+        }
+        return voices
+    }
+
+    static func voice(from v: [String: Any]) -> VoiceInfo? {
+        guard let id = v["voice_id"] as? String, let name = v["name"] as? String else { return nil }
+        let labels = v["labels"] as? [String: String] ?? [:]
+        let gender: VoiceGender = switch labels["gender"]?.lowercased() {
+        case "female"?: .female
+        case "male"?: .male
+        default: .neutral
+        }
+        let age: VoiceAge = switch labels["age"]?.lowercased() {
+        case "young"?: .young
+        case "old"?, "older"?, "middle_aged"?, "middle aged"?: (labels["age"]?.lowercased().hasPrefix("middle") == true ? .adult : .older)
+        default: .adult
+        }
+        let accent = (labels["accent"] ?? "American").split(separator: "-").map { $0.capitalized }.joined(separator: " ")
+        let detail = [labels["description"], labels["use_case"] ?? labels["use case"]].compactMap { $0 }
+            .map { $0.replacingOccurrences(of: "_", with: " ").capitalized }.joined(separator: ", ")
+        // Shortened names like "Rachel - calm narrator" keep the first part.
+        let short = name.components(separatedBy: " - ").first ?? name
+        return VoiceInfo(engine: .elevenlabs, voiceID: id, name: short, gender: gender, age: age, accent: accent, quality: 3, detail: detail)
+    }
+
+    // MARK: Speech
+
+    /// What ElevenLabs is sent: the text, with v4 audio tags for the tone and any sound the
+    /// speech tag asks for.
+    static func text(for request: SpeechRequest) -> String {
+        var tags: [String] = []
+        if request.kind != nil, let tag = request.tone.audioTag { tags.append(tag) }
+        if let sound = request.sound { tags.append(sound.audioTag) }
+        return (tags + [request.text]).joined(separator: " ")
+    }
+
+    /// One line (or piece of narration) in a voice. The text leaves the Mac here, and only
+    /// here, and only when the book allows it.
+    func render(_ request: SpeechRequest, allowed: Bool) async throws -> AVAudioPCMBuffer {
+        guard allowed else { throw ElevenLabsError.bookNotAllowed }
+        guard let key = apiKey, consented != nil else { throw SpeechError.engineUnavailable(.elevenlabs) }
+        var samples: [Float] = []
+        let gap = [Float](repeating: 0, count: Int(SpeechAudio.format.sampleRate * 0.18))
+        for (n, piece) in ModelSpeech.chunks(Self.text(for: request), limit: 2000).enumerated() {
+            try Task.checkCancellation()
+            if n > 0 { samples += gap }
+            var c = URLComponents(url: Self.host.appending(path: "v1/text-to-speech/\(request.choice.voiceID)"), resolvingAgainstBaseURL: false)!
+            c.queryItems = [URLQueryItem(name: "output_format", value: "pcm_24000")]
+            var req = URLRequest(url: c.url!)
+            req.httpMethod = "POST"
+            req.timeoutInterval = 90
+            req.setValue(key, forHTTPHeaderField: "xi-api-key")
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            var body: [String: Any] = ["text": piece, "model_id": Self.model, "seed": Int(ModelSpeech.seed(piece + request.choice.voiceID) % 4_294_967_295)]
+            if let rate = request.choice.rate, rate != 1 { body["voice_settings"] = ["speed": min(1.2, max(0.7, rate))] }
+            req.httpBody = try JSONSerialization.data(withJSONObject: body)
+            let (data, response) = try await send(req)
+            try Self.throwIfFailed(response, data)
+            samples += Self.pcm16(data)
+        }
+        return try ModelSpeech.buffer(ModelSpeech.level(samples), volume: request.kind == .thought ? 0.85 : 1)
+    }
+
+    /// 16-bit little-endian mono PCM to floats.
+    nonisolated static func pcm16(_ data: Data) -> [Float] {
+        data.withUnsafeBytes { raw in
+            let n = raw.count / 2
+            var out = [Float](repeating: 0, count: n)
+            for i in 0..<n { out[i] = Float(Int16(littleEndian: raw.loadUnaligned(fromByteOffset: i * 2, as: Int16.self))) / 32768 }
+            return out
+        }
+    }
+
+    private func send(_ req: URLRequest) async throws -> (Data, URLResponse) {
+        do {
+            return try await session.data(for: req)
+        } catch let e as URLError where e.code != .cancelled {
+            throw ElevenLabsError.offline
+        }
+    }
+
+    static func throwIfFailed(_ response: URLResponse, _ data: Data) throws {
+        guard let http = response as? HTTPURLResponse else { throw ElevenLabsError.server(0, "") }
+        guard !(200..<300).contains(http.statusCode) else { return }
+        let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        let detail = obj?["detail"] as? [String: Any]
+        let status = (detail?["status"] as? String ?? "").lowercased()
+        let message = detail?["message"] as? String ?? (obj?["detail"] as? String) ?? ""
+        switch http.statusCode {
+        case 401: throw status.contains("quota") ? ElevenLabsError.outOfCredits : ElevenLabsError.badKey
+        case 402: throw ElevenLabsError.outOfCredits
+        case 429: throw ElevenLabsError.busy
+        default:
+            if status.contains("quota") { throw ElevenLabsError.outOfCredits }
+            throw ElevenLabsError.server(http.statusCode, message)
+        }
+    }
+
+    /// A saved voice list entry (VoiceInfo isn't Codable).
+    private struct SavedVoice: Codable {
+        var id, name, gender, age, accent, detail: String
+        init(_ v: VoiceInfo) {
+            id = v.voiceID; name = v.name; gender = v.gender.rawValue; age = v.age.rawValue; accent = v.accent; detail = v.detail
+        }
+        var info: VoiceInfo {
+            VoiceInfo(engine: .elevenlabs, voiceID: id, name: name, gender: VoiceGender(rawValue: gender) ?? .neutral,
+                      age: VoiceAge(rawValue: age) ?? .adult, accent: accent, quality: 3, detail: detail)
+        }
+    }
+}
+
+enum ElevenLabsError: LocalizedError {
+    case bookNotAllowed, badKey, outOfCredits, busy, offline
+    case server(Int, String)
+
+    var errorDescription: String? {
+        switch self {
+        case .bookNotAllowed: "This book hasn’t been allowed to use ElevenLabs. Choose ElevenLabs on the Voices page to allow it."
+        case .badKey: "ElevenLabs didn’t accept the API key. Check it in Settings › Voices."
+        case .outOfCredits: "Your ElevenLabs plan is out of credits for this month. Add credits at elevenlabs.io, or use a voice engine on this Mac."
+        case .busy: "ElevenLabs is busy. Wait a moment, then play the line again."
+        case .offline: "Unable to reach ElevenLabs. Check the internet connection, or use a voice engine on this Mac."
+        case .server(let code, let message): "ElevenLabs couldn’t make the audio (\(code))\(message.isEmpty ? "" : ": " + message)."
+        }
+    }
+}
+
+/// The ElevenLabs key in the login keychain.
+enum Keychain {
+    private static let service = "com.smanke.InnerVoice"
+
+    static func read(account: String) -> String? {
+        let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+                                kSecAttrAccount as String: account, kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
+        var out: AnyObject?
+        guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess, let data = out as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    static func write(_ value: String, account: String) {
+        delete(account: account)
+        let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+                                kSecAttrAccount as String: account, kSecValueData as String: Data(value.utf8),
+                                kSecAttrLabel as String: "InnerVoice ElevenLabs API key"]
+        SecItemAdd(q as CFDictionary, nil)
+    }
+
+    static func delete(account: String) {
+        let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
+        SecItemDelete(q as CFDictionary)
+    }
+}

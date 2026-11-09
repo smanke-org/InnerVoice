@@ -2,7 +2,7 @@
 
 InnerVoice helps audiobook narrators prepare a book before they press record. Open the manuscript and an AI that runs entirely on your Mac reads it, colors every spoken line by who says it, and builds a summary of each character from what the book says about them: age, gender, accent, voice, personality, history. When it isn't sure who's speaking, the line turns red with its best guess in the margin ("Cyrus?"), so you can confirm or fix it with a keystroke.
 
-No more highlighter pens, character notes in a separate document, or hunting for a minor character's three lines in chapter 31. Your manuscript never leaves your Mac.
+No more highlighter pens, character notes in a separate document, or hunting for a minor character's three lines in chapter 31. Your manuscript stays on your Mac, unless you choose ElevenLabs' cloud voices for a book (InnerVoice asks first).
 
 <p align="center"><img src="docs/images/manuscript.jpg" width="820" alt="The manuscript in InnerVoice: spoken lines highlighted in each character's color, initials in the margin, unsure lines in red, and the inspector showing the selected line"></p>
 

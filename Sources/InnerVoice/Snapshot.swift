@@ -163,6 +163,42 @@ enum Snapshot {
                     }
                     document.setVoiceEngine(.apple, undoManager: nil)
                 }
+                // ElevenLabs, against the self-test's fake server: the Voices page with the
+                // cloud notice, and the setup sheet in a window of its own.
+                if wants("elevenlabs") {
+                    let config = URLSessionConfiguration.ephemeral
+                    config.protocolClasses = [FakeElevenLabs.self]
+                    ElevenLabs.shared.session = URLSession(configuration: config)
+                    ElevenLabs.shared.save(key: "test-key", consent: true)
+                    EngineSwitches.shared.set(.elevenlabs, on: true)
+                    _ = try? await ElevenLabs.shared.refreshVoices()
+                    document.setCloudVoicesAllowed(true, undoManager: nil)
+                    if let main = document.project.characters.max(by: { (document.index.stats[$0.id]?.lines ?? 0) < (document.index.stats[$1.id]?.lines ?? 0) }) {
+                        await shot("voices-elevenlabs", settle: 1.5) {
+                            document.setVoiceEngine(.elevenlabs, undoManager: nil)
+                            workspace.voiceTarget = .character(main.id)
+                            workspace.page = .voices
+                        }
+                    }
+                    for mode in ["light", "dark"] {
+                        NSApp.appearance = NSAppearance(named: mode == "light" ? .aqua : .darkAqua)
+                        let host = NSHostingController(rootView: ElevenLabsSetupSheet(isPresented: .constant(true)))
+                        let w = NSWindow(contentViewController: host)
+                        w.styleMask = [.titled]
+                        w.makeKeyAndOrderFront(nil)
+                        try? await Task.sleep(for: .seconds(1.5))
+                        capture(w, "\(dir)/elevenlabs-setup-\(mode).png")
+                        w.close()
+                    }
+                    SettingsWindow.shared.show(tab: .voices)
+                    try? await Task.sleep(for: .seconds(0.9))
+                    if let s = SettingsWindow.shared.window { capture(s, "\(dir)/settings-voices-elevenlabs-dark.png") }
+                    SettingsWindow.shared.show(tab: .general)
+                    SettingsWindow.shared.window?.close()
+                    document.setVoiceEngine(.apple, undoManager: nil)
+                    document.setCloudVoicesAllowed(false, undoManager: nil)
+                    ElevenLabs.shared.disconnect()
+                }
                 // The status bar: a line whose engine isn't downloaded (APP_VOICE_MODELS empty).
                 if !ModelSpeech.isInstalled(.orpheus), let main = document.project.characters.first {
                     await shot("speech-error", settle: 1.5) {

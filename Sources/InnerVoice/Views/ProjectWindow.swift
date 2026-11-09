@@ -310,6 +310,7 @@ struct SpeechStatusBar: View {
     private var message: String {
         switch player.preparingEngine {
         case .qwen?, .orpheus?: "Getting \(player.preparingEngine!.title) ready… The first line takes a few seconds."
+        case .elevenlabs?: "Sending the line to ElevenLabs…"
         default: "Making the audio…"
         }
     }

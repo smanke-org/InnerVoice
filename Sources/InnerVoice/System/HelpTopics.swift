@@ -84,7 +84,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
                 ("Review", "Lines, tones and voices that need you"),
                 ("Voices", "A voice for each character and the narrator (⌘8)"),
             ]),
-            .tip("Your manuscript never leaves this Mac. The only download is the AI model itself."),
+            .tip("Your manuscript stays on this Mac. The only downloads are the AI models themselves. The one exception is ElevenLabs voices, which you have to set up and allow for each book: see Voices & Listening."),
             .tip("Quitting asks first. Turn off \"Ask before quitting\" in Settings › General, or tick \"Don't ask again\" when it asks."),
         ]
 
@@ -159,7 +159,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
         ]
 
         case .voices: [
-            .text("InnerVoice can read the book aloud with a different voice for each character, so you can hear a scene before you record it, check who says what, or rehearse against the other parts. Every voice runs on your Mac; nothing is sent anywhere."),
+            .text("InnerVoice can read the book aloud with a different voice for each character, so you can hear a scene before you record it, check who says what, or rehearse against the other parts. Apple Voices, Qwen3-TTS and Orpheus run on your Mac and send nothing anywhere. ElevenLabs, if you set it up, runs in the cloud (see below)."),
             .heading("Voices for the cast"),
             .text("After Tag Speakers and Build Summaries, InnerVoice casts a voice for each character from what the book says about them: gender, age and accent from the summary, or a title like Mrs. or a \"she said\" when the summary is quiet. Main characters choose first, and two characters who share a scene get different voices. The narrator gets the best voice of all."),
             .text("Open the Voices page (⌘8) to hear and change them. Click a character, then play any voice: it says one of that character's own lines. Click Use to give them that voice, or Confirm to keep the one casting picked. Speed and pitch make an Apple voice older, younger or more distinct."),
@@ -183,7 +183,11 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
                 ("Apple Voices", "Come with your Mac and work right away. They can't act, so a tone only changes speed and pitch a little. More natural Premium voices are a free download in System Settings › Accessibility › Spoken Content."),
                 ("Qwen3-TTS", "Sixteen ready-made voices, from a little girl to a weathered sailor, or any voice you describe. When the summary says how a character sounds (\"An older man with a deep, gravelly voice, speaking English with a Scottish accent\"), casting designs that voice for them. It records a short sample of each voice in each tone, then speaks every line from that sample, so the voice stays the same and the tone comes through. 6.2 GB."),
                 ("Orpheus", "Eight natural American voices that act from the words. A sigh, laugh, gasp or groan in the speech tag (\"she sighed\") is performed too. 3.6 GB."),
+                ("ElevenLabs (Cloud)", "Natural voices from your ElevenLabs account, made on ElevenLabs' servers with its eleven_v4 model, which acts each tone. Unlike the others it sends text off your Mac: every line an ElevenLabs voice speaks goes to ElevenLabs, and uses your plan's credits."),
             ]),
+            .heading("ElevenLabs and your manuscript"),
+            .text("ElevenLabs is the only part of InnerVoice that sends your book anywhere. Set it up in Settings › Voices: Open API Keys Page, create a key, paste it, click Check Key, and tick that you understand your text goes to ElevenLabs. The key is kept in your Mac's keychain."),
+            .text("Then each book asks before its text is sent for the first time, when you choose ElevenLabs (or include it in Mix Engines) on its Voices page. A table read or an exported book sends the whole manuscript, so allow it only for books you have the right to share. Stop Sending This Book on the Voices page ends it for that book, and Disconnect in Settings › Voices forgets the key. Audio ElevenLabs already made stays in the saved audio on this Mac."),
             .text("Download Qwen3-TTS and Orpheus once from Settings › Voices, or from the Voices page when you choose one. Downloading is the only time they use the internet; your book never leaves the Mac. They need a Mac with Apple silicon, and the first line takes a few seconds while the engine loads."),
             .text("Want a wider range? Choose Mix Engines from the engine menu on the Voices page (when two or more engines are on). Every voice from every engine that's on is in one list, and casting picks from all of them; each character can sound like a different engine. On a Mac with 32 GB of memory or more, Qwen3-TTS and Orpheus stay loaded together, so lines play without waiting for a model to load."),
             .text("The first line from Qwen3-TTS or Orpheus takes a few seconds while the engine loads; a bar at the bottom of the window says so. If a line can't play, the bar says why."),

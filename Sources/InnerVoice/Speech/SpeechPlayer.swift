@@ -18,7 +18,9 @@ struct VoiceResolver {
         var map: [UUID: VoiceChoice] = [:]
         for c in project.characters { if let v = c.voice(for: e) { map[c.id] = v.choice } }
         characters = map
-        let usable = Set(VoiceEngine.engines.filter { EngineSwitches.shared.usable($0) })
+        // ElevenLabs only for a book that allows its text to be sent.
+        let usable = Set(VoiceEngine.engines.filter { EngineSwitches.shared.usable($0) && (!$0.isCloud || project.settings.cloudVoicesAllowed != nil) })
+        cloudAllowed = project.settings.cloudVoicesAllowed != nil
         self.usable = usable
         writtenByNarrator = UserDefaults.standard.object(forKey: "voices.writtenByNarrator") as? Bool ?? true
         // The narrator's voice: one the narrator chose; else, in a first-person book, the
@@ -35,6 +37,9 @@ struct VoiceResolver {
         }
     }
 
+    /// The book allows its text to go to ElevenLabs.
+    var cloudAllowed = false
+
     /// Whether letters, signs and other written text are read by the narrator
     /// (Settings › Voices) rather than the character who wrote them.
     var writtenByNarrator = true
@@ -46,7 +51,7 @@ struct VoiceResolver {
         let e = engine ?? project.engineInUse
         if project.settings.narratorVoice(for: e)?.source == .user { return nil }
         guard let pov = project.character(project.settings.povCharacterID), let v = pov.voice(for: e)?.choice,
-              !v.isNarrator, EngineSwitches.shared.usable(v.engine) else { return nil }
+              !v.isNarrator, EngineSwitches.shared.usable(v.engine), !v.engine.isCloud || project.settings.cloudVoicesAllowed != nil else { return nil }
         return pov
     }
 
@@ -58,6 +63,7 @@ struct VoiceResolver {
         case .apple: VoiceCatalog.appleVoices().first.map { VoiceChoice(engine: .apple, voiceID: $0.voiceID) }
         case .orpheus: VoiceChoice(engine: .orpheus, voiceID: "tara")
         case .qwen: VoiceInfo.qwenPresets.first?.choice
+        case .elevenlabs: ElevenLabs.shared.voices.first?.choice
         case .mixed: EngineSwitches.shared.enabled.first.flatMap { $0 == .mixed ? nil : fallback($0) }
         }
     }
@@ -73,7 +79,7 @@ struct VoiceResolver {
     func request(for segment: SpeechSegment) -> SpeechRequest? {
         guard let choice = choice(for: segment) else { return nil }
         return SpeechRequest(text: segment.text, choice: choice, tone: segment.speakerID == nil && segment.lineID == nil ? .neutral : segment.tone,
-                             kind: segment.lineID == nil ? nil : segment.kind, sound: segment.sound)
+                             kind: segment.lineID == nil ? nil : segment.kind, sound: segment.sound, cloudAllowed: cloudAllowed)
     }
 }
 

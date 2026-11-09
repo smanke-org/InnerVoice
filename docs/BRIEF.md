@@ -43,7 +43,7 @@ silicon. Local data, works offline. No accounts.
 ## AI
 llama.cpp on the Mac, with a model the narrator picks from a list. Recommendations
 come from the Mac's memory, with a note for each model on why it fits or not.
-The model download is the only network use; manuscripts never leave the Mac.
+The model download is the only network use; manuscripts never leave the Mac, except through ElevenLabs cloud voices, which the narrator sets up and allows per book.
 Plain code finds the dialogue; the model only decides who speaks and reads the
 character facts. Apple's on-device model is a no-download fallback.
 

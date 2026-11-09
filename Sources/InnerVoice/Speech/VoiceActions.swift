@@ -37,6 +37,12 @@ import SwiftUI
         setVoice(v.choice, for: characterID, undoManager: undoManager)
     }
 
+    /// Lets this book's text go to ElevenLabs (the narrator said yes), or stops it.
+    func setCloudVoicesAllowed(_ allowed: Bool, undoManager: UndoManager?) {
+        updateSettings(allowed ? "Allow ElevenLabs" : "Stop Sending to ElevenLabs", undoManager: undoManager) { $0.cloudVoicesAllowed = allowed ? .now : nil }
+        if allowed { VoiceCastingRun.castIfNeeded(document: self) }
+    }
+
     func setVoiceEngine(_ engine: VoiceEngine, undoManager: UndoManager?) {
         updateSettings("Change Voice Engine", undoManager: undoManager) { $0.voiceEngine = engine == .apple ? nil : engine }
         VoiceCastingRun.castIfNeeded(document: self)
@@ -46,7 +52,7 @@ import SwiftUI
     /// Casts every voice again from the summaries; the narrator's choices stay.
     func castVoicesAgain(undoManager: UndoManager?) {
         let engine = project.engineInUse
-        let voices = VoiceCatalog.voices(for: engine)
+        let voices = VoiceCatalog.voices(for: engine, project: project)
         let index = self.index
         change("Cast Voices", undoManager: undoManager) { p in
             VoiceCasting.cast(&p, index: index, engine: engine, voices: voices)
@@ -72,7 +78,7 @@ enum VoiceCastingRun {
             return v.source == .auto && v.confidence < project.settings.unsureBelow
         }
         guard !open.isEmpty || project.settings.narratorVoice(for: engine) == nil else { return }
-        let voices = VoiceCatalog.voices(for: engine)
+        let voices = VoiceCatalog.voices(for: engine, project: project)
         guard !voices.isEmpty else { return }
         let sure = Set(speaking.filter { !open.contains($0) }.map(\.id))
         document.applyQuietly { p in

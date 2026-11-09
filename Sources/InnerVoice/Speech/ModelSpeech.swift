@@ -31,7 +31,7 @@ enum ModelSpeech {
             try Task.checkCancellation()
             if n > 0 { samples += gap }
             switch engine {
-            case .apple, .mixed: throw SpeechError.engineUnavailable(engine)
+            case .apple, .mixed, .elevenlabs: throw SpeechError.engineUnavailable(engine)
             case .orpheus:
                 var r = request
                 r.text = piece
@@ -267,7 +267,7 @@ actor MLXSpeech {
         switch engine {
         case .orpheus: orpheusModel = nil
         case .qwen: designModel = nil; cloneModel = nil
-        case .apple, .mixed: break
+        case .apple, .mixed, .elevenlabs: break
         }
         Memory.clearCache()
     }
@@ -279,7 +279,7 @@ actor MLXSpeech {
                 switch engine {
                 case .orpheus: _ = try await loadOrpheus()
                 case .qwen: _ = try await loadClone(); _ = try await loadDesign()
-                case .apple, .mixed: break
+                case .apple, .mixed, .elevenlabs: break
                 }
             } catch {
                 SpeechLog.write("loading \(engine.rawValue) failed: \(error)")

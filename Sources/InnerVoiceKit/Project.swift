@@ -329,6 +329,9 @@ public struct ProjectSettings: Codable, Hashable, Sendable {
     public var voiceEngine: VoiceEngine?
     /// The voice that reads narration, per engine (like `BookCharacter.voices`).
     public var narratorVoices: [String: CastVoice]?
+    /// When the narrator allowed this book's text to be sent to a cloud voice engine
+    /// (ElevenLabs). nil: never sent.
+    public var cloudVoicesAllowed: Date?
     public init() {}
 
     public var engine: VoiceEngine { voiceEngine ?? .apple }
