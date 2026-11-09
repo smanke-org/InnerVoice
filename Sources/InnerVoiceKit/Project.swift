@@ -99,6 +99,9 @@ public struct Line: Codable, Identifiable, Hashable, Sendable {
     /// 0…1, like `confidence`. Below the project's threshold the tone is Unsure.
     public var toneConfidence: Double?
     public var toneSource: ToneSource?
+    /// The AI model that tagged the line (for its accuracy in Activity). Optional and set
+    /// only on AI lines.
+    public var aiModel: String?
 
     public init(id: UUID = UUID(), paragraphID: UUID, range: TextSpan, kind: LineKind = .spoken,
                 speakerID: UUID? = nil, confidence: Double = 0, source: AssignmentSource = .none,

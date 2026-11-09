@@ -32,6 +32,8 @@ enum AudioExporter {
                       progress: (Int, Int, String) -> Void) async throws -> [URL] {
         let total = parts.reduce(0) { $0 + $1.segments.count }
         var done = 0
+        var exported = 0.0
+        defer { ActivityStore.shared.record(ActivityKey.secondsExported, count: Int(exported.rounded())) }
         var urls: [URL] = []
         let fileFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 44_100, channels: 1, interleaved: false)!
         for part in parts where !part.segments.isEmpty {
@@ -43,7 +45,9 @@ enum AudioExporter {
                 try Task.checkCancellation()
                 progress(done, total, part.name)
                 if let request = resolver.request(for: seg) {
-                    try write(try await SpeechRenderer.shared.render(request), to: file, converter: converter, format: fileFormat)
+                    let audio = try await SpeechRenderer.shared.render(request)
+                    try write(audio, to: file, converter: converter, format: fileFormat)
+                    exported += Double(audio.frameLength) / audio.format.sampleRate
                 }
                 if seg.pauseAfter > 0 {
                     try write(SpeechAudio.silence(seg.pauseAfter), to: file, converter: converter, format: fileFormat)

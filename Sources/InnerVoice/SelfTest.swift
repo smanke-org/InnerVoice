@@ -87,6 +87,35 @@ enum SelfTest {
             }
         }
 
+        // Activity: reviewing guesses counts kept and changed, per AI model; numbers only.
+        do {
+            let store = ActivityStore.shared
+            store.resetForTest()
+            let guesses = doc.project.lines.filter { $0.speakerID != nil && $0.source != .user }.prefix(2)
+            if guesses.count == 2, let other = doc.project.characters.first(where: { $0.id != guesses.last!.speakerID }) {
+                doc.change("", undoManager: nil) { p in
+                    for i in p.lines.indices where guesses.contains(where: { $0.id == p.lines[i].id }) { p.lines[i].source = .ai; p.lines[i].aiModel = "Test Model" }
+                }
+                doc.assign([guesses.first!.id], to: guesses.first!.speakerID, undoManager: undo)
+                doc.assign([guesses.last!.id], to: other.id, undoManager: undo)
+                let t = store.log.lifetime
+                let acc = ModelAccuracy.all(in: t).first { $0.model == "Test Model" }
+                check("confirming a guess counts as kept, changing it as changed",
+                      t[ActivityKey.guessesKept] == 1 && t[ActivityKey.guessesChanged] == 1, "\(t)")
+                check("AI accuracy is kept per model", acc?.kept == 1 && acc?.changed == 1 && acc?.rate == 0.5)
+                undo.undo(); undo.undo(); undo.undo()
+            }
+            if let l = doc.project.lines.first(where: { $0.toneSource == .rule || $0.toneSource == .ai }), let t = l.tone {
+                doc.setTone(t, for: [l.id], undoManager: undo)
+                check("confirming a tone counts as kept", store.log.lifetime[ActivityKey.tonesKept] == 1)
+                undo.undo()
+            }
+            let saved = (try? JSONEncoder().encode(store.log)).map { String(decoding: $0, as: UTF8.self) } ?? ""
+            let words = doc.project.chapters.flatMap(\.paragraphs).flatMap { $0.text.split(separator: " ") }.filter { $0.count > 6 }.prefix(50)
+            check("Activity stores numbers only, nothing from the book", !words.contains { saved.contains($0) })
+            store.resetForTest()
+        }
+
         // Project types: each shows its own pages; nothing is deleted when switching.
         do {
             let all = Workspace.Page.allCases.filter { $0 != .revisions }

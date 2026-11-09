@@ -178,6 +178,7 @@ final class ElevenLabs {
             req.httpBody = try JSONSerialization.data(withJSONObject: body)
             let (data, response) = try await send(req)
             try Self.throwIfFailed(response, data)
+            ActivityStore.shared.record(ActivityKey.elevenLabsCharacters, count: piece.count)
             samples += Self.pcm16(data)
         }
         return try ModelSpeech.buffer(ModelSpeech.level(samples), volume: request.kind == .thought ? 0.85 : 1)

@@ -45,6 +45,9 @@ struct ProjectWindow: View {
         .sheet(isPresented: $workspace.showProjectSettings) {
             ProjectSettingsSheet(document: document, isPresented: $workspace.showProjectSettings)
         }
+        .sheet(isPresented: $workspace.showBookStats) {
+            BookStatsSheet(document: document, isPresented: $workspace.showBookStats)
+        }
         // Asked once per project, new or made before the question existed. Test runs don't
         // ask (snapshots show the sheet on purpose).
         .onAppear { askProjectTypeIfNeeded() }
@@ -231,6 +234,9 @@ enum Importer {
         let book = try await Task.detached(priority: .userInitiated) { try ManuscriptImporter.read(url) }.value
         var project = ProjectBuilder.make(from: book, fileName: url.lastPathComponent)
         PronunciationFinder.refresh(&project, isKnownWord: SpellCheck.isKnown)
+        // Activity: lines the rules tagged on import.
+        let byRules = project.lines.filter { $0.speakerID != nil && ($0.source == .rule || $0.source == .exchange) }.count
+        await MainActor.run { ActivityStore.shared.record(ActivityKey.linesRules, count: byRules) }
         var original: (String, Data)?
         if let data = try? Data(contentsOf: url), data.count < 200_000_000 { original = (url.lastPathComponent, data) }
         return (project, original)

@@ -75,7 +75,10 @@ struct PronunciationsPage: View {
             }
             .width(48)
             TableColumn("Confirmed") { p in
-                Toggle("Confirmed", isOn: Binding(get: { p.confirmed }, set: { v in update(p.id, "Confirm Pronunciation") { $0.confirmed = v } }))
+                Toggle("Confirmed", isOn: Binding(get: { p.confirmed }, set: { v in
+                    if v, !p.confirmed { ActivityStore.shared.record(ActivityKey.pronunciations) }
+                    update(p.id, "Confirm Pronunciation") { $0.confirmed = v }
+                }))
                     .labelsHidden()
                     .toggleStyle(.checkbox)
                     .help("Checked with the author or rights holder")

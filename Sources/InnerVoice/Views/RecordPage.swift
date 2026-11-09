@@ -274,6 +274,7 @@ struct RetakesPage: View {
                     ForEach(retakes) { r in
                         HStack(alignment: .firstTextBaseline, spacing: Space.md) {
                             Toggle("Done", isOn: Binding(get: { r.done }, set: { v in
+                                if v, !r.done { ActivityStore.shared.record(ActivityKey.retakesCleared) }
                                 document.change(v ? "Finish Retake" : "Reopen Retake", undoManager: undoManager) { p in
                                     if let i = p.retakes.firstIndex(where: { $0.id == r.id }) { p.retakes[i].done = v }
                                 }

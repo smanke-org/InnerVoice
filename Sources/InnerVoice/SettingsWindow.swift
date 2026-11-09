@@ -190,6 +190,7 @@ struct SettingsPane: View {
                 case .voices: VoicesSettings()
                 case .recording: RecordingSettings()
                 case .appearance: AppearanceSettings()
+                case .activity: ActivitySettings()
                 case .ai: EmptyView()
                 }
             }

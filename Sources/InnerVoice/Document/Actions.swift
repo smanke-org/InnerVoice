@@ -6,6 +6,8 @@ import SwiftUI
 @MainActor extension InnerVoiceDocument {
     func assign(_ lineIDs: [UUID], to speaker: UUID?, undoManager: UndoManager?) {
         let name = lineIDs.count == 1 ? "Assign Line" : "Assign \(lineIDs.count) Lines"
+        let ids = Set(lineIDs)
+        ActivityStore.shared.recordReview(before: project.lines.filter { ids.contains($0.id) }, newSpeaker: speaker)
         change(name, undoManager: undoManager) { p in
             let set = Set(lineIDs)
             for i in p.lines.indices where set.contains(p.lines[i].id) {
@@ -38,6 +40,9 @@ import SwiftUI
 
     /// The text is narration after all.
     func removeLines(_ lineIDs: [UUID], undoManager: UndoManager?) {
+        // A guess that turned out to be narration was a wrong guess.
+        let ids = Set(lineIDs)
+        ActivityStore.shared.recordReview(before: project.lines.filter { ids.contains($0.id) && $0.source != .none }, newSpeaker: nil)
         change(lineIDs.count == 1 ? "Mark as Narration" : "Mark \(lineIDs.count) Lines as Narration", undoManager: undoManager) { p in
             let set = Set(lineIDs)
             p.lines.removeAll { set.contains($0.id) }
@@ -135,6 +140,7 @@ import SwiftUI
     }
 
     func toggleRecorded(_ paragraphID: UUID, undoManager: UndoManager?) {
+        if !project.recorded.contains(paragraphID) { ActivityStore.shared.record(ActivityKey.paragraphsRecorded) }
         change(project.recorded.contains(paragraphID) ? "Mark Not Recorded" : "Mark Recorded", undoManager: undoManager) { p in
             if p.recorded.contains(paragraphID) { p.recorded.remove(paragraphID) } else { p.recorded.insert(paragraphID) }
         }
@@ -146,6 +152,7 @@ import SwiftUI
     }
 
     func addRetake(_ paragraphID: UUID, note: String, undoManager: UndoManager?) {
+        if !project.retakes.contains(where: { $0.paragraphID == paragraphID && !$0.done }) { ActivityStore.shared.record(ActivityKey.retakesMarked) }
         change("Mark Retake", undoManager: undoManager) { p in
             if let i = p.retakes.firstIndex(where: { $0.paragraphID == paragraphID && !$0.done }) {
                 p.retakes[i].note = note
@@ -246,6 +253,7 @@ final class Workspace {
     /// "What is this project for?" (asked once per project).
     var showProjectType = false
     var showProjectSettings = false
+    var showBookStats = false
     /// Where to go when the running Tag Speakers finishes (the AI voices setup ends on Voices).
     var afterTagging: Page?
     /// The narrator or character chosen on the Voices page.

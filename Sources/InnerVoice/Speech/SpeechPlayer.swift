@@ -154,6 +154,7 @@ final class SpeechPlayer {
                     self.lastStarted = seg
                     onSegment?(seg)
                     await self.node.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack)
+                    if !Task.isCancelled { ActivityStore.shared.record(ActivityKey.secondsPlayed, count: Int((Double(buffer.frameLength) / buffer.format.sampleRate).rounded())) }
                     try Task.checkCancellation()
                     if seg.pauseAfter > 0 {
                         await self.node.scheduleBuffer(SpeechAudio.silence(seg.pauseAfter), completionCallbackType: .dataPlayedBack)

@@ -102,9 +102,13 @@ final class TaggingController {
                             }
                         }
                         if let replies {
+                            let modelName = model.displayName
                             document.applyQuietly { p in
                                 let before = AttributionPrompt.apply(replies, chunk: chunk, to: &p)
                                 for l in before where changed[l.id] == nil { changed[l.id] = l }
+                                // Which model tagged each line, for its accuracy in Activity.
+                                let ids = Set(before.map(\.id))
+                                for i in p.lines.indices where ids.contains(p.lines[i].id) && p.lines[i].source == .ai { p.lines[i].aiModel = modelName }
                             }
                         }
                         self.status?.progress = (Double(n) + Double(k + 1) / Double(max(1, chunks.count)) * 0.7) / Double(total)
@@ -132,6 +136,15 @@ final class TaggingController {
                     }
                 }
                 document.applyQuietly { $0.tonesTagged = .now }
+                // Activity: lines the run gave a speaker or a tone (numbers only).
+                for line in document.project.lines {
+                    guard let old = changed[line.id] else { continue }
+                    if old.speakerID == nil, line.speakerID != nil {
+                        if line.source == .ai { ActivityStore.shared.record(ActivityKey.linesAI) }
+                        if line.source == .rule || line.source == .exchange { ActivityStore.shared.record(ActivityKey.linesRules) }
+                    }
+                    if line.toneSource == .ai, old.toneSource != .ai { ActivityStore.shared.record(ActivityKey.tonesAI) }
+                }
                 newCharacters = document.project.characters.map(\.id).filter { !charactersBefore.contains($0) }
                 document.applyQuietly { $0.lastTagged = .now }
                 let needs = document.project.linesNeedingYou
@@ -262,6 +275,7 @@ final class TaggingController {
                     }
                 }
                 document.applyQuietly { $0.summariesBuilt = .now }
+                ActivityStore.shared.record(ActivityKey.facts, count: added)
                 // Summaries say who sounds like what: cast the voices that were unsure.
                 VoiceCastingRun.castIfNeeded(document: document)
                 self.finished = added == 0 ? "No new facts found." : "Added \(added) facts to the cast's summaries."

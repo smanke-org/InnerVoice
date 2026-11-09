@@ -33,6 +33,9 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | Same as Narrator | A character whose lines are read in the narrator's voice | narrator voice, default voice |
 | Project type | What a project is for: Narration Tools or Produce with AI Voices; decides which pages and commands show | mode, workflow |
 | Project Settings | Book › Project Settings: settings that belong to one book (its project type) | document settings |
+| Activity | Settings › Activity: what InnerVoice did for you across books (numbers only) | analytics, usage, telemetry |
+| Book Stats | Book › Book Stats: the open book's numbers | statistics, report |
+| Lines tagged for you | Lines the rules or the AI gave a speaker | auto-tagged |
 | Cloud | Marks ElevenLabs, the one engine that sends text off the Mac | online, remote |
 | Send This Book to ElevenLabs | The per-book permission before any of its text goes to ElevenLabs; Stop Sending This Book ends it | consent, opt in |
 | Sound | A sigh, laugh, gasp, groan, sniffle, yawn or cough a speech tag asks for; Orpheus performs it | effect, tag |

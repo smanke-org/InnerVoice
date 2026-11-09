@@ -228,6 +228,9 @@ enum Snapshot {
                 await shot("project-settings") { workspace.showProjectSettings = true }
                 workspace.showProjectSettings = false
                 try? await Task.sleep(for: .seconds(0.5))
+                await shot("book-stats") { workspace.showBookStats = true }
+                workspace.showBookStats = false
+                try? await Task.sleep(for: .seconds(0.5))
                 for purpose in ProjectPurpose.allCases {
                     await shot("type-\(purpose.rawValue)") {
                         document.updateSettings("", undoManager: nil) { $0.purpose = purpose }
@@ -244,6 +247,7 @@ enum Snapshot {
                 try? await Task.sleep(for: .seconds(0.5))
             }
             if wants("settings") {
+                ActivityStore.shared.seedForSnapshot()
                 for mode in ["light", "dark"] {
                     NSApp.appearance = NSAppearance(named: mode == "light" ? .aqua : .darkAqua)
                     for tab in SettingsTab.allCases {

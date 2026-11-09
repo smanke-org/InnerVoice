@@ -247,3 +247,95 @@ struct ProjectSettingsSheet: View {
         .noInitialFocus()
     }
 }
+
+/// Book › Book Stats: this book's numbers, for its project type. Worked out from the book
+/// itself, so they're always current.
+struct BookStatsSheet: View {
+    @ObservedObject var document: InnerVoiceDocument
+    @Binding var isPresented: Bool
+
+    var body: some View {
+        let p = document.project
+        let index = document.index
+        let lines = p.lines
+        let total = lines.count
+        let auto = lines.filter { $0.speakerID != nil && ($0.source == .ai || $0.source == .rule || $0.source == .exchange) }.count
+        let byYou = lines.filter { $0.source == .user }.count
+        let needs = p.linesNeedingYou
+        let chaptersDone = p.chapters.filter { c in
+            c.paragraphs.allSatisfy { para in (index.linesByParagraph[para.id] ?? []).allSatisfy { !p.needsYou(p.lines[$0]) } }
+        }.count
+        let speaking = p.characters.filter { (index.stats[$0.id]?.lines ?? 0) > 0 }
+        let paragraphs = p.chapters.reduce(0) { $0 + $1.paragraphs.count }
+        VStack(alignment: .leading, spacing: Space.lg) {
+            HStack(spacing: Space.sm) {
+                Text("Book Stats").font(.title2.weight(.semibold))
+                Spacer()
+                if let purpose = p.settings.purpose {
+                    Label(purpose.title, systemImage: purpose.symbol).font(.callout).foregroundStyle(.secondary)
+                }
+            }
+            Text(p.title).foregroundStyle(.secondary)
+            HStack(alignment: .top, spacing: Space.lg) {
+                stat(total == 0 ? "—" : "\(Int((Double(auto) / Double(total) * 100).rounded()))%", "of lines tagged for you")
+                stat("\(chaptersDone) of \(p.chapters.count)", "chapters with nothing to review")
+                stat(needs.formatted(), needs == 1 ? "line needs you" : "lines need you")
+            }
+            Form {
+                Section("Speakers") {
+                    row("Lines", total.formatted())
+                    row("Tagged by the rules or the AI", auto.formatted())
+                    row("Assigned or confirmed by you", byYou.formatted())
+                    row("Speaking characters", speaking.count.formatted())
+                    row("Character facts", p.characters.reduce(0) { $0 + $1.facts.count }.formatted())
+                    let toned = lines.filter { $0.tone != nil && $0.tone != .neutral }.count
+                    row("Lines with a tone other than neutral", toned.formatted())
+                }
+                if p.showsNarrationTools {
+                    Section("Narration") {
+                        row("Pronunciations confirmed", "\(p.pronunciations.filter(\.confirmed).count) of \(p.pronunciations.count)")
+                        row("Paragraphs recorded", "\(p.recorded.count) of \(paragraphs)")
+                        row("Retakes still to do", p.retakes.filter { !$0.done }.count.formatted())
+                    }
+                }
+                if p.showsVoices {
+                    let engine = p.engineInUse
+                    Section("AI Voices") {
+                        row("Engine", engine.title)
+                        row("Characters with a voice", "\(speaking.filter { $0.voice(for: engine) != nil }.count) of \(speaking.count)")
+                        row("Voices you chose or confirmed", speaking.filter { $0.voice(for: engine)?.source == .user }.count.formatted())
+                        row("Tones you set", lines.filter { $0.toneSource == .user }.count.formatted())
+                    }
+                }
+            }
+            .formStyle(.grouped)
+            // Scrolls on short screens instead of running past the window.
+            .frame(height: min(440, (NSScreen.main?.visibleFrame.height ?? 900) - 360))
+            HStack {
+                Button("All Activity…") {
+                    isPresented = false
+                    SettingsWindow.shared.show(tab: .activity)
+                }
+                .help("What InnerVoice has done across all your books (Settings › Activity)")
+                Spacer()
+                Button("Done") { isPresented = false }.keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(Space.xl)
+        .frame(width: 560)
+        .fixedSize(horizontal: false, vertical: true)
+        .noInitialFocus()
+    }
+
+    private func stat(_ value: String, _ label: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value).font(.title2.weight(.semibold)).monospacedDigit()
+            Text(label).font(.caption).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func row(_ label: String, _ value: String) -> some View {
+        LabeledContent(label) { Text(value).monospacedDigit().foregroundStyle(.secondary) }
+    }
+}

@@ -218,6 +218,8 @@ struct BookCommands: Commands {
             .disabled(focus == nil)
             Button("Choose Model…") { focus?.workspace.showModelSheet = true }
                 .disabled(focus == nil)
+            Button("Book Stats…") { focus?.workspace.showBookStats = true }
+                .disabled(focus == nil)
             Button("Project Settings…") { focus?.workspace.showProjectSettings = true }
                 .keyboardShortcut(",", modifiers: [.command, .option])
                 .disabled(focus == nil)
@@ -319,6 +321,8 @@ enum RevisionImport {
             do {
                 let book = try await Task.detached { try ManuscriptImporter.read(url) }.value
                 let result = RevisionMerger.merge(focus.document.project, with: book, fileName: url.lastPathComponent)
+                // Activity: tags that carried over instead of being done again.
+                ActivityStore.shared.record(ActivityKey.linesCarriedOver, count: result.project.lines.filter { $0.speakerID != nil }.count)
                 focus.document.change("Import Revised Manuscript", undoManager: focus.undoManager, textChanged: true) { $0 = result.project }
                 if let data = try? Data(contentsOf: url) { focus.document.original = (url.lastPathComponent, data) }
                 focus.workspace.page = .revisions

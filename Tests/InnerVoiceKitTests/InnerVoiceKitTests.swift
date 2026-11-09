@@ -771,3 +771,24 @@ private let appleVoices = [
     #expect(choices.allSatisfy { $0.engine == .qwen || $0.engine == .orpheus })
     #expect(p.settings.narratorVoice(for: .mixed).map { $0.choice.engine != .mixed } == true)
 }
+
+
+@Test func activityLogAddsUpAndCombinesMacs() {
+    var a = ActivityLog(), b = ActivityLog()
+    let cal = Calendar(identifier: .gregorian)
+    let day1 = cal.date(from: DateComponents(year: 2026, month: 11, day: 1))!
+    let day2 = cal.date(from: DateComponents(year: 2026, month: 11, day: 2))!
+    a.record(ActivityKey.linesAI, count: 10, at: day1, calendar: cal)
+    a.record(ActivityKey.aiKept("M"), count: 9, at: day1, calendar: cal)
+    a.record(ActivityKey.aiChanged("M"), count: 1, at: day2, calendar: cal)
+    b.record(ActivityKey.linesAI, count: 5, at: day2, calendar: cal)
+    let both = ActivityLog.combined([a, b])
+    #expect(both.lifetime[ActivityKey.linesAI] == 15)
+    #expect(both.firstDay == "2026-11-01")
+    #expect(both.totals(since: day2, calendar: cal)[ActivityKey.linesAI] == 5)
+    let m = ModelAccuracy.all(in: both.lifetime)
+    #expect(m.count == 1 && m[0].reviewed == 10 && m[0].rate == 0.9)
+    var old = a
+    old.trim(keepDays: 1, now: cal.date(from: DateComponents(year: 2026, month: 12, day: 1))!, calendar: cal)
+    #expect(old.days.isEmpty && old.lifetime[ActivityKey.linesAI] == 10)
+}

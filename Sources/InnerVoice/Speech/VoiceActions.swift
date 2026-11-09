@@ -4,6 +4,9 @@ import SwiftUI
 /// The narrator's voice and tone edits. Each is one undo step.
 @MainActor extension InnerVoiceDocument {
     func setTone(_ tone: Tone, for lineIDs: [UUID], undoManager: UndoManager?) {
+        for l in project.lines where lineIDs.contains(l.id) && (l.toneSource == .ai || l.toneSource == .rule) {
+            ActivityStore.shared.record(l.tone == tone ? ActivityKey.tonesKept : ActivityKey.tonesChanged)
+        }
         change(lineIDs.count == 1 ? "Set Tone" : "Set Tone of \(lineIDs.count) Lines", undoManager: undoManager) { p in
             let set = Set(lineIDs)
             for i in p.lines.indices where set.contains(p.lines[i].id) {
@@ -18,6 +21,9 @@ import SwiftUI
     /// narrator's choice: casting never changes it.
     func setVoice(_ choice: VoiceChoice, for characterID: UUID?, undoManager: UndoManager?) {
         let voice = CastVoice(choice: choice, confidence: 1, source: .user)
+        if let id = characterID, let old = project.character(id)?.voice(for: project.engineInUse == .mixed ? .mixed : choice.engine), old.source == .auto {
+            ActivityStore.shared.record(old.choice == choice ? ActivityKey.voicesKept : ActivityKey.voicesChanged)
+        }
         // Mixing engines: the voice is kept with the project's mixed casting, whatever its engine.
         let key: VoiceEngine = project.engineInUse == .mixed ? .mixed : choice.engine
         change(characterID == nil ? "Choose Narrator Voice" : "Choose Voice", undoManager: undoManager) { p in

@@ -78,6 +78,12 @@ struct ModelRow: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                // How it did on this person's own books (Settings › Activity), once there's enough to go on.
+                if let acc = ModelAccuracy.all(in: ActivityStore.shared.combined(allMacs: true).lifetime).first(where: { $0.model == model.name }), acc.reviewed >= 10 {
+                    Label("On your books: \(Int((acc.rate * 100).rounded()))% of \(acc.reviewed.formatted()) checked guesses kept", systemImage: "chart.bar")
+                        .font(.callout)
+                        .foregroundStyle(Palette.accentText)
+                }
                 HStack(spacing: Space.lg) {
                     Meter(label: "Accuracy", value: model.quality)
                     Meter(label: "Speed", value: model.speed)
