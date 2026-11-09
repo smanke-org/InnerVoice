@@ -40,6 +40,7 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | Playback speed | How fast Play plays (0.75× to 2×), pauses included; Export Audio is always 1× | rate, tempo |
 | From the book | The part of a character's Voice Notes Build Summary writes (age, gender, accent, voice, manner); the narrator's once edited | AI notes, auto notes |
 | Design a Voice from Voice Notes | ElevenLabs designs a new voice from a character's description and Voice Notes (Cloud; uses credits and a voice slot) | clone, generate voice |
+| Use Voices from Another Project | Copy voices (and optionally Voice Notes, narrator voice, engine) from an earlier book in a series, after matching its characters to this book's | import cast, series voices, voice transfer |
 | Voice brief | The AI's casting note in Voice Notes: pitch, pace, texture, attitude, and the contrast with scene partners | voice profile, direction |
 | Cloud | Marks ElevenLabs, the one engine that sends text off the Mac | online, remote |
 | Send This Book to ElevenLabs | The per-book permission before any of its text goes to ElevenLabs; Stop Sending This Book ends it | consent, opt in |

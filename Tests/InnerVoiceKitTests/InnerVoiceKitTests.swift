@@ -885,3 +885,48 @@ private let appleVoices = [
     let short = VoiceDescription.design(base: "A woman.", character: c, limit: 200)
     #expect(short.count <= 200 && short.hasSuffix("."))
 }
+
+@Test func seriesVoicesMatchAndCarryOver() {
+    // The earlier book: three voiced characters and a narrator voice.
+    var old = Project.empty
+    let mara = BookCharacter(name: "Mara Quinn", aliases: ["Miss Quinn"], colorHex: "#111111", voiceNotes: "Warm, clipped.")
+    let tom = BookCharacter(name: "Tom Hale", colorHex: "#222222")
+    let edda = BookCharacter(name: "Doctor Edda Voss", colorHex: "#333333")
+    let nobody = BookCharacter(name: "Silent Sam", colorHex: "#444444")
+    old.characters = [mara, tom, edda, nobody]
+    let qwen = VoiceChoice(engine: .qwen, voiceID: "design", design: "A woman with a warm voice.")
+    old.characters[0].setVoice(CastVoice(choice: qwen, confidence: 0.6, source: .auto), for: .qwen)
+    old.characters[0].setVoice(CastVoice(choice: VoiceChoice(engine: .apple, voiceID: "karen"), confidence: 0.6, source: .auto), for: .apple)
+    old.characters[1].setVoice(CastVoice(choice: VoiceChoice(engine: .orpheus, voiceID: "leo"), confidence: 1, source: .user), for: .orpheus)
+    old.characters[2].setVoice(CastVoice(choice: VoiceChoice(engine: .orpheus, voiceID: "zac"), confidence: 1, source: .user), for: .orpheus)
+    old.settings.voiceEngine = .qwen
+    old.settings.setNarratorVoice(CastVoice(choice: VoiceInfo.qwenPresets[0].choice, confidence: 1, source: .auto), for: .qwen)
+
+    // This book: Mara goes by "Miss Quinn" as her name now, Tom keeps his, Edda is just "Edda".
+    var new = Project.empty
+    new.characters = [BookCharacter(name: "Miss Quinn", colorHex: "#aaaaaa"), BookCharacter(name: "Tom Hale", colorHex: "#bbbbbb"),
+                      BookCharacter(name: "Edda", colorHex: "#cccccc"), BookCharacter(name: "Pip", colorHex: "#dddddd")]
+    let oldIndex = BookIndex(old)
+    // Only characters with a voice are offered.
+    #expect(SeriesVoices.voiced(old, index: oldIndex).count == 3)
+    let matches = SeriesVoices.suggest(from: old, oldIndex: oldIndex, to: new)
+    let byName = Dictionary(uniqueKeysWithValues: matches.map { ($0.source, $0) })
+    #expect(byName[mara.id]?.target == new.characters[0].id && byName[mara.id]?.how == .name)
+    #expect(byName[tom.id]?.target == new.characters[1].id && byName[tom.id]?.how == .name)
+    #expect(byName[edda.id]?.target == new.characters[2].id && byName[edda.id]?.how == .firstName)
+
+    // Leave Tom out, then apply.
+    let chosen = matches.map { $0.source == tom.id ? SeriesVoices.Match(source: tom.id, target: nil, how: nil) : $0 }
+    let n = SeriesVoices.apply(chosen, from: old, to: &new, options: .init())
+    #expect(n == 2)
+    let q = new.characters[0]
+    #expect(q.voice(for: .qwen)?.choice == qwen && q.voice(for: .qwen)?.source == .user && q.voice(for: .apple)?.choice.voiceID == "karen")
+    #expect(q.voiceNotes == "Warm, clipped.")
+    #expect(new.characters[1].voices == nil)
+    #expect(new.characters[2].voice(for: .orpheus)?.choice.voiceID == "zac")
+    #expect(new.settings.voiceEngine == .qwen && new.settings.narratorVoice(for: .qwen)?.source == .user)
+
+    // Casting keeps carried-over voices.
+    VoiceCasting.cast(&new, index: BookIndex(new), engine: .orpheus, voices: VoiceInfo.orpheus)
+    #expect(new.characters[2].voice(for: .orpheus)?.choice.voiceID == "zac")
+}

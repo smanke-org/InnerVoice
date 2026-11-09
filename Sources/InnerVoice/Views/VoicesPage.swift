@@ -50,6 +50,10 @@ struct VoicesPage: View {
                     .help("Choose every voice again from the character summaries. Voices you chose stay.")
             }
             ToolbarItem {
+                Button("Use Voices from Another Project", systemImage: "books.vertical") { workspace.showSeriesVoices = true }
+                    .help("Give characters the voices they had in an earlier book in the series. You match the characters first.")
+            }
+            ToolbarItem {
                 PlayStopButton(document: document, workspace: workspace)
             }
         }

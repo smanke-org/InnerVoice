@@ -70,6 +70,21 @@ nonisolated final class InnerVoiceDocument: ReferenceFileDocument {
         original = contents.original.map { ($0.name, $0.data) }
     }
 
+    /// Reads another project's book model from disk without opening it (Use Voices from
+    /// Another Project). Single files and 0.1.0 packages both work.
+    nonisolated static func readProject(at url: URL) throws -> Project {
+        let wrapper = try FileWrapper(url: url, options: .immediate)
+        let contents: ProjectArchive.Contents
+        if wrapper.isDirectory {
+            contents = try readPackage(wrapper)
+        } else if let data = wrapper.regularFileContents, ProjectArchive.looksLikeArchive(data) {
+            contents = try ProjectArchive.read(data)
+        } else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        return try decoder.decode(Project.self, from: contents.projectJSON)
+    }
+
     /// A project saved as a package (Inner Voice 0.1.0).
     private static func readPackage(_ wrapper: FileWrapper) throws -> ProjectArchive.Contents {
         guard let data = wrapper.fileWrappers?["project.json"]?.regularFileContents else {

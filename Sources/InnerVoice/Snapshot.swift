@@ -267,6 +267,30 @@ enum Snapshot {
                 await shot("project-settings") { workspace.showProjectSettings = true }
                 workspace.showProjectSettings = false
                 try? await Task.sleep(for: .seconds(0.5))
+                // Use Voices from Another Project, with a made-up earlier book in the series.
+                await shot("series-voices", settle: 1.2) {
+                    var earlier = document.project
+                    earlier.title = "Saltwater Hymns"
+                    earlier.importedAt = .distantPast
+                    let designs = ["Mara": "A woman in her thirties with a warm, clipped voice.", "Tom": "An older man with a low, gravelly voice speaking English with a Scottish accent.",
+                                   "Edda": "A woman with a precise, clipped voice speaking English with a German accent.", "Pip": "A young boy with a bright, breathless voice."]
+                    for i in earlier.characters.indices {
+                        let d = designs[earlier.characters[i].firstName] ?? "An adult with a clear, natural voice."
+                        earlier.characters[i].setVoice(CastVoice(choice: VoiceChoice(engine: .qwen, voiceID: "design", design: d), confidence: 1, source: .user), for: .qwen)
+                    }
+                    // In this book Tom is just "Tom", and Pip isn't in the earlier one.
+                    if let t = earlier.characters.firstIndex(where: { $0.name.hasPrefix("Tom") }) { earlier.characters[t].name = "Tom"; earlier.characters[t].aliases = [] }
+                    earlier.characters.removeAll { $0.name.hasPrefix("Pip") }
+                    earlier.characters.append(BookCharacter(name: "Old Quinn", colorHex: "#7A8B99"))
+                    earlier.characters[earlier.characters.count - 1].setVoice(CastVoice(choice: VoiceInfo.qwenPresets[3].choice, confidence: 1, source: .user), for: .qwen)
+                    earlier.settings.voiceEngine = .qwen
+                    earlier.settings.setNarratorVoice(CastVoice(choice: VoiceInfo.qwenPresets[0].choice, confidence: 1, source: .user), for: .qwen)
+                    workspace.seriesSource = earlier
+                    workspace.showSeriesVoices = true
+                }
+                workspace.showSeriesVoices = false
+                workspace.showProjectSettings = false
+                try? await Task.sleep(for: .seconds(0.5))
                 await shot("book-stats") { workspace.showBookStats = true }
                 workspace.showBookStats = false
                 try? await Task.sleep(for: .seconds(0.5))

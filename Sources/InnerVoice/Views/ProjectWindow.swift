@@ -53,6 +53,9 @@ struct ProjectWindow: View {
         } message: {
             Text("InnerVoice has already read the book for every character. Running it again adds what it finds to their summaries and updates the “From the book” part of each character’s voice notes.\n\nVoices that casting picked may change to fit the new notes; voices you chose stay as they are. To fine-tune how a character sounds, edit their voice notes on their page: casting and the AI voices read them.")
         }
+        .sheet(isPresented: $workspace.showSeriesVoices, onDismiss: { workspace.seriesSource = nil }) {
+            SeriesVoicesSheet(document: document, isPresented: $workspace.showSeriesVoices, preset: workspace.seriesSource)
+        }
         .sheet(isPresented: $workspace.showBookStats) {
             BookStatsSheet(document: document, isPresented: $workspace.showBookStats)
         }

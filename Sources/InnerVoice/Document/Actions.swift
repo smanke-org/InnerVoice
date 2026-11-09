@@ -254,6 +254,10 @@ final class Workspace {
     var showProjectType = false
     var showProjectSettings = false
     var showBookStats = false
+    /// Use Voices from Another Project (a book earlier in the series).
+    var showSeriesVoices = false
+    /// The earlier book, already read (snapshots pass a made-up one).
+    var seriesSource: Project?
     /// "Analyze the Whole Cast Again?" before a second Build Summaries for everyone.
     var askAnalyzeCastAgain = false
     /// Where to go when the running Tag Speakers finishes (the AI voices setup ends on Voices).

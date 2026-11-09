@@ -381,6 +381,35 @@ enum SelfTest {
 
     /// ElevenLabs against a fake server inside the app: setup, voices, the book's permission
     /// (nothing is sent without it), audio tags, errors.
+    /// Use Voices from Another Project: an earlier book saved to /tmp is read back without
+    /// opening it, its voices go to the matched characters as one undo step.
+    private static func seriesVoices(_ doc: InnerVoiceDocument, undo: UndoManager) {
+        var earlier = doc.project
+        earlier.title = "Saltwater Hymns"
+        guard let tom = earlier.characters.firstIndex(where: { $0.name.hasPrefix("Tom") }) else { return }
+        let voice = VoiceChoice(engine: .orpheus, voiceID: "leo")
+        earlier.characters[tom].setVoice(CastVoice(choice: voice, confidence: 1, source: .user), for: .orpheus)
+        earlier.characters[tom].voiceNotes = "Low and slow, from the earlier book."
+        let url = URL(fileURLWithPath: "/tmp/innervoice-selftest-series.innervoice")
+        do {
+            try InnerVoiceDocument.archive(.init(project: earlier, audio: [:], original: nil)).write(to: url)
+            let read = try InnerVoiceDocument.readProject(at: url)
+            try? FileManager.default.removeItem(at: url)
+            let matches = SeriesVoices.suggest(from: read, oldIndex: BookIndex(read), to: doc.project)
+            let before = doc.project
+            doc.change("Use Voices from \(read.title)", undoManager: undo) { SeriesVoices.apply(matches, from: read, to: &$0, options: .init(engine: false)) }
+            let now = doc.project.characters.first { $0.name.hasPrefix("Tom") }
+            check("Use Voices from Another Project reads the earlier book and gives Tom his voice and notes",
+                  read.title == "Saltwater Hymns" && now?.voice(for: .orpheus)?.choice == voice && now?.voice(for: .orpheus)?.source == .user
+                  && now?.voiceNotes == "Low and slow, from the earlier book.")
+            undo.undo()
+            // (Earlier steps in this run share the undo group, so only the characters are compared.)
+            check("one Undo takes the carried-over voices back", doc.project.characters == before.characters)
+        } catch {
+            check("Use Voices from Another Project reads the earlier book", false, error.localizedDescription)
+        }
+    }
+
     /// What views ask on every redraw (which engines are on and downloaded, the engine in use,
     /// the voice lists and names) must be cheap: these used to read the keychain, list the
     /// model folders and ask the system for its voices each time, and the window lagged.
@@ -698,6 +727,7 @@ enum SelfTest {
         if ProcessInfo.processInfo.environment["APP_SELFTEST_DOWNLOAD"] != nil { await voiceDownload() }
         await elevenLabs(doc, undo: undo)
         redrawCost(doc)
+        seriesVoices(doc, undo: undo)
 
         if let path = ProcessInfo.processInfo.environment["APP_SELFTEST_MODEL"] {
             await liveModel(path: path)

@@ -236,6 +236,8 @@ struct BookCommands: Commands {
                 .disabled(focus == nil)
             if focus?.document.project.showsVoices ?? true {
             Divider()
+            Button("Use Voices from Another Project…") { focus?.workspace.showSeriesVoices = true }
+                .disabled(focus == nil)
             Button("Play Line") {
                 if let f = focus { PlayCommand.playLine(document: f.document, workspace: f.workspace) }
             }
