@@ -27,7 +27,7 @@ enum SpeechError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .engineUnavailable(let e): "\(e.title) isn’t installed yet. Choose it in Settings › Voices to download it, or use Apple Voices."
+        case .engineUnavailable(let e): "\(e.title) isn’t downloaded yet. Download it in Settings › Voices, or choose another engine on the Voices page."
         case .voiceMissing(let name): "The voice “\(name)” isn’t on this Mac anymore. Choose another on the Voices page."
         case .failed(let why): "Unable to speak the line: \(why)"
         }

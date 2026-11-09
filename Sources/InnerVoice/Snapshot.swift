@@ -163,6 +163,14 @@ enum Snapshot {
                     }
                     document.setVoiceEngine(.apple, undoManager: nil)
                 }
+                // The status bar: a line whose engine isn't downloaded (APP_VOICE_MODELS empty).
+                if !ModelSpeech.isInstalled(.orpheus), let main = document.project.characters.first {
+                    await shot("speech-error", settle: 1.5) {
+                        workspace.page = .manuscript
+                        PlayCommand.audition(VoiceChoice(engine: .orpheus, voiceID: "tara"), character: main, document: document)
+                    }
+                    SpeechPlayer.shared.failure = nil
+                }
                 await shot("review-voices", settle: 1.0) { workspace.reviewFilter = "voices"; workspace.page = .review }
                 await shot("audio-export-sheet") { workspace.page = .manuscript; workspace.showAudioExport = true }
                 workspace.showAudioExport = false
