@@ -50,7 +50,7 @@ enum SystemHooks {
 
     /// A test or snapshot run (APP_STORE, APP_SNAPSHOT or --selftest): no updater, sync, menu
     /// bar icon, ToolHUD hub or ShortcutsLens report, and quitting never asks.
-    static var isTestRun: Bool {
+    nonisolated static var isTestRun: Bool {
         let env = ProcessInfo.processInfo.environment
         return !(env["APP_STORE"] ?? "").isEmpty || env["APP_SNAPSHOT"] != nil
             || CommandLine.arguments.contains("--selftest")

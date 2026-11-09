@@ -192,7 +192,7 @@ final class ElevenLabs {
         // 1. Previews of voices that fit the description; the first is kept.
         let design = try await post("v1/text-to-voice/design", [
             "voice_description": text, "model_id": Self.designModel, "auto_generate_text": true,
-            "seed": Int(ModelSpeech.seed(text) % 4_294_967_295),
+            "seed": Self.seed(text),
         ])
         guard let generated = (design["previews"] as? [[String: Any]])?.first?["generated_voice_id"] as? String else {
             throw ElevenLabsError.server(0, "No voice came back")
@@ -215,6 +215,13 @@ final class ElevenLabs {
         return info
     }
 
+    /// The same text in the same voice comes out the same. Kept under 2^31: some ElevenLabs
+    /// endpoints reject larger seeds (422), which made about half of all requests fail.
+    nonisolated static func seed(_ s: String) -> Int { Int(ModelSpeech.seed(s) % 2_147_483_647) }
+
+    /// Text with nothing to say ("…", a lone dash) is rejected by ElevenLabs: not sent.
+    nonisolated static func hasWords(_ s: String) -> Bool { s.contains { $0.isLetter || $0.isNumber } }
+
     // MARK: Speech
 
     /// What ElevenLabs is sent: the text, with v4 audio tags for the tone and any sound the
@@ -233,7 +240,7 @@ final class ElevenLabs {
         guard let key = apiKey, consented != nil else { throw SpeechError.engineUnavailable(.elevenlabs) }
         var pieces: [Data] = []
         let gapCount = Int(SpeechAudio.format.sampleRate * 0.18)
-        for piece in ModelSpeech.chunks(Self.text(for: request), limit: 2000) {
+        for piece in ModelSpeech.chunks(Self.text(for: request), limit: 2000) where Self.hasWords(piece.replacingOccurrences(of: #"\[[^\]]*\]"#, with: "", options: .regularExpression)) {
             try Task.checkCancellation()
             var c = URLComponents(url: Self.host.appending(path: "v1/text-to-speech/\(request.choice.voiceID)"), resolvingAgainstBaseURL: false)!
             c.queryItems = [URLQueryItem(name: "output_format", value: "pcm_24000")]
@@ -242,7 +249,7 @@ final class ElevenLabs {
             req.timeoutInterval = 90
             req.setValue(key, forHTTPHeaderField: "xi-api-key")
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            var body: [String: Any] = ["text": piece, "model_id": Self.model, "seed": Int(ModelSpeech.seed(piece + request.choice.voiceID) % 4_294_967_295)]
+            var body: [String: Any] = ["text": piece, "model_id": Self.model, "seed": Self.seed(piece + request.choice.voiceID)]
             if let rate = request.choice.rate, rate != 1 { body["voice_settings"] = ["speed": min(1.2, max(0.7, rate))] }
             req.httpBody = try JSONSerialization.data(withJSONObject: body)
             let (data, response) = try await send(req)
@@ -250,6 +257,7 @@ final class ElevenLabs {
             ActivityStore.shared.record(ActivityKey.elevenLabsCharacters, count: piece.count)
             pieces.append(data)
         }
+        if pieces.isEmpty { return try ModelSpeech.buffer([Float](repeating: 0, count: Int(SpeechAudio.format.sampleRate * 0.2))) }
         // Decoding and leveling seconds of audio happens off the main thread, so the window
         // stays responsive while lines arrive.
         let leveled = await Task.detached(priority: .userInitiated) { () -> [Float] in
@@ -287,7 +295,14 @@ final class ElevenLabs {
         let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
         let detail = obj?["detail"] as? [String: Any]
         let status = (detail?["status"] as? String ?? "").lowercased()
-        let message = detail?["message"] as? String ?? (obj?["detail"] as? String) ?? ""
+        // A 422 explains itself as a list: [{"loc": [...], "msg": "...", "type": "..."}].
+        let list = (obj?["detail"] as? [[String: Any]])?.compactMap { item -> String? in
+            guard let msg = item["msg"] as? String else { return nil }
+            let field = (item["loc"] as? [Any])?.last.map { "\($0)" }
+            return field.map { "\($0): \(msg)" } ?? msg
+        }.joined(separator: "; ")
+        let message = detail?["message"] as? String ?? (obj?["detail"] as? String) ?? list ?? ""
+        SpeechLog.write("ElevenLabs \(http.statusCode) \(response.url?.path ?? ""): \(status) \(message.prefix(300))")
         switch http.statusCode {
         // A key without a permission (keys are scoped) says which one: show ElevenLabs' words.
         case 401 where status.contains("permission"): throw ElevenLabsError.server(401, message)

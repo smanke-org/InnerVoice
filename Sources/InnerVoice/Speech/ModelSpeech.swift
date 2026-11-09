@@ -122,7 +122,7 @@ enum ModelSpeech {
     }
 
     /// The same text in the same voice always comes out the same.
-    static func seed(_ s: String) -> UInt64 {
+    nonisolated static func seed(_ s: String) -> UInt64 {
         SHA256.hash(data: Data(s.utf8)).prefix(8).reduce(0) { $0 << 8 | UInt64($1) }
     }
 

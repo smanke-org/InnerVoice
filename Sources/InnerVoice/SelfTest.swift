@@ -475,7 +475,22 @@ enum SelfTest {
                 check("a wrong key says so", error.localizedDescription.contains("API key"), error.localizedDescription)
             }
         }
+        // A 422 says why, in ElevenLabs' words.
+        FakeElevenLabs.status = 422
+        SpeechRenderer.shared.clearCache()
+        if let seg = lines.last, let req = r.request(for: seg) {
+            do { _ = try await SpeechRenderer.shared.render(req); check("a 422 says why", false) } catch {
+                check("a 422 says why", error.localizedDescription.contains("seed: Input should be"), error.localizedDescription)
+            }
+        }
         FakeElevenLabs.status = 200
+        // Seeds stay under 2^31, and text with nothing to say isn't sent.
+        let seedsOK = ["a", "Mara", "The lamp turned slowly", "x\u{1F}y"].allSatisfy { (0..<2_147_483_647).contains(ElevenLabs.seed($0)) }
+        let sentBefore = FakeElevenLabs.speechRequests.count
+        if let v = voices.first {
+            _ = try? await ElevenLabs.shared.render(SpeechRequest(text: "…", choice: v.choice, tone: .neutral, kind: .spoken, cloudAllowed: true), allowed: true)
+        }
+        check("seeds fit ElevenLabs, and “…” alone isn't sent", seedsOK && FakeElevenLabs.speechRequests.count == sentBefore)
         // Stop sending this book.
         doc.setCloudVoicesAllowed(false, undoManager: undo)
         let before = FakeElevenLabs.speechRequests.count
@@ -807,6 +822,8 @@ nonisolated final class FakeElevenLabs: URLProtocol, @unchecked Sendable {
                 var pcm = Data()
                 for i in 0..<12_000 { var v = Int16(sin(Double(i) / 24_000 * 2 * .pi * 220) * 8000).littleEndian; pcm.append(Data(bytes: &v, count: 2)) }
                 body = pcm
+            } else if code == 422 {
+                body = Data(#"{"detail":[{"loc":["body","seed"],"msg":"Input should be less than or equal to 2147483647","type":"less_than_equal"}]}"#.utf8)
             } else {
                 body = Data(#"{"detail":{"status":"invalid_api_key","message":"Invalid API key"}}"#.utf8)
             }

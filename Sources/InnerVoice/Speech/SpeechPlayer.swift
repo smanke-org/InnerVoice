@@ -217,6 +217,8 @@ final class SpeechPlayer {
 nonisolated enum SpeechLog {
     static func write(_ message: String) {
         NSLog("InnerVoice speech: %@", message)
+        // Test runs (the fake ElevenLabs server's errors) never write the person's log.
+        guard !SystemHooks.isTestRun else { return }
         let dir = URL.libraryDirectory.appending(path: "Logs/InnerVoice")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let file = dir.appending(path: "speech.log")
