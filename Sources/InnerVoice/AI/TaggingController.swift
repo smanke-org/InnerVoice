@@ -18,6 +18,8 @@ final class TaggingController {
         var characterProgress: Double = 0
         var characterNumber = 0
         var characterCount = 0
+        /// "Analyzing the cast" or "Writing voice briefs".
+        var phase = ""
     }
 
     /// This project's most recent job, so a page shows only the result of its own kind.
@@ -245,10 +247,11 @@ final class TaggingController {
         var facts: [Fact]
         var notes: String
         var fromBook: String?
+        var brief: String?
     }
 
     nonisolated static func snapshot(_ p: Project) -> [UUID: SavedSummary] {
-        Dictionary(p.characters.map { ($0.id, SavedSummary(facts: $0.facts, notes: $0.voiceNotes, fromBook: $0.voiceNotesFromBook)) },
+        Dictionary(p.characters.map { ($0.id, SavedSummary(facts: $0.facts, notes: $0.voiceNotes, fromBook: $0.voiceNotesFromBook, brief: $0.voiceBriefGenerated)) },
                    uniquingKeysWith: { a, _ in a })
     }
 
@@ -258,6 +261,7 @@ final class TaggingController {
             p.characters[i].facts = s.facts
             p.characters[i].voiceNotes = s.notes
             p.characters[i].voiceNotesFromBook = s.fromBook
+            p.characters[i].voiceBriefGenerated = s.brief
         }
     }
 
@@ -272,10 +276,11 @@ final class TaggingController {
             guard let self else { return }
             var added = 0
             var notesWritten = 0
+            var briefsWritten = 0
             defer {
                 self.status = nil
                 self.model = nil
-                if added > 0 || notesWritten > 0 {
+                if added > 0 || notesWritten > 0 || briefsWritten > 0 {
                     let after = Self.snapshot(document.project)
                     document.registerRunUndo("Build Summaries", undoManager: undoManager,
                                              restore: { Self.put(before, &$0) }, redo: { Self.put(after, &$0) })
@@ -288,29 +293,36 @@ final class TaggingController {
                 let index = document.index
                 var cast = document.project.characters.sorted { (index.stats[$0.id]?.lines ?? 0) > (index.stats[$1.id]?.lines ?? 0) }
                 if let only { cast = cast.filter { only.contains($0.id) } }
+                // Two parts: reading the book for facts (most of the time), then a voice brief for
+                // each character, written after everyone's facts so each can be set apart from
+                // the characters they share scenes with.
+                let readShare = 0.75
+                let total = Double(max(1, cast.count))
                 for (n, character) in cast.enumerated() {
                     try Task.checkCancellation()
-                    self.status = Status(job: .summaries, progress: Double(n) / Double(max(1, cast.count)),
+                    self.status = Status(job: .summaries, progress: readShare * Double(n) / total,
                                          message: "Reading about \(character.name) (\(n + 1) of \(cast.count))…",
-                                         character: character.name, characterProgress: 0, characterNumber: n + 1, characterCount: cast.count)
+                                         character: character.name, characterProgress: 0, characterNumber: n + 1, characterCount: cast.count,
+                                         phase: "Analyzing the cast")
                     let chunks = Array(SummaryPrompt.chunks(for: character, project: document.project, index: document.index,
                                                             maxWords: model.passageWords + 200).prefix(4))
+                    let count = Double(max(1, chunks.count))
                     for (k, chunk) in chunks.enumerated() {
                         try Task.checkCancellation()
                         // The character's bar moves while the model reads and writes, not only
                         // between passages (a minor character often has just one).
-                        let count = Double(max(1, chunks.count)), total = Double(max(1, cast.count))
                         let text = try await model.complete(chunk.messages, grammar: SummaryPrompt.grammar, maxTokens: 700) { [weak self] f in
                             Task { @MainActor in
-                                guard let self, self.status?.job == .summaries, self.status?.characterNumber == n + 1 else { return }
+                                guard let self, self.status?.job == .summaries, self.status?.characterNumber == n + 1,
+                                      self.status?.phase == "Analyzing the cast" else { return }
                                 let part = (Double(k) + f) / count
                                 self.status?.characterProgress = max(self.status?.characterProgress ?? 0, part)
-                                self.status?.progress = max(self.status?.progress ?? 0, (Double(n) + part) / total)
+                                self.status?.progress = max(self.status?.progress ?? 0, readShare * (Double(n) + part) / total)
                             }
                         }
-                        let part = Double(k + 1) / Double(max(1, chunks.count))
+                        let part = Double(k + 1) / count
                         self.status?.characterProgress = part
-                        self.status?.progress = (Double(n) + part) / Double(max(1, cast.count))
+                        self.status?.progress = readShare * (Double(n) + part) / total
                         guard let replies = SummaryPrompt.parse(text) else { continue }
                         document.applyQuietly { p in
                             added += SummaryPrompt.merge(replies, chunk: chunk, characterID: character.id, into: &p, index: document.index)
@@ -321,13 +333,41 @@ final class TaggingController {
                         if let i = p.characterIndex(character.id), VoiceNotesFromBook.merge(into: &p.characters[i]) { notesWritten += 1 }
                     }
                 }
+                // Voice briefs: pitch, pace, texture, attitude, and the contrast with scene partners.
+                let speaking = cast.filter { (document.index.stats[$0.id]?.lines ?? 0) > 0 }
+                let briefTotal = Double(max(1, speaking.count))
+                for (m, character) in speaking.enumerated() {
+                    try Task.checkCancellation()
+                    self.status = Status(job: .summaries, progress: readShare + (1 - readShare) * Double(m) / briefTotal,
+                                         message: "Writing a voice brief for \(character.name) (\(m + 1) of \(speaking.count))…",
+                                         character: character.name, characterProgress: 0, characterNumber: m + 1, characterCount: speaking.count,
+                                         phase: "Writing voice briefs")
+                    guard let current = document.project.character(character.id) else { continue }
+                    let messages = VoiceBriefPrompt.messages(for: current, project: document.project, index: document.index)
+                    let text = try await model.complete(messages, grammar: VoiceBriefPrompt.grammar, maxTokens: 260) { [weak self] f in
+                        Task { @MainActor in
+                            guard let self, self.status?.phase == "Writing voice briefs", self.status?.characterNumber == m + 1 else { return }
+                            self.status?.characterProgress = max(self.status?.characterProgress ?? 0, f)
+                            self.status?.progress = max(self.status?.progress ?? 0, readShare + (1 - readShare) * (Double(m) + f) / briefTotal)
+                        }
+                    }
+                    self.status?.characterProgress = 1
+                    if let brief = VoiceBriefPrompt.parse(text) {
+                        document.applyQuietly { p in
+                            if let i = p.characterIndex(character.id), brief.merge(into: &p.characters[i]) { briefsWritten += 1 }
+                        }
+                    } else {
+                        Self.log("unparseable voice brief (\(text.count) characters): \(text.replacingOccurrences(of: "\n", with: "⏎").prefix(300))")
+                    }
+                }
                 // Only a run over the whole cast counts as "analyzed the cast".
                 if only == nil { document.applyQuietly { $0.summariesBuilt = .now } }
                 ActivityStore.shared.record(ActivityKey.facts, count: added)
                 // Summaries say who sounds like what: cast the voices that were unsure.
                 VoiceCastingRun.castIfNeeded(document: document)
-                let notes = notesWritten == 0 ? "" : (notesWritten == 1 && cast.count == 1 ? " Voice notes updated." : " Voice notes updated for \(notesWritten) characters.")
-                    + (notesWritten == 0 ? "" : " Voices casting picked may change; edit a character’s voice notes to fine-tune how they sound.")
+                let touched = max(notesWritten, briefsWritten)
+                let notes = touched == 0 ? "" : (cast.count == 1 ? " Voice notes updated" + (briefsWritten > 0 ? ", with a voice brief." : ".") : " Voice notes updated for \(touched) characters" + (briefsWritten > 0 ? ", with voice briefs." : "."))
+                    + (touched == 0 ? "" : " Voices casting picked may change; edit a character’s voice notes to fine-tune how they sound.")
                 self.finished = (added == 0 ? "No new facts found." : (cast.count == 1 ? "Added \(added) facts to \(cast[0].firstName)’s summary." : "Added \(added) facts to the cast’s summaries.")) + notes
             } catch {
                 if Task.isCancelled || error is CancellationError {
@@ -344,10 +384,12 @@ final class TaggingController {
         status = message.map { Status(job: .tagging, progress: progress, message: $0) }
     }
 
+    func debugPhase(_ phase: String) { status?.phase = phase }
+
     /// Build Summaries' progress without running it (snapshot mode).
     func debugSummaries(_ name: String?, number: Int = 1, count: Int = 1, character: Double = 0, overall: Double = 0) {
         status = name.map { Status(job: .summaries, progress: overall, message: "", character: $0, characterProgress: character,
-                                   characterNumber: number, characterCount: count) }
+                                   characterNumber: number, characterCount: count, phase: "Analyzing the cast") }
     }
 
     static func log(_ s: String) {

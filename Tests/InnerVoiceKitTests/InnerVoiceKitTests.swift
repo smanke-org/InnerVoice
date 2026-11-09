@@ -831,6 +831,10 @@ private let appleVoices = [
     c.facts.append(Fact(kind: .accent, text: "Inverness"))
     #expect(!VoiceNotesFromBook.merge(into: &c))
     #expect(c.voiceNotes.contains("rasps, then whispers") && !c.voiceNotes.contains("Inverness"))
+    // Junk the model sometimes leaves is not written.
+    var junk = BookCharacter(name: "Pip", colorHex: "#000000", facts: [Fact(kind: .gender, text: "Male; //"), Fact(kind: .gender, text: "//"),
+                                                                      Fact(kind: .voice, text: "Breathless")])
+    #expect(VoiceNotesFromBook.merge(into: &junk) && junk.voiceNotes.contains("Gender: Male\n") && !junk.voiceNotes.contains("//"))
     // Nothing about the voice: no block.
     var quiet = BookCharacter(name: "Ann", colorHex: "#000000", facts: [Fact(kind: .age, text: "nine")])
     #expect(!VoiceNotesFromBook.merge(into: &quiet) && quiet.voiceNotes.isEmpty)
@@ -843,4 +847,25 @@ private let appleVoices = [
     let profile = VoiceCasting.profile(c, project: p, index: BookIndex(p))
     #expect(profile.gender == .female && profile.age == .older)
     #expect(profile.evidence.contains("Gender: your voice notes"))
+}
+
+
+@Test func voiceBriefsGoInTheNotesAndShapeCasting() {
+    let reply = #"{"pitch":"Low, chest voice","pace":"Slow and deliberate","texture":"Gravelly","attitude":"Gruff but warm","contrast":"Lower and slower than Mara"}"#
+    let brief = VoiceBriefPrompt.parse(reply)
+    #expect(brief?.pitch == "Low, chest voice")
+    var p = ProjectBuilder.make(from: book(["“Who’s there?” asked Tom.", "“Only me,” said Mara."]), fileName: "t.txt")
+    let i = p.characters.firstIndex { $0.name == "Tom" }!
+    p.characters[i].voiceNotes = "Warm underneath."
+    #expect(brief!.merge(into: &p.characters[i]))
+    #expect(p.characters[i].voiceNotes.hasPrefix("Warm underneath.\n\nVoice brief:\nPitch: Low, chest voice"))
+    #expect(GeneratedNotes.narratorsOwn(p.characters[i]) == "Warm underneath.")
+    let index = BookIndex(p)
+    let profile = VoiceCasting.profile(p.characters[i], project: p, index: index)
+    #expect(profile.pitchLean == -1 && profile.paceLean == -1)
+    #expect(VoiceCasting.describe(profile, name: "Tom").contains("low-pitched") && VoiceCasting.describe(profile, name: "Tom").contains("speaking slowly"))
+    // The prompt names the scene partner and asks for the contrast.
+    let msgs = VoiceBriefPrompt.messages(for: p.characters[i], project: p, index: index)
+    #expect(msgs.last?.content.contains("- Mara") == true && msgs.last?.content.contains("Warm underneath.") == true)
+    #expect(VoiceBriefPrompt.parse("no json here") == nil)
 }

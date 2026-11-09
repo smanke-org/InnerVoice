@@ -260,6 +260,9 @@ public struct CastingProfile: Hashable, Sendable {
     public var accent: String?
     /// Words about the voice itself: "deep", "gravelly", "soft"…
     public var timbre: [String] = []
+    /// From the voice brief: -1 low or slow, 0 neither, 1 high or quick.
+    public var pitchLean = 0
+    public var paceLean = 0
     public var lines = 0
     /// Where each piece came from, for the Voices page ("Gender: the summary").
     public var evidence: [String] = []
@@ -359,7 +362,19 @@ public enum VoiceCasting {
         }
         let w = Set(words(factText([.voice]) + " " + character.voiceNotes))
         p.timbre = timbreWords.filter { w.contains($0) }
+        // The voice brief's pitch and pace (the AI's, or the narrator's edit of it).
+        let brief = VoiceBrief.read(from: character.voiceNotes)
+        p.pitchLean = lean(brief.pitch, low: ["low", "deep", "bass", "baritone", "lower"], high: ["high", "bright", "light", "higher", "squeaky", "thin"])
+        p.paceLean = lean(brief.pace, low: ["slow", "deliberate", "measured", "unhurried", "drawling", "slower"], high: ["quick", "fast", "brisk", "rapid", "clipped", "hurried", "faster"])
+        if p.pitchLean != 0 || p.paceLean != 0 { p.evidence.append("Pitch and pace: the voice brief") }
         return p
+    }
+
+    static func lean(_ text: String?, low: [String], high: [String]) -> Int {
+        guard let text else { return 0 }
+        let w = Set(words(text))
+        let l = low.filter { w.contains($0) }.count, h = high.filter { w.contains($0) }.count
+        return l > h ? -1 : h > l ? 1 : 0
     }
 
     static func gender(in text: String) -> VoiceGender? {
@@ -469,7 +484,10 @@ public enum VoiceCasting {
         }
         var parts = [who]
         // Something about the voice itself, so Qwen3-TTS doesn't make a thin one.
-        parts.append("with a \(p.timbre.isEmpty ? "clear, natural" : p.timbre.prefix(3).joined(separator: ", ")) voice")
+        let pitch = p.pitchLean < 0 ? "low-pitched" : p.pitchLean > 0 ? "high-pitched" : nil
+        let quality = [pitch].compactMap { $0 } + (p.timbre.isEmpty && pitch == nil ? ["clear, natural"] : Array(p.timbre.prefix(3)))
+        parts.append("with a \(quality.joined(separator: ", ")) voice")
+        if p.paceLean != 0 { parts.append(p.paceLean < 0 ? "speaking slowly" : "speaking quickly") }
         if let a = p.accent { parts.append("speaking English with a \(a) accent") }
         return parts.joined(separator: " ") + "."
     }
@@ -580,6 +598,11 @@ public enum VoiceCasting {
                 case .older: choice.pitch = 0.88; choice.rate = 0.92
                 case .adult: break
                 }
+            }
+            // Apple voices can't take a description: the brief's pitch and pace nudge them.
+            if voice.engine == .apple, p.pitchLean != 0 || p.paceLean != 0 {
+                choice.pitch = ((choice.pitch ?? 1) * (1 + 0.06 * Double(p.pitchLean)) * 100).rounded() / 100
+                choice.rate = ((choice.rate ?? 1) * (1 + 0.06 * Double(p.paceLean)) * 100).rounded() / 100
             }
             let sharedNarrator = voice.voiceID == narratorID ? 0.5 : 0
             project.characters[i].setVoice(CastVoice(choice: choice, confidence: confidence(p, sharedOverlap: max(shared, sharedNarrator)), source: .auto), for: engine)

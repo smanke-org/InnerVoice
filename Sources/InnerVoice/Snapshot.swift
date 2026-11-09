@@ -132,6 +132,15 @@ enum Snapshot {
                 await shot("analyze-again") { workspace.castPath = []; workspace.page = .cast; workspace.askAnalyzeCastAgain = true }
                 workspace.askAnalyzeCastAgain = false
                 try? await Task.sleep(for: .seconds(0.5))
+                // The background AI bar on another page: voice briefs, then a voice model loading.
+                await shot("ai-bar-briefs") {
+                    workspace.page = .review
+                    document.tagging.debugSummaries("Edda Voss", number: 3, count: 4, character: 0.4, overall: 0.85)
+                    document.tagging.debugPhase("Writing voice briefs")
+                }
+                document.tagging.debugSummaries(nil)
+                await shot("ai-bar-loading") { workspace.page = .pronunciations; SpeechModelActivity.begin(.qwen) }
+                SpeechModelActivity.end(.qwen)
                 await shot("cast-analyzing") {
                     workspace.castPath = []; workspace.page = .cast
                     document.tagging.debugSummaries("Tom Hale", number: 2, count: 4, character: 0.5, overall: 0.375)

@@ -28,7 +28,6 @@ struct CharacterDetail: View {
                 .frame(maxWidth: 820, alignment: .leading)
                 .frame(maxWidth: .infinity)
             }
-            .safeAreaInset(edge: .top) { SummaryProgress(document: document) }
             .navigationTitle(c.name)
             .toolbar {
                 ToolbarItemGroup {

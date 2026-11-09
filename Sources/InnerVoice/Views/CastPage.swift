@@ -99,7 +99,7 @@ struct CastPage: View {
                     }
                 }
             }
-            .safeAreaInset(edge: .top) { SummaryProgress(document: document) }
+
         }
     }
 

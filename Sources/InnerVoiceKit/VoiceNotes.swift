@@ -16,8 +16,9 @@ public enum VoiceNotesFromBook {
         var lines: [String] = []
         for (kind, title) in kinds {
             let texts = character.facts.filter { $0.kind == kind }
-                .map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: ".;")) }
-                .filter { !$0.isEmpty }
+                .map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: ".;/ ")) }
+                // Only facts with words in them (a model sometimes leaves "//").
+                .filter { $0.contains(where: \.isLetter) }
             // Manner: the first two personality facts are enough to colour a read.
             let picked = kind == .personality ? Array(texts.prefix(2)) : texts
             guard !picked.isEmpty else { continue }
@@ -34,25 +35,40 @@ public enum VoiceNotesFromBook {
     @discardableResult
     public static func merge(into character: inout BookCharacter) -> Bool {
         guard let new = block(for: character) else { return false }
-        var notes = character.voiceNotes
-        if let old = character.voiceNotesFromBook, !old.isEmpty, let r = notes.range(of: old) {
-            // The block is as InnerVoice last wrote it: bring it up to date.
-            guard old != new else { return false }
-            notes.replaceSubrange(r, with: new)
-        } else if notes.contains(heading) {
-            // The narrator edited the block: theirs now.
-            return false
-        } else {
-            let trimmed = notes.trimmingCharacters(in: .whitespacesAndNewlines)
-            notes = trimmed.isEmpty ? new : trimmed + "\n\n" + new
-        }
-        character.voiceNotes = notes
-        character.voiceNotesFromBook = new
-        return true
+        return GeneratedNotes.put(new, heading: heading, previous: &character.voiceNotesFromBook, in: &character.voiceNotes)
     }
 
     static func capitalizedFirst(_ s: String) -> String {
         guard let f = s.first else { return s }
         return f.uppercased() + s.dropFirst()
+    }
+}
+
+/// Blocks InnerVoice writes into Voice Notes ("From the book:", "Voice brief:"): each
+/// replaced only while it's exactly as last written; once the narrator edits one, it's theirs.
+public enum GeneratedNotes {
+    /// Returns whether `notes` changed.
+    @discardableResult
+    public static func put(_ new: String, heading: String, previous: inout String?, in notes: inout String) -> Bool {
+        if let old = previous, !old.isEmpty, let r = notes.range(of: old) {
+            guard old != new else { return false }
+            notes.replaceSubrange(r, with: new)
+        } else if notes.contains(heading) {
+            return false
+        } else {
+            let trimmed = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+            notes = trimmed.isEmpty ? new : trimmed + "\n\n" + new
+        }
+        previous = new
+        return true
+    }
+
+    /// The narrator's own part of the notes: without the blocks InnerVoice wrote.
+    public static func narratorsOwn(_ c: BookCharacter) -> String {
+        var s = c.voiceNotes
+        for block in [c.voiceNotesFromBook, c.voiceBriefGenerated].compactMap({ $0 }) where !block.isEmpty {
+            s = s.replacingOccurrences(of: block, with: "")
+        }
+        return s.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

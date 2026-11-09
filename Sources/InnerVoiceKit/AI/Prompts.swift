@@ -296,7 +296,8 @@ public enum SummaryPrompt {
         var added = 0
         for reply in replies {
             let text = reply.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !text.isEmpty, text.count < 240 else { continue }
+                .trimmingCharacters(in: CharacterSet(charactersIn: ";/ "))
+            guard text.contains(where: \.isLetter), text.count < 240 else { continue }
             let kind = FactKind(rawValue: reply.kind.lowercased()) ?? .other
             var source: UUID? = reply.paragraph.flatMap { chunk.labels[$0.trimmingCharacters(in: .whitespaces)] }
             let quote = (reply.quote ?? "").trimmingCharacters(in: .whitespacesAndNewlines)

@@ -5,6 +5,7 @@ import MLX
 import MLXAudioCore
 import MLXAudioTTS
 import NaturalLanguage
+import Observation
 
 /// Qwen3-TTS and Orpheus, on Apple's MLX (Apple silicon only).
 ///
@@ -240,6 +241,8 @@ actor MLXSpeech {
     private func loadOrpheus() async throws -> LlamaTTSModel {
         if let m = orpheusModel { return m }
         if !keepBoth { designModel = nil; cloneModel = nil }
+        await SpeechModelActivity.begin(.orpheus)
+        defer { Task { await SpeechModelActivity.end(.orpheus) } }
         let m = try await Self.load(VoicePack.orpheus.repos[0], as: LlamaTTSModel.self)
         orpheusModel = m
         return m
@@ -248,6 +251,8 @@ actor MLXSpeech {
     private func loadDesign() async throws -> Qwen3TTSModel {
         if let m = designModel { return m }
         if !keepBoth { orpheusModel = nil }
+        await SpeechModelActivity.begin(.qwen)
+        defer { Task { await SpeechModelActivity.end(.qwen) } }
         let m = try await Self.load(VoicePack.qwenDesignRepo, as: Qwen3TTSModel.self)
         designModel = m
         return m
@@ -256,6 +261,8 @@ actor MLXSpeech {
     private func loadClone() async throws -> Qwen3TTSModel {
         if let m = cloneModel { return m }
         if !keepBoth { orpheusModel = nil }
+        await SpeechModelActivity.begin(.qwen)
+        defer { Task { await SpeechModelActivity.end(.qwen) } }
         let m = try await Self.load(VoicePack.qwenCloneRepo, as: Qwen3TTSModel.self)
         cloneModel = m
         return m
@@ -322,4 +329,19 @@ actor MLXSpeech {
         let audio = try await model.generate(text: text, voice: nil, refAudio: ref, refText: referenceText, language: "English", generationParameters: p)
         return audio.asArray(Float.self)
     }
+}
+
+
+/// Which AI voice engine is loading its models right now, for the progress bar in every
+/// project window (loading takes several seconds and happens in the background).
+@Observable
+@MainActor
+final class SpeechModelActivity {
+    static let shared = SpeechModelActivity()
+    private(set) var loading: [VoiceEngine: Int] = [:]
+
+    var current: VoiceEngine? { loading.first { $0.value > 0 }?.key }
+
+    static func begin(_ e: VoiceEngine) { shared.loading[e, default: 0] += 1 }
+    static func end(_ e: VoiceEngine) { shared.loading[e] = max(0, (shared.loading[e] ?? 1) - 1) }
 }

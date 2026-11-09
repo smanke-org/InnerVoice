@@ -97,6 +97,8 @@ struct ProjectWindow: View {
                 .navigationSplitViewColumnWidth(min: 200, ideal: 236, max: 320)
         } detail: {
             detail
+                // The AI working in the background, on every page.
+                .safeAreaInset(edge: .top, spacing: 0) { BackgroundAIBar(document: document, page: workspace.page) }
                 .toolbar { toolbar }
         }
         .inspector(isPresented: Binding(get: { workspace.showInspector && workspace.page == .manuscript },

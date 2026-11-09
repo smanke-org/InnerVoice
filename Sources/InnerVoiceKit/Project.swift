@@ -191,6 +191,9 @@ public struct BookCharacter: Codable, Identifiable, Hashable, Sendable {
     /// The "From the book:" block Build Summary last wrote into `voiceNotes`, so a later run
     /// can replace it, but only while the narrator hasn't edited it.
     public var voiceNotesFromBook: String?
+    /// The "Voice brief:" block the AI last wrote into `voiceNotes` (same rule: replaced only
+    /// while the narrator hasn't edited it).
+    public var voiceBriefGenerated: String?
 
     public var isPinned: Bool { pinned ?? false }
 

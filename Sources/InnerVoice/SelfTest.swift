@@ -678,7 +678,7 @@ enum SelfTest {
         // Build Summaries for the whole cast: both bars move, voice notes are written, one Undo.
         let undo = UndoManager()
         let notesBefore = doc.project.characters.map(\.voiceNotes)
-        var sawCount = 0, sawCharacterMid = false, sawOverall: Set<Int> = []
+        var sawCount = 0, sawCharacterMid = false, sawOverall: Set<Int> = [], sawBriefs = false
         doc.tagging.buildSummaries(undoManager: undo)
         let summariesStart = Date()
         while doc.tagging.isRunning {
@@ -686,15 +686,25 @@ enum SelfTest {
                 sawCount = max(sawCount, s.characterCount)
                 if s.characterProgress > 0, s.characterProgress < 1 { sawCharacterMid = true }
                 sawOverall.insert(Int(s.progress * 10))
+                if s.phase == "Writing voice briefs" { sawBriefs = true }
             }
             try? await Task.sleep(for: .milliseconds(100))
         }
         print(String(format: "LIVE summaries in %.0f s: %@", Date().timeIntervalSince(summariesStart), doc.tagging.finished ?? doc.tagging.failure ?? ""))
         check("Build Summaries shows a bar for the run and for each character", sawCount > 1 && sawCharacterMid && sawOverall.count > 2,
               "characters \(sawCount), overall steps \(sawOverall.count)")
+        let speakingNow = doc.project.characters.filter { (doc.index.stats[$0.id]?.lines ?? 0) > 0 }
+        let briefed = speakingNow.filter { $0.voiceNotes.contains(VoiceBrief.heading) }
+        check("Build Summaries writes a voice brief for each speaking character", sawBriefs && briefed.count == speakingNow.count,
+              "\(briefed.count) of \(speakingNow.count)")
+        let contrasts = briefed.filter { c in
+            VoiceBriefPrompt.partners(of: c, project: doc.project, index: doc.index).contains { c.voiceNotes.contains("Contrast:") && c.voiceNotes.contains($0.firstName) }
+        }
+        check("voice briefs set characters apart from their scene partners by name", contrasts.count >= max(1, briefed.count / 2),
+              "\(contrasts.count) of \(briefed.count)")
         let withNotes = doc.project.characters.filter { $0.voiceNotes.contains(VoiceNotesFromBook.heading) }
         check("Build Summaries writes voice notes from the book", !withNotes.isEmpty, "\(withNotes.count) characters")
-        for c in withNotes.prefix(2) { print("NOTES \(c.name):\n\(c.voiceNotes)") }
+        for c in speakingNow { print("NOTES \(c.name):\n\(c.voiceNotes)") }
         undo.undo()
         check("one Undo takes the facts and voice notes back", doc.project.characters.map(\.voiceNotes) == notesBefore)
         manager.unloadNow()
