@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// How a line is said. Speech engines that can act (Qwen3-TTS, Orpheus) use it; Apple's
 /// voices only change speed, pitch and loudness a little.
@@ -414,7 +415,30 @@ public enum VoiceCasting {
     /// "she said" or "he asked" right after the character's lines (worth two), and the
     /// first "she", "her", "he" or "his" after the character's name in a sentence that
     /// names nobody else in the cast ("Doctor Edda Voss arrived with her bag").
+    /// Pronoun results by what they depend on (the book's text, the character's lines and
+    /// everyone's names), so redrawing a page while the narrator types costs nothing: the
+    /// scan reads the whole manuscript.
+    private static let pronounCache = Mutex<[Int: PronounResult]>([:])
+    private struct PronounResult: Sendable { var gender: VoiceGender; var sure: Bool }
+
     static func pronounGender(_ id: UUID, project: Project, index: BookIndex) -> (gender: VoiceGender, sure: Bool)? {
+        var h = Hasher()
+        h.combine(id)
+        for c in project.characters { h.combine(c.id); h.combine(c.allNames) }
+        for line in project.lines where line.speakerID == id { h.combine(line.paragraphID); h.combine(line.range.location); h.combine(line.range.length) }
+        for chapter in project.chapters { h.combine(chapter.paragraphs.count); for p in chapter.paragraphs { h.combine(p.text.utf8.count) } }
+        let key = h.finalize()
+        if let hit = pronounCache.withLock({ $0[key] }) { return hit.sure || hit.gender != .neutral ? (hit.gender, hit.sure) : nil }
+        let result = scanPronouns(id, project: project, index: index)
+        pronounCache.withLock { cache in
+            if cache.count > 2000 { cache.removeAll() }
+            // "Nothing found" is kept as neutral, not sure.
+            cache[key] = result.map { PronounResult(gender: $0.gender, sure: $0.sure) } ?? PronounResult(gender: .neutral, sure: false)
+        }
+        return result
+    }
+
+    private static func scanPronouns(_ id: UUID, project: Project, index: BookIndex) -> (gender: VoiceGender, sure: Bool)? {
         var she = 0, he = 0
         for line in project.lines where line.speakerID == id {
             guard let p = project.paragraph(line.paragraphID, index: index) else { continue }

@@ -55,15 +55,15 @@ struct PronunciationsPage: View {
     private var table: some View {
         Table(rows, selection: $selection) {
             TableColumn("Term") { p in
-                TextField("Term", text: binding(p, \.term)).textFieldStyle(.plain).font(.body.weight(.medium))
+                DraftTextField("Term", text: binding(p, \.term)).textFieldStyle(.plain).font(.body.weight(.medium))
             }
             .width(min: 120, ideal: 160)
             TableColumn("Say It As") { p in
-                TextField("e.g. SHEV-on", text: binding(p, \.sayItAs)).textFieldStyle(.plain)
+                DraftTextField("e.g. SHEV-on", text: binding(p, \.sayItAs)).textFieldStyle(.plain)
             }
             .width(min: 120, ideal: 170)
             TableColumn("Notes") { p in
-                TextField("Origin, stress, source", text: binding(p, \.notes)).textFieldStyle(.plain).foregroundStyle(.secondary)
+                DraftTextField("Origin, stress, source", text: binding(p, \.notes)).textFieldStyle(.plain).foregroundStyle(.secondary)
             }
             .width(min: 140, ideal: 220)
             TableColumn("Sample") { p in

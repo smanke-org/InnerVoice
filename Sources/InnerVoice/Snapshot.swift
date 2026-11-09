@@ -307,6 +307,7 @@ enum Snapshot {
             }
             if wants("review-keys") { await reviewKeysTest(document: document, workspace: workspace) }
             if wants("cast-click") { await castClickTest(document: document, workspace: workspace) }
+            if wants("notes-typing") { await notesTypingTest(document: document, workspace: workspace) }
             // Last: driving real menus leaves the app inactive, which would gray later shots.
             if wants("speaker-menu") {
                 NSApp.appearance = NSAppearance(named: .aqua)
@@ -418,6 +419,52 @@ enum Snapshot {
         }
         try? await Task.sleep(for: .seconds(1.0))
         print("SNAPSHOT cast-click on \(main.name): " + (workspace.castPath == [main.id] ? "PASS opened their page" : "FAIL path \(workspace.castPath)"))
+        workspace.castPath = []
+    }
+
+    /// Typing in a character's Voice Notes: real key events go into a draft (the book isn't
+    /// changed on every keystroke), which is saved when typing pauses, as one undo step.
+    @MainActor
+    static func notesTypingTest(document: InnerVoiceDocument, workspace: Workspace) async {
+        guard let main = document.project.characters.max(by: { (document.index.stats[$0.id]?.lines ?? 0) < (document.index.stats[$1.id]?.lines ?? 0) }) else { return }
+        workspace.page = .cast
+        workspace.castPath = [main.id]
+        try? await Task.sleep(for: .seconds(1.2))
+        guard let window = NSApp.windows.first(where: { $0.isVisible && $0.canBecomeMain && !$0.isSheet }) else { return }
+        window.makeKeyAndOrderFront(nil)
+        func fields(in v: NSView?) -> [NSTextField] {
+            guard let v else { return [] }
+            return ((v as? NSTextField).map { [$0] } ?? []) + v.subviews.flatMap { fields(in: $0) }
+        }
+        guard let field = fields(in: window.contentView).first(where: { $0.placeholderString?.hasPrefix("How you'll voice") == true }) else {
+            print("SNAPSHOT notes-typing: FAIL no Voice Notes field"); return
+        }
+        window.makeFirstResponder(field)
+        let before = document.project.character(main.id)?.voiceNotes ?? ""
+        let changesBefore = document.tagRevision
+        let typed = " Low and slow."
+        let start = Date()
+        for ch in typed {
+            for type in [NSEvent.EventType.keyDown, .keyUp] {
+                if let ev = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                             windowNumber: window.windowNumber, context: nil, characters: String(ch),
+                                             charactersIgnoringModifiers: String(ch), isARepeat: false, keyCode: ch == " " ? 49 : 0) {
+                    window.sendEvent(ev)
+                }
+            }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        let perKey = (Date().timeIntervalSince(start) / Double(typed.count) - 0.02) * 1000
+        let changedWhileTyping = document.tagRevision != changesBefore
+        try? await Task.sleep(for: .seconds(1.2))
+        let after = document.project.character(main.id)?.voiceNotes ?? ""
+        print("SNAPSHOT notes-typing: " + String(format: "%.1f ms a key; ", perKey)
+              + (changedWhileTyping ? "FAIL the book changed while typing" : "PASS the book waited while typing") + "; "
+              + (after == before + typed ? "PASS saved after the pause" : "FAIL saved “\(after.suffix(30))”"))
+        window.makeFirstResponder(nil)
+        window.undoManager?.undo()
+        let undone = document.project.character(main.id)?.voiceNotes ?? ""
+        print("SNAPSHOT notes-typing undo: " + (undone == before ? "PASS one step" : "FAIL left “\(undone.suffix(30))”"))
         workspace.castPath = []
     }
 

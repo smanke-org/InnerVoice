@@ -117,14 +117,16 @@ struct CharacterDetail: View {
                 document.updateCharacter(c.id, "Change Color", undoManager: undoManager) { $0.colorHex = hex }
             } }
             VStack(alignment: .leading, spacing: Space.sm) {
-                TextField("Name", text: binding(c, \.name, "Rename Character"))
+                DraftTextField("Name", text: binding(c, \.name, "Rename Character"))
+                    .id(c.id)
                     .font(.largeTitle.weight(.semibold))
                     .textFieldStyle(.plain)
-                TextField("Also called (comma separated)", text: Binding(
+                DraftTextField("Also called (comma separated)", text: Binding(
                     get: { c.aliases.joined(separator: ", ") },
                     set: { v in document.updateCharacter(c.id, "Edit Aliases", undoManager: undoManager) {
                         $0.aliases = v.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
                     } }))
+                    .id(c.id)
                     .textFieldStyle(.plain)
                     .foregroundStyle(.secondary)
                 HStack(spacing: Space.xl) {
@@ -223,8 +225,9 @@ struct CharacterDetail: View {
     private func notes(_ c: BookCharacter) -> some View {
         VStack(alignment: .leading, spacing: Space.md) {
             Text("Voice Notes").font(.title3.weight(.semibold))
-            TextField("How you'll voice \(c.name): pitch, pace, placement, a reference voice…",
-                      text: binding(c, \.voiceNotes, "Edit Voice Notes"), axis: .vertical)
+            DraftTextField("How you'll voice \(c.name): pitch, pace, placement, a reference voice…",
+                           text: binding(c, \.voiceNotes, "Edit Voice Notes"), axis: .vertical)
+                .id(c.id)
                 .lineLimit(2...12)
                 .textFieldStyle(.roundedBorder)
             Text("Build Summary adds what the book says about \(c.firstName)’s voice under “From the book:”. Casting and the AI voices read these notes, so change them to fine-tune how \(c.firstName) sounds. Once you edit that part, Build Summary leaves it alone.")
@@ -232,7 +235,8 @@ struct CharacterDetail: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             Text("Notes").font(.title3.weight(.semibold)).padding(.top, Space.sm)
-            TextField("Anything else to remember", text: binding(c, \.notes, "Edit Notes"), axis: .vertical)
+            DraftTextField("Anything else to remember", text: binding(c, \.notes, "Edit Notes"), axis: .vertical)
+                .id(c.id)
                 .lineLimit(2...8)
                 .textFieldStyle(.roundedBorder)
         }
@@ -308,7 +312,7 @@ struct FactRow: View {
                         Image(systemName: "sparkles").font(.caption).foregroundStyle(.secondary)
                             .help("Found by the AI")
                     }
-                    TextField(fact.kind.title, text: Binding(get: { fact.text }, set: { v in
+                    DraftTextField(fact.kind.title, text: Binding(get: { fact.text }, set: { v in
                         document.updateCharacter(characterID, "Edit Fact", undoManager: undoManager) { c in
                             if let i = c.facts.firstIndex(where: { $0.id == fact.id }) {
                                 c.facts[i].text = v
