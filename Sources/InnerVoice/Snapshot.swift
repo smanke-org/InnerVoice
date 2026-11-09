@@ -151,6 +151,8 @@ enum Snapshot {
                         if let s = SettingsWindow.shared.window { capture(s, "\(dir)/settings-\(tab.rawValue)-\(mode).png") }
                     }
                 }
+                // The tab is remembered in the person's real preferences: leave it on General.
+                SettingsWindow.shared.show(tab: .general)
                 SettingsWindow.shared.window?.close()
             }
             print("SNAPSHOT done \(dir)")
