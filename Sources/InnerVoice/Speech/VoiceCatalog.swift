@@ -89,7 +89,13 @@ enum VoiceCatalog {
     static func name(of choice: VoiceChoice) -> String {
         switch choice.engine {
         case .qwen:
-            return choice.design.map { $0.count > 48 ? String($0.prefix(47)) + "…" : $0 } ?? "Designed voice"
+            // Short enough for a list row, cut at a word.
+            return choice.design.map { d in
+                guard d.count > 48 else { return d }
+                let head = d.prefix(47)
+                let cut = head.lastIndex(of: " ").map { head[..<$0] } ?? head
+                return cut.trimmingCharacters(in: CharacterSet(charactersIn: " ,;")) + "…"
+            } ?? "Designed voice"
         default:
             guard let v = info(for: choice) else { return "Missing voice" }
             return v.name

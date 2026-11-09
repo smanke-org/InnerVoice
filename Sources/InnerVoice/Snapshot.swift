@@ -153,7 +153,11 @@ enum Snapshot {
                     for engine in [VoiceEngine.orpheus, .qwen] {
                         await shot("voices-\(engine.rawValue)", settle: 1.2) {
                             document.setVoiceEngine(engine, undoManager: nil)
-                            workspace.voiceTarget = .character(main.id)
+                            // Qwen3-TTS: the character with the fullest description shows it best.
+                            let pick = engine == .qwen
+                                ? document.project.characters.max { ($0.voice(for: .qwen)?.choice.design?.count ?? 0) < ($1.voice(for: .qwen)?.choice.design?.count ?? 0) } ?? main
+                                : main
+                            workspace.voiceTarget = .character(pick.id)
                             workspace.page = .voices
                         }
                     }
