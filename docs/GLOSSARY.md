@@ -21,6 +21,9 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | Who's Speaking? | A line the AI could not decide on, shown in red | unassigned, unknown, untagged |
 | Unsure | A line the AI or the rules tagged with a best guess but low confidence; red, with "Name?" in the margin | low confidence |
 | Best guess | The speaker an Unsure line probably has, for the narrator to confirm | suggestion, prediction |
+| Steps | The bar across the top of the window: Manuscript, Speakers, Review, Characters, then Voices and Listen (AI voices) or Pronunciations and Record (narration), each with how far along it is; the next step has a button | wizard, tour, onboarding, checklist |
+| Skip | Mark a step done without doing it; right-click the step to bring it back | dismiss, ignore |
+| To review | Lines in a chapter that still need the narrator ("2 to review" in the sidebar) | needs attention, flagged |
 | Review | The page listing every line, tone and voice that needs the narrator, with context | queue, inbox |
 | Tone | How a line is said: neutral, excited, confused, sad, angry, whispered, scared, tender or sarcastic | emotion, mood, style |
 | Voice | The speech voice a character (or the narrator) is read in, on one engine | TTS voice, speaker voice |

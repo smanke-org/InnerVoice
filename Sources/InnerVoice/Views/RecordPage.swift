@@ -98,7 +98,7 @@ struct RecordPage: View {
         let total = all.filter { document.project.recorded.contains($0.paragraph.id) }.count
         return HStack(spacing: Space.xl) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(document.project.chapters.indices.contains(chapterIndex) ? document.project.chapters[chapterIndex].title : "")
+                Text(document.project.chapters.indices.contains(chapterIndex) ? document.project.chapters[chapterIndex].shownTitle : "")
                     .font(.headline)
                 Text("Paragraph \(i + 1) of \(all.count)")
                     .font(.caption)

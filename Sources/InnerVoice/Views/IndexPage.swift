@@ -113,7 +113,7 @@ struct IndexPage: View {
                                     }
                                 } label: {
                                     HStack {
-                                        Text(project.chapters[ch].title).lineLimit(1)
+                                        Text(project.chapters[ch].shownTitle).lineLimit(1)
                                         Spacer()
                                         Text("\(byChapter[ch]?.count ?? 0)")
                                             .font(.caption.monospacedDigit())

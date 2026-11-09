@@ -51,10 +51,11 @@ import SwiftUI
 
     /// Deletes text the narrator doesn't read (an ISBN, an ad for another book) from the
     /// project's copy of the book. One undo step; the imported file is never changed.
-    func deleteText(cuts: [UUID: [TextSpan]], chapters: Set<UUID> = [], undoManager: UndoManager?) {
-        guard !cuts.isEmpty || !chapters.isEmpty else { return }
-        let name = chapters.count == 1 && cuts.isEmpty ? "Delete Chapter" : (chapters.count > 1 && cuts.isEmpty ? "Delete Chapters" : "Delete Text")
-        change(name, undoManager: undoManager, textChanged: true) { $0.deleteText(cuts: cuts, chapters: chapters) }
+    func deleteText(cuts: [UUID: [TextSpan]], chapters: Set<UUID> = [], headings: [UUID: TextSpan] = [:], undoManager: UndoManager?) {
+        guard !cuts.isEmpty || !chapters.isEmpty || !headings.isEmpty else { return }
+        let onlyChapters = cuts.isEmpty && headings.isEmpty
+        let name = chapters.count == 1 && onlyChapters ? "Delete Chapter" : (chapters.count > 1 && onlyChapters ? "Delete Chapters" : "Delete Text")
+        change(name, undoManager: undoManager, textChanged: true) { $0.deleteText(cuts: cuts, chapters: chapters, headings: headings) }
     }
 
     /// Pinned characters head every speaker list.

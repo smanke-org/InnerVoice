@@ -14,6 +14,7 @@ struct ProjectWindow: View {
     let fileURL: URL?
     @State private var workspace = Workspace()
     @Environment(\.undoManager) private var undoManager
+    @AppStorage(GuidedStepsBar.hiddenKey) private var stepsHidden = false
 
     var body: some View {
         Group {
@@ -105,7 +106,11 @@ struct ProjectWindow: View {
                 // The AI working in the background, on every page.
                 // (The Cast page shows it inside its navigation stack.)
                 .safeAreaInset(edge: .top, spacing: 0) {
-                    if workspace.page != .cast { BackgroundAIBar(document: document, page: workspace.page) }
+                    VStack(spacing: 0) {
+                        // Where the book stands and the next step (View › Hide Steps).
+                        if !stepsHidden { GuidedStepsBar(document: document, workspace: workspace, undoManager: undoManager) }
+                        if workspace.page != .cast { BackgroundAIBar(document: document, page: workspace.page) }
+                    }
                 }
                 .toolbar { toolbar }
         }

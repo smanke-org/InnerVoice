@@ -25,22 +25,30 @@ struct ProjectSidebar: View {
                         .tag(Row.page(page))
                 }
             }
-            Section("Chapters") {
+            Section {
                 ForEach(Array(project.chapters.enumerated()), id: \.element.id) { i, chapter in
                     let needs = needsCount(chapterIndex: i)
                     HStack {
-                        Text(chapter.title).lineLimit(1)
+                        Text(chapter.shownTitle).lineLimit(1)
+                            .foregroundStyle(chapter.title.isEmpty ? .secondary : .primary)
                         Spacer()
                         if needs > 0 {
-                            Text("\(needs)")
+                            // Same red as the lines themselves, with words, so the number
+                            // isn't a mystery: lines here that still need a speaker.
+                            Label("\(needs) to review", systemImage: "person.fill.questionmark")
+                                .labelStyle(.titleAndIcon)
                                 .font(.caption.monospacedDigit().weight(.semibold))
                                 .foregroundStyle(Color(nsColor: .attention))
-                                .help("\(needs) lines in this chapter need you")
+                                .lineLimit(1)
+                                .fixedSize()
+                                .help(needs == 1 ? "1 line in this chapter needs you to confirm who says it" : "\(needs) lines in this chapter need you to confirm who says them")
+                                .accessibilityLabel(needs == 1 ? "1 line to review" : "\(needs) lines to review")
                         } else if chapterTagged(i) {
                             Image(systemName: "checkmark")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.tertiary)
                                 .help("Every line in this chapter has a speaker")
+                                .accessibilityLabel("Every line has a speaker")
                         }
                     }
                     .tag(Row.chapter(i))
@@ -56,10 +64,12 @@ struct ProjectSidebar: View {
                         .disabled(document.tagging.isRunning)
                     }
                 }
+            } header: {
+                Text("Chapters")
             }
             let cast = project.characters.sorted { (index.stats[$0.id]?.lines ?? 0) > (index.stats[$1.id]?.lines ?? 0) }
             if !cast.isEmpty {
-                Section("Cast") {
+                Section {
                     if project.showsVoices {
                         HStack(spacing: Space.sm) {
                             Image(systemName: "book.closed").font(.caption).foregroundStyle(.secondary).frame(width: 10)
@@ -73,11 +83,20 @@ struct ProjectSidebar: View {
                             Circle().fill(Color(hexString: c.colorHex)).frame(width: 10, height: 10)
                             Text(c.name).lineLimit(1)
                             Spacer()
-                            Text("\(index.stats[c.id]?.lines ?? 0)")
+                            let count = index.stats[c.id]?.lines ?? 0
+                            Text("\(count)")
                                 .font(.caption.monospacedDigit())
                                 .foregroundStyle(.secondary)
+                                .help(count == 1 ? "\(c.name) speaks 1 line" : "\(c.name) speaks \(count) lines")
+                                .accessibilityLabel(count == 1 ? "1 line" : "\(count) lines")
                         }
                         .tag(Row.character(c.id))
+                    }
+                } header: {
+                    HStack {
+                        Text("Cast")
+                        Spacer()
+                        Text("Lines").textCase(nil)
                     }
                 }
             }

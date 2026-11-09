@@ -85,6 +85,8 @@ struct StatusBanners: View {
     @ObservedObject var document: InnerVoiceDocument
     @Bindable var workspace: Workspace
     @Environment(\.undoManager) private var undoManager
+    /// With the steps showing, Tag Speakers is their next step: no second invitation here.
+    @AppStorage(GuidedStepsBar.hiddenKey) private var stepsHidden = false
 
     var body: some View {
         let tagging = document.tagging
@@ -120,7 +122,7 @@ struct StatusBanners: View {
                     }
                     Button("Dismiss") { tagging.finished = nil }
                 }
-            } else if document.project.lastTagged == nil, !document.project.lines.isEmpty {
+            } else if stepsHidden, document.project.lastTagged == nil, !document.project.lines.isEmpty {
                 banner(symbol: "sparkles", tint: .accentColor) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("InnerVoice found \(document.project.lines.count.formatted()) lines in \(document.project.chapters.count) chapters.")

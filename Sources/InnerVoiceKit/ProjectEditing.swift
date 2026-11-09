@@ -28,7 +28,11 @@ extension Project {
     /// its recorded mark and retakes; summary facts and pronunciations that pointed at it
     /// keep their text but lose the link. Only the project's copy changes: the manuscript
     /// file it came from is never touched.
-    public mutating func deleteText(cuts: [UUID: [TextSpan]], chapters doomed: Set<UUID> = []) {
+    ///
+    /// `headings` are ranges inside chapter titles (front matter often imports as a
+    /// heading: "Copyright", an ISBN). A heading with nothing left isn't a chapter: its
+    /// text joins the chapter before it, or, for the first chapter, stays with no heading.
+    public mutating func deleteText(cuts: [UUID: [TextSpan]], chapters doomed: Set<UUID> = [], headings: [UUID: TextSpan] = [:]) {
         var removedParagraphs = Set<UUID>()
         var lineChanges: [UUID: [TextSpan]] = [:]   // paragraph → the cuts as applied, last first
 
@@ -63,6 +67,7 @@ extension Project {
             chapters[c].paragraphs.removeAll { removedParagraphs.contains($0.id) }
         }
         chapters.removeAll { doomed.contains($0.id) }
+        cutHeadings(headings)
 
         lines = lines.compactMap { line in
             if removedParagraphs.contains(line.paragraphID) { return nil }
@@ -89,6 +94,28 @@ extension Project {
         for i in revisions.indices {
             revisions[i].added.removeAll { removedParagraphs.contains($0) }
             revisions[i].changed.removeAll { removedParagraphs.contains($0) }
+        }
+    }
+
+    /// Takes text out of chapter headings; an emptied heading's chapter joins the one before.
+    mutating func cutHeadings(_ headings: [UUID: TextSpan]) {
+        for c in chapters.indices.reversed() {
+            guard let span = headings[chapters[c].id] else { continue }
+            let ns = chapters[c].title as NSString
+            let r = NSIntersectionRange(span.ns, NSRange(location: 0, length: ns.length))
+            guard r.length > 0 else { continue }
+            let title = ns.replacingCharacters(in: Self.absorbSpace(around: r, in: ns), with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !title.isEmpty {
+                chapters[c].title = title
+            } else if c > 0 {
+                chapters[c - 1].paragraphs += chapters[c].paragraphs
+                chapters.remove(at: c)
+            } else if chapters[c].paragraphs.isEmpty {
+                chapters.remove(at: c)
+            } else {
+                chapters[c].title = ""
+            }
         }
     }
 
@@ -120,4 +147,9 @@ extension Project {
         }
         return r
     }
+}
+
+extension Chapter {
+    /// The title to show in lists: a chapter whose heading was deleted is the book's opening.
+    public var shownTitle: String { title.isEmpty ? "Opening" : title }
 }

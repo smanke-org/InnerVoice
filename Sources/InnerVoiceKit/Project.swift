@@ -376,6 +376,8 @@ public struct ProjectSettings: Codable, Hashable, Sendable {
     /// When the narrator allowed this book's text to be sent to a cloud voice engine
     /// (ElevenLabs). nil: never sent.
     public var cloudVoicesAllowed: Date?
+    /// Steps (`GuidedStep` raw values) the narrator marked done or skipped.
+    public var stepsDone: [String]?
     public init() {}
 
     public var engine: VoiceEngine { voiceEngine ?? .apple }

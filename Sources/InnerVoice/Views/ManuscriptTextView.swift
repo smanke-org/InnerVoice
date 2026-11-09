@@ -335,10 +335,13 @@ struct ManuscriptTextView: NSViewRepresentable {
 
             for (c, chapter) in project.chapters.enumerated() {
                 layout.chapterStarts.append(out.length)
-                out.append(NSAttributedString(string: chapter.title + "\n", attributes: [
-                    .font: heading, .foregroundColor: NSColor.labelColor, .paragraphStyle: headingStyle,
-                    .chapterIndex: c,
-                ]))
+                // A chapter whose heading was deleted shows none.
+                if !chapter.title.isEmpty {
+                    out.append(NSAttributedString(string: chapter.title + "\n", attributes: [
+                        .font: heading, .foregroundColor: NSColor.labelColor, .paragraphStyle: headingStyle,
+                        .chapterIndex: c,
+                    ]))
+                }
                 for p in chapter.paragraphs {
                     let start = out.length
                     let style: NSParagraphStyle = p.style == .sceneBreak ? breakStyle : (p.style == .blockQuote ? quoteStyle : bodyStyle)
@@ -563,10 +566,26 @@ struct ManuscriptTextView: NSViewRepresentable {
         /// chapter goes when its heading and every paragraph are selected.
         func deleteText(in selection: NSRange) {
             guard selection.length > 0 else { return }
+            let total = (textView?.string as NSString?)?.length ?? 0
+            let plan = Self.deletion(of: selection, project: project, layout: layout, total: total)
+            guard !plan.isEmpty else { NSSound.beep(); return }
+            textView?.setSelectedRange(NSRange(location: selection.location, length: 0))
+            parent.workspace.selectedLines = []
+            document.deleteText(cuts: plan.cuts, chapters: plan.chapters, headings: plan.headings, undoManager: parent.undoManager)
+        }
+
+        struct Deletion {
             var cuts: [UUID: [TextSpan]] = [:]
             var chapters = Set<UUID>()
-            let total = (textView?.string as NSString?)?.length ?? 0
-            for (c, chapter) in project.chapters.enumerated() {
+            var headings: [UUID: TextSpan] = [:]
+            var isEmpty: Bool { cuts.isEmpty && chapters.isEmpty && headings.isEmpty }
+        }
+
+        /// What a selection deletes: words inside paragraphs, words in a heading, or a whole
+        /// chapter when its heading and every paragraph are selected.
+        static func deletion(of selection: NSRange, project: Project, layout: LineLayout, total: Int) -> Deletion {
+            var plan = Deletion()
+            for (c, chapter) in project.chapters.enumerated() where c < layout.chapterStarts.count {
                 let start = layout.chapterStarts[c]
                 let end = c + 1 < layout.chapterStarts.count ? layout.chapterStarts[c + 1] : total
                 guard NSIntersectionRange(selection, NSRange(location: start, length: end - start)).length > 0 else { continue }
@@ -583,15 +602,16 @@ struct ManuscriptTextView: NSViewRepresentable {
                         if hit.length > 0 { chapterCuts[p.id] = [TextSpan(location: hit.location - r.location, length: hit.length)] }
                     }
                 }
+                let title = NSRange(location: start, length: (chapter.title as NSString).length)
                 if selection.location <= start, NSMaxRange(selection) >= headingEnd - 1, everyParagraph {
-                    chapters.insert(chapter.id)
+                    plan.chapters.insert(chapter.id)
                 } else {
-                    cuts.merge(chapterCuts) { a, _ in a }
+                    plan.cuts.merge(chapterCuts) { a, _ in a }
+                    let inHeading = NSIntersectionRange(selection, title)
+                    if inHeading.length > 0 { plan.headings[chapter.id] = TextSpan(location: inHeading.location - start, length: inHeading.length) }
                 }
             }
-            textView?.setSelectedRange(NSRange(location: selection.location, length: 0))
-            parent.workspace.selectedLines = []
-            document.deleteText(cuts: cuts, chapters: chapters, undoManager: parent.undoManager)
+            return plan
         }
 
         static func dot(_ color: NSColor) -> NSImage {

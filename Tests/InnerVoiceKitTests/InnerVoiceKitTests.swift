@@ -930,3 +930,62 @@ private let appleVoices = [
     VoiceCasting.cast(&new, index: BookIndex(new), engine: .orpheus, voices: VoiceInfo.orpheus)
     #expect(new.characters[2].voice(for: .orpheus)?.choice.voiceID == "zac")
 }
+
+@Test func deletingChapterHeadings() {
+    var (p, _, _, _) = deletionProject()
+    let first = p.chapters[0], second = p.chapters[1]
+    let lines = p.lines
+    // Part of a heading: the rest stays.
+    var q = p
+    q.deleteText(cuts: [:], headings: [first.id: TextSpan(location: 0, length: (first.title as NSString).length - 1)])
+    #expect(q.chapters[0].title.count == 1)
+    // A later heading, all of it: its text joins the chapter before, lines untouched.
+    q = p
+    q.deleteText(cuts: [:], headings: [second.id: TextSpan(location: 0, length: (second.title as NSString).length)])
+    #expect(q.chapters.count == p.chapters.count - 1)
+    #expect(q.chapters[0].paragraphs.map(\.id) == first.paragraphs.map(\.id) + second.paragraphs.map(\.id))
+    #expect(q.lines == lines)
+    // The first heading: its text stays, with no heading.
+    p.deleteText(cuts: [:], headings: [first.id: TextSpan(location: 0, length: 999)])
+    #expect(p.chapters[0].title.isEmpty)
+    #expect(p.chapters[0].shownTitle == "Opening")
+    #expect(p.chapters[0].paragraphs.map(\.id) == first.paragraphs.map(\.id))
+}
+
+@Test func guidedStepsFollowTheBook() {
+    var p = Project(title: "t", chapters: [Chapter(title: "One", paragraphs: [Paragraph(text: "“Hi,” said Ada.")])])
+    let para = p.chapters[0].paragraphs[0].id
+    p.lines = [Line(paragraphID: para, range: TextSpan(location: 0, length: 6), kind: .spoken, speakerID: nil, confidence: 0, source: .none)]
+    var steps = GuidedSteps(project: p, narration: false, speaking: 0, voicesNeeded: 0)
+    #expect(steps.all.map(\.step) == [.manuscript, .speakers, .review, .characters, .voices, .listen])
+    #expect(steps.current?.step == .manuscript)
+    // Marking the manuscript ready moves on to Tag Speakers.
+    p.settings.markStep(.manuscript, done: true)
+    steps = GuidedSteps(project: p, narration: false, speaking: 0, voicesNeeded: 0)
+    #expect(steps.current?.step == .speakers)
+    // Tagged with a line that needs the narrator: Review is next and says how many.
+    p.lastTagged = .now
+    steps = GuidedSteps(project: p, narration: false, speaking: 0, voicesNeeded: 0)
+    #expect(steps.current?.step == .review)
+    #expect(steps.current?.detail == "1 to review")
+    // Skipping review moves on; the characters haven't been read.
+    p.settings.markStep(.review, done: true)
+    steps = GuidedSteps(project: p, narration: false, speaking: 1, voicesNeeded: 0)
+    #expect(steps.current?.step == .characters)
+    p.summariesBuilt = .now
+    p.voicesCast = .now
+    steps = GuidedSteps(project: p, narration: false, speaking: 1, voicesNeeded: 2)
+    #expect(steps.current?.step == .voices)
+    #expect(steps.current?.detail == "2 need a voice")
+    steps = GuidedSteps(project: p, narration: false, speaking: 1, voicesNeeded: 0)
+    #expect(steps.current?.step == .listen)
+    p.settings.markStep(.listen, done: true)
+    #expect(GuidedSteps(project: p, narration: false, speaking: 1, voicesNeeded: 0).allDone)
+    // Taking a mark off brings the step back.
+    p.settings.markStep(.review, done: false)
+    #expect(GuidedSteps(project: p, narration: false, speaking: 1, voicesNeeded: 0).current?.step == .review)
+    // Narration has its own last steps.
+    let n = GuidedSteps(project: p, narration: true, speaking: 1, voicesNeeded: 0)
+    #expect(n.all.map(\.step) == [.manuscript, .speakers, .review, .characters, .pronunciations, .record])
+    #expect(n.all.last?.detail == "0 of 1 recorded")
+}

@@ -1,6 +1,7 @@
 import AppKit
 @preconcurrency import AVFoundation
 import InnerVoiceKit
+import SwiftUI
 
 /// Self-test for agents: runs the app's real functions on the sample book (never a real
 /// project), prints PASS or FAIL per check, and quits with exit code 0 or 1.
@@ -410,6 +411,100 @@ enum SelfTest {
         }
     }
 
+    /// Delete Text the way the narrator does it: select text in the real manuscript view of
+    /// a window, then press Delete or choose Delete Text from the right-click menu. The text
+    /// must leave the project AND the screen.
+    private static func deleteTextInTheView() async {
+        let doc = InnerVoiceDocument(project: SeedData.project())
+        let undo = UndoManager()
+        let workspace = Workspace()
+        let look = ReadingLook(fontSize: 16, serif: true, spacing: .single, margin: .initials)
+        let host = NSHostingView(rootView: ManuscriptTextView(document: doc, workspace: workspace, undoManager: undo,
+                                                              onAssignRequest: { _, _, _ in }, onVisibleChapter: { _ in }, look: look))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        host.layoutSubtreeIfNeeded()
+        try? await Task.sleep(for: .milliseconds(300))
+        func find(_ v: NSView) -> ReadingTextView? { (v as? ReadingTextView) ?? v.subviews.lazy.compactMap(find).first }
+        guard let tv = find(host), let c = tv.coordinator else { check("the manuscript view is there to delete from", false); return }
+        func screen() -> String { tv.string }
+        func settle() async { host.layoutSubtreeIfNeeded(); try? await Task.sleep(for: .milliseconds(200)); host.layoutSubtreeIfNeeded() }
+
+        // Cases: words inside a paragraph; a whole chapter heading alone; across two paragraphs.
+        let chapter = doc.project.chapters[0]
+        guard let para = chapter.paragraphs.first(where: { ($0.text as NSString).length > 40 }),
+              let range = c.layout.paragraphRanges[para.id] else { check("the sample has a long paragraph", false); return }
+        let words = (para.text as NSString).substring(to: 12)
+        // 1. The Delete key.
+        tv.setSelectedRange(NSRange(location: range.location, length: 12))
+        if let key = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
+                                      context: nil, characters: "\u{7F}", charactersIgnoringModifiers: "\u{7F}", isARepeat: false, keyCode: 51) {
+            tv.keyDown(with: key)
+        }
+        await settle()
+        let projectText = doc.project.chapters[0].paragraphs.first { $0.id == para.id }?.text ?? ""
+        check("the Delete key deletes selected text from the project", !projectText.hasPrefix(words), "still starts “\(projectText.prefix(20))”")
+        check("the Delete key deletes selected text from the screen", (screen() as NSString).range(of: para.text).location == NSNotFound
+              && (screen() as NSString).range(of: projectText).location != NSNotFound)
+        undo.undo()
+        await settle()
+        check("Undo puts deleted text back on the screen", (screen() as NSString).range(of: para.text).location != NSNotFound)
+
+        // 2. The right-click menu.
+        guard let r2 = c.layout.paragraphRanges[para.id] else { return }
+        tv.setSelectedRange(NSRange(location: r2.location, length: 12))
+        let menu = c.menu(for: r2.location + 3, selection: tv.selectedRange())
+        if let item = menu.items.first(where: { $0.title == "Delete Text" }), let action = item.action {
+            NSApp.sendAction(action, to: item.target, from: item)
+        } else {
+            check("the right-click menu offers Delete Text", false)
+        }
+        await settle()
+        check("Delete Text in the menu deletes it from the screen", (screen() as NSString).range(of: para.text).location == NSNotFound)
+        undo.undo()
+        await settle()
+
+        // 3. A chapter heading alone (front matter often imports as a heading: "Copyright",
+        // an ISBN). The first chapter's text stays with no heading; a later one joins the
+        // chapter before it.
+        guard let start = c.layout.chapterStarts.first else { return }
+        let title = chapter.title
+        tv.setSelectedRange(NSRange(location: start, length: (title as NSString).length))
+        tv.delete(nil)
+        await settle()
+        check("deleting the first chapter's heading leaves its text with no heading",
+              doc.project.chapters.first?.title == "" && doc.project.chapters.first?.paragraphs.count == chapter.paragraphs.count
+              && (screen() as NSString).range(of: title).location == NSNotFound, "“\(doc.project.chapters.first?.title ?? "")”")
+        undo.undo()
+        await settle()
+        let second = doc.project.chapters[1]
+        if c.layout.chapterStarts.count > 1 {
+            let s2 = c.layout.chapterStarts[1]
+            tv.setSelectedRange(NSRange(location: s2, length: (second.title as NSString).length))
+            tv.delete(nil)
+            await settle()
+            check("deleting a later chapter's heading joins its text to the chapter before",
+                  doc.project.chapters.count == 2 && doc.project.chapters[0].paragraphs.count == chapter.paragraphs.count + second.paragraphs.count)
+            undo.undo()
+            await settle()
+        }
+        // 4. Part of a heading ("Chapter 1: The Storm" → "Chapter 1").
+        if let colon = title.firstIndex(of: ":") {
+            let keep = title[..<colon]
+            let s1 = c.layout.chapterStarts[0]
+            let cut = (String(keep) as NSString).length
+            tv.setSelectedRange(NSRange(location: s1 + cut, length: (title as NSString).length - cut))
+            tv.delete(nil)
+            await settle()
+            check("deleting part of a heading keeps the rest", doc.project.chapters.first?.title == String(keep), doc.project.chapters.first?.title ?? "")
+            undo.undo()
+            await settle()
+        }
+        check("Undo after heading deletes restores the book", doc.project.chapters.count == 3 && doc.project.chapters[0].title == title)
+        window.close()
+    }
+
     /// What views ask on every redraw (which engines are on and downloaded, the engine in use,
     /// the voice lists and names) must be cheap: these used to read the keychain, list the
     /// model folders and ask the system for its voices each time, and the window lagged.
@@ -626,6 +721,19 @@ enum SelfTest {
                     check("Undo brings a deleted chapter back", doc.project == before)
                 }
             }
+            await deleteTextInTheView()
+            // Steps: the sample is tagged and summarized with lines to review, so Review is next;
+            // skipping it moves on, and Undo brings it back.
+            let steps = GuidedStepsBar.steps(doc)
+            check("the next step on the sample is Review", steps.current?.step == .review, "\(steps.current?.step.rawValue ?? "none")")
+            doc.updateSettings("Skip Step", undoManager: undo) { $0.markStep(.review, done: true) }
+            let after = GuidedStepsBar.steps(doc)
+            check("skipping a step moves to the next one and says Skipped",
+                  after.current?.step == .voices && after.all.first { $0.step == .review }?.isSkipped == true)
+            undo.undo()
+            check("Undo brings a skipped step back", GuidedStepsBar.steps(doc).current?.step == .review)
+            let card = GuidedStepsBar.card(for: .review, steps: steps, document: doc, page: .manuscript)
+            check("the Review step offers Start Review", card.action?.title == "Start Review" && card.title.contains("3 lines"), card.title)
             // Pins: pinned speakers head the list, A to Z by first name; the menu's search narrows it.
             if doc.project.characters.count >= 3 {
                 let chosen = Array(doc.project.characters.sorted(by: Project.byFirstName).suffix(2))

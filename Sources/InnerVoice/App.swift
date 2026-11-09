@@ -265,6 +265,7 @@ struct ViewCommands: Commands {
     @AppStorage("reading.fontSize", store: ReadingStyle.store) private var fontSize = ReadingStyle.standardSize
     @AppStorage("reading.marginNames", store: ReadingStyle.store) private var marginNames = MarginNames.initials.rawValue
     @AppStorage("reading.lineSpacing", store: ReadingStyle.store) private var lineSpacing = LineSpacing.single.rawValue
+    @AppStorage(GuidedStepsBar.hiddenKey) private var stepsHidden = false
 
     var body: some Commands {
         CommandGroup(before: .sidebar) {
@@ -278,6 +279,8 @@ struct ViewCommands: Commands {
                     .keyboardShortcut("r", modifiers: [.command, .shift])
                     .disabled(focus == nil)
             }
+            Divider()
+            Button(stepsHidden ? "Show Steps" : "Hide Steps") { stepsHidden.toggle() }
             Divider()
             Button("Highlight Lines") { setStyle(.highlight) }
                 .keyboardShortcut("h", modifiers: [.command, .option])
