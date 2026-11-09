@@ -26,7 +26,7 @@ nonisolated struct VoicePack: Sendable {
         engine: .qwen,
         repos: [VoicePack.qwenDesignRepo, VoicePack.qwenCloneRepo],
         bytes: 6_180_000_000,
-        summary: "A voice designed for each character from their summary, kept the same on every line and acted in each tone.")
+        summary: "A voice designed for each character from their summary and Voice Notes, kept the same on every line and acted in each tone.")
 
     /// Designs a voice from a description and acts in a tone.
     static let qwenDesignRepo = "mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit"
