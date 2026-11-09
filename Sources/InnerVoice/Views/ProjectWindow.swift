@@ -96,9 +96,13 @@ struct ProjectWindow: View {
                     set: { s in document.updateSettings("Change Color Style", undoManager: undoManager) { $0.style = s } })) {
                     Label("Highlight", systemImage: "highlighter").tag(ColorStyle.highlight)
                     Label("Outline", systemImage: "rectangle.dashed").tag(ColorStyle.outline)
+                    Label("Underline", systemImage: "underline").tag(ColorStyle.underline)
                 }
                 .pickerStyle(.segmented)
-                .help("Highlight lines with their color, or outline them (⌥⌘H, ⌥⌘O)")
+                .help("Highlight lines with their color, outline them or underline them (⌥⌘H, ⌥⌘O, ⌥⌘U)")
+            }
+            ToolbarItem {
+                TextSizeControl()
             }
             ToolbarSpacer(.fixed)
             ToolbarItemGroup {
@@ -238,5 +242,24 @@ enum SpellCheck {
         let checker = NSSpellChecker.shared
         let range = checker.checkSpelling(of: word, startingAt: 0, language: "en", wrap: false, inSpellDocumentWithTag: 0, wordCount: nil)
         return range.location == NSNotFound
+    }
+}
+
+/// Smaller and bigger text, one point a step, beside the color style in the toolbar.
+/// The same as View › Bigger Text and Smaller Text, and the size in Settings › Manuscript.
+struct TextSizeControl: View {
+    @AppStorage("reading.fontSize") private var size = ReadingStyle.standardSize
+
+    var body: some View {
+        ControlGroup {
+            Button("Smaller Text", systemImage: "textformat.size.smaller") { ReadingStyle.setFontSize(size - 1) }
+                .help("Make the manuscript text smaller (⌘−). Now \(Int(size)) pt.")
+                .disabled(size <= ReadingStyle.sizes.lowerBound)
+            Button("Bigger Text", systemImage: "textformat.size.larger") { ReadingStyle.setFontSize(size + 1) }
+                .help("Make the manuscript text bigger (⌘+). Now \(Int(size)) pt.")
+                .disabled(size >= ReadingStyle.sizes.upperBound)
+        } label: {
+            Label("Text Size", systemImage: "textformat.size")
+        }
     }
 }

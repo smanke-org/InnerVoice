@@ -140,6 +140,11 @@ struct SystemAppCommands: Commands {
             Button("About \(AppInfo.name)") { AppInfo.showAbout() }
             UpdateMenuButton()
         }
+        // Settings is an AppKit window (see SettingsWindow), so the app menu item is ours.
+        CommandGroup(replacing: .appSettings) {
+            Button("Settings…") { SettingsWindow.shared.show() }
+                .keyboardShortcut(",", modifiers: .command)
+        }
     }
 }
 

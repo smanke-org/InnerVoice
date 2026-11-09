@@ -1,45 +1,5 @@
 import SwiftUI
 
-/// The Settings window (Command-Comma). One tab per topic.
-struct SettingsView: View {
-    @AppStorage("settings.tab") private var tab: SettingsTab = .general
-
-    var body: some View {
-        TabView(selection: $tab) {
-            ForEach(SettingsTab.allCases) { t in
-                page(t)
-                    .tabItem { Label(t.title, systemImage: t.symbol) }
-                    .tag(t)
-            }
-        }
-        .noInitialFocus()
-    }
-
-    @ViewBuilder
-    private func page(_ tab: SettingsTab) -> some View {
-        switch tab {
-        case .ai:
-            ScrollView {
-                ModelPicker().padding(Space.xl)
-            }
-            .frame(minWidth: 620, idealWidth: 620, maxWidth: .infinity, minHeight: 280, idealHeight: 640, maxHeight: .infinity)
-        default:
-            Form {
-                switch tab {
-                case .general: GeneralSettings()
-                case .manuscript: ManuscriptSettings()
-                case .recording: RecordingSettings()
-                case .appearance: AppearanceSettings()
-                case .ai: EmptyView()
-                }
-            }
-            .formStyle(.grouped)
-            // Settings scroll and can be dragged bigger (house rule).
-            .frame(minWidth: 560, idealWidth: 560, maxWidth: .infinity, minHeight: 280, idealHeight: 560, maxHeight: .infinity)
-        }
-    }
-}
-
 enum SettingsTab: String, CaseIterable, Identifiable {
     case general, manuscript, ai, recording, appearance
 
@@ -73,8 +33,10 @@ struct GeneralSettings: View {
 }
 
 struct ManuscriptSettings: View {
-    @AppStorage("reading.fontSize") private var fontSize = 16.0
+    @AppStorage("reading.fontSize") private var fontSize = ReadingStyle.standardSize
     @AppStorage("reading.serif") private var serif = true
+    @AppStorage("reading.lineSpacing") private var spacing = LineSpacing.single.rawValue
+    @AppStorage("reading.marginNames") private var marginNames = MarginNames.initials.rawValue
 
     var body: some View {
         Section("Reading") {
@@ -84,14 +46,28 @@ struct ManuscriptSettings: View {
             }
             LabeledContent("Text size") {
                 HStack {
-                    Slider(value: $fontSize, in: 12...26, step: 1)
+                    Slider(value: $fontSize, in: ReadingStyle.sizes, step: 1)
                         .frame(width: 200)
                     Text("\(Int(fontSize)) pt").monospacedDigit().frame(width: 44, alignment: .trailing)
                 }
             }
+            Picker("Line spacing", selection: $spacing) {
+                ForEach(LineSpacing.allCases) { Text($0.title).tag($0.rawValue) }
+            }
+            .pickerStyle(.segmented)
         }
         Section {
-            Text("Highlight or Outline, the Unsure level and initials are saved with each project. Change them in the View menu or the toolbar.")
+            Picker("Speakers in the margin", selection: $marginNames) {
+                ForEach(MarginNames.allCases) { Text($0.title).tag($0.rawValue) }
+            }
+            .pickerStyle(.segmented)
+        } footer: {
+            Text("Initials take the least room; long names are shortened with “…”. To hide them in a project, turn off View › Show Speakers in Margin.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        Section {
+            Text("Highlight, Outline or Underline, the Unsure level and showing speakers in the margin are saved with each project. Change them in the View menu or the toolbar.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }

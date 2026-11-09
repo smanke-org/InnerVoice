@@ -39,6 +39,12 @@ struct AssignPopover: View {
         return ordered.filter { c in ([c.name] + c.aliases).contains { $0.localizedCaseInsensitiveContains(q) } }
     }
 
+    /// The Narration row: shown until the search rules it out ("nar", "not").
+    private var showsNarration: Bool {
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        return q.isEmpty || "narration".hasPrefix(q) || "not spoken".hasPrefix(q)
+    }
+
     private var canCreate: Bool {
         let q = query.trimmingCharacters(in: .whitespaces)
         return !q.isEmpty && !document.project.characters.contains { $0.name.caseInsensitiveCompare(q) == .orderedSame }
@@ -60,6 +66,12 @@ struct AssignPopover: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(spacing: 2) {
+                        if showsNarration {
+                            narrationRow(highlighted: highlighted == -1)
+                                .id(-1)
+                                .onTapGesture { markNarration() }
+                            Divider().padding(.horizontal, Space.sm)
+                        }
                         ForEach(Array(filtered.prefix(60).enumerated()), id: \.element.id) { i, c in
                             row(c, number: i < 9 && query.isEmpty ? i + 1 : nil, highlighted: i == highlighted)
                                 .id(i)
@@ -81,7 +93,7 @@ struct AssignPopover: View {
                     }
                     .padding(Space.xs)
                 }
-                .frame(height: min(300, CGFloat(filtered.count + (canCreate ? 1 : 0)) * 30 + 12))
+                .frame(height: min(300, CGFloat(filtered.count + (canCreate ? 1 : 0) + (showsNarration ? 1 : 0)) * 30 + 12))
                 .onChange(of: highlighted) { proxy.scrollTo(highlighted) }
             }
             Divider()
@@ -89,11 +101,6 @@ struct AssignPopover: View {
                 Button("Who's Speaking?") { assign(nil) }
                     .help("Clear the speaker; the line shows in red")
                 Spacer()
-                Button("Narration") {
-                    document.removeLines([lineID], undoManager: undoManager)
-                    onClose()
-                }
-                .help("This text isn't a line; read it in the narrator's voice")
             }
             .controlSize(.small)
             .buttonStyle(.borderless)
@@ -103,9 +110,10 @@ struct AssignPopover: View {
         .frame(width: 300)
         .onAppear { focused = true }
         .onKeyPress(.downArrow) { highlighted = min(highlighted + 1, filtered.count - (canCreate ? 0 : 1)); return .handled }
-        .onKeyPress(.upArrow) { highlighted = max(0, highlighted - 1); return .handled }
+        .onKeyPress(.upArrow) { highlighted = max(showsNarration ? -1 : 0, highlighted - 1); return .handled }
         .onKeyPress(.escape) { onClose(); return .handled }
         .onKeyPress(characters: .decimalDigits) { press in
+            if query.isEmpty, press.characters == "0" { markNarration(); return .handled }
             guard query.isEmpty, let n = Int(press.characters), n >= 1, n <= min(9, filtered.count) else { return .ignored }
             assign(filtered[n - 1].id)
             return .handled
@@ -152,8 +160,41 @@ struct AssignPopover: View {
         .accessibilityHint(number.map { "Press \($0)" } ?? "")
     }
 
+    /// Not a character speaking: the text is narration, read in the narrator's voice.
+    private func narrationRow(highlighted: Bool) -> some View {
+        HStack(spacing: Space.sm) {
+            Image(systemName: "text.alignleft")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(width: 10)
+            Text("Narration (not spoken)").lineLimit(1)
+            Spacer()
+            if query.isEmpty {
+                Text("0")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(.horizontal, Space.sm)
+        .padding(.vertical, Space.xs)
+        .frame(height: 26)
+        .contentShape(Rectangle())
+        .background(highlighted ? Color.accentColor.opacity(0.18) : .clear, in: RoundedRectangle(cornerRadius: 6))
+        .help("No one speaks this; read it in the narrator's voice. The color goes away (0).")
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint(query.isEmpty ? "Press 0" : "")
+    }
+
+    private func markNarration() {
+        document.removeLines([lineID], undoManager: undoManager)
+        onClose()
+    }
+
     private func commit() {
-        if highlighted < filtered.count {
+        if highlighted == -1, showsNarration {
+            markNarration()
+        } else if highlighted >= 0, highlighted < filtered.count {
             assign(filtered[highlighted].id)
         } else if canCreate {
             assignNew()

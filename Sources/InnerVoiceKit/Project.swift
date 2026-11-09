@@ -197,6 +197,15 @@ public struct BookCharacter: Codable, Identifiable, Hashable, Sendable {
         let letters = parts.prefix(2).compactMap(\.first).map(String.init)
         return letters.isEmpty ? String(name.prefix(2)) : letters.joined().uppercased()
     }
+
+    /// The first name, skipping titles: "Dr. Edda Voss" is Edda. A title on its own
+    /// ("Captain") or with only a surname ("Mr. Hale") keeps the whole name.
+    public var firstName: String {
+        let parts = name.split(separator: " ").map(String.init)
+        guard let first = parts.first else { return name }
+        if Names.titles.contains(first) { return parts.count > 2 ? parts[1] : name }
+        return first
+    }
 }
 
 /// A person reading the audiobook.
@@ -260,8 +269,14 @@ public struct Retake: Codable, Identifiable, Hashable, Sendable {
 }
 
 public enum ColorStyle: String, Codable, CaseIterable, Sendable {
-    case highlight, outline
-    public var title: String { self == .highlight ? "Highlight" : "Outline" }
+    case highlight, outline, underline
+    public var title: String {
+        switch self {
+        case .highlight: "Highlight"
+        case .outline: "Outline"
+        case .underline: "Underline"
+        }
+    }
 }
 
 public struct ProjectSettings: Codable, Hashable, Sendable {
@@ -393,7 +408,7 @@ public enum Words {
 /// Name helpers shared by rules, prompts and initials.
 public enum Names {
     public static let titles: Set<String> = [
-        "Mr.", "Mrs.", "Ms.", "Miss", "Dr.", "Mr", "Mrs", "Ms", "Dr", "Lady", "Lord", "Sir", "Dame", "Captain", "Capt.",
+        "Mr.", "Mrs.", "Ms.", "Miss", "Mister", "Dr.", "Mr", "Mrs", "Ms", "Dr", "Lady", "Lord", "Sir", "Dame", "Captain", "Capt.",
         "Aunt", "Uncle", "Professor", "Prof.", "Father", "Mother", "Sister", "Brother", "King", "Queen", "Prince",
         "Princess", "Detective", "Inspector", "Sergeant", "Officer", "Agent", "Madam", "Madame", "Señor", "Señora",
         "General", "Colonel", "Major", "Lieutenant", "Admiral", "Doctor", "Granny", "Grandpa", "Grandma", "Saint",

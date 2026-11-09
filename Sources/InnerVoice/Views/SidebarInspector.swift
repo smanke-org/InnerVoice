@@ -159,6 +159,10 @@ struct ProjectInspector: View {
                     }
                     Divider()
                     Button("Who's Speaking?") { document.assign([line.id], to: nil, undoManager: undoManager) }
+                    Button("Narration (Not Spoken)") {
+                        document.removeLines([line.id], undoManager: undoManager)
+                        workspace.selectedLines = []
+                    }
                 } label: {
                     if let c = document.project.character(line.speakerID) {
                         Label(c.name, systemImage: "circle.fill")

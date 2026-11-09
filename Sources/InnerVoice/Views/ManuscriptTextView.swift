@@ -2,18 +2,57 @@ import AppKit
 import InnerVoiceKit
 import SwiftUI
 
-/// Reading settings shared by the manuscript and Record.
+/// Reading settings shared by the manuscript and Record (per Mac, not per project).
 enum ReadingStyle {
+    static let sizes: ClosedRange<Double> = 12...26
+    static let standardSize = 16.0
+
     static var fontSize: CGFloat {
         let v = UserDefaults.standard.double(forKey: "reading.fontSize")
-        return v > 0 ? v : 16
+        return v > 0 ? v : standardSize
     }
     static var serif: Bool { UserDefaults.standard.object(forKey: "reading.serif") as? Bool ?? true }
+    static var spacing: LineSpacing { LineSpacing(rawValue: UserDefaults.standard.string(forKey: "reading.lineSpacing") ?? "") ?? .single }
+    static var marginNames: MarginNames { MarginNames(rawValue: UserDefaults.standard.string(forKey: "reading.marginNames") ?? "") ?? .initials }
+
+    /// Bigger or smaller text, one point at a time, within `sizes`.
+    static func setFontSize(_ size: Double) {
+        UserDefaults.standard.set(min(max(size.rounded(), sizes.lowerBound), sizes.upperBound), forKey: "reading.fontSize")
+    }
 
     static func font(size: CGFloat, weight: NSFont.Weight = .regular) -> NSFont {
         let base = NSFont.systemFont(ofSize: size, weight: weight)
         if serif, let d = base.fontDescriptor.withDesign(.serif) { return NSFont(descriptor: d, size: size) ?? base }
         return base
+    }
+}
+
+/// Single keeps the reading view's usual spacing; Double is twice the single line height,
+/// like a double-spaced manuscript.
+enum LineSpacing: String, CaseIterable, Identifiable {
+    case single, double
+    var id: String { rawValue }
+    var title: String { self == .single ? "Single" : "Double" }
+    var multiple: CGFloat { self == .single ? 1.32 : 2.0 }
+}
+
+/// What the left margin shows for each line's speaker.
+enum MarginNames: String, CaseIterable, Identifiable {
+    case initials, firstName, fullName
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .initials: "Initials"
+        case .firstName: "First Name"
+        case .fullName: "Full Name"
+        }
+    }
+    func label(for c: BookCharacter) -> String {
+        switch self {
+        case .initials: c.initials
+        case .firstName: c.firstName
+        case .fullName: c.name
+        }
     }
 }
 
@@ -75,6 +114,12 @@ struct ManuscriptTextView: NSViewRepresentable {
     var undoManager: UndoManager?
     var onAssignRequest: (UUID, NSRect, NSView) -> Void
     var onVisibleChapter: (Int) -> Void
+    // Read through ReadingStyle; here so a change from Settings, the toolbar or the View
+    // menu updates the view at once.
+    @AppStorage("reading.fontSize") private var fontSizeSetting = ReadingStyle.standardSize
+    @AppStorage("reading.serif") private var serifSetting = true
+    @AppStorage("reading.lineSpacing") private var spacingSetting = LineSpacing.single.rawValue
+    @AppStorage("reading.marginNames") private var marginSetting = MarginNames.initials.rawValue
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -121,7 +166,8 @@ struct ManuscriptTextView: NSViewRepresentable {
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         let c = context.coordinator
         c.parent = self
-        if c.builtText != document.textRevision || c.builtFontSize != ReadingStyle.fontSize || c.builtSerif != ReadingStyle.serif {
+        if c.builtText != document.textRevision || c.builtFontSize != ReadingStyle.fontSize || c.builtSerif != ReadingStyle.serif
+            || c.builtSpacing != ReadingStyle.spacing {
             c.rebuild()
         } else if c.builtLines != document.lineRevision {
             c.rebuildEntries()
@@ -133,6 +179,12 @@ struct ManuscriptTextView: NSViewRepresentable {
             c.builtTags = document.tagRevision
             c.builtSelection = workspace.selectedLines
             c.textView?.needsDisplay = true
+            c.textView?.margin.needsDisplay = true
+        }
+        // Longer names in the margin need a wider gutter (only resized when it changes).
+        if c.builtGutter != c.gutterWidth() { c.didResize() }
+        if c.builtMargin != ReadingStyle.marginNames {
+            c.builtMargin = ReadingStyle.marginNames
             c.textView?.margin.needsDisplay = true
         }
         if let pending = workspace.pendingAssign {
@@ -156,6 +208,9 @@ struct ManuscriptTextView: NSViewRepresentable {
         var builtLines = -1
         var builtFontSize: CGFloat = 0
         var builtSerif = true
+        var builtSpacing = LineSpacing.single
+        var builtGutter: CGFloat = 0
+        var builtMargin = MarginNames.initials
         var builtSelection: [UUID] = []
         var handledReveal: Workspace.Reveal?
         private var lastReportedChapter = -1
@@ -169,15 +224,36 @@ struct ManuscriptTextView: NSViewRepresentable {
 
         func rebuild() {
             guard let textView else { return }
+            // Same book, new size or spacing: keep the reader's place.
+            let anchor = builtText == document.textRevision ? topCharacter() : nil
             builtText = document.textRevision
             builtTags = document.tagRevision
             builtLines = document.lineRevision
             builtFontSize = ReadingStyle.fontSize
             builtSerif = ReadingStyle.serif
-            let (text, layout) = Self.build(project: project, index: document.index, fontSize: builtFontSize)
+            builtSpacing = ReadingStyle.spacing
+            let (text, layout) = Self.build(project: project, index: document.index, fontSize: builtFontSize, spacing: builtSpacing)
             self.layout = layout
             textView.textStorage?.setAttributedString(text)
             didResize()
+            if let anchor { scroll(toCharacter: anchor) }
+        }
+
+        /// The first character at the top of the visible text, or nil at the very top.
+        func topCharacter() -> Int? {
+            guard let tv = textView, let lm = tv.layoutManager, let tc = tv.textContainer, !tv.string.isEmpty else { return nil }
+            let y = tv.visibleRect.minY - tv.textContainerOrigin.y
+            guard y > 1 else { return nil }
+            return lm.characterIndexForGlyph(at: lm.glyphIndex(for: NSPoint(x: 0, y: y), in: tc))
+        }
+
+        func scroll(toCharacter char: Int) {
+            guard let tv = textView, let lm = tv.layoutManager, let tc = tv.textContainer,
+                  char < (tv.string as NSString).length else { return }
+            let range = NSRange(location: char, length: 1)
+            lm.ensureLayout(forCharacterRange: range)
+            let rect = lm.boundingRect(forGlyphRange: lm.glyphRange(forCharacterRange: range, actualCharacterRange: nil), in: tc)
+            tv.scroll(NSPoint(x: 0, y: rect.minY + tv.textContainerOrigin.y))
         }
 
         /// Lines were added or removed but the text is the same: only the line map changes.
@@ -196,18 +272,28 @@ struct ManuscriptTextView: NSViewRepresentable {
             return out.sorted { $0.range.location < $1.range.location }
         }
 
+        /// The part of a line rect that holds the text. Extra line spacing sits above the
+        /// words, so with Double spacing a highlight would otherwise reach up into the gap.
+        /// Single spacing keeps its usual box.
+        func textBox(_ rect: NSRect) -> NSRect {
+            let m = builtSpacing.multiple, usual = LineSpacing.single.multiple
+            guard m > usual else { return rect }
+            let height = rect.height * usual / m
+            return NSRect(x: rect.minX, y: rect.maxY - height, width: rect.width, height: height)
+        }
+
         /// The line an entry stands for, if it still exists.
         func line(_ e: LineLayout.Entry) -> Line? {
             document.index.lineIndexByID[e.lineID].map { project.lines[$0] }
         }
 
-        static func build(project: Project, index: BookIndex, fontSize: CGFloat) -> (NSAttributedString, LineLayout) {
+        static func build(project: Project, index: BookIndex, fontSize: CGFloat, spacing: LineSpacing = .single) -> (NSAttributedString, LineLayout) {
             let out = NSMutableAttributedString()
             var layout = LineLayout()
             let body = ReadingStyle.font(size: fontSize)
             let heading = ReadingStyle.font(size: round(fontSize * 1.55), weight: .semibold)
             let bodyStyle = NSMutableParagraphStyle()
-            bodyStyle.lineHeightMultiple = 1.32
+            bodyStyle.lineHeightMultiple = spacing.multiple
             bodyStyle.paragraphSpacing = fontSize * 0.75
             bodyStyle.firstLineHeadIndent = 0
             let headingStyle = NSMutableParagraphStyle()
@@ -246,12 +332,22 @@ struct ManuscriptTextView: NSViewRepresentable {
 
         // MARK: Geometry
 
-        /// Centers a comfortable reading measure and leaves a gutter for initials.
+        /// Room left of the text for the margin labels: initials need little, full names more.
+        func gutterWidth() -> CGFloat {
+            guard project.settings.showInitials else { return 72 }
+            let names = ReadingStyle.marginNames
+            let widest = project.characters.map { LineLayoutManager.markerWidth(names.label(for: $0)) }.max() ?? 0
+            return max(72, widest + 40)
+        }
+
+        /// Centers a comfortable reading measure and leaves a gutter for the margin labels.
         @objc func didResize() {
             guard let textView, let scroll = textView.enclosingScrollView, let container = textView.textContainer else { return }
             let width = scroll.contentSize.width
-            let measure = min(max(360, width - 140), builtFontSize * 42)
-            let side = max(72, (width - measure) / 2)
+            let gutter = gutterWidth()
+            builtGutter = gutter
+            let measure = min(max(360, width - 2 * gutter), builtFontSize * 42)
+            let side = max(gutter, (width - measure) / 2)
             textView.textContainerInset = NSSize(width: side, height: 40)
             container.size = NSSize(width: measure, height: CGFloat.greatestFiniteMagnitude)
             textView.frame.size.width = width
@@ -340,6 +436,9 @@ struct ManuscriptTextView: NSViewRepresentable {
                 sub.addItem(.separator())
                 sub.addItem(ClosureMenuItem(title: "Who's Speaking? (Clear)") { [weak self] in
                     self?.document.assign(ids, to: nil, undoManager: undo)
+                })
+                sub.addItem(ClosureMenuItem(title: "Narration (Not Spoken)") { [weak self] in
+                    self?.document.removeLines(ids, undoManager: undo)
                 })
                 assign.submenu = sub
                 menu.addItem(assign)
@@ -479,8 +578,8 @@ final class MarginOverlay: NSView {
             drawn.insert(y)
             let speaker = project.character(line.speakerID)
             let color = needs ? NSColor.attention : NSColor(hexString: speaker?.colorHex ?? "#888888")
-            LineLayoutManager.drawMarker(needs ? "?" : (speaker?.initials ?? ""), color: color,
-                                         at: NSPoint(x: origin.x - 40, y: origin.y + first.midY), dark: dark)
+            let label = needs ? "?" : speaker.map { ReadingStyle.marginNames.label(for: $0) } ?? ""
+            LineLayoutManager.drawMarker(label, color: color, rightEdge: origin.x - 18, midY: origin.y + c.textBox(first).midY, dark: dark)
         }
     }
 }
@@ -518,7 +617,31 @@ nonisolated final class LineLayoutManager: NSLayoutManager {
             }
             let isSelected = selected.contains(line.id)
             for rect in rects {
-                let box = rect.insetBy(dx: -3, dy: 0.5)
+                let box = c.textBox(rect).insetBy(dx: -3, dy: 0.5)
+                if style == .underline {
+                    // A colored rule under the words: solid for speech, dashed for thoughts,
+                    // dotted for written text. Red when the narrator is needed.
+                    let rule = NSBezierPath()
+                    let y = rect.maxY - 1.5
+                    rule.move(to: NSPoint(x: rect.minX, y: y))
+                    rule.line(to: NSPoint(x: rect.maxX, y: y))
+                    rule.lineWidth = 2.5
+                    rule.lineCapStyle = .round
+                    switch line.kind {
+                    case .thought: rule.setLineDash([6, 4], count: 2, phase: 0)
+                    case .written: rule.setLineDash([0.1, 4.5], count: 2, phase: 0)
+                    case .spoken: break
+                    }
+                    color.withAlphaComponent(dark ? 0.95 : 0.85).setStroke()
+                    rule.stroke()
+                    if isSelected {
+                        let ring = NSBezierPath(roundedRect: box.insetBy(dx: -2, dy: -2), xRadius: 6, yRadius: 6)
+                        NSColor.controlAccentColor.setStroke()
+                        ring.lineWidth = 2
+                        ring.stroke()
+                    }
+                    continue
+                }
                 let path = NSBezierPath(roundedRect: box, xRadius: 4, yRadius: 4)
                 switch line.kind {
                 case .thought: path.setLineDash([4, 3], count: 2, phase: 0)
@@ -545,13 +668,32 @@ nonisolated final class LineLayoutManager: NSLayoutManager {
         }
     }
 
-    @MainActor static func drawMarker(_ text: String, color: NSColor, at center: NSPoint, dark: Bool) {
-        guard !text.isEmpty else { return }
-        let font = NSFont.systemFont(ofSize: 10, weight: .bold)
-        let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: dark ? color.blended(withFraction: 0.35, of: .white) ?? color : color.blended(withFraction: 0.25, of: .black) ?? color]
+    @MainActor static let markerFont = NSFont.systemFont(ofSize: 10, weight: .bold)
+    /// A full name longer than this is cut short with "…".
+    static let markerMaxText: CGFloat = 150
+
+    /// The label as drawn: short enough to fit the margin.
+    @MainActor static func markerText(_ text: String) -> String {
+        let attrs: [NSAttributedString.Key: Any] = [.font: markerFont]
+        guard (text as NSString).size(withAttributes: attrs).width > markerMaxText else { return text }
+        var cut = text
+        while cut.count > 1, ((cut + "…") as NSString).size(withAttributes: attrs).width > markerMaxText { cut.removeLast() }
+        return cut.trimmingCharacters(in: .whitespaces) + "…"
+    }
+
+    @MainActor static func markerWidth(_ text: String) -> CGFloat {
+        let size = (markerText(text) as NSString).size(withAttributes: [.font: markerFont])
+        return max(22, ceil(size.width) + 10)
+    }
+
+    /// A pill with the speaker's label, its right edge just left of the text.
+    @MainActor static func drawMarker(_ raw: String, color: NSColor, rightEdge: CGFloat, midY: CGFloat, dark: Bool) {
+        guard !raw.isEmpty else { return }
+        let text = markerText(raw)
+        let attrs: [NSAttributedString.Key: Any] = [.font: markerFont, .foregroundColor: dark ? color.blended(withFraction: 0.35, of: .white) ?? color : color.blended(withFraction: 0.25, of: .black) ?? color]
         let size = (text as NSString).size(withAttributes: attrs)
-        let w = max(22, size.width + 10)
-        let box = NSRect(x: center.x - w / 2, y: center.y - 9, width: w, height: 18)
+        let w = markerWidth(raw)
+        let box = NSRect(x: rightEdge - w, y: midY - 9, width: w, height: 18)
         color.withAlphaComponent(dark ? 0.28 : 0.16).setFill()
         NSBezierPath(roundedRect: box, xRadius: 9, yRadius: 9).fill()
         (text as NSString).draw(at: NSPoint(x: box.midX - size.width / 2, y: box.midY - size.height / 2), withAttributes: attrs)

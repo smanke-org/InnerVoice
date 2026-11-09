@@ -450,3 +450,16 @@ private func sampleContents() -> ProjectArchive.Contents {
     #expect(throws: ProjectArchive.ArchiveError.missingProject) { try ProjectArchive.read(noProject) }
     #expect(ProjectArchive.safeName("../../etc/passwd") == "passwd")
 }
+
+// MARK: - Margin names
+
+@Test func characterFirstNamesSkipTitles() {
+    func first(_ n: String) -> String { BookCharacter(name: n, colorHex: "#0EA5E9").firstName }
+    #expect(first("Mara Quinn") == "Mara")
+    #expect(first("Dr. Edda Voss") == "Edda")
+    #expect(first("Captain") == "Captain")
+    #expect(first("Mr. Hale") == "Mr. Hale")
+    #expect(first("Mister Waterford") == "Mister Waterford")
+    #expect(first("Grey-hair") == "Grey-hair")
+    #expect(BookCharacter(name: "Mister Waterford", colorHex: "#0EA5E9").initials == "W")
+}

@@ -12,7 +12,6 @@ enum Snapshot {
     static var requested: Bool { !(ProcessInfo.processInfo.environment["APP_SNAPSHOT"] ?? "").isEmpty }
     private static var attached: (InnerVoiceDocument, Workspace)?
     static var newDocument: NewDocumentAction?
-    static var openSettings: OpenSettingsAction?
 
     /// The sample book this run created. Only its window is ever driven or photographed.
     private static var sample: InnerVoiceDocument?
@@ -86,7 +85,24 @@ enum Snapshot {
                     if let red { workspace.show(paragraph: red.paragraphID, line: red.id) }
                 }
                 await shot("manuscript-outline") { document.updateSettings("", undoManager: nil) { $0.style = .outline } }
+                await shot("manuscript-underline") { document.updateSettings("", undoManager: nil) { $0.style = .underline } }
+                // Reading preferences live in memory only here: the snapshot copy shares the
+                // person's real preferences.
+                await shot("manuscript-names", settle: 1.2) {
+                    reading("reading.marginNames", MarginNames.fullName.rawValue)
+                    reading("reading.lineSpacing", LineSpacing.double.rawValue)
+                    document.updateSettings("", undoManager: nil) { $0.style = .highlight }
+                    document.objectWillChange.send()
+                }
+                await shot("manuscript-first-names", settle: 1.2) {
+                    reading("reading.marginNames", MarginNames.firstName.rawValue)
+                    reading("reading.lineSpacing", nil)
+                    document.updateSettings("", undoManager: nil) { $0.style = .outline }
+                    document.objectWillChange.send()
+                }
+                reading("reading.marginNames", nil)
                 document.updateSettings("", undoManager: nil) { $0.style = .highlight }
+                document.objectWillChange.send()
                 if wants("assign-popover"), let red {
                     workspace.page = .manuscript
                     workspace.pendingAssign = red.id
@@ -126,25 +142,27 @@ enum Snapshot {
                 workspace.showModelSheet = false
                 try? await Task.sleep(for: .seconds(0.5))
             }
-            if wants("settings"), let openSettings {
-                let main = window()
-                openSettings()
-                try? await Task.sleep(for: .seconds(1))
+            if wants("settings") {
                 for mode in ["light", "dark"] {
                     NSApp.appearance = NSAppearance(named: mode == "light" ? .aqua : .darkAqua)
                     for tab in SettingsTab.allCases {
-                        UserDefaults.standard.set(tab.rawValue, forKey: "settings.tab")
+                        SettingsWindow.shared.show(tab: tab)
                         try? await Task.sleep(for: .seconds(0.9))
-                        if let s = NSApp.windows.first(where: { $0.isVisible && $0 !== main && !$0.isSheet && $0.title != "Welcome to Inner Voice" }) {
-                            capture(s, "\(dir)/settings-\(tab.rawValue)-\(mode).png")
-                        }
+                        if let s = SettingsWindow.shared.window { capture(s, "\(dir)/settings-\(tab.rawValue)-\(mode).png") }
                     }
                 }
-                UserDefaults.standard.set(SettingsTab.general.rawValue, forKey: "settings.tab")
+                SettingsWindow.shared.window?.close()
             }
             print("SNAPSHOT done \(dir)")
             finish()
         }
+    }
+
+    /// Sets a preference for this run only (the argument domain is never saved).
+    static func reading(_ key: String, _ value: Any?) {
+        var arguments = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
+        arguments[key] = value
+        UserDefaults.standard.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
     }
 
     /// Quits without asking to save the sample book.

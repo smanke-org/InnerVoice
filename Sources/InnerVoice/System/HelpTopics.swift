@@ -105,14 +105,14 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
         ]
 
         case .fixingLines: [
-            .text("Click a line to assign it. The Assign To popover lists the characters with their colors, the ones used most in this chapter first. Type to filter the list, or press a number key to pick one of the first nine."),
+            .text("Click a line to assign it. The Assign To popover lists the characters with their colors, the ones used most in this chapter first. Type to filter the list, or press a number key to pick one of the first nine. Narration (not spoken) sits at the top of the list for text no one says out loud."),
             .keys([
                 ("Click a line", "Open Assign To"),
                 ("Return", "Open Assign To for the focused line"),
                 ("1 – 9", "Assign to that character in the list"),
                 ("Type", "Filter the characters"),
                 ("New Character…", "Make a character and assign the line to them"),
-                ("Narration (not a line)", "The text isn't spoken after all"),
+                ("0 or Narration (not spoken)", "No one says it: the color goes and you read it as narration"),
                 ("⌘Z", "Undo the change"),
             ]),
             .text("A line you assign is marked as yours, and a later Tag Speakers run never changes it. You can also right-click a line and choose Assign To."),
@@ -127,17 +127,19 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
 
         case .colors: [
             .text("Every character has a color, and each line shows the color of the character who says it. New characters get the next color that's easy to tell apart. Change a character's color in Cast."),
-            .heading("Highlight or Outline"),
-            .text("Highlight fills each line with its color; Outline draws a line around it and keeps the page calmer. Choose in the toolbar or in Settings › Manuscript. Each project keeps its own choice."),
+            .heading("Highlight, Outline or Underline"),
+            .text("Highlight fills each line with its color; Outline draws a line around it; Underline draws a colored line under the words and keeps the page calmest. Choose in the toolbar or the View menu (⌥⌘H, ⌥⌘O, ⌥⌘U). Each project keeps its own choice."),
             .keys([
-                ("Spoken", "Highlighted or outlined in the character's color"),
-                ("Thought", "A dashed outline"),
-                ("Written", "A dotted underline, for letters, signs and texts"),
+                ("Spoken", "Highlighted, outlined or underlined in the character's color"),
+                ("Thought", "Dashed"),
+                ("Written", "Dotted, for letters, signs and texts"),
             ]),
             .heading("Red means it needs you"),
             .text("Red is kept for lines that need you, and no character is ever red. Who's Speaking? is a line the AI couldn't decide on. Unsure is a line it tagged with low confidence. Both show a \"?\" in the margin."),
-            .heading("Initials in the margin"),
-            .text("Each line also has the character's initials in the margin, so you never have to rely on color alone. Hold the pointer over the initials to see the full name."),
+            .heading("Speakers in the margin"),
+            .text("Each line also shows who says it in the margin, so you never have to rely on color alone. Choose initials, first names or full names in Settings › Manuscript or View › Speakers in Margin; long names are shortened with \"…\". Turn them off for a project with View › Show Speakers in Margin."),
+            .heading("Text size and spacing"),
+            .text("Make the text bigger or smaller with the buttons in the toolbar, or View › Bigger Text (⌘+), Smaller Text (⌘−) and Actual Size (⌘0). Choose Single or Double line spacing in Settings › Manuscript or View › Line Spacing. The page keeps your place when you change either."),
         ]
 
         case .castAndSummaries: [
@@ -250,7 +252,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
         case .settings: [
             .keys([
                 ("General", "Appearance, asking before quitting, the Dock and menu bar icons, iCloud and updates"),
-                ("Manuscript", "Highlight or Outline, how sure the AI must be before a line stops being Unsure, the font"),
+                ("Manuscript", "The typeface, text size, line spacing, and initials, first names or full names in the margin"),
                 ("AI", "The model"),
                 ("Recording", "Record's font size and keys"),
             ]),

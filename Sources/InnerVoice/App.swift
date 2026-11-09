@@ -43,11 +43,6 @@ struct InnerVoiceApp: App {
         .defaultLaunchBehavior(.presented)
         .restorationBehavior(.disabled)
 
-        Settings {
-            SettingsView()
-                .themed()
-        }
-        .windowResizability(.contentMinSize)
     }
 }
 
@@ -55,14 +50,12 @@ struct InnerVoiceApp: App {
 struct WindowOpener: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.newDocument) private var newDocument
-    @Environment(\.openSettings) private var openSettings
     var body: some View {
         Color.clear.frame(width: 0, height: 0).onAppear {
             AppState.openWindow = openWindow
             AppState.newDocument = newDocument
             Snapshot.newDocument = newDocument
-            Snapshot.openSettings = openSettings
-            SystemHooks.settingsOpener = { openSettings() }
+            SystemHooks.settingsOpener = { SettingsWindow.shared.show() }
         }
     }
 }
@@ -226,6 +219,9 @@ struct BookCommands: Commands {
 
 struct ViewCommands: Commands {
     @FocusedValue(\.project) private var focus
+    @AppStorage("reading.fontSize") private var fontSize = ReadingStyle.standardSize
+    @AppStorage("reading.marginNames") private var marginNames = MarginNames.initials.rawValue
+    @AppStorage("reading.lineSpacing") private var lineSpacing = LineSpacing.single.rawValue
 
     var body: some Commands {
         CommandGroup(before: .sidebar) {
@@ -244,10 +240,29 @@ struct ViewCommands: Commands {
             Button("Outline Lines") { setStyle(.outline) }
                 .keyboardShortcut("o", modifiers: [.command, .option])
                 .disabled(focus == nil)
-            Toggle("Show Initials", isOn: Binding(get: { focus?.document.project.settings.showInitials ?? true }, set: { v in
-                focus?.document.updateSettings("Show Initials", undoManager: focus?.undoManager) { $0.showInitials = v }
+            Button("Underline Lines") { setStyle(.underline) }
+                .keyboardShortcut("u", modifiers: [.command, .option])
+                .disabled(focus == nil)
+            Toggle("Show Speakers in Margin", isOn: Binding(get: { focus?.document.project.settings.showInitials ?? true }, set: { v in
+                focus?.document.updateSettings("Show Speakers in Margin", undoManager: focus?.undoManager) { $0.showInitials = v }
             }))
             .disabled(focus == nil)
+            Picker("Speakers in Margin", selection: $marginNames) {
+                ForEach(MarginNames.allCases) { Text($0.title).tag($0.rawValue) }
+            }
+            Divider()
+            Button("Bigger Text") { ReadingStyle.setFontSize(fontSize + 1) }
+                .keyboardShortcut("+", modifiers: .command)
+                .disabled(fontSize >= ReadingStyle.sizes.upperBound)
+            Button("Smaller Text") { ReadingStyle.setFontSize(fontSize - 1) }
+                .keyboardShortcut("-", modifiers: .command)
+                .disabled(fontSize <= ReadingStyle.sizes.lowerBound)
+            Button("Actual Size") { ReadingStyle.setFontSize(ReadingStyle.standardSize) }
+                .keyboardShortcut("0", modifiers: .command)
+                .disabled(fontSize == ReadingStyle.standardSize)
+            Picker("Line Spacing", selection: $lineSpacing) {
+                ForEach(LineSpacing.allCases) { Text($0.title).tag($0.rawValue) }
+            }
             Divider()
         }
     }
