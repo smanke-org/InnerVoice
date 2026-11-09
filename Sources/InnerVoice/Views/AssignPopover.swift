@@ -16,8 +16,14 @@ struct AssignPopover: View {
 
     private var line: Line? { document.index.lineIndexByID[lineID].map { document.project.lines[$0] } }
 
-    /// Most used in this chapter first, then the rest by lines.
+    /// Pinned speakers first (A to Z by first name), then the most used in this chapter,
+    /// then the rest by lines.
     private var ordered: [BookCharacter] {
+        let pinned = document.project.speakerOrder.pinned
+        return pinned + byUse.filter { !$0.isPinned }
+    }
+
+    private var byUse: [BookCharacter] {
         let project = document.project
         let index = document.index
         guard let line, let pos = index.positions[line.paragraphID] else { return project.characters }
@@ -36,7 +42,7 @@ struct AssignPopover: View {
     private var filtered: [BookCharacter] {
         let q = query.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return ordered }
-        return ordered.filter { c in ([c.name] + c.aliases).contains { $0.localizedCaseInsensitiveContains(q) } }
+        return ordered.filter { $0.matches(q) }
     }
 
     /// The Narration row: shown until the search rules it out ("nar", "not").
@@ -144,6 +150,17 @@ struct AssignPopover: View {
             Text(c.name).lineLimit(1)
             if current { Image(systemName: "checkmark").font(.caption.bold()).foregroundStyle(.secondary) }
             Spacer()
+            Button {
+                document.setPinned(c.id, !c.isPinned, undoManager: undoManager)
+            } label: {
+                Image(systemName: c.isPinned ? "pin.fill" : "pin")
+                    .font(.caption)
+                    .foregroundStyle(c.isPinned ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
+            }
+            .buttonStyle(.borderless)
+            .opacity(c.isPinned || highlighted ? 1 : 0.35)
+            .help(c.isPinned ? "Unpin \(c.name)" : "Pin \(c.name) to the top of speaker lists")
+            .accessibilityLabel(c.isPinned ? "Unpin \(c.name)" : "Pin \(c.name)")
             if let number {
                 Text("\(number)")
                     .font(.caption.monospacedDigit())

@@ -33,10 +33,10 @@ struct GeneralSettings: View {
 }
 
 struct ManuscriptSettings: View {
-    @AppStorage("reading.fontSize") private var fontSize = ReadingStyle.standardSize
-    @AppStorage("reading.serif") private var serif = true
-    @AppStorage("reading.lineSpacing") private var spacing = LineSpacing.single.rawValue
-    @AppStorage("reading.marginNames") private var marginNames = MarginNames.initials.rawValue
+    @AppStorage("reading.fontSize", store: ReadingStyle.store) private var fontSize = ReadingStyle.standardSize
+    @AppStorage("reading.serif", store: ReadingStyle.store) private var serif = true
+    @AppStorage("reading.lineSpacing", store: ReadingStyle.store) private var spacing = LineSpacing.single.rawValue
+    @AppStorage("reading.marginNames", store: ReadingStyle.store) private var marginNames = MarginNames.initials.rawValue
 
     var body: some View {
         Section("Reading") {

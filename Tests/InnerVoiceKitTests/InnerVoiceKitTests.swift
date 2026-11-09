@@ -463,3 +463,89 @@ private func sampleContents() -> ProjectArchive.Contents {
     #expect(first("Grey-hair") == "Grey-hair")
     #expect(BookCharacter(name: "Mister Waterford", colorHex: "#0EA5E9").initials == "W")
 }
+
+// MARK: - Speaker order and pins
+
+@Test func speakerOrderPutsPinsFirstByFirstName() {
+    var p = Project(title: "T")
+    p.characters = [
+        BookCharacter(name: "Zed Arlo", colorHex: "#0EA5E9"),
+        BookCharacter(name: "Dr. Edda Voss", colorHex: "#0EA5E9", pinned: true),
+        BookCharacter(name: "Mara Quinn", colorHex: "#0EA5E9"),
+        BookCharacter(name: "Bram Toll", colorHex: "#0EA5E9", pinned: true),
+        BookCharacter(name: "Ada Wren", colorHex: "#0EA5E9"),
+    ]
+    let order = p.speakerOrder
+    #expect(order.pinned.map(\.name) == ["Bram Toll", "Dr. Edda Voss"])
+    #expect(order.others.map(\.name) == ["Ada Wren", "Mara Quinn", "Zed Arlo"])
+    let edda = p.characters[1]
+    #expect(edda.matches("edd"))
+    #expect(edda.matches("VOSS"))
+    #expect(edda.matches("ev"))
+    #expect(!edda.matches("mara"))
+}
+
+@Test func oldCharactersDecodeUnpinned() throws {
+    let json = ##"{"id":"6F1E3C2A-0000-4000-8000-000000000001","name":"Ada","aliases":[],"colorHex":"#0EA5E9","facts":[],"notes":"","voiceNotes":""}"##
+    let c = try JSONDecoder().decode(BookCharacter.self, from: Data(json.utf8))
+    #expect(!c.isPinned)
+}
+
+// MARK: - Deleting text
+
+private func deletionProject() -> (Project, UUID, UUID, UUID) {
+    let keep = Paragraph(text: "“Hello,” said Ada. ISBN 978-0-00-000000-0 “Bye.”", italic: [TextSpan(location: 19, length: 4)])
+    let gone = Paragraph(text: "Also by this author: Another Book.")
+    let next = Paragraph(text: "“Next,” said Bram.")
+    var p = Project(title: "T", chapters: [
+        Chapter(title: "One", paragraphs: [keep, gone, next]),
+        Chapter(title: "Ads", paragraphs: [Paragraph(text: "Read the next book!")]),
+    ])
+    let ada = BookCharacter(name: "Ada", colorHex: "#0EA5E9")
+    p.characters = [ada]
+    p.lines = [
+        Line(paragraphID: keep.id, range: TextSpan(location: 0, length: 8), speakerID: ada.id),
+        Line(paragraphID: keep.id, range: TextSpan((keep.text as NSString).range(of: "“Bye.”")), speakerID: ada.id),
+        Line(paragraphID: next.id, range: TextSpan(location: 0, length: 7)),
+    ]
+    p.recorded = [gone.id]
+    p.retakes = [Retake(paragraphID: gone.id, note: "x")]
+    return (p, keep.id, gone.id, next.id)
+}
+
+@Test func deletingTextMovesLaterLines() {
+    var (p, keep, _, _) = deletionProject()
+    let text = p.chapters[0].paragraphs[0].text as NSString
+    let isbn = text.range(of: "ISBN 978-0-00-000000-0")
+    p.deleteText(cuts: [keep: [TextSpan(isbn)]])
+    let after = p.chapters[0].paragraphs[0]
+    #expect(after.text == "“Hello,” said Ada. “Bye.”")
+    #expect(after.substring(p.lines[0].range) == "“Hello,”")
+    #expect(after.substring(p.lines[1].range) == "“Bye.”")
+    #expect(after.italic.isEmpty)   // the italic run was the word ISBN
+}
+
+@Test func deletingTextTrimsAndDropsLines() {
+    var (p, keep, _, _) = deletionProject()
+    // Cut from inside the first line to just before the second: the first is trimmed.
+    p.deleteText(cuts: [keep: [TextSpan(location: 7, length: 12)]])
+    let after = p.chapters[0].paragraphs[0]
+    #expect(after.substring(p.lines[0].range) == "“Hello,")
+    #expect(after.text.hasPrefix("“Hello,ISBN"))
+    #expect(p.lines.count == 3)
+    // A cut that swallows a whole line drops it.
+    let bye = (after.text as NSString).range(of: "“Bye.”")
+    p.deleteText(cuts: [keep: [TextSpan(bye)]])
+    #expect(p.lines.count == 2)
+}
+
+@Test func deletingWholeParagraphsAndChapters() {
+    var (p, _, gone, next) = deletionProject()
+    let ads = p.chapters[1].id
+    p.deleteText(cuts: [gone: [TextSpan(location: 0, length: 999)]], chapters: [ads])
+    #expect(p.chapters.count == 1)
+    #expect(p.chapters[0].paragraphs.count == 2)
+    #expect(p.recorded.isEmpty)
+    #expect(p.retakes.isEmpty)
+    #expect(p.lines.last?.paragraphID == next)
+}

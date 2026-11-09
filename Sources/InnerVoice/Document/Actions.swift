@@ -44,6 +44,19 @@ import SwiftUI
         }
     }
 
+    /// Deletes text the narrator doesn't read (an ISBN, an ad for another book) from the
+    /// project's copy of the book. One undo step; the imported file is never changed.
+    func deleteText(cuts: [UUID: [TextSpan]], chapters: Set<UUID> = [], undoManager: UndoManager?) {
+        guard !cuts.isEmpty || !chapters.isEmpty else { return }
+        let name = chapters.count == 1 && cuts.isEmpty ? "Delete Chapter" : (chapters.count > 1 && cuts.isEmpty ? "Delete Chapters" : "Delete Text")
+        change(name, undoManager: undoManager, textChanged: true) { $0.deleteText(cuts: cuts, chapters: chapters) }
+    }
+
+    /// Pinned characters head every speaker list.
+    func setPinned(_ id: UUID, _ on: Bool, undoManager: UndoManager?) {
+        updateCharacter(id, on ? "Pin Speaker" : "Unpin Speaker", undoManager: undoManager) { $0.pinned = on ? true : nil }
+    }
+
     /// Makes a line from text the finder missed.
     @discardableResult
     func makeLine(paragraphID: UUID, range: TextSpan, speaker: UUID?, undoManager: UndoManager?) -> UUID {

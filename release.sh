@@ -32,6 +32,9 @@ if ! [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]$ ]]; then
   exit 1
 fi
 TAG="v${VERSION}"
+# The beta label goes in the titles only: a GitHub pre-release is skipped by the
+# releases/latest lookups the updater and the README's download link rely on.
+STAGE=$(/usr/libexec/PlistBuddy -c "Print :InnerVoiceReleaseStage" "${PLIST}" 2>/dev/null || true)
 
 # Other sessions release too: compare with what is actually published.
 LATEST=$(gh release list --repo "${REPO}" --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null || true)
@@ -62,7 +65,7 @@ echo "==> Building ${VERSION} (universal) with ${IDENTITY}"
 # build.sh deletes the product first and refuses a binary the build didn't write, so the
 # bundle is provably this build. BUILD_NUMBER makes CFBundleVersion the version too.
 SIGN_IDENTITY="${IDENTITY}" BUILD_NUMBER="${VERSION}" ./build.sh --universal
-APP=".build/app/Inner Voice.app"
+APP=".build/app/InnerVoice.app"
 BUILT=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "${APP}/Contents/Info.plist")
 [ "${BUILT}" = "${VERSION}" ] || { echo "Built ${BUILT}, expected ${VERSION}." >&2; exit 1; }
 ARCHS=$(lipo -archs "${APP}/Contents/MacOS/InnerVoice")
@@ -82,14 +85,14 @@ for f in "${VERSIONED}" "${STABLE}"; do
 done
 
 echo "==> Tagging ${TAG}"
-git tag -a "${TAG}" -m "Inner Voice ${VERSION}"
+git tag -a "${TAG}" -m "InnerVoice ${VERSION}${STAGE:+ ${STAGE}}"
 git push origin "${TAG}"
 
 echo "==> Publishing ${TAG}"
 # Both assets go up: the version-stamped one to pin to, and the fixed-name one the updater
 # and the README's permanent download link use.
 gh release create "${TAG}" "${VERSIONED}" "${STABLE}" --repo "${REPO}" \
-  --title "Inner Voice ${VERSION}" \
+  --title "InnerVoice ${VERSION}${STAGE:+ ${STAGE}}" \
   --notes "${RELEASE_NOTES:-See the commit history for what changed in ${VERSION}.}"
 
 echo "==> Verifying the permanent download link"

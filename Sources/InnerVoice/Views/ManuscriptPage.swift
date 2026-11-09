@@ -7,13 +7,22 @@ struct ManuscriptPage: View {
     @ObservedObject var document: InnerVoiceDocument
     @Bindable var workspace: Workspace
     @Environment(\.undoManager) private var undoManager
+    @AppStorage("reading.fontSize", store: ReadingStyle.store) private var fontSize = ReadingStyle.standardSize
+    @AppStorage("reading.serif", store: ReadingStyle.store) private var serif = true
+    @AppStorage("reading.lineSpacing", store: ReadingStyle.store) private var spacing = LineSpacing.single.rawValue
+    @AppStorage("reading.marginNames", store: ReadingStyle.store) private var marginNames = MarginNames.initials.rawValue
+
+    private var look: ReadingLook {
+        ReadingLook(fontSize: fontSize, serif: serif, spacing: LineSpacing(rawValue: spacing) ?? .single,
+                    margin: MarginNames(rawValue: marginNames) ?? .initials)
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
                 StatusBanners(document: document, workspace: workspace)
                 ManuscriptTextView(document: document, workspace: workspace, undoManager: undoManager,
-                                   onAssignRequest: showAssign, onVisibleChapter: { workspace.visibleChapter = $0 })
+                                   onAssignRequest: showAssign, onVisibleChapter: { workspace.visibleChapter = $0 }, look: look)
             }
             if !workspace.exchange.isEmpty {
                 ExchangeBanner(count: workspace.exchange.count) {
@@ -114,7 +123,7 @@ struct StatusBanners: View {
             } else if document.project.lastTagged == nil, !document.project.lines.isEmpty {
                 banner(symbol: "sparkles", tint: .accentColor) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Inner Voice found \(document.project.lines.count.formatted()) lines in \(document.project.chapters.count) chapters.")
+                        Text("InnerVoice found \(document.project.lines.count.formatted()) lines in \(document.project.chapters.count) chapters.")
                         Text("Tag Speakers uses the AI on this Mac to find who says each one. Your manuscript never leaves this Mac.")
                             .font(.callout)
                             .foregroundStyle(.secondary)

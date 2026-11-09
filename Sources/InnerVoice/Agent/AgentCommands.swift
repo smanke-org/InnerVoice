@@ -1,7 +1,7 @@
 import AppKit
 import InnerVoiceKit
 
-/// Everything an agent can do in Inner Voice. Add a command here and the CLI, `help`, and the
+/// Everything an agent can do in InnerVoice. Add a command here and the CLI, `help`, and the
 /// MCP tools all get it. Each `run` is on the main actor and calls the same code as the window's
 /// buttons and menus (InnerVoiceDocument's edits, TaggingController, Exporter, ModelManager), with
 /// the window's own undo manager, so the window updates at once and Edit › Undo works.
@@ -24,7 +24,7 @@ enum AgentCommands {
                      example: "innervoice status --json", readOnly: true) { _ in
             let front = OpenProjects.front
             let open = OpenProjects.all.sorted { a, _ in a === front }
-            var result: JSONObject = ["app": AppInfo.name, "version": AppInfo.version, "build": AppInfo.build,
+            var result: JSONObject = ["app": AppInfo.name, "version": AppInfo.version, "stage": AppInfo.stage ?? "release", "build": AppInfo.build,
                                       "projects": open.map { projectJSON($0, front: front) }, "model": modelSummary,
                                       "busy": TaggingController.busyReason ?? NSNull()]
             if AgentSocket.isTestRun { result["testRun"] = true }
@@ -59,7 +59,7 @@ enum AgentCommands {
                      example: "innervoice projects open ~/Documents/Harbor.innervoice --json") { args in
             let url = URL(fileURLWithPath: try args.required("path"))
             guard url.pathExtension.lowercased() == "innervoice" else {
-                throw AgentError.usage("\(url.lastPathComponent) isn't an Inner Voice project (.innervoice). To start one from a manuscript: innervoice projects new --manuscript \"\(url.path)\"")
+                throw AgentError.usage("\(url.lastPathComponent) isn't an InnerVoice project (.innervoice). To start one from a manuscript: innervoice projects new --manuscript \"\(url.path)\"")
             }
             guard FileManager.default.fileExists(atPath: url.path) else { throw AgentError.notFound("no project at \(url.path)") }
             try refuseRealFilesInTestRun(url)
@@ -91,10 +91,10 @@ enum AgentCommands {
             let url = URL(fileURLWithPath: try args.required("manuscript"))
             guard FileManager.default.fileExists(atPath: url.path) else { throw AgentError.notFound("no file at \(url.path)") }
             guard ManuscriptImporter.fileExtensions.contains(url.pathExtension.lowercased()) else {
-                throw AgentError.usage("Inner Voice can't read .\(url.pathExtension) files. It reads \(ManuscriptImporter.fileExtensions.sorted().joined(separator: ", "))")
+                throw AgentError.usage("InnerVoice can't read .\(url.pathExtension) files. It reads \(ManuscriptImporter.fileExtensions.sorted().joined(separator: ", "))")
             }
             guard let newDocument = AppState.newDocument else {
-                throw AgentError.unavailable("Inner Voice has no window open yet to start a project from. Try again in a second")
+                throw AgentError.unavailable("InnerVoice has no window open yet to start a project from. Try again in a second")
             }
             let (book, original): (Project, (name: String, data: Data)?)
             do { (book, original) = try await Importer.project(from: url) } catch {
@@ -351,7 +351,7 @@ enum AgentCommands {
                 hex = "#" + digits.uppercased()
             }
             guard !CharacterPalette.isTooRed(hex) else {
-                throw AgentError.invalid("\(hex) is too close to red, which Inner Voice keeps for Who's Speaking? and Unsure lines. Pick another color, like \(CharacterPalette.next(used: document.project.characters.map(\.colorHex)))")
+                throw AgentError.invalid("\(hex) is too close to red, which InnerVoice keeps for Who's Speaking? and Unsure lines. Pick another color, like \(CharacterPalette.next(used: document.project.characters.map(\.colorHex)))")
             }
             let changed = c.colorHex.caseInsensitiveCompare(hex) != .orderedSame
             if changed { document.updateCharacter(c.id, "Change Color", undoManager: entry.undoManager) { $0.colorHex = hex } }
@@ -513,7 +513,7 @@ enum AgentCommands {
     // MARK: Model
 
     private static var models: [AgentCommand] { [
-        AgentCommand(name: "model list", summary: "List the models Inner Voice can use, with advice for this Mac's memory. Returns `models` (id, name, size, quality and speed 1 to 5, fit, note, downloaded, selected, recommended, download) and `apple` (Apple's on-device model).",
+        AgentCommand(name: "model list", summary: "List the models InnerVoice can use, with advice for this Mac's memory. Returns `models` (id, name, size, quality and speed 1 to 5, fit, note, downloaded, selected, recommended, download) and `apple` (Apple's on-device model).",
                      example: "innervoice model list --json", readOnly: true) { _ in
             let manager = ModelManager.shared
             manager.refresh()
@@ -554,7 +554,7 @@ enum AgentCommands {
                 }
                 selection = "catalog:" + m.id
             }
-            guard TaggingController.busyReason == nil else { throw AgentError.busy("Inner Voice is \(TaggingController.busyReason!). Stop it first with `innervoice tag stop`") }
+            guard TaggingController.busyReason == nil else { throw AgentError.busy("InnerVoice is \(TaggingController.busyReason!). Stop it first with `innervoice tag stop`") }
             let changed = manager.selection != selection
             if changed { manager.selection = selection }
             return ["changed": changed, "selection": manager.selectionName, "ready": manager.isReady]

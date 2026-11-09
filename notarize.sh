@@ -17,7 +17,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-APP_NAME="Inner Voice"
+APP_NAME="InnerVoice"
 APP_DIR=".build/app/${APP_NAME}.app"
 ZIP_PATH=".build/app/InnerVoice-notarize.zip"
 

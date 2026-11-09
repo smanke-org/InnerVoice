@@ -1,7 +1,7 @@
 import Foundation
 
-/// Inner Voice's own menu shortcuts, in one place: ShortcutsLens gets them in its report, and
-/// Help's Keyboard Shortcuts page lists them. Inner Voice registers no global shortcuts; these
+/// InnerVoice's own menu shortcuts, in one place: ShortcutsLens gets them in its report, and
+/// Help's Keyboard Shortcuts page lists them. InnerVoice registers no global shortcuts; these
 /// work only while it is in front. Keep in step with the menus (App.swift's commands).
 enum ShortcutCatalog {
     /// The project window's pages, in sidebar order: ⌘1 is the first.

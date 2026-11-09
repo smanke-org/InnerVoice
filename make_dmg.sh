@@ -12,7 +12,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-APP_NAME="Inner Voice"
+APP_NAME="InnerVoice"
 APP_DIR=".build/app/${APP_NAME}.app"
 VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "${APP_DIR}/Contents/Info.plist")
 DMG_PATH=".build/app/InnerVoice-${VERSION}.dmg"
@@ -60,7 +60,7 @@ ln -s /Applications "${STAGING}/Applications"
 # Finder scripting is too unreliable to sit in a release path (on macOS 27 it silently
 # ignores a background picture set that way), and a fixture makes every build identical.
 # Capture it once with:
-#   tools/capture_dmg_layout.sh ".build/app/Inner Voice.app" "Inner Voice" Resources/dmg/DS_Store
+#   tools/capture_dmg_layout.sh ".build/app/InnerVoice.app" "InnerVoice" Resources/dmg/DS_Store
 if [ -f "Resources/dmg/DS_Store" ]; then
   cp "Resources/dmg/DS_Store" "${STAGING}/.DS_Store"
 else

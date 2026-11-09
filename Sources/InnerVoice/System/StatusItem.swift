@@ -106,7 +106,7 @@ enum SystemMenu {
 }
 
 /// The menus' actions. Items run from the menu bar or from ToolHUD, so each one that opens a
-/// window brings Inner Voice forward first.
+/// window brings InnerVoice forward first.
 final class SystemMenuTarget: NSObject {
     static let shared = SystemMenuTarget()
 

@@ -32,7 +32,7 @@ enum ShortcutsLensReport {
         /// "toggle". Two of the app's own shortcuts on the same keys with different gestures
         /// aren't counted as a conflict.
         var gesture: String? = nil
-        /// "app" for a menu shortcut that works only while this app is in front. Inner Voice
+        /// "app" for a menu shortcut that works only while this app is in front. InnerVoice
         /// reports only such shortcuts. ShortcutsLens versions that don't know the key ignore it
         /// (and list them as global).
         var scope: String? = nil

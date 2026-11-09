@@ -105,7 +105,7 @@ drawSymbol("Iv", in: tile, includeName: includeName, ctx: ctx)
 // Name along the bottom.
 if includeName {
     let nameSize = side * 0.077
-    let name = "Inner Voice"
+    let name = "InnerVoice"
     let nameWidth = size(of: name, size: nameSize).width
     draw(name, size: nameSize, at: CGPoint(
         x: tile.midX - nameWidth / 2,

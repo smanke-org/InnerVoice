@@ -36,9 +36,9 @@ enum QuitConfirmation {
         let alert = NSAlert()
         alert.messageText = "Quit \(AppInfo.name)?"
         if let reason = SystemHooks.busyReason?() {
-            alert.informativeText = "Inner Voice is \(reason). Quitting stops it; what's done so far is kept in the project."
+            alert.informativeText = "InnerVoice is \(reason). Quitting stops it; what's done so far is kept in the project."
         } else {
-            alert.informativeText = "Your projects are saved. Open Inner Voice again to pick up where you left off."
+            alert.informativeText = "Your projects are saved. Open InnerVoice again to pick up where you left off."
         }
         // Quit has no key, so Return does nothing: quitting takes a click, never a stray keystroke.
         alert.addButton(withTitle: "Cancel")

@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// About Inner Voice: the icon, version and copyright, then what changed in the last 10
+/// About InnerVoice: the icon, version and copyright, then what changed in the last 10
 /// releases, from their GitHub release notes. (The standard About panel can't show notes
 /// that arrive after it opens.)
 final class AboutWindow {
@@ -43,7 +43,7 @@ private struct AboutView: View {
                 Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 64, height: 64)
                 VStack(alignment: .leading, spacing: Space.xs) {
                     Text(AppInfo.name).font(.title2.weight(.semibold))
-                    Text("Version \(AppInfo.version)").foregroundStyle(.secondary)
+                    Text("Version \(AppInfo.labeledVersion)").foregroundStyle(.secondary)
                     if !copyright.isEmpty { Text(copyright).font(.caption).foregroundStyle(.secondary) }
                 }
             }

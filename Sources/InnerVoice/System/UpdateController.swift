@@ -389,7 +389,7 @@ enum UpdateController {
         let alert = NSAlert()
         alert.messageText = "Update to version \(newVersion)?"
         alert.informativeText = """
-        You have \(current). The update will be downloaded, checked, and installed automatically. Inner Voice will quit and reopen to finish. Your projects are saved first.
+        You have \(current). The update will be downloaded, checked, and installed automatically. InnerVoice will quit and reopen to finish. Your projects are saved first.
         """
         if !notes.isEmpty {
             let list = NSHostingView(rootView: VStack(alignment: .leading, spacing: Space.sm) {

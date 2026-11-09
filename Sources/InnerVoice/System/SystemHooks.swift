@@ -33,7 +33,7 @@ enum SystemHooks {
 
     // MARK: Set by the app
 
-    /// What Inner Voice is busy with right now, in words that follow "Inner Voice is"
+    /// What InnerVoice is busy with right now, in words that follow "InnerVoice is"
     /// ("tagging speakers", "building summaries"), or nil. While it says something, an
     /// automatic update waits, and the quit question mentions it.
     static var busyReason: (() -> String?)?
@@ -66,6 +66,7 @@ enum SystemHooks {
         #if DEBUG
         if DebugSystemTest.runIfAsked() { return }
         #endif
+        Autosave.start()
         guard !isTestRun else { return }
 
         AppPresence.applyDock()
@@ -88,6 +89,25 @@ enum SystemHooks {
         if updatesAllowed { AutoUpdater.shared.start(newInstall: newInstall) }
     }
 
+    /// Projects with changes save themselves 30 seconds after the change, in place, while
+    /// the person keeps working: the document is copied on the main thread (a quick copy of
+    /// the book's values) and written to disk in the background.
+    enum Autosave {
+        static let seconds: TimeInterval = 30
+
+        static func start() {
+            #if DEBUG
+            // A test copy autosaves only when a test asks (its /tmp projects only).
+            let test = ProcessInfo.processInfo.environment["INNERVOICE_AUTOSAVE_SECONDS"].flatMap(TimeInterval.init)
+            guard !isTestRun || test != nil else { return }
+            NSDocumentController.shared.autosavingDelay = test ?? seconds
+            #else
+            guard !isTestRun else { return }
+            NSDocumentController.shared.autosavingDelay = seconds
+            #endif
+        }
+    }
+
     static func shouldTerminate(_ app: NSApplication) -> NSApplication.TerminateReply {
         QuitConfirmation.shouldTerminate()
     }
@@ -101,7 +121,7 @@ enum SystemHooks {
         AppPresence.dockMenu(title: "Settings…", target: SystemMenuTarget.shared, action: #selector(SystemMenuTarget.settings))
     }
 
-    /// Opening Inner Voice again (Dock icon, Applications, Spotlight). With both icons hidden
+    /// Opening InnerVoice again (Dock icon, Applications, Spotlight). With both icons hidden
     /// it opens Settings, the way back, and returns false so no new project is started; otherwise
     /// true, for the usual document behavior.
     static func shouldHandleReopen(hasVisibleWindows: Bool) -> Bool {
@@ -132,7 +152,7 @@ enum SystemHooks {
 
 // MARK: - Menus
 
-/// About Inner Voice (the window with the last 10 releases) in place of the standard panel, then
+/// About InnerVoice (the window with the last 10 releases) in place of the standard panel, then
 /// Check for Updates…, which reads "Update to x.y.z…" once a newer release is known.
 struct SystemAppCommands: Commands {
     var body: some Commands {
@@ -160,7 +180,7 @@ private struct UpdateMenuButton: View {
     }
 }
 
-/// Help › Inner Voice Help (⌘?), in place of the standard item.
+/// Help › InnerVoice Help (⌘?), in place of the standard item.
 struct SystemHelpCommands: Commands {
     var body: some Commands {
         CommandGroup(replacing: .help) {
@@ -173,7 +193,7 @@ struct SystemHelpCommands: Commands {
 // MARK: - Settings
 
 /// The house sections of Settings › General, for the app's own grouped Form: Appearance, asking
-/// before quitting, where Inner Voice appears, iCloud sync and updates.
+/// before quitting, where InnerVoice appears, iCloud sync and updates.
 struct SystemGeneralSettings: View {
     @AppStorage(QuitConfirmation.key) private var confirmQuit = true
     @AppStorage(AppPresence.Key.dock) private var showInDock = AppPresence.dockDefault
@@ -189,7 +209,7 @@ struct SystemGeneralSettings: View {
         .onAppear { WhatsNew.shared.show(asked: false) }
         Section {
             Toggle("Ask before quitting", isOn: $confirmQuit)
-                .help("Quitting Inner Voice asks first, so a stray ⌘Q doesn't stop Tag Speakers.")
+                .help("Quitting InnerVoice asks first, so a stray ⌘Q doesn't stop Tag Speakers.")
         }
         Section {
             Toggle("Show in Dock", isOn: $showInDock)
@@ -197,7 +217,7 @@ struct SystemGeneralSettings: View {
             Toggle("Show in menu bar", isOn: $showInMenuBar)
                 .help("A menu bar menu with New from Manuscript…, Open…, Open Recent and Settings….")
             Toggle("Put in ToolHUD’s menu while ToolHUD is running", isOn: $hub.foldIntoToolHUD)
-                .help("ToolHUD shows this menu as a submenu of its own, and Inner Voice’s icon leaves the menu bar until ToolHUD quits.")
+                .help("ToolHUD shows this menu as a submenu of its own, and InnerVoice’s icon leaves the menu bar until ToolHUD quits.")
             if !showInDock && !showInMenuBar {
                 SystemCaption(AppPresence.hiddenEverywhereNote(appName: AppInfo.name, settingsName: "Settings"))
             }

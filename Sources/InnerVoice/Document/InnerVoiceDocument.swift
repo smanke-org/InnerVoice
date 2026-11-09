@@ -133,6 +133,18 @@ nonisolated final class InnerVoiceDocument: ReferenceFileDocument {
             doc.register(name, before: after, after: before, undoManager: undoManager, textChanged: textChanged)
         }
         undoManager.setActionName(name)
+        Self.closeUndoGroupSoon()
+    }
+
+    /// An undo step recorded outside a click or key press (the agent CLI, the end of an AI
+    /// run) sits in an undo group that only closes after the next event, so the window
+    /// didn't count as edited and autosave never ran while the person was away. An empty
+    /// app event right behind it closes the group at once.
+    @MainActor
+    static func closeUndoGroupSoon() {
+        guard let event = NSEvent.otherEvent(with: .applicationDefined, location: .zero, modifierFlags: [], timestamp: 0,
+                                             windowNumber: 0, context: nil, subtype: 0x4956, data1: 0, data2: 0) else { return }
+        NSApp.postEvent(event, atStart: false)
     }
 
     @MainActor
@@ -167,6 +179,7 @@ nonisolated final class InnerVoiceDocument: ReferenceFileDocument {
             doc.registerRunUndo(name, undoManager: undoManager, restore: redo, redo: restore)
         }
         undoManager.setActionName(name)
+        Self.closeUndoGroupSoon()
     }
 
     @MainActor

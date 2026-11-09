@@ -1,4 +1,4 @@
-# Inner Voice glossary
+# InnerVoice glossary
 
 ## Voice
 Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
@@ -12,7 +12,8 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | Line | One piece of text spoken, thought or written by a character | quote, utterance, dialogue item |
 | Spoken / Thought / Written | The three kinds of line | speech, monologue, text |
 | Narration | Text that is not a line; read in the narrator's own voice | prose, body |
-| Character | Someone in the book who has lines | speaker, role, persona |
+| Character | Someone in the book who has lines | role, persona |
+| Speaker | The character a given line belongs to (speaker lists, speakers in the margin) | voice, owner |
 | Alias | Another name the same character goes by | nickname field |
 | Cast | All the characters in a project | roster, people |
 | Color | A character's color in the manuscript | tag color, label |
@@ -20,6 +21,8 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | Who's Speaking? | A line the AI could not decide on, shown in red | unassigned, unknown, untagged |
 | Unsure | A line the AI tagged but with low confidence; also red | low confidence |
 | Assign | Give a line to a character | tag, retag, set speaker |
+| Pin | Keep a character at the top of every speaker list | favorite, star |
+| Delete Text | Take text the narrator doesn't read out of the project (the imported file never changes) | remove, hide, strike |
 | Tag Speakers | Run the AI over the manuscript to assign lines | analyze, process, parse |
 | Summary | What the book says about a character: age, gender, accent, voice, personality, history, relationships | profile, bio |
 | Fact | One item in a summary, with its source line | attribute, trait |

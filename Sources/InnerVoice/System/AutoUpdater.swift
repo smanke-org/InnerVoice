@@ -5,7 +5,7 @@ import UserNotifications
 /// Looks for updates as often as the user chose (once a day unless they change it) and,
 /// depending on `UpdatePolicy`, notifies or installs.
 ///
-/// An automatic install quits and relaunches Inner Voice, so a downloaded update waits until:
+/// An automatic install quits and relaunches InnerVoice, so a downloaded update waits until:
 /// - the app isn't busy (`appBusyReason`, from `SystemHooks.busyReason`: Tag Speakers or
 ///   Build Summaries running, say),
 /// - no app is holding the display awake (Keynote, PowerPoint, screen sharing and video
@@ -152,8 +152,8 @@ final class AutoUpdater: NSObject, ObservableObject, UNUserNotificationCenterDel
                 NSLog("InnerVoice: update check failed: \(error.localizedDescription)")
                 // An automatic install that failed falls back to asking, once per version.
                 if policy == .automatic, let version = UpdateAvailability.shared.pending {
-                    notify(id: "update-failed-\(version)", title: "Inner Voice couldn't update itself",
-                           body: "\(error.localizedDescription) You can install \(version) with Inner Voice › Update to \(version)….", installable: true)
+                    notify(id: "update-failed-\(version)", title: "InnerVoice couldn't update itself",
+                           body: "\(error.localizedDescription) You can install \(version) with InnerVoice › Update to \(version)….", installable: true)
                 }
             }
         }
@@ -254,14 +254,14 @@ final class AutoUpdater: NSObject, ObservableObject, UNUserNotificationCenterDel
         guard let from = UserDefaults.standard.string(forKey: Self.installedFromKey) else { return }
         UserDefaults.standard.removeObject(forKey: Self.installedFromKey)
         guard from != AppInfo.version else { return }
-        notify(id: "updated-\(AppInfo.version)", title: "Inner Voice updated to \(AppInfo.version)",
+        notify(id: "updated-\(AppInfo.version)", title: "InnerVoice updated to \(AppInfo.version)",
                body: "It installed itself while your Mac wasn't in use. Click to see what's new.", installable: false)
     }
 
     private func notifyAvailable(_ version: String) {
         guard UserDefaults.standard.string(forKey: Self.notifiedVersionKey) != version else { return }
         UserDefaults.standard.set(version, forKey: Self.notifiedVersionKey)
-        notify(id: "available-\(version)", title: "Inner Voice \(version) is available",
+        notify(id: "available-\(version)", title: "InnerVoice \(version) is available",
                body: "Click to review and install it. You're on \(AppInfo.version).", installable: true)
     }
 

@@ -26,7 +26,7 @@ struct StartWindow: View {
                         .resizable()
                         .frame(width: 64, height: 64)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Inner Voice").font(.largeTitle.weight(.semibold))
+                        Text("InnerVoice").font(.largeTitle.weight(.semibold))
                         Text("Know every voice before you press record.")
                             .foregroundStyle(.secondary)
                     }

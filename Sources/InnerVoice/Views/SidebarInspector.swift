@@ -5,6 +5,7 @@ import SwiftUI
 struct ProjectSidebar: View {
     @ObservedObject var document: InnerVoiceDocument
     @Bindable var workspace: Workspace
+    @Environment(\.undoManager) private var undoManager
 
     private enum Row: Hashable {
         case page(Workspace.Page)
@@ -47,6 +48,11 @@ struct ProjectSidebar: View {
                             document.tagging.retag(chapters: [i], undoManager: nil)
                         }
                         .disabled(document.tagging.isRunning || !ModelManager.shared.isReady)
+                        Divider()
+                        Button("Delete Chapter") {
+                            document.deleteText(cuts: [:], chapters: [chapter.id], undoManager: undoManager)
+                        }
+                        .disabled(document.tagging.isRunning)
                     }
                 }
             }
@@ -154,8 +160,18 @@ struct ProjectInspector: View {
                 .textSelection(.enabled)
             LabeledContent("Speaker") {
                 Menu {
-                    ForEach(document.project.characters) { c in
-                        Button(c.name) { document.assign([line.id], to: c.id, undoManager: undoManager) }
+                    let order = document.project.speakerOrder
+                    if !order.pinned.isEmpty {
+                        Section("Pinned") {
+                            ForEach(order.pinned) { c in
+                                Button(c.name) { document.assign([line.id], to: c.id, undoManager: undoManager) }
+                            }
+                        }
+                    }
+                    Section(order.pinned.isEmpty ? "" : "Everyone Else") {
+                        ForEach(order.others) { c in
+                            Button(c.name) { document.assign([line.id], to: c.id, undoManager: undoManager) }
+                        }
                     }
                     Divider()
                     Button("Who's Speaking?") { document.assign([line.id], to: nil, undoManager: undoManager) }

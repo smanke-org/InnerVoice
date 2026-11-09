@@ -1,4 +1,4 @@
-# Inner Voice
+# InnerVoice
 
 A Mac app that reads an audiobook manuscript with an on-device AI, colors every
 spoken line by who says it, and gives the narrator the cast, the voices, the

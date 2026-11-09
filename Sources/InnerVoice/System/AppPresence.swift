@@ -2,7 +2,7 @@ import AppKit
 
 /// Where the app shows itself: a Dock icon, a menu bar icon, both, or neither.
 ///
-/// Inner Voice is a document app, so unlike the menu bar apps it starts with both on: the Dock
+/// InnerVoice is a document app, so unlike the menu bar apps it starts with both on: the Dock
 /// icon carries the project windows, and the menu bar icon is a quick way to start or open a
 /// project. With the Dock icon on, right-clicking it offers Settings (macOS only shows an app's
 /// own Dock-menu items while it is running with a Dock icon). With both off the app runs with

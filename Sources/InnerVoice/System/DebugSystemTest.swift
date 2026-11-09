@@ -84,7 +84,7 @@ enum DebugSystemTest {
 
         let docMenu = SystemHooks.dockMenu()
         check(docMenu?.items.first?.title == "Settings…", "Dock menu has Settings…")
-        check(AppInfo.name == "Inner Voice" && UpdateController.repository == "smanke-org/InnerVoice", "names and repository")
+        check(AppInfo.name == "InnerVoice" && UpdateController.repository == "smanke-org/InnerVoice", "names and repository")
 
         report.append("--- windows\n" + NSApp.windows.filter(\.isVisible).map { "\($0.title) \(Int($0.frame.width))×\(Int($0.frame.height))" }.joined(separator: "\n"))
         try? report.joined(separator: "\n").write(to: dir.appending(path: "report.txt"), atomically: true, encoding: .utf8)

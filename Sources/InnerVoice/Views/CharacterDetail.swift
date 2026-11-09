@@ -32,10 +32,17 @@ struct CharacterDetail: View {
                 ToolbarItemGroup {
                     Button("Rehearse", systemImage: "play.rectangle") { workspace.rehearse = c.id }
                         .help("Step through \(c.name)'s lines with cue lines")
-                    Button("Build Summary", systemImage: "text.badge.star") {
+                    Menu("Build Summary", systemImage: "text.badge.star") {
+                        Button("Build \(c.firstName)’s Summary") {
+                            TagCommand.summaries(document: document, workspace: workspace, undoManager: undoManager, only: [c.id])
+                        }
+                        Button("Build Everyone’s Summaries") {
+                            TagCommand.summaries(document: document, workspace: workspace, undoManager: undoManager)
+                        }
+                    } primaryAction: {
                         TagCommand.summaries(document: document, workspace: workspace, undoManager: undoManager, only: [c.id])
                     }
-                    .help("Read the book again for details about \(c.name)")
+                    .help("Read the book again for details about \(c.name). Click the arrow to build every character’s summary in one go.")
                     .disabled(document.tagging.isRunning)
                     Menu("More", systemImage: "ellipsis") {
                         Menu("Merge Into") {
@@ -45,6 +52,9 @@ struct CharacterDetail: View {
                                     workspace.castPath = [other.id]
                                 }
                             }
+                        }
+                        Button(c.isPinned ? "Unpin from Speaker Lists" : "Pin to Top of Speaker Lists") {
+                            document.setPinned(c.id, !c.isPinned, undoManager: undoManager)
                         }
                         Button(document.project.settings.povCharacterID == c.id ? "Not the Narrator" : "Tells the Story (First Person)") {
                             let on = document.project.settings.povCharacterID != c.id

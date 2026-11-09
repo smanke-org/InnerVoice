@@ -1,6 +1,6 @@
 import Foundation
 
-/// What Inner Voice does when a newer release appears.
+/// What InnerVoice does when a newer release appears.
 enum UpdatePolicy: String, CaseIterable {
     /// Download, verify and install on its own, while the Mac isn't being used.
     case automatic

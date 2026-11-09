@@ -28,7 +28,7 @@ struct PronunciationsPage: View {
                 ContentUnavailableView {
                     Label("No Pronunciations", systemImage: "character.bubble")
                 } description: {
-                    Text("Inner Voice lists names, places and made-up words it finds. Add your own with Add Term.")
+                    Text("InnerVoice lists names, places and made-up words it finds. Add your own with Add Term.")
                 } actions: {
                     Button("Add Term") { add() }
                     Button("Find Terms") { refresh() }
@@ -176,8 +176,8 @@ final class SampleRecorder: NSObject {
             Task { @MainActor in
                 guard granted else {
                     let alert = NSAlert()
-                    alert.messageText = "Inner Voice Can't Use the Microphone"
-                    alert.informativeText = "Turn on Inner Voice in System Settings › Privacy & Security › Microphone to record samples."
+                    alert.messageText = "InnerVoice Can't Use the Microphone"
+                    alert.informativeText = "Turn on InnerVoice in System Settings › Privacy & Security › Microphone to record samples."
                     alert.runModal()
                     return
                 }

@@ -2,7 +2,7 @@ import AppKit
 
 /// Starts the CLI when there is a command after the app's name, else the app.
 ///   innervoice <command>      run it against the running app and exit (Agent/AgentCLI.swift)
-///   Inner Voice.app           the app (App.swift)
+///   InnerVoice.app           the app (App.swift)
 @main
 enum Main {
     static func main() {
@@ -11,6 +11,11 @@ enum Main {
         // a snapshot run once reopened the person's real book through window restoration
         // and photographed it instead of the sample.
         if AgentSocket.isTestRun || SystemHooks.isTestRun { AgentDemo.isolateTestRun() }
+        // A copy updated from 0.1.2 arrives as "Inner Voice.app" and renames itself.
+        if !SystemHooks.isTestRun || ProcessInfo.processInfo.environment["INNERVOICE_RENAME_TEST"] != nil,
+           MainActor.assumeIsolated({ AppRename.renameIfNeeded() }) {
+            RunLoop.main.run()
+        }
         InnerVoiceApp.main()
     }
 }
@@ -59,7 +64,7 @@ enum AgentDemo {
     /// Opens SeedData's sample book in a new window and waits for the window to register.
     static func openSample() async throws -> OpenProjects.Entry {
         guard let newDocument = AppState.newDocument else {
-            throw AgentError.unavailable("Inner Voice has no window open yet to start a project from. Try again in a second")
+            throw AgentError.unavailable("InnerVoice has no window open yet to start a project from. Try again in a second")
         }
         let before = Set(OpenProjects.all.map(\.id))
         let sample = SeedData.project()

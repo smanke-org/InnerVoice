@@ -217,7 +217,7 @@ struct ModelSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Space.lg) {
             Text("Choose a Model for Tag Speakers").font(.title2.weight(.semibold))
-            Text("Inner Voice reads your book with an AI model that runs on this Mac. Pick one to download; the one marked Best for this Mac balances accuracy and speed for your memory.")
+            Text("InnerVoice reads your book with an AI model that runs on this Mac. Pick one to download; the one marked Best for this Mac balances accuracy and speed for your memory.")
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             ScrollView {

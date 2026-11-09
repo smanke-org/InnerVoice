@@ -7,24 +7,49 @@ enum ReadingStyle {
     static let sizes: ClosedRange<Double> = 12...26
     static let standardSize = 16.0
 
+    /// Where reading settings live. Test runs get a store of their own (emptied at launch):
+    /// a test copy shares the person's preferences, and its text size or margin choices
+    /// must never change theirs.
+    static let store: UserDefaults = {
+        guard SystemHooks.isTestRun, let test = UserDefaults(suiteName: "com.smanke.InnerVoice.testrun") else { return .standard }
+        test.removePersistentDomain(forName: "com.smanke.InnerVoice.testrun")
+        return test
+    }()
+
     static var fontSize: CGFloat {
-        let v = UserDefaults.standard.double(forKey: "reading.fontSize")
+        let v = store.double(forKey: "reading.fontSize")
         return v > 0 ? v : standardSize
     }
-    static var serif: Bool { UserDefaults.standard.object(forKey: "reading.serif") as? Bool ?? true }
-    static var spacing: LineSpacing { LineSpacing(rawValue: UserDefaults.standard.string(forKey: "reading.lineSpacing") ?? "") ?? .single }
-    static var marginNames: MarginNames { MarginNames(rawValue: UserDefaults.standard.string(forKey: "reading.marginNames") ?? "") ?? .initials }
+    static var serif: Bool { store.object(forKey: "reading.serif") as? Bool ?? true }
+    static var spacing: LineSpacing { LineSpacing(rawValue: store.string(forKey: "reading.lineSpacing") ?? "") ?? .single }
+    static var marginNames: MarginNames { MarginNames(rawValue: store.string(forKey: "reading.marginNames") ?? "") ?? .initials }
+
+    /// The whole look at once, for the reading view to compare against what it built.
+    static var look: ReadingLook { ReadingLook(fontSize: fontSize, serif: serif, spacing: spacing, margin: marginNames) }
 
     /// Bigger or smaller text, one point at a time, within `sizes`.
     static func setFontSize(_ size: Double) {
-        UserDefaults.standard.set(min(max(size.rounded(), sizes.lowerBound), sizes.upperBound), forKey: "reading.fontSize")
+        store.set(min(max(size.rounded(), sizes.lowerBound), sizes.upperBound), forKey: "reading.fontSize")
     }
 
-    static func font(size: CGFloat, weight: NSFont.Weight = .regular) -> NSFont {
+    static func setSpacing(_ spacing: LineSpacing) {
+        store.set(spacing.rawValue, forKey: "reading.lineSpacing")
+    }
+
+    static func font(size: CGFloat, weight: NSFont.Weight = .regular, serif: Bool = ReadingStyle.serif) -> NSFont {
         let base = NSFont.systemFont(ofSize: size, weight: weight)
         if serif, let d = base.fontDescriptor.withDesign(.serif) { return NSFont(descriptor: d, size: size) ?? base }
         return base
     }
+}
+
+/// What the reading view is built with. The page passes it in, so a change from the
+/// toolbar, Settings or the View menu reaches the view on the next update.
+struct ReadingLook: Equatable {
+    var fontSize: CGFloat
+    var serif: Bool
+    var spacing: LineSpacing
+    var margin: MarginNames
 }
 
 /// Single keeps the reading view's usual spacing; Double is twice the single line height,
@@ -114,12 +139,10 @@ struct ManuscriptTextView: NSViewRepresentable {
     var undoManager: UndoManager?
     var onAssignRequest: (UUID, NSRect, NSView) -> Void
     var onVisibleChapter: (Int) -> Void
-    // Read through ReadingStyle; here so a change from Settings, the toolbar or the View
-    // menu updates the view at once.
-    @AppStorage("reading.fontSize") private var fontSizeSetting = ReadingStyle.standardSize
-    @AppStorage("reading.serif") private var serifSetting = true
-    @AppStorage("reading.lineSpacing") private var spacingSetting = LineSpacing.single.rawValue
-    @AppStorage("reading.marginNames") private var marginSetting = MarginNames.initials.rawValue
+    /// The reading settings. The page reads them (so SwiftUI updates it when they change)
+    /// and passes them down: settings the view only held in @AppStorage, without reading
+    /// them, never reached it, so Bigger and Smaller Text did nothing.
+    var look: ReadingLook
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -166,8 +189,8 @@ struct ManuscriptTextView: NSViewRepresentable {
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         let c = context.coordinator
         c.parent = self
-        if c.builtText != document.textRevision || c.builtFontSize != ReadingStyle.fontSize || c.builtSerif != ReadingStyle.serif
-            || c.builtSpacing != ReadingStyle.spacing {
+        if c.builtText != document.textRevision || c.builtFontSize != look.fontSize || c.builtSerif != look.serif
+            || c.builtSpacing != look.spacing {
             c.rebuild()
         } else if c.builtLines != document.lineRevision {
             c.rebuildEntries()
@@ -183,8 +206,8 @@ struct ManuscriptTextView: NSViewRepresentable {
         }
         // Longer names in the margin need a wider gutter (only resized when it changes).
         if c.builtGutter != c.gutterWidth() { c.didResize() }
-        if c.builtMargin != ReadingStyle.marginNames {
-            c.builtMargin = ReadingStyle.marginNames
+        if c.builtMargin != look.margin {
+            c.builtMargin = look.margin
             c.textView?.margin.needsDisplay = true
         }
         if let pending = workspace.pendingAssign {
@@ -229,10 +252,11 @@ struct ManuscriptTextView: NSViewRepresentable {
             builtText = document.textRevision
             builtTags = document.tagRevision
             builtLines = document.lineRevision
-            builtFontSize = ReadingStyle.fontSize
-            builtSerif = ReadingStyle.serif
-            builtSpacing = ReadingStyle.spacing
-            let (text, layout) = Self.build(project: project, index: document.index, fontSize: builtFontSize, spacing: builtSpacing)
+            builtFontSize = parent.look.fontSize
+            builtSerif = parent.look.serif
+            builtSpacing = parent.look.spacing
+            builtMargin = parent.look.margin
+            let (text, layout) = Self.build(project: project, index: document.index, fontSize: builtFontSize, spacing: builtSpacing, serif: builtSerif)
             self.layout = layout
             textView.textStorage?.setAttributedString(text)
             didResize()
@@ -287,11 +311,12 @@ struct ManuscriptTextView: NSViewRepresentable {
             document.index.lineIndexByID[e.lineID].map { project.lines[$0] }
         }
 
-        static func build(project: Project, index: BookIndex, fontSize: CGFloat, spacing: LineSpacing = .single) -> (NSAttributedString, LineLayout) {
+        static func build(project: Project, index: BookIndex, fontSize: CGFloat, spacing: LineSpacing = .single,
+                          serif: Bool = true) -> (NSAttributedString, LineLayout) {
             let out = NSMutableAttributedString()
             var layout = LineLayout()
-            let body = ReadingStyle.font(size: fontSize)
-            let heading = ReadingStyle.font(size: round(fontSize * 1.55), weight: .semibold)
+            let body = ReadingStyle.font(size: fontSize, serif: serif)
+            let heading = ReadingStyle.font(size: round(fontSize * 1.55), weight: .semibold, serif: serif)
             let bodyStyle = NSMutableParagraphStyle()
             bodyStyle.lineHeightMultiple = spacing.multiple
             bodyStyle.paragraphSpacing = fontSize * 0.75
@@ -335,7 +360,7 @@ struct ManuscriptTextView: NSViewRepresentable {
         /// Room left of the text for the margin labels: initials need little, full names more.
         func gutterWidth() -> CGFloat {
             guard project.settings.showInitials else { return 72 }
-            let names = ReadingStyle.marginNames
+            let names = parent.look.margin
             let widest = project.characters.map { LineLayoutManager.markerWidth(names.label(for: $0)) }.max() ?? 0
             return max(72, widest + 40)
         }
@@ -426,21 +451,7 @@ struct ManuscriptTextView: NSViewRepresentable {
                 parent.workspace.selectedLines = ids
                 let title = ids.count == 1 ? "Assign To" : "Assign \(ids.count) Lines To"
                 let assign = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-                let sub = NSMenu()
-                let index = document.index
-                for c in project.characters.sorted(by: { (index.stats[$0.id]?.lines ?? 0) > (index.stats[$1.id]?.lines ?? 0) }) {
-                    let item = ClosureMenuItem(title: c.name) { [weak self] in self?.document.assign(ids, to: c.id, undoManager: undo) }
-                    item.image = Self.dot(NSColor(hexString: c.colorHex))
-                    sub.addItem(item)
-                }
-                sub.addItem(.separator())
-                sub.addItem(ClosureMenuItem(title: "Who's Speaking? (Clear)") { [weak self] in
-                    self?.document.assign(ids, to: nil, undoManager: undo)
-                })
-                sub.addItem(ClosureMenuItem(title: "Narration (Not Spoken)") { [weak self] in
-                    self?.document.removeLines(ids, undoManager: undo)
-                })
-                assign.submenu = sub
+                assign.submenu = speakerMenu(for: ids, heading: nil)
                 menu.addItem(assign)
                 let kind = NSMenuItem(title: "Kind", action: nil, keyEquivalent: "")
                 let kinds = NSMenu()
@@ -472,7 +483,98 @@ struct ManuscriptTextView: NSViewRepresentable {
             }
             if menu.items.count > 0 { menu.addItem(.separator()) }
             menu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "")
+            if selection.length > 0 {
+                menu.addItem(ClosureMenuItem(title: "Delete Text") { [weak self] in self?.deleteText(in: selection) })
+            }
             return menu
+        }
+
+        /// Speakers for `ids`: assigning, Narration and pins all go through the window's undo.
+        func speakerMenu(for ids: [UUID], heading: String?) -> NSMenu {
+            let undo = parent.undoManager
+            let current = Set(ids.compactMap { id in document.index.lineIndexByID[id].map { project.lines[$0].speakerID } })
+            return SpeakerMenu(project: project, heading: heading, current: current.count == 1 ? current.first! : nil,
+                               assign: { [weak self] speaker in self?.document.assign(ids, to: speaker, undoManager: undo) },
+                               narration: { [weak self] in
+                                   self?.document.removeLines(ids, undoManager: undo)
+                                   self?.parent.workspace.selectedLines = []
+                               },
+                               pin: { [weak self] id, on in self?.document.setPinned(id, on, undoManager: undo) }).menu
+        }
+
+        // MARK: The margin
+
+        /// The line whose name is drawn in the margin at `point` (text view coordinates).
+        func marginEntry(at point: NSPoint) -> LineLayout.Entry? {
+            guard let tv = textView, let lm = tv.layoutManager, let tc = tv.textContainer else { return nil }
+            let origin = tv.textContainerOrigin
+            guard point.x < origin.x - 4 else { return nil }
+            let probe = NSRect(x: 0, y: point.y - origin.y - 2, width: tc.size.width, height: 4)
+            let glyphs = lm.glyphRange(forBoundingRect: probe, in: tc)
+            let chars = lm.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
+            for e in layout.entries(in: chars) {
+                guard let l = line(e), project.settings.showInitials || project.needsYou(l) else { continue }
+                let first = lm.boundingRect(forGlyphRange: lm.glyphRange(forCharacterRange: NSRange(location: e.range.location, length: min(1, e.range.length)), actualCharacterRange: nil), in: tc)
+                if point.y >= first.minY + origin.y, point.y <= first.maxY + origin.y { return e }
+            }
+            return nil
+        }
+
+        /// A right-click on a name in the margin: reassign that speaker's lines in the
+        /// paragraph (or its red lines, for a red ?), with the search field ready for typing.
+        func marginMenu(at point: NSPoint) -> NSMenu? {
+            guard let e = marginEntry(at: point), let clicked = line(e) else { return nil }
+            let needs = project.needsYou(clicked)
+            let siblings = project.lines.filter { l in
+                l.paragraphID == clicked.paragraphID && (needs ? project.needsYou(l) : (!project.needsYou(l) && l.speakerID == clicked.speakerID))
+            }
+            let ids = siblings.isEmpty ? [clicked.id] : siblings.map(\.id)
+            parent.workspace.selectedLines = ids
+            let count = ids.count == 1 ? "1 line" : "\(ids.count) lines"
+            let heading: String
+            if needs {
+                heading = ids.count == 1 ? "Who says this line?" : "Who says these \(ids.count) lines?"
+            } else {
+                heading = "\(project.character(clicked.speakerID)?.name ?? "Speaker")’s \(count) in this paragraph"
+            }
+            return speakerMenu(for: ids, heading: heading)
+        }
+
+        // MARK: Deleting text
+
+        /// Deletes the selected text from the project (not from the imported file). A whole
+        /// chapter goes when its heading and every paragraph are selected.
+        func deleteText(in selection: NSRange) {
+            guard selection.length > 0 else { return }
+            var cuts: [UUID: [TextSpan]] = [:]
+            var chapters = Set<UUID>()
+            let total = (textView?.string as NSString?)?.length ?? 0
+            for (c, chapter) in project.chapters.enumerated() {
+                let start = layout.chapterStarts[c]
+                let end = c + 1 < layout.chapterStarts.count ? layout.chapterStarts[c + 1] : total
+                guard NSIntersectionRange(selection, NSRange(location: start, length: end - start)).length > 0 else { continue }
+                let headingEnd = chapter.paragraphs.first.flatMap { layout.paragraphRanges[$0.id]?.location } ?? end
+                var everyParagraph = true
+                var chapterCuts: [UUID: [TextSpan]] = [:]
+                for p in chapter.paragraphs {
+                    guard let r = layout.paragraphRanges[p.id] else { continue }
+                    let hit = NSIntersectionRange(selection, r)
+                    if hit.length == r.length, r.length > 0 {
+                        chapterCuts[p.id] = [TextSpan(location: 0, length: r.length)]
+                    } else {
+                        everyParagraph = false
+                        if hit.length > 0 { chapterCuts[p.id] = [TextSpan(location: hit.location - r.location, length: hit.length)] }
+                    }
+                }
+                if selection.location <= start, NSMaxRange(selection) >= headingEnd - 1, everyParagraph {
+                    chapters.insert(chapter.id)
+                } else {
+                    cuts.merge(chapterCuts) { a, _ in a }
+                }
+            }
+            textView?.setSelectedRange(NSRange(location: selection.location, length: 0))
+            parent.workspace.selectedLines = []
+            document.deleteText(cuts: cuts, chapters: chapters, undoManager: parent.undoManager)
         }
 
         static func dot(_ color: NSColor) -> NSImage {
@@ -522,6 +624,7 @@ final class ReadingTextView: NSTextView {
 
     override func menu(for event: NSEvent) -> NSMenu? {
         let point = convert(event.locationInWindow, from: nil)
+        if let margin = coordinator?.marginMenu(at: point) { return margin }
         return coordinator?.menu(for: characterIndexForInsertion(at: point), selection: selectedRange())
     }
 
@@ -531,7 +634,23 @@ final class ReadingTextView: NSTextView {
             coordinator?.requestAssign(id)
             return
         }
+        // Delete or Forward Delete removes the selected text from the project.
+        if event.keyCode == 51 || event.keyCode == 117, selectedRange().length > 0 {
+            coordinator?.deleteText(in: selectedRange())
+            return
+        }
         super.keyDown(with: event)
+    }
+
+    /// Edit › Delete works on a selection even though the reading view can't be typed in.
+    override func delete(_ sender: Any?) {
+        guard selectedRange().length > 0 else { return }
+        coordinator?.deleteText(in: selectedRange())
+    }
+
+    override func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
+        if item.action == #selector(delete(_:)) { return selectedRange().length > 0 }
+        return super.validateUserInterfaceItem(item)
     }
 
     let margin = MarginOverlay()
@@ -578,7 +697,7 @@ final class MarginOverlay: NSView {
             drawn.insert(y)
             let speaker = project.character(line.speakerID)
             let color = needs ? NSColor.attention : NSColor(hexString: speaker?.colorHex ?? "#888888")
-            let label = needs ? "?" : speaker.map { ReadingStyle.marginNames.label(for: $0) } ?? ""
+            let label = needs ? "?" : speaker.map { c.builtMargin.label(for: $0) } ?? ""
             LineLayoutManager.drawMarker(label, color: color, rightEdge: origin.x - 18, midY: origin.y + c.textBox(first).midY, dark: dark)
         }
     }

@@ -1,14 +1,14 @@
 ---
 name: innervoice
-description: Drive Inner Voice, the audiobook narrator's app on this Mac, from the shell with the `innervoice` command: see open projects, chapters, lines and the cast, assign lines to characters, fix line kinds, rename, recolor and merge characters, run Tag Speakers and Build Summaries, set pronunciations, choose the model, and export narrator scripts, the tagged manuscript, the cast list or the pronunciation guide. Use when the user asks about a book they are narrating, who speaks a line, their cast or pronunciations, or names Inner Voice.
+description: Drive InnerVoice, the audiobook narrator's app on this Mac, from the shell with the `innervoice` command: see open projects, chapters, lines and the cast, assign lines to characters, fix line kinds, rename, recolor and merge characters, run Tag Speakers and Build Summaries, set pronunciations, choose the model, and export narrator scripts, the tagged manuscript, the cast list or the pronunciation guide. Use when the user asks about a book they are narrating, who speaks a line, their cast or pronunciations, or names InnerVoice.
 ---
 
-# Inner Voice
+# InnerVoice
 
-`innervoice` runs commands in the Inner Voice app. Changes show in the project's window at once,
+`innervoice` runs commands in the InnerVoice app. Changes show in the project's window at once,
 and Edit › Undo in that window takes them back. If the app is closed, the command opens it in the
 background. If `innervoice` isn't on PATH, use
-`"/Applications/Inner Voice.app/Contents/MacOS/InnerVoice"` the same way.
+`"/Applications/InnerVoice.app/Contents/MacOS/InnerVoice"` the same way.
 
 ## Rules
 
@@ -31,7 +31,7 @@ background. If `innervoice` isn't on PATH, use
   ones only). Lines the narrator assigned are never changed by the AI.
 - Character colors are never reddish (red means Who's Speaking?); the app refuses them.
 - To try something without real data, run a Debug build (`./build.sh --debug`, then
-  `.build/app/Inner Voice.app/Contents/MacOS/InnerVoice`) with `APP_STORE=/tmp/iv-test` in front, and
+  `.build/app/InnerVoice.app/Contents/MacOS/InnerVoice`) with `APP_STORE=/tmp/iv-test` in front, and
   `INNERVOICE_DEMO=1` to open the sample book (or `innervoice projects demo`). A test copy only
   opens projects in /tmp. Quit it by its process id: `kill $(lsof -t "$APP_STORE"*.sock)` or the
   pid you started, never `pkill -x InnerVoice`, which also quits the person's own copy (and
@@ -52,4 +52,4 @@ Everything else (chapters, line kinds, rename, color, merge, summaries, pronunci
 `open <page>`): `innervoice help`, and `innervoice help <command>` for its options.
 
 MCP server for Claude Desktop and other clients without a shell (not registered by default):
-`claude mcp add --scope user innervoice -- "/Applications/Inner Voice.app/Contents/MacOS/InnerVoice" mcp`
+`claude mcp add --scope user innervoice -- "/Applications/InnerVoice.app/Contents/MacOS/InnerVoice" mcp`

@@ -106,17 +106,17 @@ nonisolated enum AgentSocket {
     /// not running, unless `launch` is false.
     static func send(_ request: Data, launch: Bool) throws -> Data {
         if let reply = try? exchange(request) { return reply }
-        guard launch else { throw AgentError.unavailable("Inner Voice is not running. Open it, or leave out --no-launch") }
+        guard launch else { throw AgentError.unavailable("InnerVoice is not running. Open it, or leave out --no-launch") }
         #if DEBUG
         // A Debug build would share the installed app's settings and recent projects: it only starts test copies.
-        guard isTestRun else { throw AgentError.unavailable("Inner Voice is not running. A Debug build starts only test copies (set APP_STORE)") }
+        guard isTestRun else { throw AgentError.unavailable("InnerVoice is not running. A Debug build starts only test copies (set APP_STORE)") }
         #endif
         try startApp()
         for _ in 0..<50 {
             Thread.sleep(forTimeInterval: 0.2)
             if let reply = try? exchange(request) { return reply }
         }
-        throw AgentError.unavailable("Inner Voice did not answer within 10 seconds on \(path)")
+        throw AgentError.unavailable("InnerVoice did not answer within 10 seconds on \(path)")
     }
 
     private static func exchange(_ request: Data) throws -> Data {
@@ -160,7 +160,7 @@ nonisolated enum AgentSocket {
         }
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
-        do { try process.run() } catch { throw AgentError.unavailable("could not start Inner Voice: \(error.localizedDescription)") }
+        do { try process.run() } catch { throw AgentError.unavailable("could not start InnerVoice: \(error.localizedDescription)") }
     }
 
     // MARK: Bytes

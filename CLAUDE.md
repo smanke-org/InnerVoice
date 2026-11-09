@@ -1,4 +1,4 @@
-# Inner Voice — notes for agents
+# InnerVoice — notes for agents
 
 Document-based Mac app for audiobook narrators: opens a manuscript, finds every line, tags who speaks it with an on-device model (llama.cpp or Apple's), and builds character summaries. Read `docs/BRIEF.md`, `docs/STORIES.md`, `docs/GLOSSARY.md` (one name per idea; use it in all UI text) and `docs/DESIGN.md` before changing anything.
 
@@ -16,7 +16,7 @@ Document-based Mac app for audiobook narrators: opens a manuscript, finds every 
 - `InnerVoiceDocument` is `nonisolated` (ReferenceFileDocument); its mutation methods are `@MainActor`. @Published can't be used there: send `objectWillChange` by hand.
 
 ## Build and check
-- `./build.sh --debug` → `.build/app/Inner Voice.app` (Developer ID, hardened runtime). `--install` replaces /Applications (quits the running copy).
+- `./build.sh --debug` → `.build/app/InnerVoice.app` (Developer ID, hardened runtime). `--install` replaces /Applications (quits the running copy).
 - `swift test` — Kit tests, including real files made with textutil, ditto and CoreGraphics.
 - `tools/selftest.sh` — in-app checks on the sample book (SeedData). `APP_SELFTEST_MODEL=<gguf>` also tags the sample with a real model and prints a score (Gemma 4 E2B: 27/28 in 18 s).
 - `tools/snap.sh` — light and dark PNGs of every page, popover, sheet and Settings tab in /tmp/InnerVoice-shots. Look at them after UI changes.

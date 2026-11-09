@@ -184,7 +184,7 @@ private struct WhatsNewView: View {
             HStack(spacing: Space.md) {
                 Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 48, height: 48)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("What's new in \(AppInfo.name) \(AppInfo.version)").font(.title3.weight(.semibold))
+                    Text("What's new in \(AppInfo.name) \(AppInfo.labeledVersion)").font(.title3.weight(.semibold))
                     if let from { Text("Updated from \(from).").foregroundStyle(.secondary) }
                 }
             }

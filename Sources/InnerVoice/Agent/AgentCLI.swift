@@ -138,7 +138,7 @@ enum AgentCLI {
             print(usage(command))
             return 0
         }
-        var lines = ["innervoice: drive Inner Voice from the shell. Every command takes --json,",
+        var lines = ["innervoice: drive InnerVoice from the shell. Every command takes --json,",
                      "and --project <name or path> where it works on one project (default: the frontmost).", ""]
         let width = (AgentCommands.all.map(\.name.count).max() ?? 0) + 2
         for command in AgentCommands.all {

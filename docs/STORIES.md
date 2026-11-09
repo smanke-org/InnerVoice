@@ -1,11 +1,11 @@
-# Inner Voice stories
+# InnerVoice stories
 
 Snapshot pages are named in `Screens:`; there is no reference app.
 
 ## M1 Core loop: open a book, see who speaks
 
 ### S-001 Create a project from a manuscript
-As the narrator, I choose File › New from Manuscript… (⌘N) or drop a file on the Start window, and Inner Voice makes a `.innervoice` project with a copy of the manuscript.
+As the narrator, I choose File › New from Manuscript… (⌘N) or drop a file on the Start window, and InnerVoice makes a `.innervoice` project with a copy of the manuscript.
 Screens: start, manuscript
 Acceptance:
 - [unit] .txt, .md, .rtf, .rtfd, .docx, .doc, .odt, .html, .pages (preview PDF/text), .epub and .pdf all import into chapters and paragraphs.
@@ -84,7 +84,7 @@ UX:
 Status: done
 
 ### S-006 Fix a whole exchange
-As the narrator, when I fix one line in an untagged back-and-forth, Inner Voice offers to swap the following lines of that exchange.
+As the narrator, when I fix one line in an untagged back-and-forth, InnerVoice offers to swap the following lines of that exchange.
 Screens: exchange-banner
 Depends: S-005
 Acceptance:
@@ -257,7 +257,7 @@ Status: done
 ## M7 Revisions
 
 ### S-060 Import a revised manuscript
-As the narrator, I choose File › Import Revised Manuscript…, and Inner Voice keeps tags, notes, recorded state and retakes on unchanged paragraphs.
+As the narrator, I choose File › Import Revised Manuscript…, and InnerVoice keeps tags, notes, recorded state and retakes on unchanged paragraphs.
 Screens: revision-review
 Acceptance:
 - [unit] Paragraph matching survives inserted, deleted, moved and lightly edited paragraphs (diff + similarity).

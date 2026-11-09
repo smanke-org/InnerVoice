@@ -102,6 +102,42 @@ enum SelfTest {
                 undo.undo()
                 check("undoing it brings the line back", doc.project.lines.contains { $0.id == first.id })
             }
+            // Delete Text: an ISBN-like run inside a paragraph, and a whole chapter; Undo restores both.
+            if let para = doc.project.chapters.first?.paragraphs.first(where: { ($0.text as NSString).length > 40 }) {
+                let before = doc.project
+                let textRevision = doc.textRevision
+                doc.deleteText(cuts: [para.id: [TextSpan(location: 0, length: 10)]], undoManager: undo)
+                let after = doc.project.chapters.first?.paragraphs.first { $0.id == para.id }?.text ?? ""
+                check("Delete Text removes the words from the project", after.count < para.text.count && doc.textRevision != textRevision)
+                check("Delete Text keeps every line inside its paragraph", doc.project.lines.allSatisfy { l in
+                    doc.index.lineIndexByID[l.id] != nil && (doc.project.text(of: l, index: doc.index).isEmpty == false)
+                })
+                undo.undo()
+                check("Undo brings deleted text back", doc.project == before)
+                if let last = doc.project.chapters.last {
+                    doc.deleteText(cuts: [:], chapters: [last.id], undoManager: undo)
+                    check("Delete Chapter removes it and its lines", !doc.project.chapters.contains { $0.id == last.id }
+                          && doc.project.lines.allSatisfy { l in !last.paragraphs.contains { $0.id == l.paragraphID } })
+                    undo.undo()
+                    check("Undo brings a deleted chapter back", doc.project == before)
+                }
+            }
+            // Pins: pinned speakers head the list, A to Z by first name; the menu's search narrows it.
+            if doc.project.characters.count >= 3 {
+                let chosen = Array(doc.project.characters.sorted(by: Project.byFirstName).suffix(2))
+                for c in chosen { doc.setPinned(c.id, true, undoManager: undo) }
+                let order = doc.project.speakerOrder
+                check("pinned speakers come first, A to Z", order.pinned.map(\.id) == chosen.map(\.id)
+                      && order.others.map(\.firstName) == order.others.map(\.firstName).sorted { $0.localizedStandardCompare($1) == .orderedAscending })
+                let menu = SpeakerMenu(project: doc.project, current: nil, assign: { _ in }, narration: {}, pin: { _, _ in })
+                let target = order.others.last!
+                menu.filter(String(target.firstName.prefix(3)))
+                check("typing in the speaker menu narrows it", menu.firstMatch?.id == target.id || menu.firstMatch.map { $0.matches(String(target.firstName.prefix(3))) } == true)
+                menu.filter("zzqx")
+                check("a search with no match says so", menu.firstMatch == nil)
+                for _ in chosen { undo.undo() }
+                check("Undo unpins", doc.project.speakerOrder.pinned.isEmpty)
+            }
             // Make Line over an existing line keeps book order.
             if let target = doc.project.lines.dropFirst(3).first(where: { $0.range.length > 4 }) {
                 let span = TextSpan(location: target.range.location, length: target.range.length - 1)

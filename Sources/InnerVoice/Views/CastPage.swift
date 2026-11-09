@@ -132,6 +132,9 @@ struct CastPage: View {
     private func menu(_ c: BookCharacter) -> some View {
         Button("Open") { workspace.castPath = [c.id] }
         Button("Rehearse Lines…") { workspace.rehearse = c.id }
+        Button(c.isPinned ? "Unpin from Speaker Lists" : "Pin to Top of Speaker Lists") {
+            document.setPinned(c.id, !c.isPinned, undoManager: undoManager)
+        }
         Menu("Merge Into") {
             ForEach(document.project.characters.filter { $0.id != c.id }) { other in
                 Button(other.name) { document.merge(c.id, into: other.id, undoManager: undoManager) }

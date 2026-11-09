@@ -12,7 +12,7 @@ public enum ImportError: LocalizedError, Equatable {
     public var errorDescription: String? {
         switch self {
         case .unsupported(let name):
-            "Inner Voice can't open “\(name)”. Save it as Word, PDF, RTF, plain text, Markdown, OpenDocument, EPUB or HTML, then try again."
+            "InnerVoice can't open “\(name)”. Save it as Word, PDF, RTF, plain text, Markdown, OpenDocument, EPUB or HTML, then try again."
         case .unreadable(let name, let reason):
             "Unable to read “\(name)”. \(reason)"
         case .noText(let name):

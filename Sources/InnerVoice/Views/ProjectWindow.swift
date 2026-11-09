@@ -122,7 +122,7 @@ struct ProjectWindow: View {
         }
         ToolbarItem {
             HelpButton(topic: workspace.page.helpTopic)
-                .help("Inner Voice Help for \(workspace.page.title)")
+                .help("InnerVoice Help for \(workspace.page.title)")
         }
         .sharedBackgroundVisibility(.hidden)
         ToolbarItem {
@@ -248,7 +248,10 @@ enum SpellCheck {
 /// Smaller and bigger text, one point a step, beside the color style in the toolbar.
 /// The same as View › Bigger Text and Smaller Text, and the size in Settings › Manuscript.
 struct TextSizeControl: View {
-    @AppStorage("reading.fontSize") private var size = ReadingStyle.standardSize
+    @AppStorage("reading.fontSize", store: ReadingStyle.store) private var size = ReadingStyle.standardSize
+    @AppStorage("reading.lineSpacing", store: ReadingStyle.store) private var spacing = LineSpacing.single.rawValue
+
+    private var isDouble: Bool { spacing == LineSpacing.double.rawValue }
 
     var body: some View {
         ControlGroup {
@@ -261,5 +264,10 @@ struct TextSizeControl: View {
         } label: {
             Label("Text Size", systemImage: "textformat.size")
         }
+        Toggle(isOn: Binding(get: { isDouble }, set: { ReadingStyle.setSpacing($0 ? .double : .single) })) {
+            Label("Double Spacing", systemImage: "arrow.up.and.down.text.horizontal")
+        }
+        .help(isDouble ? "Switch to single line spacing (⌥⌘L). Now double spaced."
+                       : "Switch to double line spacing (⌥⌘L). Now single spaced.")
     }
 }

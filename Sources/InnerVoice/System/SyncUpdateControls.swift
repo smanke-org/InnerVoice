@@ -28,7 +28,7 @@ struct SyncUpdateSections: View {
         } header: {
             Text("iCloud")
         } footer: {
-            SystemCaption("Appearance, the accent color, asking before quitting, where Inner Voice appears and the update choices follow you to every Mac signed in to the same iCloud account with sync turned on. Your projects never sync: they stay where you saved them.")
+            SystemCaption("Appearance, the accent color, asking before quitting, where InnerVoice appears and the update choices follow you to every Mac signed in to the same iCloud account with sync turned on. Your projects never sync: they stay where you saved them.")
         }
 
         Section {
@@ -56,7 +56,7 @@ struct SyncUpdateSections: View {
                 LabeledContent {
                     Button("Open Notification Settings") { AutoUpdater.openNotificationSettings() }
                 } label: {
-                    Label("Notifications are off for Inner Voice, so update news only shows in the menus.", systemImage: "bell.slash")
+                    Label("Notifications are off for InnerVoice, so update news only shows in the menus.", systemImage: "bell.slash")
                         .font(.caption).foregroundStyle(.orange)
                 }
             }
@@ -71,11 +71,11 @@ struct SyncUpdateSections: View {
     private var updateFooter: String {
         switch updater.policy {
         case .automatic:
-            return "Inner Voice checks \(updater.interval.phrase). A new version installs itself when Tag Speakers and Build Summaries aren't running, no app is presenting or keeping the screen awake, and your Mac hasn't been used for 2 minutes. Your projects are saved first. You'll get a notification when it's done."
+            return "InnerVoice checks \(updater.interval.phrase). A new version installs itself when Tag Speakers and Build Summaries aren't running, no app is presenting or keeping the screen awake, and your Mac hasn't been used for 2 minutes. Your projects are saved first. You'll get a notification when it's done."
         case .ask:
-            return "Inner Voice checks \(updater.interval.phrase) and sends a notification when a new version is out. Nothing installs until you choose to."
+            return "InnerVoice checks \(updater.interval.phrase) and sends a notification when a new version is out. Nothing installs until you choose to."
         case .off:
-            return "Inner Voice won't look for updates on its own. Use Check Now whenever you like."
+            return "InnerVoice won't look for updates on its own. Use Check Now whenever you like."
         }
     }
 }

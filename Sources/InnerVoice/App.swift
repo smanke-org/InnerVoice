@@ -2,8 +2,8 @@ import AppKit
 import InnerVoiceKit
 import SwiftUI
 
-// Inner Voice
-//   Inner Voice                        the app
+// InnerVoice
+//   InnerVoice                        the app
 //   APP_SNAPSHOT=<dir> InnerVoice      open the sample book, save a PNG of every page, panel and Settings tab, quit
 //   InnerVoice --selftest              run the self-test on the sample book and quit with 0 or 1 (tools/selftest.sh)
 //   APP_MODELS=<dir>                   keep downloaded models somewhere else (tests)
@@ -33,7 +33,7 @@ struct InnerVoiceApp: App {
             ViewCommands()
         }
 
-        Window("Welcome to Inner Voice", id: "start") {
+        Window("Welcome to InnerVoice", id: "start") {
             StartWindow()
                 .themed()
                 .background(WindowOpener())
@@ -219,9 +219,9 @@ struct BookCommands: Commands {
 
 struct ViewCommands: Commands {
     @FocusedValue(\.project) private var focus
-    @AppStorage("reading.fontSize") private var fontSize = ReadingStyle.standardSize
-    @AppStorage("reading.marginNames") private var marginNames = MarginNames.initials.rawValue
-    @AppStorage("reading.lineSpacing") private var lineSpacing = LineSpacing.single.rawValue
+    @AppStorage("reading.fontSize", store: ReadingStyle.store) private var fontSize = ReadingStyle.standardSize
+    @AppStorage("reading.marginNames", store: ReadingStyle.store) private var marginNames = MarginNames.initials.rawValue
+    @AppStorage("reading.lineSpacing", store: ReadingStyle.store) private var lineSpacing = LineSpacing.single.rawValue
 
     var body: some Commands {
         CommandGroup(before: .sidebar) {
@@ -263,6 +263,10 @@ struct ViewCommands: Commands {
             Picker("Line Spacing", selection: $lineSpacing) {
                 ForEach(LineSpacing.allCases) { Text($0.title).tag($0.rawValue) }
             }
+            Button(lineSpacing == LineSpacing.double.rawValue ? "Single Spacing" : "Double Spacing") {
+                ReadingStyle.setSpacing(lineSpacing == LineSpacing.double.rawValue ? .single : .double)
+            }
+            .keyboardShortcut("l", modifiers: [.command, .option])
             Divider()
         }
     }

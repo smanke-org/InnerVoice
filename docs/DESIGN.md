@@ -1,4 +1,4 @@
-# Inner Voice design plan
+# InnerVoice design plan
 
 ## Archetype
 Document-based app: one window per book (`.innervoice` package), each a
@@ -36,7 +36,7 @@ Rehearse is a sheet. Assign To is a popover on the line.
 
 ## Empty states
 - Welcome window: drop area "Drop a manuscript here" + Open Manuscript… + recent projects.
-- Manuscript before tagging: banner "Inner Voice found 2,314 lines. Tag Speakers to find who says each one."
+- Manuscript before tagging: banner "InnerVoice found 2,314 lines. Tag Speakers to find who says each one."
 - Cast with no characters: "No characters yet" + Tag Speakers.
 - Index with every character hidden: "Turn on characters to list their lines."
 - Pronunciations: "No unusual words found" + Add Term.

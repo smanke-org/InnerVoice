@@ -169,10 +169,15 @@ public struct BookCharacter: Codable, Identifiable, Hashable, Sendable {
     public var narratorID: UUID?
     /// nil follows the automatic rule (main characters start hidden in the index).
     public var showInIndex: Bool?
+    /// Pinned to the top of every speaker list (Assign To, the right-click menu).
+    /// Optional so projects saved before pins open unchanged.
+    public var pinned: Bool?
+
+    public var isPinned: Bool { pinned ?? false }
 
     public init(id: UUID = UUID(), name: String, aliases: [String] = [], colorHex: String,
                 facts: [Fact] = [], notes: String = "", voiceNotes: String = "",
-                narratorID: UUID? = nil, showInIndex: Bool? = nil) {
+                narratorID: UUID? = nil, showInIndex: Bool? = nil, pinned: Bool? = nil) {
         self.id = id
         self.name = name
         self.aliases = aliases
@@ -182,6 +187,17 @@ public struct BookCharacter: Codable, Identifiable, Hashable, Sendable {
         self.voiceNotes = voiceNotes
         self.narratorID = narratorID
         self.showInIndex = showInIndex
+        self.pinned = pinned
+    }
+
+    /// True when a search typed in a speaker list finds this character: any of its names
+    /// contains the text (ignoring case and accents), or the text starts its initials.
+    public func matches(_ query: String) -> Bool {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return true }
+        let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+        if ([name] + aliases).contains(where: { $0.range(of: q, options: options) != nil }) { return true }
+        return q.count <= 3 && initials.range(of: q, options: [.caseInsensitive, .anchored]) != nil
     }
 
     /// Every name the character goes by, longest first, for matching in text.

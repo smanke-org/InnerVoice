@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-/// Keeps Inner Voice's settings the same on every Mac on one iCloud account, through
+/// Keeps InnerVoice's settings the same on every Mac on one iCloud account, through
 /// `iCloud Drive/InnerVoice/Settings.plist`. Whole-document, last writer wins.
 ///
 /// Only the settings listed in `keys` travel; everything else in the defaults domain
@@ -121,7 +121,7 @@ final class SettingsSync: ObservableObject {
 
     // MARK: - Lifecycle
 
-    /// On a brand-new install, a settings file already in iCloud Drive means this user has Inner Voice
+    /// On a brand-new install, a settings file already in iCloud Drive means this user has InnerVoice
     /// on another Mac: turn sync on and start from those settings, rather than the defaults.
     func adoptOnNewInstall() {
         guard !isEnabled, FileManager.default.fileExists(atPath: Self.file.path) else { return }

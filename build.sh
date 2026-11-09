@@ -1,16 +1,16 @@
 #!/bin/zsh
-# Builds Inner Voice into .build/app/Inner Voice.app (Developer ID when available,
+# Builds InnerVoice into .build/app/InnerVoice.app (Developer ID when available,
 # hardened runtime, not sandboxed) with the pinned llama.framework embedded.
 #
 # Usage: ./build.sh            release build (arm64)
 #        ./build.sh --debug    debug build
-#        ./build.sh --install  also replace /Applications/Inner Voice.app (quits the running copy)
+#        ./build.sh --install  also replace /Applications/InnerVoice.app (quits the running copy)
 #        ./build.sh --open     install, then open it
 #        ./build.sh --universal  arm64 + x86_64 (release.sh uses this)
 set -euo pipefail
 here=${0:A:h}
 name="InnerVoice"
-display="Inner Voice"
+display="InnerVoice"
 bundle="com.smanke.InnerVoice"
 config=release
 [[ " $* " == *" --debug "* ]] && config=debug

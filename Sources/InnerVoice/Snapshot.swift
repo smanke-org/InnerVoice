@@ -34,7 +34,7 @@ enum Snapshot {
             try? await Task.sleep(for: .seconds(1.5))
             for mode in ["light", "dark"] {
                 NSApp.appearance = NSAppearance(named: mode == "light" ? .aqua : .darkAqua)
-                if wants("start"), let start = NSApp.windows.first(where: { $0.title == "Welcome to Inner Voice" && $0.isVisible }) {
+                if wants("start"), let start = NSApp.windows.first(where: { $0.title == "Welcome to InnerVoice" && $0.isVisible }) {
                     try? await Task.sleep(for: .seconds(0.6))
                     capture(start, "\(dir)/start-\(mode).png")
                 }
@@ -53,9 +53,9 @@ enum Snapshot {
             newDocument { seed }
             for _ in 0..<40 where attached == nil { try? await Task.sleep(for: .seconds(0.25)) }
             guard let (document, workspace) = attached else { print("SNAPSHOT no project window"); finish(); return }
-            NSApp.windows.first { $0.title == "Welcome to Inner Voice" }?.close()
+            NSApp.windows.first { $0.title == "Welcome to InnerVoice" }?.close()
             try? await Task.sleep(for: .seconds(1))
-            let window = { NSApp.windows.first { $0.isVisible && $0.canBecomeMain && !$0.isSheet && $0.title != "Welcome to Inner Voice" } }
+            let window = { NSApp.windows.first { $0.isVisible && $0.canBecomeMain && !$0.isSheet && $0.title != "Welcome to InnerVoice" } }
             // The same size on a Retina screen for every page, set again before each shot:
             // SwiftUI restores the window frame the person's own copy saved (the preferences
             // are shared), which made a run come out tall and at 1×.
@@ -98,17 +98,19 @@ enum Snapshot {
                     reading("reading.marginNames", MarginNames.fullName.rawValue)
                     reading("reading.lineSpacing", LineSpacing.double.rawValue)
                     document.updateSettings("", undoManager: nil) { $0.style = .highlight }
-                    document.objectWillChange.send()
                 }
                 await shot("manuscript-first-names", settle: 1.2) {
                     reading("reading.marginNames", MarginNames.firstName.rawValue)
                     reading("reading.lineSpacing", LineSpacing.single.rawValue)
                     document.updateSettings("", undoManager: nil) { $0.style = .outline }
-                    document.objectWillChange.send()
                 }
+                await shot("manuscript-bigger", settle: 1.2) {
+                    ReadingStyle.setFontSize(21)
+                    ReadingStyle.setSpacing(.single)
+                }
+                ReadingStyle.setFontSize(ReadingStyle.standardSize)
                 reading("reading.marginNames", MarginNames.initials.rawValue)
                 document.updateSettings("", undoManager: nil) { $0.style = .highlight }
-                document.objectWillChange.send()
                 if wants("assign-popover"), let red {
                     workspace.page = .manuscript
                     workspace.pendingAssign = red.id
@@ -161,16 +163,100 @@ enum Snapshot {
                 SettingsWindow.shared.show(tab: .general)
                 SettingsWindow.shared.window?.close()
             }
+            // Last: driving real menus leaves the app inactive, which would gray later shots.
+            if wants("speaker-menu") {
+                NSApp.appearance = NSAppearance(named: .aqua)
+                workspace.page = .manuscript
+                try? await Task.sleep(for: .seconds(0.8))
+                await speakerMenuTest(document: document, dir: dir, submenu: false)
+                await speakerMenuTest(document: document, dir: dir, submenu: true)
+            }
             print("SNAPSHOT done \(dir)")
             finish()
         }
     }
 
-    /// Sets a preference for this run only (the argument domain is never saved).
+    /// Opens the margin's speaker menu on a line, types part of another speaker's surname
+    /// (a search match, not a menu type-select match), photographs the menu before and after,
+    /// presses Return and checks the paragraph's lines went to that speaker.
+    @MainActor
+    static func speakerMenuTest(document: InnerVoiceDocument, dir: String, submenu: Bool) async {
+        guard let window = NSApp.windows.first(where: { $0.isVisible && $0.canBecomeMain && !$0.isSheet }),
+              let tv = find(ReadingTextView.self, in: window.contentView), let c = tv.coordinator else {
+            print("SNAPSHOT speaker-menu: no reading view"); return
+        }
+        let project = document.project
+        guard let line = project.lines.first(where: { $0.speakerID != nil && !project.needsYou($0) }),
+              let target = project.characters.first(where: { $0.id != line.speakerID && $0.name.split(separator: " ").count > 1 }) else {
+            print("SNAPSHOT speaker-menu: no suitable line"); return
+        }
+        c.reveal(Workspace.Reveal(paragraphID: line.paragraphID, lineID: line.id))
+        try? await Task.sleep(for: .seconds(0.6))
+        guard let e = c.layout.entries.first(where: { $0.lineID == line.id }), let rect = c.rects(for: e.range).first else { return }
+        let point = submenu ? NSPoint(x: rect.midX, y: rect.midY) : NSPoint(x: tv.textContainerOrigin.x - 30, y: rect.midY)
+        tv.setSelectedRange(NSRange(location: e.range.location, length: 0))
+        guard let menu = submenu ? c.menu(for: e.range.location, selection: NSRange(location: e.range.location, length: 0)) : c.marginMenu(at: point) else {
+            print("SNAPSHOT speaker-menu: no margin menu at \(point)"); return
+        }
+        let tag = submenu ? "speaker-submenu" : "speaker-menu"
+        let surname = String(target.name.split(separator: " ").last!)
+        let query = String(surname.dropFirst().prefix(3)).lowercased()
+        let pid = getpid()
+        func key(_ code: CGKeyCode, _ text: String?) {
+            for down in [true, false] {
+                let ev = CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: down)
+                if let text { let u = Array(text.utf16); ev?.keyboardSetUnicodeString(stringLength: u.count, unicodeString: u) }
+                ev?.postToPid(pid)
+            }
+        }
+        func shootMenu(_ name: String) {
+            let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+            let mine = list.filter { ($0[kCGWindowOwnerPID as String] as? Int32) == pid && ($0[kCGWindowLayer as String] as? Int ?? 0) >= 101 }
+            guard !mine.isEmpty else { print("SNAPSHOT speaker-menu: no menu window"); return }
+            for (n, w) in mine.enumerated() {
+                guard let id = w[kCGWindowNumber as String] as? Int else { continue }
+                let p = Process()
+                p.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+                p.arguments = ["-x", "-o", "-l", String(id), "\(dir)/\(name)-\(n).png"]
+                try? p.run(); p.waitUntilExit()
+                print("SNAPSHOT \(dir)/\(name)-\(n).png")
+            }
+        }
+        // Run-loop timers, not the main queue: this runs inside a main-queue job, and the
+        // queue can't run another while popUp spins the run loop under it.
+        func after(_ seconds: Double, _ body: @escaping @MainActor () -> Void) {
+            let t = Timer(timeInterval: seconds, repeats: false) { _ in MainActor.assumeIsolated { body() } }
+            RunLoop.main.add(t, forMode: .common)
+        }
+        // In the line's menu: Down highlights Assign To, Right opens it (as hovering does).
+        if submenu { after(0.8) { key(125, nil); key(124, nil) } }
+        after(submenu ? 1.8 : 1.0) {
+            shootMenu("\(tag)-open")
+            for ch in query { key(0, String(ch)) }
+            after(0.8) {
+                shootMenu("\(tag)-typed")
+                key(36, "\r")
+            }
+        }
+        // Safety net: never leave a menu open if the keys didn't land.
+        after(6) { menu.cancelTracking() }
+        menu.popUp(positioning: nil, at: point, in: tv)
+        try? await Task.sleep(for: .seconds(0.5))
+        let assigned = document.project.lines.first { $0.id == line.id }?.speakerID
+        print("SNAPSHOT \(tag) typed “\(query)” for \(target.name): " + (assigned == target.id ? "PASS assigned" : "FAIL got \(document.project.character(assigned)?.name ?? "nobody")"))
+        c.parent.undoManager?.undo()
+    }
+
+    static func find<T: NSView>(_ type: T.Type, in view: NSView?) -> T? {
+        guard let view else { return nil }
+        if let hit = view as? T { return hit }
+        for sub in view.subviews { if let hit = find(type, in: sub) { return hit } }
+        return nil
+    }
+
+    /// Sets a reading preference in the test run’s own store (never the person’s).
     static func reading(_ key: String, _ value: Any?) {
-        var arguments = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
-        arguments[key] = value
-        UserDefaults.standard.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
+        ReadingStyle.store.set(value, forKey: key)
     }
 
     /// Quits without asking to save the sample book.
