@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Settings > Appearance: the accent color. Light and dark mode follow the Mac.
+/// Settings > Accent: the app's accent color, used for selections, buttons such as Confirm
+/// and Tag Speakers, switches and checkmarks. Character colors don't change with it.
 struct AppearanceSettings: View {
     @Bindable private var store = ThemeStore.shared
 
@@ -22,13 +23,16 @@ struct AppearanceSettings: View {
                         .foregroundStyle(.secondary)
                 }
             }
+        } footer: {
+            Text("The accent color marks what’s selected, the main buttons (like Confirm and Tag Speakers), switches and checkmarks. Each character keeps their own color.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 }
 
-/// A small sample window in the chosen accent: a sidebar, two tasks, a tag,
-/// a button, and a switch. It redraws as people pick a color.
-/// Swap the sample words for ones from this app.
+/// A small InnerVoice window in the chosen accent: the sidebar, a line waiting for its
+/// speaker to be confirmed, the Confirm button and a switch. It redraws as people pick a color.
 private struct AccentPreview: View {
     private let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
 
@@ -56,9 +60,9 @@ private struct AccentPreview: View {
             }
             .padding(.leading, Space.xs)
             .padding(.bottom, Space.sm)
-            sidebarRow("Inbox", symbol: "tray", selected: true)
-            sidebarRow("Today", symbol: "star", selected: false)
-            sidebarRow("Done", symbol: "checkmark.circle", selected: false)
+            sidebarRow("Review", symbol: "checklist", selected: true)
+            sidebarRow("Cast", symbol: "person.2", selected: false)
+            sidebarRow("Voices", symbol: "person.wave.2", selected: false)
             Spacer(minLength: 0)
         }
         .padding(Space.sm)
@@ -79,24 +83,24 @@ private struct AccentPreview: View {
     private var content: some View {
         VStack(alignment: .leading, spacing: Space.sm) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Inbox").font(.headline)
+                Text("Chapter 1").font(.headline)
                 Spacer()
-                Text("1 left").font(.caption).foregroundStyle(Palette.accentText)
+                Text("2 need you").font(.caption).foregroundStyle(Palette.accentText)
             }
-            task("Pick a color", done: true)
-            task("Ship the first build", done: false, tag: "Today")
+            line("“The path was underwater.”", speaker: "Mara", confirmed: true)
+            line("“Then you’ll be needing this.”", speaker: "Tom?", confirmed: false)
             Spacer(minLength: 0)
             // Drawn, not real controls: the preview is a picture, and real
             // controls turn gray when the window is not in front.
             HStack {
-                Label("Add Task", systemImage: "plus")
+                Text("Confirm Tom")
                     .font(.callout.weight(.medium))
                     .foregroundStyle(Palette.onAccent)
                     .padding(.horizontal, Space.md)
                     .frame(height: 24)
                     .background(Palette.accent, in: Capsule())
                 Spacer()
-                Text("Focus").font(.caption).foregroundStyle(.secondary)
+                Text("Follow along").font(.caption).foregroundStyle(.secondary)
                 Capsule()
                     .fill(Palette.accent)
                     .frame(width: 28, height: 16)
@@ -108,22 +112,18 @@ private struct AccentPreview: View {
         .padding(Space.md)
     }
 
-    private func task(_ title: String, done: Bool, tag: String? = nil) -> some View {
+    private func line(_ text: String, speaker: String, confirmed: Bool) -> some View {
         HStack(spacing: Space.sm) {
-            Image(systemName: done ? "checkmark.circle.fill" : "circle")
-                .foregroundStyle(done ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
-            Text(title)
-                .strikethrough(done)
-                .foregroundStyle(done ? .secondary : .primary)
+            Image(systemName: confirmed ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(confirmed ? AnyShapeStyle(Palette.accent) : AnyShapeStyle(.tertiary))
+            Text(text).lineLimit(1)
             Spacer()
-            if let tag {
-                Text(tag)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(Palette.accentText)
-                    .padding(.horizontal, Space.sm)
-                    .padding(.vertical, 2)
-                    .background(Palette.accent.opacity(0.15), in: Capsule())
-            }
+            Text(speaker)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(Palette.accentText)
+                .padding(.horizontal, Space.sm)
+                .padding(.vertical, 2)
+                .background(Palette.accent.opacity(0.15), in: Capsule())
         }
         .font(.callout)
     }
