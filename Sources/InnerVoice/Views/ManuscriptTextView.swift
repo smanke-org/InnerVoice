@@ -19,9 +19,11 @@ enum ReadingStyle {
 
 /// Where each line sits in the reading view's text.
 struct LineLayout {
+    /// A line by its id, never by its place in `project.lines`: adding or removing a line
+    /// shifts every place after it, and a stale place drew (and clicked) the next line.
     struct Entry {
         var range: NSRange
-        var lineIndex: Int
+        var lineID: UUID
     }
     var entries: [Entry] = []
     var paragraphRanges: [UUID: NSRange] = [:]
@@ -121,6 +123,12 @@ struct ManuscriptTextView: NSViewRepresentable {
         c.parent = self
         if c.builtText != document.textRevision || c.builtFontSize != ReadingStyle.fontSize || c.builtSerif != ReadingStyle.serif {
             c.rebuild()
+        } else if c.builtLines != document.lineRevision {
+            c.rebuildEntries()
+            c.builtTags = document.tagRevision
+            c.builtSelection = workspace.selectedLines
+            c.textView?.needsDisplay = true
+            c.textView?.margin.needsDisplay = true
         } else if c.builtTags != document.tagRevision || c.builtSelection != workspace.selectedLines {
             c.builtTags = document.tagRevision
             c.builtSelection = workspace.selectedLines
@@ -145,6 +153,7 @@ struct ManuscriptTextView: NSViewRepresentable {
         var layout = LineLayout()
         var builtText = -1
         var builtTags = -1
+        var builtLines = -1
         var builtFontSize: CGFloat = 0
         var builtSerif = true
         var builtSelection: [UUID] = []
@@ -162,12 +171,34 @@ struct ManuscriptTextView: NSViewRepresentable {
             guard let textView else { return }
             builtText = document.textRevision
             builtTags = document.tagRevision
+            builtLines = document.lineRevision
             builtFontSize = ReadingStyle.fontSize
             builtSerif = ReadingStyle.serif
             let (text, layout) = Self.build(project: project, index: document.index, fontSize: builtFontSize)
             self.layout = layout
             textView.textStorage?.setAttributedString(text)
             didResize()
+        }
+
+        /// Lines were added or removed but the text is the same: only the line map changes.
+        func rebuildEntries() {
+            builtLines = document.lineRevision
+            layout.entries = Self.entries(project: project, index: document.index, paragraphRanges: layout.paragraphRanges)
+        }
+
+        static func entries(project: Project, index: BookIndex, paragraphRanges: [UUID: NSRange]) -> [LineLayout.Entry] {
+            var out: [LineLayout.Entry] = []
+            for (pid, i) in index.linesByParagraph.flatMap({ pid, ids in ids.map { (pid, $0) } }) {
+                guard let start = paragraphRanges[pid]?.location else { continue }
+                let r = project.lines[i].range
+                out.append(LineLayout.Entry(range: NSRange(location: start + r.location, length: r.length), lineID: project.lines[i].id))
+            }
+            return out.sorted { $0.range.location < $1.range.location }
+        }
+
+        /// The line an entry stands for, if it still exists.
+        func line(_ e: LineLayout.Entry) -> Line? {
+            document.index.lineIndexByID[e.lineID].map { project.lines[$0] }
         }
 
         static func build(project: Project, index: BookIndex, fontSize: CGFloat) -> (NSAttributedString, LineLayout) {
@@ -207,13 +238,9 @@ struct ManuscriptTextView: NSViewRepresentable {
                     out.append(NSAttributedString(string: "\n", attributes: [.font: body, .paragraphStyle: style]))
                     layout.paragraphRanges[p.id] = NSRange(location: start, length: (p.text as NSString).length)
                     layout.paragraphStarts.append((start, p.id))
-                    for i in index.linesByParagraph[p.id] ?? [] {
-                        let r = project.lines[i].range
-                        layout.entries.append(LineLayout.Entry(range: NSRange(location: start + r.location, length: r.length), lineIndex: i))
-                    }
                 }
             }
-            layout.entries.sort { $0.range.location < $1.range.location }
+            layout.entries = entries(project: project, index: index, paragraphRanges: layout.paragraphRanges)
             return (out, layout)
         }
 
@@ -259,8 +286,7 @@ struct ManuscriptTextView: NSViewRepresentable {
         func reveal(_ r: Workspace.Reveal) {
             guard let textView else { return }
             var range = layout.paragraphRanges[r.paragraphID] ?? NSRange(location: 0, length: 0)
-            if let lineID = r.lineID, let li = document.index.lineIndexByID[lineID],
-               let e = layout.entries.first(where: { $0.lineIndex == li }) {
+            if let lineID = r.lineID, let e = layout.entries.first(where: { $0.lineID == lineID }) {
                 range = e.range
             }
             guard range.location != NSNotFound, range.location <= (textView.string as NSString).length else { return }
@@ -276,31 +302,29 @@ struct ManuscriptTextView: NSViewRepresentable {
         // MARK: Interaction
 
         func click(at char: Int) {
-            guard let e = layout.entry(at: char) else {
+            guard let e = layout.entry(at: char), let line = line(e) else {
                 parent.workspace.selectedLines = []
                 return
             }
-            let line = project.lines[e.lineIndex]
             parent.workspace.selectedLines = [line.id]
             requestAssign(line.id)
         }
 
         func requestAssign(_ lineID: UUID) {
-            guard let textView, let li = document.index.lineIndexByID[lineID],
-                  let e = layout.entries.first(where: { $0.lineIndex == li }) else { return }
+            guard let textView, let e = layout.entries.first(where: { $0.lineID == lineID }) else { return }
             let rects = rects(for: e.range)
             guard let rect = rects.first else { return }
             parent.onAssignRequest(lineID, rect, textView)
         }
 
         func lines(in range: NSRange) -> [UUID] {
-            layout.entries(in: range).map { project.lines[$0.lineIndex].id }
+            layout.entries(in: range).compactMap { line($0)?.id }
         }
 
         func menu(for char: Int, selection: NSRange) -> NSMenu {
             let menu = NSMenu()
             var ids = selection.length > 0 ? lines(in: selection) : []
-            if ids.isEmpty, let e = layout.entry(at: char) { ids = [project.lines[e.lineIndex].id] }
+            if ids.isEmpty, let e = layout.entry(at: char), let l = line(e) { ids = [l.id] }
             let undo = parent.undoManager
             if !ids.isEmpty {
                 parent.workspace.selectedLines = ids
@@ -444,8 +468,8 @@ final class MarginOverlay: NSView {
         let chars = lm.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
         let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
         var drawn = Set<Int>()
-        for entry in c.layout.entries(in: chars) where entry.lineIndex < project.lines.count {
-            let line = project.lines[entry.lineIndex]
+        for entry in c.layout.entries(in: chars) {
+            guard let line = c.line(entry) else { continue }
             let needs = project.needsYou(line)
             guard project.settings.showInitials || needs else { continue }
             let firstGlyphs = lm.glyphRange(forCharacterRange: NSRange(location: entry.range.location, length: min(1, entry.range.length)), actualCharacterRange: nil)
@@ -483,8 +507,7 @@ nonisolated final class LineLayoutManager: NSLayoutManager {
         let selected = Set(c.parent.workspace.selectedLines)
 
         for entry in c.layout.entries(in: chars) {
-            guard entry.lineIndex < project.lines.count else { continue }
-            let line = project.lines[entry.lineIndex]
+            guard let line = c.line(entry) else { continue }
             let needs = project.needsYou(line)
             let speaker = project.character(line.speakerID)
             let color = needs ? NSColor.attention : NSColor(hexString: speaker?.colorHex ?? "#888888")

@@ -50,16 +50,17 @@ import SwiftUI
         let line = Line(paragraphID: paragraphID, range: range, kind: .spoken, speakerID: speaker,
                         confidence: speaker == nil ? 0 : 1, source: speaker == nil ? .none : .user)
         change("Make Line", undoManager: undoManager) { p in
-            // Keep book order: after the last line that starts before it.
             let index = BookIndex(p)
             guard let pos = index.positions[paragraphID] else { return }
+            // Drop lines it overlaps, then keep book order: before the first line that
+            // starts after it. (Finding the place first put it late when an overlapped
+            // line came before it.)
+            p.lines.removeAll { $0.paragraphID == paragraphID && NSIntersectionRange($0.range.ns, range.ns).length > 0 }
             let at = p.lines.firstIndex { l in
                 guard let lp = index.positions[l.paragraphID] else { return false }
                 return lp > pos || (lp == pos && l.range.location > range.location)
             } ?? p.lines.count
-            // Drop lines it overlaps.
-            p.lines.removeAll { $0.paragraphID == paragraphID && NSIntersectionRange($0.range.ns, range.ns).length > 0 }
-            p.lines.insert(line, at: min(at, p.lines.count))
+            p.lines.insert(line, at: at)
         }
         return line.id
     }

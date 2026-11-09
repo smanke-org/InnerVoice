@@ -86,6 +86,32 @@ enum SelfTest {
             check("merge removes the merged character", doc.project.character(extra) == nil)
         }
 
+        // The reading view keeps each highlight on its own line after lines come and go.
+        do {
+            let (_, built) = ManuscriptTextView.Coordinator.build(project: doc.project, index: doc.index, fontSize: 16)
+            let revision = doc.lineRevision
+            if let first = doc.project.lines.first(where: { $0.kind == .spoken }) {
+                doc.removeLines([first.id], undoManager: undo)
+                check("removing a line remaps the reading view", doc.lineRevision != revision)
+                let entries = ManuscriptTextView.Coordinator.entries(project: doc.project, index: doc.index, paragraphRanges: built.paragraphRanges)
+                let mapped = entries.allSatisfy { e in
+                    guard let li = doc.index.lineIndexByID[e.lineID], let start = built.paragraphRanges[doc.project.lines[li].paragraphID]?.location else { return false }
+                    return e.range.location == start + doc.project.lines[li].range.location
+                }
+                check("after Mark as Narration every highlight is its own line's", mapped && entries.count == doc.project.lines.count)
+                undo.undo()
+                check("undoing it brings the line back", doc.project.lines.contains { $0.id == first.id })
+            }
+            // Make Line over an existing line keeps book order.
+            if let target = doc.project.lines.dropFirst(3).first(where: { $0.range.length > 4 }) {
+                let span = TextSpan(location: target.range.location, length: target.range.length - 1)
+                doc.makeLine(paragraphID: target.paragraphID, range: span, speaker: nil, undoManager: undo)
+                let order = doc.project.lines.map { (doc.index.positions[$0.paragraphID]!.global, $0.range.location) }
+                check("Make Line keeps lines in book order", zip(order, order.dropFirst()).allSatisfy { $0 <= $1 })
+                undo.undo()
+            }
+        }
+
         // Saving.
         if let data = try? InnerVoiceDocument.encoder.encode(doc.project),
            let back = try? InnerVoiceDocument.decoder.decode(Project.self, from: data) {

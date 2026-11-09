@@ -36,6 +36,9 @@ nonisolated final class InnerVoiceDocument: ReferenceFileDocument {
     private(set) var textRevision = 0 { willSet { objectWillChange.send() } }
     /// Bumped when only colors, speakers or kinds change.
     private(set) var tagRevision = 0 { willSet { objectWillChange.send() } }
+    /// Bumped when lines are added, removed or moved without the text changing, so the
+    /// reading view remaps its text to lines.
+    private(set) var lineRevision = 0 { willSet { objectWillChange.send() } }
     /// Per-document AI work (Tag Speakers, Build Summaries).
     @MainActor lazy var tagging = TaggingController(document: self)
 
@@ -134,9 +137,15 @@ nonisolated final class InnerVoiceDocument: ReferenceFileDocument {
 
     @MainActor
     private func replace(with p: Project, textChanged: Bool) {
+        let linesMoved = !Self.sameLinePlaces(project.lines, p.lines)
         project = p
+        if linesMoved { lineRevision += 1 }
         if textChanged { textRevision += 1 }
         tagRevision += 1
+    }
+
+    static func sameLinePlaces(_ a: [Line], _ b: [Line]) -> Bool {
+        a.count == b.count && zip(a, b).allSatisfy { $0.id == $1.id && $0.range == $1.range && $0.paragraphID == $1.paragraphID }
     }
 
     /// Changes made by background AI work, applied without one undo step per passage.
