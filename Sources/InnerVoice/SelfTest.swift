@@ -279,6 +279,22 @@ enum SelfTest {
                 _ = try? await SpeechRenderer.shared.render(request)
                 check("\(engine.title): a line plays at once the second time", Date().timeIntervalSince(start) < 0.5)
             }
+            // A voice designed from long Voice Notes still speaks (the description is capped).
+            if engine == .qwen, var c = top {
+                c.voiceNotes = "Gravelly and slow, a voice worn down by sea air. Speaks from the chest; rarely raises it.\n\n"
+                    + "Voice brief:\nPitch: Low, rough at the bottom\nPace: Slow, long pauses before answers\nTexture: Hoarse, weathered\nAttitude: Guarded, dry humor\nContrast: Deeper and slower than anyone around him\n\n"
+                    + "From the book:\nAge: In his seventies\nAccent: Cornish\nVoice: Rasping\nManner: Stubborn; kind underneath"
+                let choice = VoiceResolver.withNotes(VoiceChoice(engine: .qwen, voiceID: "design", design: "An older man with a deep voice."), c)
+                do {
+                    let audio = try await SpeechRenderer.shared.render(SpeechRequest(text: "I told you the tide would turn before morning, and it did.", choice: choice, tone: .neutral, kind: .spoken))
+                    let seconds = Double(audio.frameLength) / audio.format.sampleRate
+                    check("Qwen3-TTS speaks a voice designed from Voice Notes", seconds > 1.5 && seconds < 20,
+                          String(format: "%d-character description, %.1f s of audio", choice.design?.count ?? 0, seconds))
+                    if let out { SpeechRenderer.write(audio, to: out.appending(path: "qwen-notes.caf")) }
+                } catch {
+                    check("Qwen3-TTS speaks a voice designed from Voice Notes", false, error.localizedDescription)
+                }
+            }
         }
         // Mix Engines: each character can have a voice from any engine; two engines take turns.
         if ModelSpeech.isInstalled(.qwen), ModelSpeech.isInstalled(.orpheus) {
@@ -410,6 +426,26 @@ enum SelfTest {
                 check("ElevenLabs audio comes back and plays", Double(audio.frameLength) / audio.format.sampleRate > 0.4)
             } catch {
                 check("a line is sent to eleven_v4", false, error.localizedDescription)
+            }
+        }
+        // Voice Design: a character's Voice Notes become a voice of their own, only when allowed.
+        if var c = speaking.first {
+            c.voiceNotes = "Husky and unhurried, a smoker's rasp. Drops her voice when she lies."
+            let description = VoiceDescription.design(base: "A woman with a low voice.", character: c, limit: ElevenLabs.designLimit)
+            let designed = VoiceResolver.withNotes(VoiceChoice(engine: .qwen, voiceID: "design", design: "A woman."), c)
+            let preset = VoiceInfo.qwenPresets[0].choice
+            check("Qwen3-TTS designs from the Voice Notes too (a ready-made voice stays as it is)",
+                  designed.design?.contains("smoker's rasp") == true && VoiceResolver.withNotes(preset, c) == preset, designed.design ?? "")
+            let blocked = try? await eleven.designVoice(name: "Test", description: description, labels: [:], allowed: false)
+            check("Voice Design sends nothing for a book that hasn't allowed ElevenLabs", blocked == nil && FakeElevenLabs.designRequests.isEmpty)
+            do {
+                let v = try await eleven.designVoice(name: c.name + " (InnerVoice)", description: description, labels: ["gender": "female"], allowed: true)
+                let sent = FakeElevenLabs.designRequests.first?["voice_description"] as? String ?? ""
+                check("Voice Design sends the character's Voice Notes to ElevenLabs", sent.contains("smoker's rasp") && FakeElevenLabs.designRequests.first?["model_id"] as? String == ElevenLabs.designModel, sent)
+                check("the designed voice is saved and listed", v.voiceID == "designed1" && FakeElevenLabs.designRequests.count == 2
+                      && eleven.voices.contains { $0.voiceID == "designed1" && $0.gender == .female })
+            } catch {
+                check("Voice Design sends the character's Voice Notes to ElevenLabs", false, error.localizedDescription)
             }
         }
         // Errors say what to do.
@@ -716,9 +752,21 @@ enum SelfTest {
 /// second of tone for each speech request (whose JSON body is kept for checking).
 nonisolated final class FakeElevenLabs: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var speechRequests: [[String: Any]] = []
+    nonisolated(unsafe) static var designRequests: [[String: Any]] = []
     nonisolated(unsafe) static var status = 200
 
-    static func reset() { speechRequests = []; status = 200 }
+    static func reset() { speechRequests = []; designRequests = []; status = 200 }
+
+    private func bodyJSON() -> [String: Any] {
+        var data = request.httpBody ?? Data()
+        if data.isEmpty, let stream = request.httpBodyStream {
+            stream.open()
+            var buf = [UInt8](repeating: 0, count: 65536)
+            while stream.hasBytesAvailable { let n = stream.read(&buf, maxLength: buf.count); if n <= 0 { break }; data.append(buf, count: n) }
+            stream.close()
+        }
+        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+    }
 
     override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "api.elevenlabs.io" }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -727,15 +775,14 @@ nonisolated final class FakeElevenLabs: URLProtocol, @unchecked Sendable {
         let url = request.url!
         var body = Data()
         var code = Self.status
-        if url.path.hasPrefix("/v1/text-to-speech/") {
-            var data = request.httpBody ?? Data()
-            if data.isEmpty, let stream = request.httpBodyStream {
-                stream.open()
-                var buf = [UInt8](repeating: 0, count: 65536)
-                while stream.hasBytesAvailable { let n = stream.read(&buf, maxLength: buf.count); if n <= 0 { break }; data.append(buf, count: n) }
-                stream.close()
-            }
-            Self.speechRequests.append((try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:])
+        if url.path == "/v1/text-to-voice/design" {
+            Self.designRequests.append(bodyJSON())
+            body = Data(#"{"previews":[{"audio_base_64":"","generated_voice_id":"gen1","media_type":"audio/mpeg","duration_secs":1}],"text":"A sample."}"#.utf8)
+        } else if url.path == "/v1/text-to-voice" {
+            Self.designRequests.append(bodyJSON())
+            body = Data(#"{"voice_id":"designed1","name":"Designed"}"#.utf8)
+        } else if url.path.hasPrefix("/v1/text-to-speech/") {
+            Self.speechRequests.append(bodyJSON())
             if code == 200 {
                 var pcm = Data()
                 for i in 0..<12_000 { var v = Int16(sin(Double(i) / 24_000 * 2 * .pi * 220) * 8000).littleEndian; pcm.append(Data(bytes: &v, count: 2)) }

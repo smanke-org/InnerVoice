@@ -145,6 +145,57 @@ final class ElevenLabs {
         return VoiceInfo(engine: .elevenlabs, voiceID: id, name: short, gender: gender, age: age, accent: accent, quality: 3, detail: detail)
     }
 
+    // MARK: Voice Design
+
+    static let designModel = "eleven_ttv_v3"
+    /// ElevenLabs takes a description of 20 to 1,000 characters.
+    static let designLimit = 1000
+
+    /// Designs a new voice from a description (a character's Voice Notes) and saves it in
+    /// the person's ElevenLabs voices. The description and the name leave the Mac here, only
+    /// when the book allows ElevenLabs. Uses credits and one of the plan's voice slots.
+    func designVoice(name: String, description: String, labels: [String: String], allowed: Bool) async throws -> VoiceInfo {
+        guard allowed else { throw ElevenLabsError.bookNotAllowed }
+        guard let key = apiKey, consented != nil else { throw SpeechError.engineUnavailable(.elevenlabs) }
+        let text = String(description.trimmingCharacters(in: .whitespacesAndNewlines).prefix(Self.designLimit))
+        guard text.count >= 20 else { throw ElevenLabsError.descriptionTooShort }
+        func post(_ path: String, _ body: [String: Any]) async throws -> [String: Any] {
+            var req = URLRequest(url: Self.host.appending(path: path))
+            req.httpMethod = "POST"
+            req.timeoutInterval = 180
+            req.setValue(key, forHTTPHeaderField: "xi-api-key")
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try JSONSerialization.data(withJSONObject: body)
+            let (data, response) = try await send(req)
+            try Self.throwIfFailed(response, data)
+            return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        }
+        // 1. Previews of voices that fit the description; the first is kept.
+        let design = try await post("v1/text-to-voice/design", [
+            "voice_description": text, "model_id": Self.designModel, "auto_generate_text": true,
+            "seed": Int(ModelSpeech.seed(text) % 4_294_967_295),
+        ])
+        guard let generated = (design["previews"] as? [[String: Any]])?.first?["generated_voice_id"] as? String else {
+            throw ElevenLabsError.server(0, "No voice came back")
+        }
+        try Task.checkCancellation()
+        // 2. Saved as a voice of the person's own.
+        let saved = try await post("v1/text-to-voice", [
+            "voice_name": name, "voice_description": text, "generated_voice_id": generated, "labels": labels,
+        ])
+        guard let id = saved["voice_id"] as? String else { throw ElevenLabsError.server(0, "The voice wasn’t saved") }
+        var info = Self.voice(from: ["voice_id": id, "name": name, "labels": labels]) ?? VoiceInfo(engine: .elevenlabs, voiceID: id, name: name, gender: .neutral, age: .adult, accent: "American")
+        info.detail = "Designed from Voice Notes"
+        voices.removeAll { $0.voiceID == id }
+        voices.append(info)
+        voices.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        if !SystemHooks.isTestRun, let data = try? JSONEncoder().encode(voices.map(SavedVoice.init)) {
+            UserDefaults.standard.set(data, forKey: Self.voicesKey)
+        }
+        ActivityStore.shared.record(ActivityKey.elevenLabsCharacters, count: text.count)
+        return info
+    }
+
     // MARK: Speech
 
     /// What ElevenLabs is sent: the text, with v4 audio tags for the tone and any sound the
@@ -233,7 +284,7 @@ final class ElevenLabs {
 }
 
 enum ElevenLabsError: LocalizedError {
-    case bookNotAllowed, badKey, outOfCredits, busy, offline
+    case bookNotAllowed, badKey, outOfCredits, busy, offline, descriptionTooShort
     case server(Int, String)
 
     var errorDescription: String? {
@@ -242,6 +293,7 @@ enum ElevenLabsError: LocalizedError {
         case .badKey: "ElevenLabs didn’t accept the API key. Check it in Settings › Voices."
         case .outOfCredits: "Your ElevenLabs plan is out of credits for this month. Add credits at elevenlabs.io, or use a voice engine on this Mac."
         case .busy: "ElevenLabs is busy. Wait a moment, then play the line again."
+        case .descriptionTooShort: "There isn’t enough to design a voice from. Add a few words about how this character sounds to their Voice Notes."
         case .offline: "Unable to reach ElevenLabs. Check the internet connection, or use a voice engine on this Mac."
         case .server(let code, let message): "ElevenLabs couldn’t make the audio (\(code))\(message.isEmpty ? "" : ": " + message)."
         }

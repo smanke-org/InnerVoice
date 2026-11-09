@@ -201,6 +201,23 @@ enum Snapshot {
                             workspace.voiceTarget = .character(main.id)
                             workspace.page = .voices
                         }
+                        // Design a Voice from Voice Notes, on its own so the whole chooser shows.
+                        document.setVoiceEngine(.elevenlabs, undoManager: nil)
+                        document.change("Voice Notes", undoManager: nil) { p in
+                            guard let i = p.characterIndex(main.id) else { return }
+                            p.characters[i].voiceNotes = "Warm but clipped; speeds up when she's worried.\n\nVoice brief:\nPitch: Low-middle, steady\nPace: Quick, clipped\nTexture: Dry, a little husky"
+                        }
+                        for mode in ["light", "dark"] {
+                            NSApp.appearance = NSAppearance(named: mode == "light" ? .aqua : .darkAqua)
+                            let host = NSHostingController(rootView: ScrollView { VoiceChooser(document: document, characterID: main.id, compact: true).padding(20) }
+                                .frame(width: 560, height: 760))
+                            let w = NSWindow(contentViewController: host)
+                            w.styleMask = [.titled]
+                            w.makeKeyAndOrderFront(nil)
+                            try? await Task.sleep(for: .seconds(1.5))
+                            capture(w, "\(dir)/voices-elevenlabs-design-\(mode).png")
+                            w.close()
+                        }
                     }
                     for mode in ["light", "dark"] {
                         NSApp.appearance = NSAppearance(named: mode == "light" ? .aqua : .darkAqua)

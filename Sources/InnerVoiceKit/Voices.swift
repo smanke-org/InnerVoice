@@ -485,7 +485,9 @@ public enum VoiceCasting {
         var parts = [who]
         // Something about the voice itself, so Qwen3-TTS doesn't make a thin one.
         let pitch = p.pitchLean < 0 ? "low-pitched" : p.pitchLean > 0 ? "high-pitched" : nil
-        let quality = [pitch].compactMap { $0 } + (p.timbre.isEmpty && pitch == nil ? ["clear, natural"] : Array(p.timbre.prefix(3)))
+        // Timbre words that only repeat the pitch ("low" after "low-pitched") are left out.
+        let timbre = p.timbre.filter { pitch == nil || !["low", "deep", "high", "higher", "lower"].contains($0.lowercased()) }
+        let quality = [pitch].compactMap { $0 } + (timbre.isEmpty && pitch == nil ? ["clear, natural"] : Array(timbre.prefix(3)))
         parts.append("with a \(quality.joined(separator: ", ")) voice")
         if p.paceLean != 0 { parts.append(p.paceLean < 0 ? "speaking slowly" : "speaking quickly") }
         if let a = p.accent { parts.append("speaking English with a \(a) accent") }
@@ -569,9 +571,10 @@ public enum VoiceCasting {
             if kept(project.characters[i]) { continue }
             let p = profile(project.characters[i], project: project, index: index)
             let chapters = index.stats[c.id]?.chapters ?? []
-            if engine == .qwen, !p.timbre.isEmpty || p.accent != nil {
-                // The book says how they sound: a voice designed from it. (Characters it says
-                // little about get a distinct ready-made voice below, not the same generic one.)
+            if engine == .qwen, !p.timbre.isEmpty || p.accent != nil || VoiceDescription.notes(project.characters[i]) != nil {
+                // The book or the Voice Notes say how they sound: a voice designed from that
+                // (the notes are added when it speaks, so editing them changes the voice).
+                // Characters nothing describes get a distinct ready-made voice below.
                 let choice = VoiceChoice(engine: .qwen, voiceID: "design", design: describe(p, name: c.name), pitch: nil)
                 project.characters[i].setVoice(CastVoice(choice: choice, confidence: confidence(p, sharedOverlap: 0), source: .auto), for: engine)
                 count += 1

@@ -72,3 +72,45 @@ public enum GeneratedNotes {
         return s.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
+
+/// A character's Voice Notes turned into words a voice model can design a voice from
+/// (Qwen3-TTS's VoiceDesign, ElevenLabs' Voice Design). The narrator's own notes come
+/// first, then the voice brief, then what the book says; headings go, and the result is
+/// cut at a whole line to fit the model.
+public enum VoiceDescription {
+    /// The notes as one paragraph, or nil when they say nothing.
+    public static func notes(_ c: BookCharacter, limit: Int = 600) -> String? {
+        let own = GeneratedNotes.narratorsOwn(c)
+        let brief = c.voiceBriefGenerated.flatMap { c.voiceNotes.contains($0) ? $0 : nil }
+        let book = c.voiceNotesFromBook.flatMap { c.voiceNotes.contains($0) ? $0 : nil }
+        // Generated blocks the narrator edited are part of `own` already.
+        var pieces: [String] = []
+        for text in [own, brief ?? "", book ?? ""] {
+            for raw in text.split(whereSeparator: \.isNewline) {
+                var line = raw.trimmingCharacters(in: .whitespaces)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "-•* "))
+                guard line.contains(where: \.isLetter) else { continue }
+                if line == VoiceNotesFromBook.heading || line == VoiceBrief.heading { continue }
+                // Who they contrast with means nothing to a voice model; how they differ does.
+                if line.lowercased().hasPrefix("contrast:") { continue }
+                if !".!?".contains(line.last!) { line += "." }
+                if pieces.contains(where: { $0.caseInsensitiveCompare(line) == .orderedSame }) { continue }
+                pieces.append(line)
+            }
+        }
+        var out = ""
+        for p in pieces {
+            let next = out.isEmpty ? p : out + " " + p
+            if next.count > limit { break }
+            out = next
+        }
+        return out.isEmpty ? nil : out
+    }
+
+    /// A voice description with the character's notes added, within `limit` characters.
+    public static func design(base: String, character c: BookCharacter, limit: Int = 700) -> String {
+        let b = base.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let n = notes(c, limit: max(0, limit - b.count - 12)) else { return b }
+        return b.isEmpty ? n : b + " Voice notes: " + n
+    }
+}

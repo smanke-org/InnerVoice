@@ -221,6 +221,8 @@ struct VoiceChooser: View {
     @Environment(\.undoManager) private var undoManager
     @State private var filter: VoiceGender?
     @State private var designDraft = ""
+    @State private var cloudDesigning = false
+    @State private var cloudDesignError: String?
 
     private var engine: VoiceEngine { document.project.engineInUse }
     private var character: BookCharacter? { characterID.flatMap { document.project.character($0) } }
@@ -246,6 +248,7 @@ struct VoiceChooser: View {
             }
             suggestions
             if engine == .qwen || (engine == .mixed && EngineSwitches.shared.usable(.qwen)) { design }
+            if let c = character, showsCloudDesign { cloudDesign(c) }
             if !compact { allVoices }
         }
     }
@@ -452,7 +455,9 @@ struct VoiceChooser: View {
     private var design: some View {
         VStack(alignment: .leading, spacing: Space.sm) {
             Text("Describe a Voice").font(.headline)
-            Text("Or describe any voice and Qwen3-TTS makes it. Say who they are and how they sound.")
+            Text(character == nil
+                 ? "Or describe any voice and Qwen3-TTS makes it. Say who they are and how they sound."
+                 : "Or describe any voice and Qwen3-TTS makes it. Say who they are and how they sound. \(character!.firstName)’s Voice Notes are added to the description, so what you write there shapes the voice too.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
             TextField("A woman in her sixties with a warm, low voice and a soft Scottish accent.", text: $designDraft, axis: .vertical)
@@ -475,6 +480,76 @@ struct VoiceChooser: View {
                     audition(VoiceChoice(engine: .qwen, voiceID: "design", design: designDraft))
                 }
                 .disabled(designDraft.isEmpty)
+            }
+        }
+    }
+
+    // MARK: ElevenLabs designs
+
+    /// ElevenLabs can design a voice from a description, for a book that allows ElevenLabs.
+    private var showsCloudDesign: Bool {
+        guard ElevenLabs.shared.isSetUp, document.project.settings.cloudVoicesAllowed != nil else { return false }
+        return engine == .elevenlabs || (engine == .mixed && EngineSwitches.shared.isOn(.elevenlabs))
+    }
+
+    /// What ElevenLabs is sent: who they are, then their Voice Notes.
+    private func cloudDescription(_ c: BookCharacter) -> String {
+        let p = VoiceCasting.profile(c, project: document.project, index: document.index)
+        return VoiceDescription.design(base: VoiceCasting.describe(p, name: c.name), character: c, limit: ElevenLabs.designLimit)
+    }
+
+    private func cloudDesign(_ c: BookCharacter) -> some View {
+        let text = cloudDescription(c)
+        return VStack(alignment: .leading, spacing: Space.sm) {
+            HStack(spacing: Space.sm) {
+                Text("Design a Voice from Voice Notes").font(.headline)
+                CloudBadge()
+            }
+            Text("ElevenLabs designs a new voice for \(c.firstName) from this description, which includes \(c.firstName)’s Voice Notes, and adds it to your ElevenLabs voices. The description is sent to ElevenLabs; designing uses credits and one of your plan’s voice slots.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(text)
+                .font(.callout)
+                .textSelection(.enabled)
+                .padding(Space.sm)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
+            if cloudDesigning {
+                ProgressView {
+                    Text("Designing \(c.firstName)’s voice with ElevenLabs…").font(.callout)
+                }
+                .progressViewStyle(.linear)
+            }
+            if let cloudDesignError {
+                Label(cloudDesignError, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.secondary)
+            }
+            HStack {
+                Button("Design Voice") { designWithElevenLabs(c, description: text) }
+                    .disabled(cloudDesigning || text.count < 20)
+                    .help("Send \(c.firstName)’s description to ElevenLabs, design a voice from it, and give it to \(c.firstName)")
+                Text("Edit Voice Notes to change what’s sent.").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func designWithElevenLabs(_ c: BookCharacter, description: String) {
+        let p = VoiceCasting.profile(c, project: document.project, index: document.index)
+        var labels: [String: String] = [:]
+        if let g = p.gender, g != .neutral { labels["gender"] = g == .female ? "female" : "male" }
+        if let a = p.age { labels["age"] = a == .older ? "old" : a == .adult ? "middle_aged" : "young" }
+        if let accent = p.accent { labels["accent"] = accent.lowercased() }
+        let allowed = document.project.settings.cloudVoicesAllowed != nil
+        cloudDesigning = true
+        cloudDesignError = nil
+        Task {
+            defer { cloudDesigning = false }
+            do {
+                let v = try await ElevenLabs.shared.designVoice(name: "\(c.name) (InnerVoice)", description: description, labels: labels, allowed: allowed)
+                document.setVoice(v.choice, for: c.id, undoManager: undoManager)
+            } catch is CancellationError {
+            } catch {
+                cloudDesignError = error.localizedDescription
             }
         }
     }

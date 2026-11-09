@@ -16,7 +16,9 @@ struct VoiceResolver {
         let e = engine ?? project.engineInUse
         self.engine = e
         var map: [UUID: VoiceChoice] = [:]
-        for c in project.characters { if let v = c.voice(for: e) { map[c.id] = v.choice } }
+        for c in project.characters {
+            if let v = c.voice(for: e)?.choice { map[c.id] = Self.withNotes(v, c) }
+        }
         characters = map
         // ElevenLabs only for a book that allows its text to be sent.
         let usable = Set(VoiceEngine.engines.filter { EngineSwitches.shared.usable($0) && (!$0.isCloud || project.settings.cloudVoicesAllowed != nil) })
@@ -35,6 +37,16 @@ struct VoiceResolver {
         } else {
             narrator = Self.fallback(e) ?? Self.fallback(.apple)
         }
+    }
+
+    /// Qwen3-TTS designs a voice from a description: the character's Voice Notes go with it,
+    /// so what the narrator writes there shapes how they sound. (ElevenLabs gets the notes
+    /// once, when it designs a voice for them; other engines can't take a description.)
+    static func withNotes(_ v: VoiceChoice, _ c: BookCharacter?) -> VoiceChoice {
+        guard let c, v.engine == .qwen, v.voiceID == "design" else { return v }
+        var out = v
+        out.design = VoiceDescription.design(base: v.design ?? "", character: c)
+        return out
     }
 
     /// The book allows its text to go to ElevenLabs.
@@ -290,7 +302,7 @@ enum PlayCommand {
                                 text: SpeechScript.apply([], to: text), tone: sampleTone, kind: .spoken, pauseAfter: 0)
         seg.pause = .none
         var resolver = VoiceResolver(project: project, engine: choice.isNarrator ? nil : choice.engine)
-        if !choice.isNarrator { resolver.narrator = choice }
+        if !choice.isNarrator { resolver.narrator = VoiceResolver.withNotes(choice, character) }
         resolver.characters = [:]
         SpeechPlayer.shared.play([seg], resolver: resolver)
     }

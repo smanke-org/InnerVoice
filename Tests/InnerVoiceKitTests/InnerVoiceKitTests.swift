@@ -869,3 +869,19 @@ private let appleVoices = [
     #expect(msgs.last?.content.contains("- Mara") == true && msgs.last?.content.contains("Warm underneath.") == true)
     #expect(VoiceBriefPrompt.parse("no json here") == nil)
 }
+
+@Test func voiceNotesBecomeAVoiceDescription() {
+    var c = BookCharacter(name: "Mara Quinn", colorHex: "#10B981")
+    #expect(VoiceDescription.notes(c) == nil)
+    #expect(VoiceDescription.design(base: "A woman.", character: c) == "A woman.")
+    c.voiceNotes = "Warm underneath\n\nVoice brief:\nPitch: Low\nPace: Unhurried\nContrast: Lower than Tom"
+    c.voiceBriefGenerated = "Voice brief:\nPitch: Low\nPace: Unhurried\nContrast: Lower than Tom"
+    let notes = VoiceDescription.notes(c) ?? ""
+    // The narrator's own words first; headings and who they contrast with are left out.
+    #expect(notes == "Warm underneath. Pitch: Low. Pace: Unhurried.")
+    #expect(VoiceDescription.design(base: "A woman.", character: c) == "A woman. Voice notes: " + notes)
+    // Cut at a whole line to fit.
+    c.voiceNotes = String(repeating: "A long note about her voice.\n", count: 3) + (1...40).map { "Line \($0) about the rasp." }.joined(separator: "\n")
+    let short = VoiceDescription.design(base: "A woman.", character: c, limit: 200)
+    #expect(short.count <= 200 && short.hasSuffix("."))
+}
