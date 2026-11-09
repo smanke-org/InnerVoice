@@ -188,6 +188,9 @@ public struct BookCharacter: Codable, Identifiable, Hashable, Sendable {
     /// The voice for each speech engine, keyed by `VoiceEngine.rawValue`, so switching
     /// engines keeps the casting done for each.
     public var voices: [String: CastVoice]?
+    /// The "From the book:" block Build Summary last wrote into `voiceNotes`, so a later run
+    /// can replace it, but only while the narrator hasn't edited it.
+    public var voiceNotesFromBook: String?
 
     public var isPinned: Bool { pinned ?? false }
 

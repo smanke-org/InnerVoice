@@ -11,7 +11,15 @@ protocol TextModel: Sendable {
     /// Words per passage this model can take in comfortably.
     var passageWords: Int { get }
     func complete(_ messages: [ChatMessage], grammar: String?, maxTokens: Int) async throws -> String
+    /// The same, telling `progress` how far it has got (0…1) as it goes, where it can.
+    func complete(_ messages: [ChatMessage], grammar: String?, maxTokens: Int, progress: (@Sendable (Double) -> Void)?) async throws -> String
     func cancel()
+}
+
+extension TextModel {
+    func complete(_ messages: [ChatMessage], grammar: String?, maxTokens: Int, progress: (@Sendable (Double) -> Void)?) async throws -> String {
+        try await complete(messages, grammar: grammar, maxTokens: maxTokens)
+    }
 }
 
 enum ModelError: LocalizedError {
@@ -36,12 +44,16 @@ nonisolated final class LlamaTextModel: TextModel, @unchecked Sendable {
     }
 
     func complete(_ messages: [ChatMessage], grammar: String?, maxTokens: Int) async throws -> String {
+        try await complete(messages, grammar: grammar, maxTokens: maxTokens, progress: nil)
+    }
+
+    func complete(_ messages: [ChatMessage], grammar: String?, maxTokens: Int, progress: (@Sendable (Double) -> Void)?) async throws -> String {
         let engine = self.engine
         return try await withCheckedThrowingContinuation { continuation in
             engine.queue.async {
                 do {
                     let prompt = engine.template.render(messages, prefill: "", closeThinking: engine.closeThinking)
-                    let text = try engine.generate(prompt: prompt, maxTokens: maxTokens, grammar: grammar) ?? ""
+                    let text = try engine.generate(prompt: prompt, maxTokens: maxTokens, grammar: grammar, progress: progress) ?? ""
                     var out = text
                     for stop in engine.template.stopStrings { if let r = out.range(of: stop) { out = String(out[..<r.lowerBound]) } }
                     continuation.resume(returning: out)

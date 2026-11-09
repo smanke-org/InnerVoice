@@ -335,6 +335,9 @@ public enum VoiceCasting {
             p.gender = g.gender
             p.genderGuessed = !g.sure
             p.evidence.append(g.sure ? "Gender: “\(g.gender == .female ? "she" : "he")” in the book" : "Gender: a guess from one “\(g.gender == .female ? "her" : "his")”")
+        } else if let g = gender(in: character.voiceNotes) {
+            p.gender = g
+            p.evidence.append("Gender: your voice notes")
         } else if let g = gender(in: factText([.relationships, .appearance, .age, .history, .other])) {
             p.gender = g
             p.evidence.append("Gender: the summary")
@@ -344,6 +347,9 @@ public enum VoiceCasting {
         if let a = age(in: factText([.age]), strict: false) ?? age(in: factText([.appearance]), strict: true) {
             p.age = a
             p.evidence.append("Age: the summary")
+        } else if let a = age(in: character.voiceNotes, strict: true) {
+            p.age = a
+            p.evidence.append("Age: your voice notes")
         }
 
         let voiceText = (factText([.accent, .voice]) + " " + character.voiceNotes).lowercased()

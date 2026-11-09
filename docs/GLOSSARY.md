@@ -38,6 +38,7 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | Lines tagged for you | Lines the rules or the AI gave a speaker | auto-tagged |
 | Pause | A gap of silence after a sentence, line, paragraph, scene break, chapter title or chapter, set in Settings › Voices › Pauses | gap, silence, break |
 | Playback speed | How fast Play plays (0.75× to 2×), pauses included; Export Audio is always 1× | rate, tempo |
+| From the book | The part of a character's Voice Notes Build Summary writes (age, gender, accent, voice, manner); the narrator's once edited | AI notes, auto notes |
 | Cloud | Marks ElevenLabs, the one engine that sends text off the Mac | online, remote |
 | Send This Book to ElevenLabs | The per-book permission before any of its text goes to ElevenLabs; Stop Sending This Book ends it | consent, opt in |
 | Sound | A sigh, laugh, gasp, groan, sniffle, yawn or cough a speech tag asks for; Orpheus performs it | effect, tag |

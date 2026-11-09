@@ -94,23 +94,12 @@ struct CastPage: View {
                         Button("Build Summaries", systemImage: "text.badge.star") {
                             TagCommand.summaries(document: document, workspace: workspace, undoManager: undoManager)
                         }
-                        .help("Read the book for each character's age, accent, voice and more (⇧⌘B)")
+                        .help("Have the AI read the book for every character’s age, accent, voice and manner, and add it to their voice notes (⇧⌘B)")
                         .disabled(document.tagging.isRunning)
                     }
                 }
             }
-            .safeAreaInset(edge: .top) {
-                if let status = document.tagging.status, status.job == .summaries {
-                    HStack(spacing: Space.md) {
-                        Image(systemName: "sparkles").foregroundStyle(.tint)
-                        Text(status.message)
-                        ProgressView(value: status.progress).frame(maxWidth: 240)
-                    }
-                    .padding(Space.md)
-                    .frame(maxWidth: .infinity)
-                    .background(.bar)
-                }
-            }
+            .safeAreaInset(edge: .top) { SummaryProgress(document: document) }
         }
     }
 

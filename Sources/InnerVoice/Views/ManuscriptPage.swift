@@ -167,9 +167,15 @@ enum TagCommand {
         document.tagging.tagSpeakers(undoManager: undoManager)
     }
 
-    static func summaries(document: InnerVoiceDocument, workspace: Workspace, undoManager: UndoManager?, only: [UUID]? = nil) {
+    static func summaries(document: InnerVoiceDocument, workspace: Workspace, undoManager: UndoManager?, only: [UUID]? = nil,
+                          confirmed: Bool = false) {
         guard ModelManager.shared.isReady else {
             workspace.showModelSheet = true
+            return
+        }
+        // The whole cast was analyzed before: ask first (new notes can change the voices).
+        if only == nil, !confirmed, document.project.summariesBuilt != nil {
+            workspace.askAnalyzeCastAgain = true
             return
         }
         document.tagging.buildSummaries(undoManager: undoManager, only: only)

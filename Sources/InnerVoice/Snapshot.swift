@@ -129,8 +129,21 @@ enum Snapshot {
                 }
                 document.tagging.debugStatus(nil, 0)
                 await shot("cast") { workspace.castPath = []; workspace.page = .cast }
+                await shot("analyze-again") { workspace.castPath = []; workspace.page = .cast; workspace.askAnalyzeCastAgain = true }
+                workspace.askAnalyzeCastAgain = false
+                try? await Task.sleep(for: .seconds(0.5))
+                await shot("cast-analyzing") {
+                    workspace.castPath = []; workspace.page = .cast
+                    document.tagging.debugSummaries("Tom Hale", number: 2, count: 4, character: 0.5, overall: 0.375)
+                }
+                document.tagging.debugSummaries(nil)
                 if let main = document.project.characters.max(by: { (document.index.stats[$0.id]?.lines ?? 0) < (document.index.stats[$1.id]?.lines ?? 0) }) {
                     await shot("character-detail", settle: 1.2) { workspace.page = .cast; workspace.castPath = [main.id] }
+                    await shot("character-analyzing", settle: 1.2) {
+                        workspace.page = .cast; workspace.castPath = [main.id]
+                        document.tagging.debugSummaries(main.name, character: 0.75, overall: 0.75)
+                    }
+                    document.tagging.debugSummaries(nil)
                     await shot("rehearse") { workspace.rehearse = main.id }
                     workspace.rehearse = nil
                     try? await Task.sleep(for: .seconds(0.5))

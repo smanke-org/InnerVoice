@@ -810,3 +810,37 @@ private let appleVoices = [
     #expect(whole.count < split.count && whole.first?.text == "The tide was in. The boat was gone.")
     #expect(PauseSettings.tight.paragraph < PauseSettings.standard.paragraph && PauseSettings.standard.paragraph < PauseSettings.relaxed.paragraph)
 }
+
+
+@Test func buildSummaryWritesVoiceNotesWithoutTouchingTheNarrators() {
+    var c = BookCharacter(name: "Tom Hale", colorHex: "#336699", facts: [
+        Fact(kind: .age, text: "about sixty"), Fact(kind: .accent, text: "soft Highland burr"),
+        Fact(kind: .voice, text: "low and slow, chest voice"), Fact(kind: .personality, text: "gruff"),
+        Fact(kind: .personality, text: "kind to children"), Fact(kind: .personality, text: "stubborn"),
+    ], voiceNotes: "Keep him warm under the gruffness.")
+    #expect(VoiceNotesFromBook.merge(into: &c))
+    #expect(c.voiceNotes.hasPrefix("Keep him warm under the gruffness.\n\nFrom the book:"))
+    #expect(c.voiceNotes.contains("Accent: Soft Highland burr") && c.voiceNotes.contains("Manner: Gruff; kind to children"))
+    #expect(!c.voiceNotes.contains("stubborn"))
+    // A new fact updates the block InnerVoice wrote.
+    c.facts.append(Fact(kind: .voice, text: "rasps when angry"))
+    #expect(VoiceNotesFromBook.merge(into: &c))
+    #expect(c.voiceNotes.contains("Low and slow, chest voice; rasps when angry") && c.voiceNotes.components(separatedBy: "From the book:").count == 2)
+    // Once the narrator edits the block, it's theirs.
+    c.voiceNotes = c.voiceNotes.replacingOccurrences(of: "rasps when angry", with: "rasps, then whispers")
+    c.facts.append(Fact(kind: .accent, text: "Inverness"))
+    #expect(!VoiceNotesFromBook.merge(into: &c))
+    #expect(c.voiceNotes.contains("rasps, then whispers") && !c.voiceNotes.contains("Inverness"))
+    // Nothing about the voice: no block.
+    var quiet = BookCharacter(name: "Ann", colorHex: "#000000", facts: [Fact(kind: .age, text: "nine")])
+    #expect(!VoiceNotesFromBook.merge(into: &quiet) && quiet.voiceNotes.isEmpty)
+}
+
+@Test func castingReadsGenderAndAgeFromVoiceNotes() {
+    let p = ProjectBuilder.make(from: book(["“Who’s there?” asked Robin."]), fileName: "t.txt")
+    var c = p.characters.first { $0.name == "Robin" }!
+    c.voiceNotes = "An elderly woman, papery and quick."
+    let profile = VoiceCasting.profile(c, project: p, index: BookIndex(p))
+    #expect(profile.gender == .female && profile.age == .older)
+    #expect(profile.evidence.contains("Gender: your voice notes"))
+}

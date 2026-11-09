@@ -28,6 +28,7 @@ struct CharacterDetail: View {
                 .frame(maxWidth: 820, alignment: .leading)
                 .frame(maxWidth: .infinity)
             }
+            .safeAreaInset(edge: .top) { SummaryProgress(document: document) }
             .navigationTitle(c.name)
             .toolbar {
                 ToolbarItemGroup {
@@ -45,7 +46,7 @@ struct CharacterDetail: View {
                     } primaryAction: {
                         TagCommand.summaries(document: document, workspace: workspace, undoManager: undoManager, only: [c.id])
                     }
-                    .help("Read the book again for details about \(c.name). Click the arrow to build every character’s summary in one go.")
+                    .help("Have the AI read the book for \(c.name)’s age, accent, voice and manner, and add it to their voice notes. Click the arrow to do every character.")
                     .disabled(document.tagging.isRunning)
                     Menu("More", systemImage: "ellipsis") {
                         Menu("Merge Into") {
@@ -225,8 +226,12 @@ struct CharacterDetail: View {
             Text("Voice Notes").font(.title3.weight(.semibold))
             TextField("How you'll voice \(c.name): pitch, pace, placement, a reference voice…",
                       text: binding(c, \.voiceNotes, "Edit Voice Notes"), axis: .vertical)
-                .lineLimit(2...6)
+                .lineLimit(2...12)
                 .textFieldStyle(.roundedBorder)
+            Text("Build Summary adds what the book says about \(c.firstName)’s voice under “From the book:”. Casting and the AI voices read these notes, so change them to fine-tune how \(c.firstName) sounds. Once you edit that part, Build Summary leaves it alone.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             Text("Notes").font(.title3.weight(.semibold)).padding(.top, Space.sm)
             TextField("Anything else to remember", text: binding(c, \.notes, "Edit Notes"), axis: .vertical)
                 .lineLimit(2...8)

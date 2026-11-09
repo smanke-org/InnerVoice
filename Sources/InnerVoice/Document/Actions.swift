@@ -254,6 +254,8 @@ final class Workspace {
     var showProjectType = false
     var showProjectSettings = false
     var showBookStats = false
+    /// "Analyze the Whole Cast Again?" before a second Build Summaries for everyone.
+    var askAnalyzeCastAgain = false
     /// Where to go when the running Tag Speakers finishes (the AI voices setup ends on Voices).
     var afterTagging: Page?
     /// The narrator or character chosen on the Voices page.

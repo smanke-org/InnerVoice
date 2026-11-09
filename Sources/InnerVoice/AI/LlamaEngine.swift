@@ -143,8 +143,10 @@ nonisolated final class LlamaEngine: @unchecked Sendable {
 
     /// Evaluates `prompt` and generates up to `maxTokens`. Returns nil when cancelled.
     /// `shouldStop` sees the text so far and can end generation early. Call on `queue`.
+    /// `progress` hears 0…1 as the prompt is read (to 0.5) and the reply is written (to
+    /// about 0.95; the reply's length isn't known in advance).
     func generate(prompt: String, maxTokens: Int, sampling: Sampling = Sampling(), grammar: String? = nil,
-                  shouldStop: ((String) -> Bool)? = nil) throws -> String? {
+                  shouldStop: ((String) -> Bool)? = nil, progress: ((Double) -> Void)? = nil) throws -> String? {
         guard let ctx, let model else { return nil }
         let myGeneration = currentGeneration
         let vocab = llama_model_get_vocab(model)
@@ -183,14 +185,17 @@ nonisolated final class LlamaEngine: @unchecked Sendable {
             }
             cached.append(contentsOf: chunk)
             pos += n
+            progress?(0.5 * Double(pos - common) / Double(max(1, tokens.count - common)))
         }
 
         let sampler = makeSampler(sampling, vocab: vocab, grammar: grammar)
         defer { llama_sampler_free(sampler) }
         var output = ""
         var pending = [CChar]()
-        for _ in 0..<maxTokens {
+        for step in 0..<maxTokens {
             if currentGeneration != myGeneration { return nil }
+            // Replies usually run well short of the limit: count against half of it.
+            if step % 8 == 0 { progress?(0.5 + 0.45 * min(1, Double(step) / Double(max(1, maxTokens / 2)))) }
             let token = llama_sampler_sample(sampler, ctx, -1)
             if llama_vocab_is_eog(vocab, token) { break }
             pending.append(contentsOf: piece(token, vocab: vocab))

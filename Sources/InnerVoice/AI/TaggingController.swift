@@ -12,13 +12,22 @@ final class TaggingController {
         var job: Job
         var progress: Double
         var message: String
+        /// Build Summaries: the character being read now, how far through them, and where
+        /// they fall in the run ("2 of 12").
+        var character: String? = nil
+        var characterProgress: Double = 0
+        var characterNumber = 0
+        var characterCount = 0
     }
+
+    /// This project's most recent job, so a page shows only the result of its own kind.
+    private(set) var lastRun: Job?
 
     private(set) var status: Status? {
         didSet {
             if oldValue == nil, status != nil { Self.running += 1 }
             if oldValue != nil, status == nil { Self.running -= 1 }
-            if let s = status { Self.lastJob = s.job }
+            if let s = status { Self.lastJob = s.job; lastRun = s.job }
         }
     }
     private static var running = 0
@@ -231,25 +240,45 @@ final class TaggingController {
 
     // MARK: Build Summaries
 
+    /// A character's facts and voice notes, for Build Summaries' one Undo step.
+    struct SavedSummary: Sendable {
+        var facts: [Fact]
+        var notes: String
+        var fromBook: String?
+    }
+
+    nonisolated static func snapshot(_ p: Project) -> [UUID: SavedSummary] {
+        Dictionary(p.characters.map { ($0.id, SavedSummary(facts: $0.facts, notes: $0.voiceNotes, fromBook: $0.voiceNotesFromBook)) },
+                   uniquingKeysWith: { a, _ in a })
+    }
+
+    nonisolated static func put(_ saved: [UUID: SavedSummary], _ p: inout Project) {
+        for i in p.characters.indices {
+            guard let s = saved[p.characters[i].id] else { continue }
+            p.characters[i].facts = s.facts
+            p.characters[i].voiceNotes = s.notes
+            p.characters[i].voiceNotesFromBook = s.fromBook
+        }
+    }
+
     func buildSummaries(undoManager: UndoManager?, only: [UUID]? = nil) {
         guard let document, !isRunning else { return }
         failure = nil
         finished = nil
         status = Status(job: .summaries, progress: 0, message: "Loading the model…")
-        let factsBefore = Dictionary(document.project.characters.map { ($0.id, $0.facts) }, uniquingKeysWith: { a, _ in a })
+        // Facts and voice notes before the run: one Undo puts both back.
+        let before = Self.snapshot(document.project)
         task = Task { [weak self] in
             guard let self else { return }
             var added = 0
+            var notesWritten = 0
             defer {
                 self.status = nil
                 self.model = nil
-                if added > 0 {
-                    let after = Dictionary(document.project.characters.map { ($0.id, $0.facts) }, uniquingKeysWith: { a, _ in a })
-                    document.registerRunUndo("Build Summaries", undoManager: undoManager, restore: { p in
-                        for i in p.characters.indices { if let f = factsBefore[p.characters[i].id] { p.characters[i].facts = f } }
-                    }, redo: { p in
-                        for i in p.characters.indices { if let f = after[p.characters[i].id] { p.characters[i].facts = f } }
-                    })
+                if added > 0 || notesWritten > 0 {
+                    let after = Self.snapshot(document.project)
+                    document.registerRunUndo("Build Summaries", undoManager: undoManager,
+                                             restore: { Self.put(before, &$0) }, redo: { Self.put(after, &$0) })
                 }
             }
             do {
@@ -262,23 +291,44 @@ final class TaggingController {
                 for (n, character) in cast.enumerated() {
                     try Task.checkCancellation()
                     self.status = Status(job: .summaries, progress: Double(n) / Double(max(1, cast.count)),
-                                         message: "Reading about \(character.name) (\(n + 1) of \(cast.count))…")
-                    let chunks = SummaryPrompt.chunks(for: character, project: document.project, index: document.index,
-                                                      maxWords: model.passageWords + 200)
-                    for chunk in chunks.prefix(4) {
+                                         message: "Reading about \(character.name) (\(n + 1) of \(cast.count))…",
+                                         character: character.name, characterProgress: 0, characterNumber: n + 1, characterCount: cast.count)
+                    let chunks = Array(SummaryPrompt.chunks(for: character, project: document.project, index: document.index,
+                                                            maxWords: model.passageWords + 200).prefix(4))
+                    for (k, chunk) in chunks.enumerated() {
                         try Task.checkCancellation()
-                        let text = try await model.complete(chunk.messages, grammar: SummaryPrompt.grammar, maxTokens: 700)
+                        // The character's bar moves while the model reads and writes, not only
+                        // between passages (a minor character often has just one).
+                        let count = Double(max(1, chunks.count)), total = Double(max(1, cast.count))
+                        let text = try await model.complete(chunk.messages, grammar: SummaryPrompt.grammar, maxTokens: 700) { [weak self] f in
+                            Task { @MainActor in
+                                guard let self, self.status?.job == .summaries, self.status?.characterNumber == n + 1 else { return }
+                                let part = (Double(k) + f) / count
+                                self.status?.characterProgress = max(self.status?.characterProgress ?? 0, part)
+                                self.status?.progress = max(self.status?.progress ?? 0, (Double(n) + part) / total)
+                            }
+                        }
+                        let part = Double(k + 1) / Double(max(1, chunks.count))
+                        self.status?.characterProgress = part
+                        self.status?.progress = (Double(n) + part) / Double(max(1, cast.count))
                         guard let replies = SummaryPrompt.parse(text) else { continue }
                         document.applyQuietly { p in
                             added += SummaryPrompt.merge(replies, chunk: chunk, characterID: character.id, into: &p, index: document.index)
                         }
                     }
+                    // What the book says about how they sound, into their Voice Notes.
+                    document.applyQuietly { p in
+                        if let i = p.characterIndex(character.id), VoiceNotesFromBook.merge(into: &p.characters[i]) { notesWritten += 1 }
+                    }
                 }
-                document.applyQuietly { $0.summariesBuilt = .now }
+                // Only a run over the whole cast counts as "analyzed the cast".
+                if only == nil { document.applyQuietly { $0.summariesBuilt = .now } }
                 ActivityStore.shared.record(ActivityKey.facts, count: added)
                 // Summaries say who sounds like what: cast the voices that were unsure.
                 VoiceCastingRun.castIfNeeded(document: document)
-                self.finished = added == 0 ? "No new facts found." : "Added \(added) facts to the cast's summaries."
+                let notes = notesWritten == 0 ? "" : (notesWritten == 1 && cast.count == 1 ? " Voice notes updated." : " Voice notes updated for \(notesWritten) characters.")
+                    + (notesWritten == 0 ? "" : " Voices casting picked may change; edit a character’s voice notes to fine-tune how they sound.")
+                self.finished = (added == 0 ? "No new facts found." : (cast.count == 1 ? "Added \(added) facts to \(cast[0].firstName)’s summary." : "Added \(added) facts to the cast’s summaries.")) + notes
             } catch {
                 if Task.isCancelled || error is CancellationError {
                     self.finished = "Stopped. Facts found so far are kept."
@@ -292,6 +342,12 @@ final class TaggingController {
     /// Shows a status without running anything (snapshot mode).
     func debugStatus(_ message: String?, _ progress: Double) {
         status = message.map { Status(job: .tagging, progress: progress, message: $0) }
+    }
+
+    /// Build Summaries' progress without running it (snapshot mode).
+    func debugSummaries(_ name: String?, number: Int = 1, count: Int = 1, character: Double = 0, overall: Double = 0) {
+        status = name.map { Status(job: .summaries, progress: overall, message: "", character: $0, characterProgress: character,
+                                   characterNumber: number, characterCount: count) }
     }
 
     static func log(_ s: String) {

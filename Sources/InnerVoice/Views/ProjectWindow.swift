@@ -45,6 +45,14 @@ struct ProjectWindow: View {
         .sheet(isPresented: $workspace.showProjectSettings) {
             ProjectSettingsSheet(document: document, isPresented: $workspace.showProjectSettings)
         }
+        .alert("Analyze the Whole Cast Again?", isPresented: $workspace.askAnalyzeCastAgain) {
+            Button("Analyze Again") {
+                TagCommand.summaries(document: document, workspace: workspace, undoManager: undoManager, confirmed: true)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("InnerVoice has already read the book for every character. Running it again adds what it finds to their summaries and updates the “From the book” part of each character’s voice notes.\n\nVoices that casting picked may change to fit the new notes; voices you chose stay as they are. To fine-tune how a character sounds, edit their voice notes on their page: casting and the AI voices read them.")
+        }
         .sheet(isPresented: $workspace.showBookStats) {
             BookStatsSheet(document: document, isPresented: $workspace.showBookStats)
         }
