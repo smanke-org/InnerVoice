@@ -105,6 +105,33 @@ enum AgentCommands {
             let entry = try await AgentWait.newProject(after: before)
             return projectJSON(entry, front: OpenProjects.front)
         },
+        AgentCommand(name: "projects save", summary: "Save a project, as File › Save does. With --as, save it to a new .innervoice file, as File › Save As… does (needed the first time an untitled project is saved).",
+                     params: [.init(name: "as", kind: .path, help: "save to this .innervoice file instead"), projectParam],
+                     example: "innervoice projects save --as ~/Documents/Harbor.innervoice --json") { args in
+            let (entry, _) = try project(args)
+            let controller = NSDocumentController.shared
+            let untitled = controller.documents.filter { $0.fileURL == nil }
+            guard let document = entry.nsDocument ?? (entry.fileURL == nil && untitled.count == 1 ? untitled[0] : nil) else {
+                throw AgentError.invalid("can't tell which window holds \(entry.name). Save it once with File › Save")
+            }
+            let type = document.fileType ?? "com.smanke.innervoice.project"
+            if let raw = args.string("as") {
+                var url = URL(fileURLWithPath: (raw as NSString).expandingTildeInPath)
+                if url.pathExtension.lowercased() != "innervoice" { url.appendPathExtension("innervoice") }
+                try refuseRealFilesInTestRun(url.deletingLastPathComponent().appending(path: url.lastPathComponent))
+                guard !FileManager.default.fileExists(atPath: url.path) || url.standardizedFileURL == document.fileURL?.standardizedFileURL else {
+                    throw AgentError.invalid("\(url.path) already exists. Choose another name, or move that file first")
+                }
+                try await document.save(to: url, ofType: type, for: .saveAsOperation)
+            } else {
+                guard let url = document.fileURL else {
+                    throw AgentError.usage("\(entry.name) has never been saved. Give it a file: innervoice projects save --as ~/Documents/\(entry.name).innervoice")
+                }
+                try refuseRealFilesInTestRun(url)
+                try await document.save(to: url, ofType: type, for: .saveOperation)
+            }
+            return projectJSON(entry, front: OpenProjects.front).merging(["path": document.fileURL?.path ?? NSNull(), "saved": true]) { _, b in b }
+        },
     ] + demo }
 
     /// Debug test copies only: the sample book, so there is a project to drive.

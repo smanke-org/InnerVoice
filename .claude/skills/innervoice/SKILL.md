@@ -17,7 +17,8 @@ background. If `innervoice` isn't on PATH, use
 - Commands work on the frontmost project window. Name another with `--project <name or path>`
   (names and ids from `innervoice projects list`). `no_project`: nothing is open; open a
   `.innervoice` with `projects open <path>` or start one from a manuscript with
-  `projects new --manuscript <file>` (it opens untitled; the person saves it with File › Save).
+  `projects new --manuscript <file>` (it opens untitled). `projects save` saves like File › Save;
+  `projects save --as <path>.innervoice` saves to a new file (needed once for an untitled project).
 - Line ids are 8 characters, from `innervoice lines list`. Refs read "Ch 3 ¶12".
   Characters are named by name, alias or id.
 - Use the glossary's words with the person: Line, Character, Cast, Assign, Who's Speaking?
@@ -32,8 +33,9 @@ background. If `innervoice` isn't on PATH, use
 - To try something without real data, run a Debug build (`./build.sh --debug`, then
   `.build/app/Inner Voice.app/Contents/MacOS/InnerVoice`) with `APP_STORE=/tmp/iv-test` in front, and
   `INNERVOICE_DEMO=1` to open the sample book (or `innervoice projects demo`). A test copy only
-  opens projects in /tmp. Quit it with `pkill -x InnerVoice` (check `pgrep -lf InnerVoice` first:
-  that also matches the real app).
+  opens projects in /tmp. Quit it by its process id: `kill $(lsof -t "$APP_STORE"*.sock)` or the
+  pid you started, never `pkill -x InnerVoice`, which also quits the person's own copy (and
+  their open book). SIGTERM closes a test copy's projects without saving.
 
 ## Main commands
 

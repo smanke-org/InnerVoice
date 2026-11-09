@@ -30,7 +30,7 @@
   <dict>
     <key>UTTypeIdentifier</key><string>com.smanke.innervoice.project</string>
     <key>UTTypeDescription</key><string>Inner Voice Project</string>
-    <key>UTTypeConformsTo</key><array><string>com.apple.package</string><string>public.composite-content</string></array>
+    <key>UTTypeConformsTo</key><array><string>public.data</string><string>public.composite-content</string><string>com.apple.package</string></array>
     <key>UTTypeIconName</key><string>AppIcon</string>
     <key>UTTypeTagSpecification</key><dict><key>public.filename-extension</key><array><string>innervoice</string></array></dict>
   </dict>

@@ -396,3 +396,57 @@ func importsEveryFormat(_ format: String) throws {
     #expect(terms.contains("gwyllion"))
     #expect(!terms.contains("They"))
 }
+
+// MARK: - Project file
+
+private func ditto(_ args: [String]) throws {
+    let p = Process()
+    p.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+    p.arguments = args
+    try p.run()
+    p.waitUntilExit()
+    #expect(p.terminationStatus == 0)
+}
+
+private func sampleContents() -> ProjectArchive.Contents {
+    let json = Data(String(repeating: "{\"line\":\"“You’re late,” said Tom Hale.\"},", count: 2000).utf8)
+    let pdf = Data((0..<50_000).map { UInt8(truncatingIfNeeded: $0 &* 2654435761 >> 13) })
+    return .init(projectJSON: json, original: .init(name: "Book 1 – draft.pdf", data: pdf),
+                 audio: ["a.m4a": Data([1, 2, 3]), "Penhallow.m4a": Data()])
+}
+
+@Test func projectArchiveRoundTrips() throws {
+    let contents = sampleContents()
+    let data = try ProjectArchive.write(contents)
+    #expect(ProjectArchive.looksLikeArchive(data))
+    #expect(data.count < contents.projectJSON.count + 60_000)   // the JSON is compressed
+    #expect(try ProjectArchive.read(data) == contents)
+}
+
+@Test func projectArchiveOpensInOtherZipTools() throws {
+    let dir = FileManager.default.temporaryDirectory.appending(path: "iv-archive-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: dir) }
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let contents = sampleContents()
+    // Ours, unpacked by ditto.
+    let file = dir.appending(path: "Book.innervoice")
+    try ProjectArchive.write(contents).write(to: file)
+    try ditto(["-x", "-k", file.path, dir.appending(path: "out").path])
+    #expect(try Data(contentsOf: dir.appending(path: "out/project.json")) == contents.projectJSON)
+    #expect(try Data(contentsOf: dir.appending(path: "out/Original/Book 1 – draft.pdf")) == contents.original?.data)
+    #expect(try Data(contentsOf: dir.appending(path: "out/Audio/a.m4a")) == Data([1, 2, 3]))
+    // A zip made by ditto from a project folder, read by us.
+    let zipped = dir.appending(path: "byditto.zip")
+    try ditto(["-c", "-k", "--sequesterRsrc", dir.appending(path: "out").path, zipped.path])
+    #expect(try ProjectArchive.read(Data(contentsOf: zipped)) == contents)
+}
+
+@Test func projectArchiveRejectsDamagedFiles() throws {
+    #expect(throws: ProjectArchive.ArchiveError.unreadable) { try ProjectArchive.read(Data("not a zip".utf8)) }
+    var data = try ProjectArchive.write(sampleContents())
+    data[60] ^= 0xFF
+    #expect(throws: ProjectArchive.ArchiveError.unreadable) { try ProjectArchive.read(data) }
+    let noProject = try ZipFile.make([("notes.txt", Data("hi".utf8))])
+    #expect(throws: ProjectArchive.ArchiveError.missingProject) { try ProjectArchive.read(noProject) }
+    #expect(ProjectArchive.safeName("../../etc/passwd") == "passwd")
+}

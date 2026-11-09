@@ -5,15 +5,12 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 extension UTType {
-    nonisolated static let innerVoiceProject = UTType(exportedAs: "com.smanke.innervoice.project", conformingTo: .package)
+    nonisolated static let innerVoiceProject = UTType(exportedAs: "com.smanke.innervoice.project", conformingTo: .data)
 }
 
-/// One book on disk: a package with project.json, the original manuscript, and
-/// pronunciation samples.
-///   Book.innervoice/
-///     project.json
-///     Original/<manuscript file>
-///     Audio/<sample>.m4a
+/// One book on disk: a single file (a zip, see `ProjectArchive`) with project.json, the
+/// original manuscript and pronunciation samples. Projects saved by 0.1.0 are packages
+/// (folders with the same three parts); they still open, and are saved as one file.
 nonisolated final class InnerVoiceDocument: ReferenceFileDocument {
     static var readableContentTypes: [UTType] { [.innerVoiceProject] }
 
@@ -55,48 +52,51 @@ nonisolated final class InnerVoiceDocument: ReferenceFileDocument {
 
     required init(configuration: ReadConfiguration) throws {
         let wrapper = configuration.file
+        let contents: ProjectArchive.Contents
+        if wrapper.isDirectory {
+            contents = try Self.readPackage(wrapper)
+        } else if let data = wrapper.regularFileContents, ProjectArchive.looksLikeArchive(data) {
+            do { contents = try ProjectArchive.read(data) } catch { throw CocoaError(.fileReadCorruptFile) }
+        } else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        let p = try Self.decoder.decode(Project.self, from: contents.projectJSON)
+        project = p
+        index = BookIndex(p)
+        audio = contents.audio
+        original = contents.original.map { ($0.name, $0.data) }
+    }
+
+    /// A project saved as a package (Inner Voice 0.1.0).
+    private static func readPackage(_ wrapper: FileWrapper) throws -> ProjectArchive.Contents {
         guard let data = wrapper.fileWrappers?["project.json"]?.regularFileContents else {
             throw CocoaError(.fileReadCorruptFile)
         }
-        let p = try Self.decoder.decode(Project.self, from: data)
-        project = p
-        index = BookIndex(p)
+        var contents = ProjectArchive.Contents(projectJSON: data)
         for (name, file) in wrapper.fileWrappers?["Audio"]?.fileWrappers ?? [:] {
-            if let d = file.regularFileContents { audio[name] = d }
+            if let d = file.regularFileContents { contents.audio[name] = d }
         }
         if let (name, file) = wrapper.fileWrappers?["Original"]?.fileWrappers?.first, let d = file.regularFileContents {
-            original = (name, d)
+            contents.original = .init(name: name, data: d)
         }
+        return contents
     }
 
     func snapshot(contentType: UTType) throws -> Snapshot {
         Snapshot(project: project, audio: audio, original: original)
     }
 
+    /// Always one ordinary file, even when the project was opened from a package: cloud
+    /// folders (OneDrive) rename and replace packages under an open window.
     func fileWrapper(snapshot: Snapshot, configuration: WriteConfiguration) throws -> FileWrapper {
-        let root = FileWrapper(directoryWithFileWrappers: [:])
-        let json = FileWrapper(regularFileWithContents: try Self.encoder.encode(snapshot.project))
-        json.preferredFilename = "project.json"
-        root.addFileWrapper(json)
-        if !snapshot.audio.isEmpty {
-            let folder = FileWrapper(directoryWithFileWrappers: [:])
-            folder.preferredFilename = "Audio"
-            for (name, data) in snapshot.audio {
-                let f = FileWrapper(regularFileWithContents: data)
-                f.preferredFilename = name
-                folder.addFileWrapper(f)
-            }
-            root.addFileWrapper(folder)
-        }
-        if let original = snapshot.original {
-            let folder = FileWrapper(directoryWithFileWrappers: [:])
-            folder.preferredFilename = "Original"
-            let f = FileWrapper(regularFileWithContents: original.data)
-            f.preferredFilename = original.name
-            folder.addFileWrapper(f)
-            root.addFileWrapper(folder)
-        }
-        return root
+        try FileWrapper(regularFileWithContents: Self.archive(snapshot))
+    }
+
+    static func archive(_ snapshot: Snapshot) throws -> Data {
+        try ProjectArchive.write(.init(
+            projectJSON: try encoder.encode(snapshot.project),
+            original: snapshot.original.map { .init(name: $0.name, data: $0.data) },
+            audio: snapshot.audio))
     }
 
     static let encoder: JSONEncoder = {

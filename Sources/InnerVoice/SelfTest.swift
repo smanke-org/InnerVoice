@@ -93,6 +93,17 @@ enum SelfTest {
         } else {
             check("a project saves and reads back the same", false)
         }
+        // The file on disk: one zip with the project, the manuscript and the samples.
+        let sample = InnerVoiceDocument.Snapshot(project: doc.project, audio: ["Kerensa.m4a": Data([1, 2, 3])],
+                                                 original: ("Penhallow.docx", Data(repeating: 7, count: 4096)))
+        if let file = try? InnerVoiceDocument.archive(sample), let back = try? ProjectArchive.read(file),
+           let project = try? InnerVoiceDocument.decoder.decode(Project.self, from: back.projectJSON) {
+            check("a project file is one zip that reads back the same",
+                  ProjectArchive.looksLikeArchive(file) && project == doc.project
+                  && back.audio == sample.audio && back.original?.name == "Penhallow.docx" && back.original?.data == sample.original?.data)
+        } else {
+            check("a project file is one zip that reads back the same", false)
+        }
 
         // Revised manuscript.
         var book = ImportedBook(title: "t", chapters: doc.project.chapters.map { c in
