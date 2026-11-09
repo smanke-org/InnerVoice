@@ -174,12 +174,13 @@ import SwiftUI
 @Observable
 final class Workspace {
     enum Page: String, CaseIterable, Identifiable {
-        case manuscript, cast, index, pronunciations, record, retakes, review, revisions
+        case manuscript, cast, voices, index, pronunciations, record, retakes, review, revisions
         var id: String { rawValue }
         var title: String {
             switch self {
             case .manuscript: "Manuscript"
             case .cast: "Cast"
+            case .voices: "Voices"
             case .index: "Index"
             case .pronunciations: "Pronunciations"
             case .record: "Record"
@@ -192,6 +193,7 @@ final class Workspace {
             switch self {
             case .manuscript: "book.pages"
             case .cast: "person.2"
+            case .voices: "person.wave.2"
             case .index: "list.bullet.indent"
             case .pronunciations: "character.bubble"
             case .record: "mic"
@@ -204,6 +206,7 @@ final class Workspace {
             switch self {
             case .manuscript, .review: .fixingLines
             case .cast: .castAndSummaries
+            case .voices: .voices
             case .index: .indexAndRehearse
             case .pronunciations: .pronunciations
             case .record, .retakes: .record
@@ -219,6 +222,7 @@ final class Workspace {
             case .record: "5"
             case .retakes: "6"
             case .review: "7"
+            case .voices: "8"
             case .revisions: nil
             }
         }
@@ -236,6 +240,11 @@ final class Workspace {
     var reveal: Reveal?
     /// Character opened in the Cast page.
     var castPath: [UUID] = []
+    /// The narrator or character chosen on the Voices page.
+    var voiceTarget: VoiceTarget = .narrator
+    var showAudioExport = false
+    /// Switches Review to this filter (snapshots, links from other pages).
+    var reviewFilter: String?
     /// Lines to swap after a fix in a back-and-forth.
     var exchange: [Exchange.Proposal] = []
     var showInspector = true
@@ -259,6 +268,11 @@ final class Workspace {
     func showCharacter(_ id: UUID) {
         page = .cast
         castPath = [id]
+    }
+
+    func showVoice(_ id: UUID?) {
+        page = .voices
+        voiceTarget = id.map { .character($0) } ?? .narrator
     }
 }
 

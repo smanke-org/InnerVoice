@@ -77,6 +77,7 @@ final class TaggingController {
                         p.lines[i].confidence = 0
                     }
                     RuleAttribution.apply(to: &p)
+                    ToneRules.apply(to: &p)
                     for l in p.lines where before[l.id] != l && changed[l.id] == nil { changed[l.id] = before[l.id] }
                 }
                 let hints = self.hintsFromRules(document)
@@ -106,12 +107,35 @@ final class TaggingController {
                                 for l in before where changed[l.id] == nil { changed[l.id] = l }
                             }
                         }
-                        self.status?.progress = (Double(n) + Double(k + 1) / Double(max(1, chunks.count))) / Double(total)
+                        self.status?.progress = (Double(n) + Double(k + 1) / Double(max(1, chunks.count)) * 0.7) / Double(total)
+                    }
+                    // Then how each line is said, now that the speakers are known.
+                    let toneChunks = TonePrompt.chunks(project: document.project, index: document.index, chapterIndex: c,
+                                                       maxWords: model.passageWords)
+                    for (k, chunk) in toneChunks.enumerated() {
+                        try Task.checkCancellation()
+                        let text = try await model.complete(chunk.messages, grammar: chunk.grammar,
+                                                            maxTokens: 40 + chunk.labels.count * 22)
+                        try Task.checkCancellation()
+                        if let replies = TonePrompt.parse(text) {
+                            document.applyQuietly { p in
+                                let before = TonePrompt.apply(replies, chunk: chunk, to: &p)
+                                for l in before where changed[l.id] == nil { changed[l.id] = l }
+                                if before.isEmpty {
+                                    Self.log("tone reply matched no line: \(text.replacingOccurrences(of: "\n", with: "⏎").prefix(300))")
+                                }
+                            }
+                        } else {
+                            Self.log("unparseable tone reply (\(text.count) characters): \(text.replacingOccurrences(of: "\n", with: "⏎").prefix(300))")
+                        }
+                        self.status?.progress = (Double(n) + 0.7 + 0.3 * Double(k + 1) / Double(max(1, toneChunks.count))) / Double(total)
                     }
                 }
+                document.applyQuietly { $0.tonesTagged = .now }
                 newCharacters = document.project.characters.map(\.id).filter { !charactersBefore.contains($0) }
                 document.applyQuietly { $0.lastTagged = .now }
                 let needs = document.project.linesNeedingYou
+                VoiceCastingRun.castIfNeeded(document: document)
                 self.finished = "Tagged \(changed.count.formatted()) lines" + (newCharacters.isEmpty ? "" : " and found \(newCharacters.count) new characters")
                     + (needs > 0 ? ". \(needs.formatted()) need you." : ".")
             } catch is CancellationError {
@@ -138,9 +162,21 @@ final class TaggingController {
         let afterLines = Dictionary(document.project.lines.filter { changed[$0.id] != nil }.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let added = document.project.characters.filter { !charactersBefore.contains($0.id) }
         document.registerRunUndo("Tag Speakers", undoManager: undoManager, restore: { p in
-            // Put back only lines the AI still owns; the narrator's later fixes stay.
+            // Put back only what the AI still owns; the narrator's later fixes stay. Speaker
+            // and tone are separate: a line can have the narrator's speaker and the AI's tone.
             for i in p.lines.indices {
-                if let old = changed[p.lines[i].id], p.lines[i].source == .ai || p.lines[i].source == .rule { p.lines[i] = old }
+                guard let old = changed[p.lines[i].id] else { continue }
+                if p.lines[i].source == .ai || p.lines[i].source == .rule {
+                    p.lines[i].speakerID = old.speakerID
+                    p.lines[i].confidence = old.confidence
+                    p.lines[i].source = old.source
+                    p.lines[i].kind = old.kind
+                }
+                if p.lines[i].toneSource != .user {
+                    p.lines[i].tone = old.tone
+                    p.lines[i].toneConfidence = old.toneConfidence
+                    p.lines[i].toneSource = old.toneSource
+                }
             }
             let used = Set(p.lines.compactMap(\.speakerID))
             let addedIDs = Set(added.map(\.id))
@@ -149,7 +185,18 @@ final class TaggingController {
             let existing = Set(p.characters.map(\.id))
             p.characters += added.filter { !existing.contains($0.id) }
             for i in p.lines.indices {
-                if let new = afterLines[p.lines[i].id], p.lines[i].source != .user { p.lines[i] = new }
+                guard let new = afterLines[p.lines[i].id] else { continue }
+                if p.lines[i].source != .user {
+                    p.lines[i].speakerID = new.speakerID
+                    p.lines[i].confidence = new.confidence
+                    p.lines[i].source = new.source
+                    p.lines[i].kind = new.kind
+                }
+                if p.lines[i].toneSource != .user {
+                    p.lines[i].tone = new.tone
+                    p.lines[i].toneConfidence = new.toneConfidence
+                    p.lines[i].toneSource = new.toneSource
+                }
             }
         })
     }
@@ -215,6 +262,8 @@ final class TaggingController {
                     }
                 }
                 document.applyQuietly { $0.summariesBuilt = .now }
+                // Summaries say who sounds like what: cast the voices that were unsure.
+                VoiceCastingRun.castIfNeeded(document: document)
                 self.finished = added == 0 ? "No new facts found." : "Added \(added) facts to the cast's summaries."
             } catch {
                 if Task.isCancelled || error is CancellationError {

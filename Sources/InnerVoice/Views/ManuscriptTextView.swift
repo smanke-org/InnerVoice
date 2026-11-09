@@ -463,6 +463,20 @@ struct ManuscriptTextView: NSViewRepresentable {
                 }
                 kind.submenu = kinds
                 menu.addItem(kind)
+                let toneItem = NSMenuItem(title: "Tone", action: nil, keyEquivalent: "")
+                let tones = NSMenu()
+                let currentTones = Set(ids.compactMap { id in document.index.lineIndexByID[id].flatMap { project.lines[$0].tone } })
+                for t in Tone.allCases {
+                    let item = ClosureMenuItem(title: t.title) { [weak self] in self?.document.setTone(t, for: ids, undoManager: undo) }
+                    if currentTones == [t] { item.state = .on }
+                    tones.addItem(item)
+                }
+                toneItem.submenu = tones
+                menu.addItem(toneItem)
+                menu.addItem(ClosureMenuItem(title: ids.count == 1 ? "Play Line" : "Play \(ids.count) Lines") { [weak self] in
+                    guard let self else { return }
+                    PlayCommand.playLine(document: self.document, workspace: self.parent.workspace)
+                })
                 menu.addItem(ClosureMenuItem(title: ids.count == 1 ? "Mark as Narration" : "Mark \(ids.count) Lines as Narration") { [weak self] in
                     self?.document.removeLines(ids, undoManager: undo)
                 })
@@ -633,6 +647,21 @@ final class ReadingTextView: NSTextView {
         // Return opens Assign To for the selected line.
         if event.keyCode == 36 || event.keyCode == 76, let id = coordinator?.parent.workspace.selectedLines.first {
             coordinator?.requestAssign(id)
+            return
+        }
+        // ⌥Space plays the selected line, ⌥⇧Space a table read from it, ⌥Esc stops (the
+        // same as the Book menu, which misses keys while its window isn't key).
+        let mods = event.modifierFlags.intersection([.option, .shift, .command, .control])
+        if event.keyCode == 49, mods == .option || mods == [.option, .shift], let c = coordinator {
+            if mods == .option, !c.parent.workspace.selectedLines.isEmpty {
+                PlayCommand.playLine(document: c.document, workspace: c.parent.workspace)
+            } else {
+                PlayCommand.playFromHere(document: c.document, workspace: c.parent.workspace)
+            }
+            return
+        }
+        if event.keyCode == 53, mods == .option {
+            SpeechPlayer.shared.stop()
             return
         }
         // Delete or Forward Delete removes the selected text from the project.

@@ -187,6 +187,7 @@ struct SettingsPane: View {
                 switch tab {
                 case .general: GeneralSettings()
                 case .manuscript: ManuscriptSettings()
+                case .voices: VoicesSettings()
                 case .recording: RecordingSettings()
                 case .appearance: AppearanceSettings()
                 case .ai: EmptyView()

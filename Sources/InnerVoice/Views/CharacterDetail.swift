@@ -19,6 +19,7 @@ struct CharacterDetail: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.xxl) {
                     header(c)
+                    voice(c)
                     summary(c)
                     notes(c)
                     sampleLines(c)
@@ -77,6 +78,21 @@ struct CharacterDetail: View {
         } else {
             ContentUnavailableView("No Character", systemImage: "person.crop.circle.badge.questionmark")
         }
+    }
+
+    // MARK: Voice
+
+    private func voice(_ c: BookCharacter) -> some View {
+        VStack(alignment: .leading, spacing: Space.md) {
+            VoiceChooser(document: document, characterID: c.id, compact: true)
+            Button("All Voices…") { workspace.showVoice(c.id) }
+                .controlSize(.small)
+                .help("Hear and choose from every voice on the Voices page (⌘8)")
+        }
+        .padding(Space.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 12))
+        .onAppear { VoiceCastingRun.castIfNeeded(document: document) }
     }
 
     // MARK: Header

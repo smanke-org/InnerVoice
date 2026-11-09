@@ -577,3 +577,155 @@ private func deletionProject() -> (Project, UUID, UUID, UUID) {
     #expect(AttributionPrompt.parse("{\"lines\":[{\"id\":\"L1\",\"speaker\":\"A\",\"kind\":\"spoken\",\"confidence\":9}]}")?.count == 1)
     #expect(AttributionPrompt.grammar.contains("ws ::= [ ]?"))
 }
+
+// MARK: Voices and tones
+
+@Test func speechTagsGiveTones() {
+    let p = ProjectBuilder.make(from: book([
+        "“Get out,” Tom snapped.",
+        "“I can’t,” Mara whispered.",
+        "“We found it!” said Pip.",
+        "“Fine,” said Tom.",
+        "Edda wiped her eyes. “He was my brother.”",
+    ]), fileName: "t.txt")
+    let index = BookIndex(p)
+    func tone(_ prefix: String) -> Line? { p.lines.first { p.text(of: $0, index: index).hasPrefix(prefix) } }
+    #expect(tone("Get out")?.tone == .angry)
+    #expect(tone("Get out")?.toneConfidence == ToneRules.sureCue)
+    #expect(tone("I can")?.tone == .whispered)
+    // An exclamation mark alone is a guess for the AI; it shows as unsure.
+    #expect(tone("We found")?.tone == .excited)
+    #expect(tone("We found").map { p.toneNeedsYou($0) } == true)
+    #expect(tone("Fine")?.tone == .neutral)
+    #expect(tone("Fine").map { p.toneNeedsYou($0) } == false)
+    #expect(tone("He was")?.tone == .sad)
+}
+
+@Test func tonePromptAgreementAndNarratorTones() {
+    var p = ProjectBuilder.make(from: book(["“We found it!” said Pip.", "“Stop,” said Tom."]), fileName: "t.txt")
+    let index = BookIndex(p)
+    let chunks = TonePrompt.chunks(project: p, index: index, chapterIndex: 0)
+    #expect(chunks.count == 1)
+    #expect(chunks[0].labels.count == 2)          // the guess and the plain line; nothing sure
+    let found = p.lines[0].id
+    let label = chunks[0].labels.first { $0.value == found }!.key
+    TonePrompt.apply([TonePrompt.Reply(id: label, tone: "excited", confidence: 50)], chunk: chunks[0], to: &p)
+    #expect(p.lines[0].toneSource == .ai)
+    #expect((p.lines[0].toneConfidence ?? 0) > 0.6)   // the rule and the AI agree
+    // The narrator's tone is never asked about or changed.
+    p.lines[1].tone = .tender
+    p.lines[1].toneSource = .user
+    #expect(!TonePrompt.needsModel(p.lines[1]))
+    ToneRules.apply(to: &p)
+    #expect(p.lines[1].tone == .tender)
+    #expect(TonePrompt.parse("{\"lines\":[{\"id\":\"T1\",\"tone\":\"sad\",\"confidence\":70}]}")?.first?.tone == "sad")
+    // The grammar needs every line answered, by label.
+    #expect(chunks[0].grammar.contains(#"\"T1\""#) && chunks[0].grammar.contains(#"\"T2\""#))
+    #expect(chunks[0].grammar.hasPrefix("root ::="))
+    // A reply that copies the speaker into the id still lands on its line.
+    var q = ProjectBuilder.make(from: book(["“Stop,” said Tom."]), fileName: "t.txt")
+    let qc = TonePrompt.chunks(project: q, index: BookIndex(q), chapterIndex: 0)
+    TonePrompt.apply([TonePrompt.Reply(id: "T1: Tom", tone: "angry", confidence: 80)], chunk: qc[0], to: &q)
+    #expect(q.lines[0].tone == .angry)
+}
+
+@Test func oldLinesDecodeWithoutTones() throws {
+    let json = ##"{"id":"6A4F1C2E-1111-4222-8333-944455556666","paragraphID":"6A4F1C2E-1111-4222-8333-944455556667","range":{"location":0,"length":4},"kind":"spoken","confidence":0.9,"source":"rule","continuesPrevious":false}"##
+    let line = try JSONDecoder().decode(Line.self, from: Data(json.utf8))
+    #expect(line.tone == nil)
+    #expect(line.toneSource == nil)
+}
+
+private func castingProject() -> Project {
+    var p = ProjectBuilder.make(from: book([
+        "“Morning,” said Edda Voss.",
+        "“Morning,” said Mara Quinn.",
+        "“Tea?” said Tom Hale.",
+        "“Please,” Mara said.",
+        "“Two sugars,” said Edda.",
+    ]), fileName: "t.txt")
+    for i in p.characters.indices {
+        switch p.characters[i].name {
+        case "Edda Voss":
+            p.characters[i].facts = [Fact(kind: .gender, text: "Woman"), Fact(kind: .age, text: "About 60"),
+                                     Fact(kind: .accent, text: "Soft Scottish accent")]
+        case "Mara Quinn":
+            p.characters[i].facts = [Fact(kind: .relationships, text: "Daughter of the late keeper")]
+        default: break
+        }
+    }
+    return p
+}
+
+private let appleVoices = [
+    VoiceInfo(engine: .apple, voiceID: "f-us", name: "Ava", gender: .female, accent: "American", quality: 2),
+    VoiceInfo(engine: .apple, voiceID: "f-sc", name: "Fiona", gender: .female, accent: "Scottish", quality: 1),
+    VoiceInfo(engine: .apple, voiceID: "m-gb", name: "Daniel", gender: .male, accent: "British", quality: 1),
+    VoiceInfo(engine: .apple, voiceID: "m-us", name: "Evan", gender: .male, accent: "American", quality: 2),
+    VoiceInfo(engine: .apple, voiceID: "n-us", name: "Sky", gender: .neutral, accent: "American", quality: 2),
+]
+
+@Test func castingReadsTheSummary() {
+    var p = castingProject()
+    let index = BookIndex(p)
+    let edda = p.characters.first { $0.name == "Edda Voss" }!
+    let profile = VoiceCasting.profile(edda, project: p, index: index)
+    #expect(profile.gender == .female)
+    #expect(profile.age == .older)
+    #expect(profile.accent == "Scottish")
+    let mara = p.characters.first { $0.name == "Mara Quinn" }!
+    #expect(VoiceCasting.profile(mara, project: p, index: index).gender == .female)
+    let tom = p.characters.first { $0.name == "Tom Hale" }!
+    #expect(VoiceCasting.profile(tom, project: p, index: index).gender == nil)   // nothing says
+
+    VoiceCasting.cast(&p, index: index, engine: .apple, voices: appleVoices)
+    let cast = { (name: String) in p.characters.first { $0.name == name }!.voice(for: .apple)! }
+    #expect(cast("Edda Voss").choice.voiceID == "f-sc")
+    #expect(cast("Edda Voss").choice.pitch ?? 1 < 1)        // older: a little lower
+    // Two women in the same scene get different voices.
+    #expect(cast("Mara Quinn").choice.voiceID == "f-us")
+    #expect(!p.voiceNeedsYou(p.characters.first { $0.name == "Edda Voss" }!))
+    // Tom: no gender known, so casting is unsure and asks.
+    #expect(p.voiceNeedsYou(p.characters.first { $0.name == "Tom Hale" }!))
+    #expect(p.settings.narratorVoice(for: .apple) != nil)
+}
+
+@Test func castingKeepsTheNarratorsChoice() {
+    var p = castingProject()
+    let index = BookIndex(p)
+    let i = p.characters.firstIndex { $0.name == "Edda Voss" }!
+    p.characters[i].setVoice(CastVoice(choice: VoiceChoice(engine: .apple, voiceID: "f-us"), confidence: 1, source: .user), for: .apple)
+    VoiceCasting.cast(&p, index: index, engine: .apple, voices: appleVoices)
+    #expect(p.characters[i].voice(for: .apple)?.choice.voiceID == "f-us")
+    // Mara can't have Edda's voice in the same scene, so she gets another.
+    #expect(p.characters.first { $0.name == "Mara Quinn" }!.voice(for: .apple)?.choice.voiceID != "f-us")
+    // Each engine keeps its own casting.
+    VoiceCasting.cast(&p, index: index, engine: .orpheus, voices: VoiceInfo.orpheus)
+    #expect(p.characters[i].voice(for: .apple)?.choice.voiceID == "f-us")
+    #expect(VoiceInfo.orpheus.first { $0.voiceID == p.characters[i].voice(for: .orpheus)?.choice.voiceID }?.gender == .female)
+}
+
+@Test func qwenVoicesAreDesignedFromTheSummary() {
+    var p = castingProject()
+    VoiceCasting.cast(&p, index: BookIndex(p), engine: .qwen, voices: [])
+    let design = p.characters.first { $0.name == "Edda Voss" }!.voice(for: .qwen)?.choice.design ?? ""
+    #expect(design.contains("older woman"))
+    #expect(design.contains("Scottish"))
+    #expect(p.settings.narratorVoice(for: .qwen)?.choice.design != nil)
+}
+
+@Test func speechScriptSplitsNarrationAndAppliesPronunciations() {
+    var p = ProjectBuilder.make(from: book([
+        "“Busy.” The doctor folded her gloves. “Your father wrote to Kerensa.”",
+        "She laid an envelope on the table.",
+    ]), fileName: "t.txt")
+    p.pronunciations = [Pronunciation(term: "Kerensa", sayItAs: "keh-REN-sa")]
+    let index = BookIndex(p)
+    let all = SpeechScript.segments(chapter: 0, project: p, index: index, includeNarration: true)
+    #expect(all.map(\.text) == ["Chapter 1", "Busy.", "The doctor folded her gloves.", "Your father wrote to keh-REN-sa.", "She laid an envelope on the table."]
+            || all.map(\.text) == ["Busy.", "The doctor folded her gloves.", "Your father wrote to keh-REN-sa.", "She laid an envelope on the table."])
+    #expect(all.filter { $0.lineID != nil }.count == 2)
+    let dialogue = SpeechScript.segments(chapter: 0, project: p, index: index, includeNarration: false)
+    #expect(dialogue.map(\.text) == ["Busy.", "Your father wrote to keh-REN-sa."])
+    #expect(dialogue.last?.pauseAfter == SpeechScript.chapterPause)
+}

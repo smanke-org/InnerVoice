@@ -142,7 +142,17 @@ enum Snapshot {
                     workspace.recordParagraph = document.project.chapters.first?.paragraphs.dropFirst(1).first?.id
                 }
                 await shot("retakes") { workspace.page = .retakes }
-                await shot("review", settle: 1.0) { workspace.page = .review }
+                await shot("review", settle: 1.0) { workspace.reviewFilter = "guesses"; workspace.page = .review }
+                await shot("review-tones", settle: 1.0) { workspace.reviewFilter = "tones"; workspace.page = .review }
+                document.castVoicesAgain(undoManager: nil)
+                if let main = document.project.characters.max(by: { (document.index.stats[$0.id]?.lines ?? 0) < (document.index.stats[$1.id]?.lines ?? 0) }) {
+                    await shot("voices", settle: 1.2) { workspace.voiceTarget = .character(main.id); workspace.page = .voices }
+                }
+                await shot("voices-narrator", settle: 1.0) { workspace.voiceTarget = .narrator; workspace.page = .voices }
+                await shot("review-voices", settle: 1.0) { workspace.reviewFilter = "voices"; workspace.page = .review }
+                await shot("audio-export-sheet") { workspace.page = .manuscript; workspace.showAudioExport = true }
+                workspace.showAudioExport = false
+                try? await Task.sleep(for: .seconds(0.5))
                 await shot("revisions") { workspace.page = .revisions }
                 await shot("export-sheet") { workspace.page = .manuscript; workspace.showExport = true }
                 workspace.showExport = false
@@ -259,6 +269,8 @@ enum Snapshot {
         }
         let guess = guessLine.speakerID
         let undo = NSApp.windows.compactMap { find(ReadingTextView.self, in: $0.contentView)?.coordinator?.parent.undoManager }.first
+            ?? NSApp.windows.first { $0.isVisible && $0.canBecomeMain }?.undoManager
+        workspace.reviewFilter = "guesses"
         workspace.page = .review
         try? await Task.sleep(for: .seconds(1.2))
         NSApp.windows.first { $0.isVisible && $0.canBecomeMain }?.makeKeyAndOrderFront(nil)
@@ -281,6 +293,7 @@ enum Snapshot {
         undo?.undo()
         workspace.page = .manuscript
         try? await Task.sleep(for: .seconds(0.4))
+        workspace.reviewFilter = "guesses"
         workspace.page = .review
         try? await Task.sleep(for: .seconds(1.2))
         // Return with nothing typed confirms the guess.
@@ -305,6 +318,39 @@ enum Snapshot {
         print("SNAPSHOT review-keys ⌘↓ then Return: " + (jumped?.source == .user && jumped?.speakerID == guess ? "PASS confirmed in the popover" : "FAIL"))
         PopoverPresenter.shared.close()
         while undo?.canUndo == true { undo?.undo() }
+
+        // ⌥Space (Play Line) plays the selected line in its voice.
+        if let spoken = document.project.lines.first(where: { $0.speakerID != nil && !document.project.needsYou($0) }) {
+            workspace.page = .manuscript
+            workspace.show(paragraph: spoken.paragraphID, line: spoken.id)
+            try? await Task.sleep(for: .seconds(1.0))
+            // As after clicking the line: the reading view has the keyboard.
+            if let w = NSApp.windows.first(where: { find(ReadingTextView.self, in: $0.contentView) != nil }), let tv = find(ReadingTextView.self, in: w.contentView) {
+                w.makeKeyAndOrderFront(nil)
+                w.makeFirstResponder(tv)
+            }
+            for down in [true, false] {
+                let ev = CGEvent(keyboardEventSource: nil, virtualKey: 49, keyDown: down)
+                ev?.flags = .maskAlternate
+                ev?.postToPid(pid)
+            }
+            var waited = 0
+            while SpeechPlayer.shared.lastStarted?.lineID != spoken.id, waited < 40 { try? await Task.sleep(for: .milliseconds(100)); waited += 1 }
+            print("SNAPSHOT play-keys ⌥Space: " + (SpeechPlayer.shared.lastStarted?.lineID == spoken.id ? "PASS played the selected line" : "FAIL nothing played"))
+            SpeechPlayer.shared.stop()
+        }
+        // Review › Unsure Tones: a number key sets the tone and the next line comes up.
+        if let unsure = document.project.lines.first(where: { document.project.toneNeedsYou($0) && !document.project.needsYou($0) }) {
+            workspace.reviewFilter = "tones"
+            workspace.page = .review
+            try? await Task.sleep(for: .seconds(1.2))
+            key(23, "5")   // 5: Angry
+            try? await Task.sleep(for: .seconds(0.8))
+            let after = document.project.lines.first { $0.id == unsure.id }
+            print("SNAPSHOT tone-keys 5: " + (after?.tone == .angry && after?.toneSource == .user ? "PASS set Angry" : "FAIL tone \(after?.tone?.rawValue ?? "-")"))
+            while undo?.canUndo == true { undo?.undo() }
+            workspace.reviewFilter = "guesses"
+        }
     }
 
     static func find<T: NSView>(_ type: T.Type, in view: NSView?) -> T? {

@@ -5,14 +5,15 @@ import Foundation
 /// work only while it is in front. Keep in step with the menus (App.swift's commands).
 enum ShortcutCatalog {
     /// The project window's pages, in sidebar order: ⌘1 is the first.
-    static let pages = ["Manuscript", "Cast", "Index", "Pronunciations", "Record", "Retakes", "Review"]
+    static let pages = ["Manuscript", "Cast", "Index", "Pronunciations", "Record", "Retakes", "Review", "Voices"]
 
     // Carbon modifiers.
     private static let command = 0x100
     private static let shift = 0x200
 
-    /// Virtual key codes (kVK_ANSI_…) for ⌘1–⌘7.
-    private static let digitKeyCodes = [18, 19, 20, 21, 23, 22, 26]
+    /// Virtual key codes (kVK_ANSI_…) for ⌘1–⌘8.
+    private static let digitKeyCodes = [18, 19, 20, 21, 23, 22, 26, 28]
+    private static let option = 0x800
 
     static var reported: [ShortcutsLensReport.Shortcut] {
         var list: [ShortcutsLensReport.Shortcut] = [
@@ -26,6 +27,12 @@ enum ShortcutCatalog {
                   category: "Lines", scope: "app"),
             .init(id: "previousNeedsYou", title: "Previous Line That Needs You", keyCode: 126, carbonModifiers: command,
                   category: "Lines", scope: "app"),
+            .init(id: "playLine", title: "Play Line", keyCode: 49, carbonModifiers: option,
+                  category: "Listening", scope: "app"),
+            .init(id: "playFromHere", title: "Play from Here", keyCode: 49, carbonModifiers: option | shift,
+                  category: "Listening", scope: "app"),
+            .init(id: "stopPlaying", title: "Stop Playing", keyCode: 53, carbonModifiers: option,
+                  category: "Listening", scope: "app"),
         ]
         for (index, page) in pages.enumerated() where index < digitKeyCodes.count {
             list.append(.init(id: "page.\(page.lowercased())", title: "Show \(page)", keyCode: digitKeyCodes[index],

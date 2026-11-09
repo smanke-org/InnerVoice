@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case general, manuscript, ai, recording, appearance
+    case general, manuscript, ai, voices, recording, appearance
 
     var id: String { rawValue }
 
@@ -10,6 +10,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .general: "General"
         case .manuscript: "Manuscript"
         case .ai: "AI"
+        case .voices: "Voices"
         case .recording: "Recording"
         case .appearance: "Accent"
         }
@@ -20,6 +21,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .general: "gearshape"
         case .manuscript: "book.pages"
         case .ai: "sparkles"
+        case .voices: "person.wave.2"
         case .recording: "mic"
         case .appearance: "paintpalette"
         }
@@ -106,5 +108,59 @@ struct RecordingSettings: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+struct VoicesSettings: View {
+    @AppStorage("voices.readNarration") private var readNarration = true
+    @AppStorage("voices.followAlong") private var followAlong = true
+    @State private var cacheSize = 0
+
+    var body: some View {
+        Section {
+            Picker("Play from Here reads", selection: $readNarration) {
+                Text("Narration and dialogue").tag(true)
+                Text("Dialogue only").tag(false)
+            }
+            .pickerStyle(.radioGroup)
+            Toggle("Follow along in the manuscript", isOn: $followAlong)
+        } header: {
+            Text("Table Read")
+        } footer: {
+            Text("Narration is read in the narrator’s voice, chosen on the Voices page. Export Audio asks each time.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        Section("Engines") {
+            LabeledContent("Apple Voices") {
+                HStack {
+                    Text("Built in").foregroundStyle(.secondary)
+                    Button("Get More Voices…") {
+                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.universalaccess?SpokenContent")!)
+                    }
+                    .help("Download free Premium voices in System Settings › Accessibility › Spoken Content › System Voice › Manage Voices")
+                }
+            }
+            LabeledContent("Qwen3-TTS") { Text(ModelSpeech.isInstalled(.qwen) ? "Installed" : "Not available yet").foregroundStyle(.secondary) }
+            LabeledContent("Orpheus") { Text(ModelSpeech.isInstalled(.orpheus) ? "Installed" : "Not available yet").foregroundStyle(.secondary) }
+        }
+        Section {
+            LabeledContent("Saved audio") {
+                HStack {
+                    Text(ByteCountFormatter.string(fromByteCount: Int64(cacheSize), countStyle: .file)).foregroundStyle(.secondary)
+                    Button("Clear") {
+                        SpeechRenderer.shared.clearCache()
+                        cacheSize = SpeechRenderer.shared.cacheSize
+                    }
+                    .disabled(cacheSize == 0)
+                    .help("Remove the saved audio. Lines are made again the next time they play.")
+                }
+            }
+        } footer: {
+            Text("Lines are saved after they’re first made, so they play at once next time. The oldest go when it passes 1 GB.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .onAppear { cacheSize = SpeechRenderer.shared.cacheSize }
     }
 }

@@ -105,6 +105,7 @@ struct ProjectSidebar: View {
         switch page {
         case .review: document.project.linesNeedingYou
         case .retakes: document.project.retakes.filter { !$0.done }.count
+        case .voices: document.project.characters.filter { (document.index.stats[$0.id]?.lines ?? 0) > 0 && document.project.voiceNeedsYou($0) }.count
         default: 0
         }
     }
@@ -201,6 +202,35 @@ struct ProjectInspector: View {
                 .labelsHidden()
                 .fixedSize()
             }
+            LabeledContent("Tone") {
+                Menu {
+                    ForEach(Tone.allCases) { t in
+                        Button { document.setTone(t, for: [line.id], undoManager: undoManager) } label: {
+                            Label(t.title, systemImage: t.symbol)
+                        }
+                    }
+                } label: {
+                    Text((line.tone ?? .neutral).title + (document.project.toneNeedsYou(line) ? "?" : ""))
+                        .foregroundStyle(document.project.toneNeedsYou(line) ? Color(nsColor: .attention) : .primary)
+                }
+                .fixedSize()
+                .help(toneHelp(line))
+            }
+            if document.project.toneNeedsYou(line), let t = line.tone {
+                LabeledContent("") {
+                    Button("Confirm \(t.title)") { document.setTone(t, for: [line.id], undoManager: undoManager) }
+                        .help("Keep this tone. Tag Speakers won’t change it.")
+                }
+            }
+            LabeledContent("Voice") {
+                HStack(spacing: Space.sm) {
+                    Button("Play", systemImage: "play.fill") { PlayCommand.playLine(document: document, workspace: workspace) }
+                        .help("Hear the line in its character’s voice (⌥Space)")
+                    Button("Voices") { workspace.showVoice(line.speakerID) }
+                        .help("Choose the voice on the Voices page")
+                }
+                .controlSize(.small)
+            }
             LabeledContent("Source") {
                 HStack(spacing: Space.xs) {
                     if line.source == .ai { Image(systemName: "sparkles").foregroundStyle(.secondary) }
@@ -213,6 +243,15 @@ struct ProjectInspector: View {
             LabeledContent("Where") {
                 Text(document.index.reference(line.paragraphID)).font(.callout.monospacedDigit())
             }
+        }
+    }
+
+    private func toneHelp(_ line: Line) -> String {
+        switch line.toneSource {
+        case .user?: "You set this tone."
+        case .ai?: "The AI read this tone, \(Int((line.toneConfidence ?? 0) * 100))% sure."
+        case .rule?: (line.toneConfidence ?? 0) >= ToneRules.sureCue ? "Read from the speech tag." : "A guess from the words; Tag Speakers asks the AI."
+        case nil: "Not read yet. Tag Speakers reads how each line is said."
         }
     }
 

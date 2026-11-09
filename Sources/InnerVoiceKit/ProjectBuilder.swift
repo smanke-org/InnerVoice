@@ -6,6 +6,7 @@ public enum ProjectBuilder {
         var project = Project(title: book.title, author: book.author, sourceFileName: fileName, chapters: book.chapters)
         project.lines = DialogueFinder.findAll(in: book.chapters)
         RuleAttribution.apply(to: &project)
+        ToneRules.apply(to: &project)
         return project
     }
 }

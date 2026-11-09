@@ -30,8 +30,8 @@ enum AgentCommands {
             if AgentSocket.isTestRun { result["testRun"] = true }
             return result
         },
-        AgentCommand(name: "open", summary: "Show a page in a project's window: manuscript, cast, index, pronunciations, record, retakes or revisions. With --character, opens that character on the Cast page.",
-                     params: [.init(name: "page", positional: true, help: "manuscript, cast, index, pronunciations, record, retakes or revisions (default manuscript)"),
+        AgentCommand(name: "open", summary: "Show a page in a project's window: manuscript, cast, voices, index, pronunciations, record, retakes, review or revisions. With --character, opens that character on the Cast page.",
+                     params: [.init(name: "page", positional: true, help: "manuscript, cast, voices, index, pronunciations, record, retakes, review or revisions (default manuscript)"),
                               .init(name: "character", help: "open this character's page in Cast (a name, alias or id)"),
                               projectParam],
                      example: "innervoice open cast --character Mara --json") { args in
@@ -161,7 +161,7 @@ enum AgentCommands {
                                 "recorded": chapter.paragraphs.filter { p.recorded.contains($0.id) }.count]
                     }]
         },
-        AgentCommand(name: "lines list", summary: "List lines in book order. Returns `lines` (id, ref like \"Ch 3 ¶12\", speaker, kind, source, confidence, needsYou, text), `total` and `nextOffset` when there are more.",
+        AgentCommand(name: "lines list", summary: "List lines in book order. Returns `lines` (id, ref like \"Ch 3 ¶12\", speaker, kind, source, confidence, needsYou, text, tone, toneSource, toneConfidence, toneNeedsYou), `total` and `nextOffset` when there are more.",
                      params: [.init(name: "chapter", kind: .integer, help: "only this chapter (from 1, see `innervoice chapters list`)"),
                               .init(name: "speaker", help: "only this character's lines (a name, alias or id), or \"none\" for Who's Speaking?"),
                               .init(name: "needs-you", kind: .boolean, help: "only red lines: Who's Speaking? and Unsure"),
@@ -251,6 +251,23 @@ enum AgentCommands {
             return ["project": entry.name, "changed": !changing.isEmpty, "kind": kind.rawValue,
                     "lines": picked.compactMap { line($0.id, document) }.map { lineJSON($0, document) }]
         },
+        AgentCommand(name: "lines tone", summary: "Set how lines are said, as Tone does in the line's menu (one Edit › Undo step): neutral, excited, confused, sad, angry, whispered, scared, tender or sarcastic. Tag Speakers never changes a tone set this way.",
+                     params: [idsParam,
+                              .init(name: "tone", help: "the tone. May also come last: `lines tone 3f2a9c1e angry`"),
+                              projectParam],
+                     example: "innervoice lines tone 3f2a9c1e angry --json") { args in
+            let (entry, document) = try project(args)
+            var ids = args.list("ids")
+            var raw = args.string("tone")
+            if raw == nil, let last = ids.last, Tone(rawValue: last.lowercased()) != nil { raw = ids.removeLast() }
+            guard let raw, let tone = Tone(rawValue: raw.lowercased()) else {
+                throw AgentError.usage("Give a tone: " + Tone.allCases.map(\.rawValue).joined(separator: ", ") + ". Example: innervoice lines tone 3f2a9c1e angry")
+            }
+            let picked = try findLines(ids, in: document)
+            document.setTone(tone, for: picked.map(\.id), undoManager: entry.undoManager)
+            return ["project": entry.name, "tone": tone.rawValue,
+                    "lines": picked.compactMap { line($0.id, document) }.map { lineJSON($0, document) }]
+        },
         AgentCommand(name: "lines reveal", summary: "Show a line in the manuscript, selected, as clicking it in the Index does.",
                      params: [.init(name: "id", required: true, positional: true, help: "the line's id (see `innervoice lines list`)"), projectParam],
                      example: "innervoice lines reveal 3f2a9c1e --json") { args in
@@ -264,7 +281,7 @@ enum AgentCommands {
     // MARK: Characters
 
     private static var characters: [AgentCommand] { [
-        AgentCommand(name: "characters list", summary: "List the cast, most lines first. Returns `characters` (id, name, aliases, color, lines, words, firstLine, chapters, facts, narrator, showInIndex).",
+        AgentCommand(name: "characters list", summary: "List the cast, most lines first. Returns `characters` (id, name, aliases, color, lines, words, firstLine, chapters, facts, narrator, showInIndex, voice).",
                      params: [projectParam],
                      example: "innervoice characters list --json", readOnly: true) { args in
             let (entry, document) = try project(args)
@@ -702,7 +719,9 @@ enum AgentCommands {
         return ["id": short(line.id), "ref": document.index.reference(line.paragraphID),
                 "speaker": p.character(line.speakerID)?.name ?? NSNull(), "kind": line.kind.rawValue,
                 "source": line.source.rawValue, "confidence": (line.confidence * 100).rounded() / 100,
-                "needsYou": p.needsYou(line), "text": p.text(of: line, index: document.index)]
+                "needsYou": p.needsYou(line), "text": p.text(of: line, index: document.index),
+                "tone": line.tone?.rawValue ?? NSNull(), "toneSource": line.toneSource?.rawValue ?? NSNull(),
+                "toneConfidence": line.toneConfidence.map { ($0 * 100).rounded() / 100 } ?? NSNull(), "toneNeedsYou": p.toneNeedsYou(line)]
     }
 
     private static func characterJSON(_ c: BookCharacter, _ document: InnerVoiceDocument) -> JSONObject {
@@ -713,7 +732,11 @@ enum AgentCommands {
                 "firstLine": stats?.firstLine.map { "Ch \($0.chapter + 1) ¶\($0.paragraph + 1)" } ?? NSNull(),
                 "chapters": stats?.chapters.count ?? 0, "facts": c.facts.count,
                 "narrator": document.project.narrators.first { $0.id == c.narratorID }?.name ?? NSNull(),
-                "showInIndex": index.showsInIndex(c)]
+                "showInIndex": index.showsInIndex(c),
+                "voice": c.voice(for: document.project.settings.engine).map { v -> JSONObject in
+                    ["engine": v.choice.engine.rawValue, "name": VoiceCatalog.name(of: v.choice), "source": v.source.rawValue,
+                     "confidence": (v.confidence * 100).rounded() / 100, "needsYou": document.project.voiceNeedsYou(c)]
+                } ?? NSNull()]
     }
 
     private static func pronunciationJSON(_ p: Pronunciation, _ document: InnerVoiceDocument) -> JSONObject {

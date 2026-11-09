@@ -53,3 +53,5 @@ Everything else (chapters, line kinds, rename, color, merge, summaries, pronunci
 
 MCP server for Claude Desktop and other clients without a shell (not registered by default):
 `claude mcp add --scope user innervoice -- "/Applications/InnerVoice.app/Contents/MacOS/InnerVoice" mcp`
+
+- `innervoice lines tone <ids> <tone>` sets how lines are said (neutral, excited, confused, sad, angry, whispered, scared, tender, sarcastic). `lines list` shows each line's tone, and `characters list` each character's voice.

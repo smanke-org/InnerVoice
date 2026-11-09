@@ -10,6 +10,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
     case fixingLines
     case colors
     case castAndSummaries
+    case voices
     case indexAndRehearse
     case narratorsAndScripts
     case pronunciations
@@ -30,6 +31,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
         case .fixingLines: "Fixing Lines"
         case .colors: "Colors"
         case .castAndSummaries: "Cast & Summaries"
+        case .voices: "Voices & Listening"
         case .indexAndRehearse: "Index & Rehearse"
         case .narratorsAndScripts: "Narrators & Scripts"
         case .pronunciations: "Pronunciations"
@@ -50,6 +52,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
         case .fixingLines: "pencil.line"
         case .colors: "paintpalette"
         case .castAndSummaries: "person.3"
+        case .voices: "person.wave.2"
         case .indexAndRehearse: "list.bullet.indent"
         case .narratorsAndScripts: "mic"
         case .pronunciations: "character.bubble"
@@ -78,6 +81,8 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
                 ("Pronunciations", "Names and made-up words, how to say them, and samples"),
                 ("Record", "The teleprompter for the booth"),
                 ("Retakes", "Every paragraph marked to read again, with your notes"),
+                ("Review", "Lines, tones and voices that need you"),
+                ("Voices", "A voice for each character and the narrator (⌘8)"),
             ]),
             .tip("Your manuscript never leaves this Mac. The only download is the AI model itself."),
             .tip("Quitting asks first. Turn off \"Ask before quitting\" in Settings › General, or tick \"Don't ask again\" when it asks."),
@@ -151,6 +156,29 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
             .text("Each line also shows who says it in the margin, so you never have to rely on color alone. Choose initials, first names or full names in Settings › Manuscript or View › Speakers in Margin; long names are shortened with \"…\". Turn them off for a project with View › Show Speakers in Margin."),
             .heading("Text size and spacing"),
             .text("Make the text bigger or smaller with the buttons in the toolbar, or View › Bigger Text (⌘+), Smaller Text (⌘−) and Actual Size (⌘0). Switch between single and double line spacing with the spacing button beside them (⌥⌘L), or in Settings › Manuscript. The page keeps your place when you change either."),
+        ]
+
+        case .voices: [
+            .text("InnerVoice can read the book aloud with a different voice for each character, so you can hear a scene before you record it, check who says what, or rehearse against the other parts. Every voice runs on your Mac; nothing is sent anywhere."),
+            .heading("Voices for the cast"),
+            .text("After Tag Speakers and Build Summaries, InnerVoice casts a voice for each character from what the book says about them: gender, age and accent from the summary, or a title like Mrs. or a \"she said\" when the summary is quiet. Main characters choose first, and two characters who share a scene get different voices. The narrator gets the best voice of all."),
+            .text("Open the Voices page (⌘8) to hear and change them. Click a character, then play any voice: it says one of that character's own lines. Click Use to give them that voice, or Confirm to keep the one casting picked. Speed and pitch make an Apple voice older, younger or more distinct."),
+            .text("A red ? means casting wasn't sure, usually because the book hasn't said whether the character is a woman or a man. Those wait for you in Review › Unsure Voices."),
+            .heading("How each line is said"),
+            .text("Every line also gets a tone: neutral, excited, confused, sad, angry, whispered, scared, tender or sarcastic. \"She snapped\" is angry and \"he whispered\" is a whisper; Tag Speakers asks the AI about the rest, with the paragraphs around each line. Tones the AI isn't sure of wait in Review › Unsure Tones, where 1 to 9 pick a tone and Space plays the line."),
+            .text("Change a tone yourself from the inspector or by right-clicking a line. Tag Speakers never changes a tone you set."),
+            .heading("Listening"),
+            .keys([
+                ("⌥Space", "Play the selected line in its character's voice"),
+                ("⌥⇧Space", "Play from Here: a table read to the end of the book"),
+                ("⌥Esc", "Stop playing"),
+            ]),
+            .text("Play from Here follows along in the manuscript. Settings › Voices decides whether narration is read too (a full table read) or only the dialogue."),
+            .heading("Exporting audio"),
+            .text("File › Export Audio… saves the whole book, one chapter or one character's lines as M4A or WAV files, one file per chapter or all in one."),
+            .heading("Engines"),
+            .text("Apple Voices come with your Mac and work right away; more natural Premium voices are a free download in System Settings › Accessibility › Spoken Content. They can't act, so a tone only changes speed and pitch a little. Qwen3-TTS and Orpheus are AI voices that act out each tone; they're downloaded once from Settings › Voices when they're available."),
+            .tip("Made audio is kept in a cache, so a line plays at once the second time. Settings › Voices shows its size and can clear it."),
         ]
 
         case .castAndSummaries: [
@@ -235,7 +263,14 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
                 ("⇧⌘T", "Tag Speakers"),
                 ("⌘.", "Stop Tag Speakers"),
                 ("⇧⌘R", "Record"),
-                ("⌘1 – ⌘6", "{pages}"),
+                ("⌘1 – ⌘8", "{pages}"),
+                ("⌥⇧⌘E", "Export Audio…"),
+            ]),
+            .heading("Listening"),
+            .keys([
+                ("⌥Space", "Play Line"),
+                ("⌥⇧Space", "Play from Here"),
+                ("⌥Esc", "Stop Playing"),
             ]),
             .heading("Manuscript"),
             .keys([

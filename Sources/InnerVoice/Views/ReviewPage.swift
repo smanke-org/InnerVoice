@@ -11,13 +11,15 @@ struct ReviewPage: View {
     @Environment(\.undoManager) private var undoManager
 
     enum Filter: String, CaseIterable, Identifiable {
-        case guesses, noSpeaker, all
+        case guesses, noSpeaker, all, tones, voices
         var id: String { rawValue }
         var title: String {
             switch self {
             case .guesses: "Unsure Guesses"
             case .noSpeaker: "Who's Speaking?"
-            case .all: "All"
+            case .all: "All Speakers"
+            case .tones: "Unsure Tones"
+            case .voices: "Unsure Voices"
             }
         }
     }
@@ -37,27 +39,47 @@ struct ReviewPage: View {
         case .guesses: needing.filter { $0.speakerID != nil }
         case .noSpeaker: needing.filter { $0.speakerID == nil }
         case .all: needing
+        case .tones: document.project.lines.filter { document.project.toneNeedsYou($0) && !document.project.needsYou($0) }
+        case .voices: []
         }
     }
+
+    /// Characters whose voice casting wasn't sure of, most lines first.
+    private var unsureVoices: [BookCharacter] {
+        let index = document.index
+        return document.project.characters
+            .filter { (index.stats[$0.id]?.lines ?? 0) > 0 && document.project.voiceNeedsYou($0) }
+            .sorted { (index.stats[$0.id]?.lines ?? 0) > (index.stats[$1.id]?.lines ?? 0) }
+    }
+
+    private func count(_ f: Filter) -> Int { f == .voices ? unsureVoices.count : items(f).count }
+
+    private var nothingToReview: Bool { Filter.allCases.allSatisfy { count($0) == 0 } }
 
     var body: some View {
         let items = items(filter)
         Group {
-            if needing.isEmpty {
+            if nothingToReview {
                 ContentUnavailableView("Nothing to Review", systemImage: "checkmark.circle",
                                        description: Text("Every line has a speaker you confirmed or one the AI is sure of."))
             } else {
                 HStack(spacing: 0) {
-                    list(items)
-                        .frame(width: 300)
+                    Group {
+                        if filter == .voices { voiceList } else { list(items) }
+                    }
+                    .frame(width: 300)
                     Divider()
-                    if let id = selection, let line = items.first(where: { $0.id == id }) {
+                    if filter == .voices, let id = selection, let c = unsureVoices.first(where: { $0.id == id }) {
+                        voiceCard(c)
+                    } else if filter == .tones, let id = selection, let line = items.first(where: { $0.id == id }) {
+                        toneCard(line, items: items)
+                    } else if filter != .voices, filter != .tones, let id = selection, let line = items.first(where: { $0.id == id }) {
                         card(line, items: items)
-                    } else if items.isEmpty, let other = Filter.allCases.first(where: { $0 != filter && !self.items($0).isEmpty }) {
+                    } else if count(filter) == 0, let other = Filter.allCases.first(where: { $0 != filter && count($0) > 0 }) {
                         ContentUnavailableView {
-                            Label(filter == .guesses ? "No Unsure Guesses Left" : "No Lines Here", systemImage: "checkmark.circle")
+                            Label(filter == .guesses ? "No Unsure Guesses Left" : "Nothing Here", systemImage: "checkmark.circle")
                         } description: {
-                            Text("\(self.items(other).count) more lines need you.")
+                            Text(other == .voices ? "\(count(other)) voices need you." : "\(count(other)) more lines need you.")
                         } actions: {
                             Button("Review \(other.title)") { filterRaw = other.rawValue }
                         }
@@ -72,30 +94,42 @@ struct ReviewPage: View {
         }
         .navigationTitle("Review")
         .navigationSubtitle(needing.isEmpty ? "" : "\(needing.count) lines need you")
-        .onAppear { selectFirstIfNeeded(items) }
-        .onChange(of: filterRaw) { selection = nil; selectFirstIfNeeded(self.items(filter)) }
+        .onAppear {
+            if let f = workspace.reviewFilter { filterRaw = f; workspace.reviewFilter = nil }
+            selectFirstIfNeeded()
+        }
+        .onChange(of: workspace.reviewFilter) {
+            if let f = workspace.reviewFilter { filterRaw = f; workspace.reviewFilter = nil }
+        }
+        .onChange(of: filterRaw) { selection = nil; selectFirstIfNeeded() }
+        .onChange(of: unsureVoices.map(\.id)) { if filter == .voices { selectFirstIfNeeded() } }
     }
 
-    private func selectFirstIfNeeded(_ items: [Line]) {
-        if selection == nil || !items.contains(where: { $0.id == selection }) { selection = items.first?.id }
+    private func selectFirstIfNeeded() {
+        let ids = filter == .voices ? unsureVoices.map(\.id) : items(filter).map(\.id)
+        if selection == nil || !ids.contains(where: { $0 == selection }) { selection = ids.first }
         focused = true
+    }
+
+    private var filterPicker: some View {
+        Picker("Show", selection: $filterRaw) {
+            ForEach(Filter.allCases) { f in
+                Text("\(f.title) (\(count(f)))").tag(f.rawValue)
+            }
+        }
+        .labelsHidden()
+        .padding(Space.md)
+        .help("What to review")
     }
 
     // MARK: The list
 
     private func list(_ items: [Line]) -> some View {
         VStack(spacing: 0) {
-            Picker("Show", selection: $filterRaw) {
-                ForEach(Filter.allCases) { f in
-                    Text("\(f.title) (\(self.items(f).count))").tag(f.rawValue)
-                }
-            }
-            .labelsHidden()
-            .padding(Space.md)
-            .help("Which lines to review")
+            filterPicker
             Divider()
             List(items, selection: $selection) { line in
-                row(line).tag(line.id)
+                (filter == .tones ? AnyView(toneRow(line)) : AnyView(row(line))).tag(line.id)
             }
             .listStyle(.inset)
         }
@@ -324,5 +358,168 @@ struct ReviewPage: View {
         guard items.indices.contains(j) else { return }
         query = ""
         selection = items[j].id
+    }
+
+    // MARK: Tones
+
+    private func toneRow(_ line: Line) -> some View {
+        let project = document.project
+        let tone = line.tone ?? .neutral
+        return HStack(alignment: .firstTextBaseline, spacing: Space.sm) {
+            Text(tone.title + "?")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color(nsColor: .attention))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 1)
+                .background(Color(nsColor: .attention).opacity(0.14), in: Capsule())
+            VStack(alignment: .leading, spacing: 2) {
+                Text(document.index.reference(line.paragraphID) + (project.character(line.speakerID).map { " · " + $0.firstName } ?? ""))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                Text(project.text(of: line, index: document.index))
+                    .lineLimit(2)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func toneCard(_ line: Line, items: [Line]) -> some View {
+        let project = document.project
+        let guess = line.tone ?? .neutral
+        let position = (items.firstIndex { $0.id == line.id } ?? 0) + 1
+        let who = project.character(line.speakerID)
+        return ScrollView {
+            VStack(alignment: .leading, spacing: Space.lg) {
+                HStack {
+                    Text("\(document.index.reference(line.paragraphID)) · \(position) of \(items.count)")
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Show in Manuscript") { workspace.show(paragraph: line.paragraphID, line: line.id) }
+                        .help("See this line in the manuscript")
+                }
+                context(line)
+                Divider()
+                VStack(alignment: .leading, spacing: Space.md) {
+                    HStack(spacing: Space.md) {
+                        Text("How does \(who?.firstName ?? "this character") say it? Best guess: \(guess.title)").font(.headline)
+                        Text("\(Int((line.toneConfidence ?? 0) * 100))% sure").foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Play", systemImage: "play.fill") { playTone(line, guess) }
+                            .help("Hear the line in \(who?.firstName ?? "its")’s voice (Space)")
+                        Button("Confirm \(guess.title)") { settleTone(line, guess, items: items) }
+                            .buttonStyle(.borderedProminent)
+                            .help("Keep this tone (Return)")
+                    }
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: Space.sm)], alignment: .leading, spacing: Space.sm) {
+                        ForEach(Tone.allCases) { t in
+                            Button { settleTone(line, t, items: items) } label: {
+                                HStack(spacing: Space.sm) {
+                                    Image(systemName: t.symbol).frame(width: 16)
+                                    Text(t.title)
+                                    Spacer(minLength: 0)
+                                    Text("\(t.key)").font(.caption.monospacedDigit()).foregroundStyle(.tertiary)
+                                }
+                                .padding(.horizontal, Space.sm)
+                                .padding(.vertical, Space.xs)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(t == guess ? Color.accentColor.opacity(0.15) : Color.secondary.opacity(0.08),
+                                            in: RoundedRectangle(cornerRadius: 6))
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .help("The line is \(t.title.lowercased()) (\(t.key))")
+                        }
+                    }
+                    HStack {
+                        Button("Skip") { move(+1, items: items) }
+                            .help("Leave this line for later (↓)")
+                        Spacer()
+                        Text("Return confirms · 1–9 picks · Space plays · ↓ ↑ move")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .controlSize(.small)
+                }
+                .focusable()
+                .focused($focused)
+                .focusEffectDisabled()
+                .onKeyPress(.downArrow) { move(+1, items: items); return .handled }
+                .onKeyPress(.upArrow) { move(-1, items: items); return .handled }
+                .onKeyPress(.return) { settleTone(line, guess, items: items); return .handled }
+                .onKeyPress(.space) { playTone(line, line.tone ?? .neutral); return .handled }
+                .onKeyPress(characters: .decimalDigits) { press in
+                    guard let n = Int(press.characters), n >= 1, n <= Tone.allCases.count else { return .ignored }
+                    settleTone(line, Tone.allCases[n - 1], items: items)
+                    return .handled
+                }
+            }
+            .padding(Space.xl)
+            .frame(maxWidth: 760, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
+        .id(line.id)
+        .onAppear { focused = true }
+    }
+
+    private func playTone(_ line: Line, _ tone: Tone) {
+        VoiceCastingRun.castIfNeeded(document: document)
+        let project = document.project
+        let index = document.index
+        guard let p = project.paragraph(line.paragraphID, index: index) else { return }
+        var segs = SpeechScript.segments(for: p, project: project, index: index, includeNarration: false).filter { $0.lineID == line.id }
+        for i in segs.indices { segs[i].tone = tone }
+        SpeechPlayer.shared.play(segs, resolver: VoiceResolver(project: project))
+    }
+
+    private func settleTone(_ line: Line, _ tone: Tone, items: [Line]) {
+        settle(line, items: items) { document.setTone(tone, for: [line.id], undoManager: undoManager) }
+    }
+
+    // MARK: Voices
+
+    private var voiceList: some View {
+        VStack(spacing: 0) {
+            filterPicker
+            Divider()
+            List(unsureVoices, selection: $selection) { c in
+                HStack(spacing: Space.sm) {
+                    Circle().fill(Color(hexString: c.colorHex)).frame(width: 10, height: 10)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(c.name)
+                        Text(c.voice(for: document.project.settings.engine).map { VoiceCatalog.name(of: $0.choice) + "?" } ?? "No voice yet")
+                            .font(.caption)
+                            .foregroundStyle(Color(nsColor: .attention))
+                    }
+                    Spacer()
+                    Text("\(document.index.stats[c.id]?.lines ?? 0)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                }
+                .tag(c.id)
+            }
+            .listStyle(.inset)
+        }
+    }
+
+    private func voiceCard(_ c: BookCharacter) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Space.lg) {
+                HStack(spacing: Space.md) {
+                    Avatar(character: c, size: 40)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(c.name).font(.title3.weight(.semibold))
+                        Text("\(document.index.stats[c.id]?.lines ?? 0) lines").foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("All Voices…") { workspace.showVoice(c.id) }
+                        .help("Choose from every voice on the Voices page")
+                }
+                CastingProfileView(document: document, character: c)
+                VoiceChooser(document: document, characterID: c.id, compact: true)
+            }
+            .padding(Space.xl)
+            .frame(maxWidth: 760, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
+        .id(c.id)
     }
 }

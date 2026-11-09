@@ -29,6 +29,9 @@ struct ProjectWindow: View {
         .sheet(isPresented: $workspace.showExport) {
             ExportSheet(document: document, isPresented: $workspace.showExport)
         }
+        .sheet(isPresented: $workspace.showAudioExport) {
+            AudioExportSheet(document: document, isPresented: $workspace.showAudioExport)
+        }
         .sheet(item: Binding(get: { workspace.rehearse.map(RehearseTarget.init) }, set: { workspace.rehearse = $0?.id })) { target in
             RehearseView(document: document, characterID: target.id, workspace: workspace)
         }
@@ -79,6 +82,7 @@ struct ProjectWindow: View {
         switch workspace.page {
         case .manuscript: ManuscriptPage(document: document, workspace: workspace)
         case .cast: CastPage(document: document, workspace: workspace)
+        case .voices: VoicesPage(document: document, workspace: workspace)
         case .index: IndexPage(document: document, workspace: workspace)
         case .pronunciations: PronunciationsPage(document: document, workspace: workspace)
         case .record: RecordPage(document: document, workspace: workspace)
@@ -120,6 +124,9 @@ struct ProjectWindow: View {
                 .disabled(needs == 0)
             }
             ToolbarSpacer(.fixed)
+            ToolbarItem {
+                PlayStopButton(document: document, workspace: workspace)
+            }
         }
         ToolbarItem {
             HelpButton(topic: workspace.page.helpTopic)

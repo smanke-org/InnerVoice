@@ -138,6 +138,7 @@ public enum RevisionMerger {
             if let s = project.pronunciations[i].firstParagraphID, !keptIDs.contains(s) { project.pronunciations[i].firstParagraphID = nil }
         }
         RuleAttribution.apply(to: &project)
+        ToneRules.apply(to: &project)
 
         let matchedOld = Set(newToOld.values)
         let removed = oldParas.enumerated().filter { !matchedOld.contains($0.offset) && Words.count($0.element.1.text) > 0 }

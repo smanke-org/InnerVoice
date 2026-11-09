@@ -21,7 +21,15 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | Who's Speaking? | A line the AI could not decide on, shown in red | unassigned, unknown, untagged |
 | Unsure | A line the AI or the rules tagged with a best guess but low confidence; red, with "Name?" in the margin | low confidence |
 | Best guess | The speaker an Unsure line probably has, for the narrator to confirm | suggestion, prediction |
-| Review | The page listing every line that needs the narrator, with context | queue, inbox |
+| Review | The page listing every line, tone and voice that needs the narrator, with context | queue, inbox |
+| Tone | How a line is said: neutral, excited, confused, sad, angry, whispered, scared, tender or sarcastic | emotion, mood, style |
+| Voice | The speech voice a character (or the narrator) is read in, on one engine | TTS voice, speaker voice |
+| Engine | Where voices come from: Apple Voices, Qwen3-TTS or Orpheus, all on the Mac | provider, backend |
+| Casting | Choosing a voice for each character from the summary; Cast Voices Again redoes it | auto-assign, matching |
+| Narrator voice | The voice that reads narration and lines nobody is cast for | default voice |
+| Play Line / Play from Here | Hear the selected line, or a table read from it to the end | preview, speak |
+| Table read | Play from Here with narration read too (Settings › Voices) | read-through |
+| Export Audio | Saving the voices as M4A or WAV files | render, bounce |
 | Assign | Give a line to a character | tag, retag, set speaker |
 | Pin | Keep a character at the top of every speaker list | favorite, star |
 | Delete Text | Take text the narrator doesn't read out of the project (the imported file never changes) | remove, hide, strike |

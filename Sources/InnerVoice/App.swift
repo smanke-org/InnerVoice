@@ -169,6 +169,9 @@ struct FileCommands: Commands {
             Button("Export…") { focus?.workspace.showExport = true }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
                 .disabled(focus == nil)
+            Button("Export Audio…") { focus?.workspace.showAudioExport = true }
+                .keyboardShortcut("e", modifiers: [.command, .option, .shift])
+                .disabled(focus == nil)
         }
     }
 }
@@ -213,6 +216,24 @@ struct BookCommands: Commands {
             .disabled(focus == nil)
             Button("Choose Model…") { focus?.workspace.showModelSheet = true }
                 .disabled(focus == nil)
+            Divider()
+            Button("Play Line") {
+                if let f = focus { PlayCommand.playLine(document: f.document, workspace: f.workspace) }
+            }
+            .keyboardShortcut(.space, modifiers: .option)
+            .disabled(focus == nil || focus?.workspace.selectedLines.isEmpty == true)
+            Button("Play from Here") {
+                if let f = focus { PlayCommand.playFromHere(document: f.document, workspace: f.workspace) }
+            }
+            .keyboardShortcut(.space, modifiers: [.option, .shift])
+            .disabled(focus == nil)
+            Button("Stop Playing") { SpeechPlayer.shared.stop() }
+                .keyboardShortcut(.escape, modifiers: .option)
+                .disabled(!SpeechPlayer.shared.isPlaying)
+            Button("Cast Voices Again") {
+                if let f = focus { f.document.castVoicesAgain(undoManager: f.undoManager) }
+            }
+            .disabled(focus == nil)
         }
     }
 }

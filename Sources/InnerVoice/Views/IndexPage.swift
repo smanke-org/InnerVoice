@@ -174,8 +174,24 @@ struct RehearseView: View {
     @Bindable var workspace: Workspace
     @Environment(\.dismiss) private var dismiss
     @State private var position = 0
+    @AppStorage("rehearse.speakCues") private var speakCues = true
 
     private var lines: [Line] { document.project.lines.filter { $0.speakerID == characterID } }
+
+    /// Says a line in its character's voice and tone.
+    private func play(_ line: Line) {
+        VoiceCastingRun.castIfNeeded(document: document)
+        let project = document.project
+        let index = document.index
+        guard let p = project.paragraph(line.paragraphID, index: index) else { return }
+        let segs = SpeechScript.segments(for: p, project: project, index: index, includeNarration: false).filter { $0.lineID == line.id }
+        SpeechPlayer.shared.play(segs, resolver: VoiceResolver(project: project))
+    }
+
+    private func speakCue() {
+        guard speakCues, lines.indices.contains(position), let cue = cue(for: lines[position]) else { return }
+        play(cue)
+    }
 
     /// The line spoken just before (any speaker), as the cue.
     private func cue(for line: Line) -> Line? {
@@ -201,9 +217,14 @@ struct RehearseView: View {
                 VStack(alignment: .leading, spacing: Space.xl) {
                     if let cue = cue(for: line) {
                         VStack(alignment: .leading, spacing: Space.xs) {
-                            Text("Cue · " + (document.project.character(cue.speakerID)?.name ?? "Who's Speaking?"))
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
+                            HStack(spacing: Space.sm) {
+                                Text("Cue · " + (document.project.character(cue.speakerID)?.name ?? "Who's Speaking?"))
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                Button { play(cue) } label: { Image(systemName: "play.circle") }
+                                    .buttonStyle(.plain)
+                                    .help("Hear the cue in \(document.project.character(cue.speakerID)?.firstName ?? "its speaker")’s voice")
+                            }
                             Text("“" + document.project.text(of: cue, index: document.index) + "”")
                                 .font(.system(size: 15, design: .serif))
                                 .foregroundStyle(.secondary)
@@ -231,6 +252,9 @@ struct RehearseView: View {
             }
             Divider()
             HStack {
+                Toggle("Speak Cues", isOn: $speakCues)
+                    .toggleStyle(.checkbox)
+                    .help("Read each cue line aloud in its character’s voice when you move to a line")
                 Button("Show in Manuscript") {
                     if lines.indices.contains(position) {
                         let l = lines[position]
@@ -252,5 +276,8 @@ struct RehearseView: View {
         }
         .frame(width: 680, height: 460)
         .noInitialFocus()
+        .onChange(of: position) { speakCue() }
+        .onAppear { speakCue() }
+        .onDisappear { SpeechPlayer.shared.stop() }
     }
 }

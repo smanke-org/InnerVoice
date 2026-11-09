@@ -93,10 +93,17 @@ public struct Line: Codable, Identifiable, Hashable, Sendable {
     public var source: AssignmentSource
     /// A quote that carries on from the previous paragraph (no closing mark there).
     public var continuesPrevious: Bool
+    /// How the line is said (for character voices). nil until the rules or the AI read it.
+    /// Optional, like the two below, so projects saved before tones open unchanged.
+    public var tone: Tone?
+    /// 0…1, like `confidence`. Below the project's threshold the tone is Unsure.
+    public var toneConfidence: Double?
+    public var toneSource: ToneSource?
 
     public init(id: UUID = UUID(), paragraphID: UUID, range: TextSpan, kind: LineKind = .spoken,
                 speakerID: UUID? = nil, confidence: Double = 0, source: AssignmentSource = .none,
-                continuesPrevious: Bool = false) {
+                continuesPrevious: Bool = false, tone: Tone? = nil, toneConfidence: Double? = nil,
+                toneSource: ToneSource? = nil) {
         self.id = id
         self.paragraphID = paragraphID
         self.range = range
@@ -105,6 +112,9 @@ public struct Line: Codable, Identifiable, Hashable, Sendable {
         self.confidence = confidence
         self.source = source
         self.continuesPrevious = continuesPrevious
+        self.tone = tone
+        self.toneConfidence = toneConfidence
+        self.toneSource = toneSource
     }
 
     public var isConfirmed: Bool { source == .user }
@@ -172,8 +182,19 @@ public struct BookCharacter: Codable, Identifiable, Hashable, Sendable {
     /// Pinned to the top of every speaker list (Assign To, the right-click menu).
     /// Optional so projects saved before pins open unchanged.
     public var pinned: Bool?
+    /// The voice for each speech engine, keyed by `VoiceEngine.rawValue`, so switching
+    /// engines keeps the casting done for each.
+    public var voices: [String: CastVoice]?
 
     public var isPinned: Bool { pinned ?? false }
+
+    public func voice(for engine: VoiceEngine) -> CastVoice? { voices?[engine.rawValue] }
+
+    public mutating func setVoice(_ voice: CastVoice?, for engine: VoiceEngine) {
+        var all = voices ?? [:]
+        all[engine.rawValue] = voice
+        voices = all.isEmpty ? nil : all
+    }
 
     public init(id: UUID = UUID(), name: String, aliases: [String] = [], colorHex: String,
                 facts: [Fact] = [], notes: String = "", voiceNotes: String = "",
@@ -304,7 +325,21 @@ public struct ProjectSettings: Codable, Hashable, Sendable {
     public var povCharacterID: UUID?
     /// Color narration too (for a first-person narrator voice).
     public var colorNarration = false
+    /// The speech engine the project's voices use. nil is Apple's voices.
+    public var voiceEngine: VoiceEngine?
+    /// The voice that reads narration, per engine (like `BookCharacter.voices`).
+    public var narratorVoices: [String: CastVoice]?
     public init() {}
+
+    public var engine: VoiceEngine { voiceEngine ?? .apple }
+
+    public func narratorVoice(for engine: VoiceEngine) -> CastVoice? { narratorVoices?[engine.rawValue] }
+
+    public mutating func setNarratorVoice(_ voice: CastVoice?, for engine: VoiceEngine) {
+        var all = narratorVoices ?? [:]
+        all[engine.rawValue] = voice
+        narratorVoices = all.isEmpty ? nil : all
+    }
 }
 
 /// What happened in the last revision import, for the review list.
@@ -360,6 +395,9 @@ public struct Project: Codable, Hashable, Sendable {
     public var summariesBuilt: Date?
     public var lastTagged: Date?
     public var revisions: [RevisionRecord]
+    /// When Tag Speakers last read the lines' tones, and when voices were last cast.
+    public var tonesTagged: Date?
+    public var voicesCast: Date?
 
     public init(title: String, author: String = "", sourceFileName: String = "", importedAt: Date = .now,
                 chapters: [Chapter] = [], lines: [Line] = [], characters: [BookCharacter] = [],
@@ -402,6 +440,19 @@ public struct Project: Codable, Hashable, Sendable {
     }
 
     public var linesNeedingYou: Int { lines.reduce(0) { $0 + (needsYou($1) ? 1 : 0) } }
+
+    /// A line's tone needs the narrator when the rules or the AI guessed it unsure.
+    public func toneNeedsYou(_ line: Line) -> Bool {
+        guard line.tone != nil, line.toneSource != .user else { return false }
+        return (line.toneConfidence ?? 0) < settings.unsureBelow
+    }
+
+    /// A character's voice needs the narrator when casting was unsure of it, or found none.
+    public func voiceNeedsYou(_ character: BookCharacter, engine: VoiceEngine? = nil) -> Bool {
+        guard voicesCast != nil else { return false }
+        guard let v = character.voice(for: engine ?? settings.engine) else { return true }
+        return v.source != .user && v.confidence < settings.unsureBelow
+    }
 
     /// Lines without any assignment yet (what Tag Speakers still has to do).
     public var untaggedCount: Int { lines.reduce(0) { $0 + ($1.source == .none ? 1 : 0) } }

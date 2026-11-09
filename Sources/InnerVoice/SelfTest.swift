@@ -30,6 +30,79 @@ enum SelfTest {
         print(ok ? "PASS \(name)" : "FAIL \(name)\(detail.isEmpty ? "" : ": \(detail)")")
     }
 
+    /// Tones, casting, Apple speech, the table read and audio export, on the sample.
+    private static func voices(_ doc: InnerVoiceDocument, undo: UndoManager) async {
+        let p = doc.project
+        let toned = p.lines.filter { $0.tone != nil }.count
+        check("every line has a tone after import", toned == p.lines.count, "\(toned) of \(p.lines.count)")
+        check("the sample has some lines that aren't neutral", p.lines.contains { ($0.tone ?? .neutral) != .neutral })
+
+        let apple = VoiceCatalog.appleVoices()
+        check("Apple voices are found", !apple.isEmpty, "\(apple.count)")
+        doc.castVoicesAgain(undoManager: undo)
+        let speaking = doc.project.characters.filter { (doc.index.stats[$0.id]?.lines ?? 0) > 0 }
+        check("casting gives every speaking character a voice", speaking.allSatisfy { $0.voice(for: .apple) != nil })
+        check("casting gives the narrator a voice", doc.project.settings.narratorVoice(for: .apple) != nil)
+        undo.undo()
+        check("Undo Cast Voices takes the voices back", doc.project.characters.allSatisfy { $0.voice(for: .apple) == nil })
+        undo.redo()
+
+        if let mara = doc.project.characters.first(where: { $0.name == "Mara Quinn" }), let v = apple.first(where: { $0.gender == .female }) {
+            doc.setVoice(VoiceChoice(engine: .apple, voiceID: v.voiceID), for: mara.id, undoManager: undo)
+            doc.castVoicesAgain(undoManager: undo)
+            check("casting again keeps a voice you chose", doc.project.character(mara.id)?.voice(for: .apple)?.choice.voiceID == v.voiceID)
+        }
+
+        if let l = doc.project.lines.first {
+            doc.setTone(.angry, for: [l.id], undoManager: undo)
+            var copy = doc.project
+            ToneRules.apply(to: &copy)
+            check("the rules never change a tone you set", copy.lines.first?.tone == .angry && copy.lines.first?.toneSource == .user)
+            undo.undo()
+        }
+
+        // Real speech: one line in its voice, cached the second time.
+        let resolver = VoiceResolver(project: doc.project)
+        let segs = SpeechScript.segments(chapter: 0, project: doc.project, index: doc.index, includeNarration: true)
+        check("the table read has narration and lines", segs.contains { $0.lineID == nil } && segs.contains { $0.lineID != nil })
+        if let seg = segs.first(where: { $0.lineID != nil }), let request = resolver.request(for: seg) {
+            do {
+                SpeechRenderer.shared.clearCache()
+                let start = Date()
+                let audio = try await SpeechRenderer.shared.render(request)
+                let seconds = Double(audio.frameLength) / audio.format.sampleRate
+                check("an Apple voice speaks a line", seconds > 0.3, String(format: "%.2f s of audio", seconds))
+                check("the line is cached", SpeechRenderer.shared.isCached(request))
+                print("SPEECH first line in \(Int(Date().timeIntervalSince(start) * 1000)) ms, \(String(format: "%.1f", seconds)) s")
+            } catch {
+                check("an Apple voice speaks a line", false, error.localizedDescription)
+            }
+        }
+        // The player goes through segments in order and stops at the end (silently in tests).
+        var heard: [String] = []
+        let two = Array(segs.filter { $0.lineID != nil }.prefix(2))
+        SpeechPlayer.shared.play(two, resolver: resolver) { heard.append($0.id) }
+        let until = Date().addingTimeInterval(20)
+        while SpeechPlayer.shared.isPlaying, Date() < until { try? await Task.sleep(for: .milliseconds(100)) }
+        check("Play plays each line in order, then stops", heard == two.map(\.id) && !SpeechPlayer.shared.isPlaying,
+              "\(heard.count) of \(two.count)")
+        check("playing leaves no error", SpeechPlayer.shared.failure == nil, SpeechPlayer.shared.failure ?? "")
+
+        let dir = FileManager.default.temporaryDirectory.appending(path: "iv-audio-selftest")
+        try? FileManager.default.removeItem(at: dir)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let few = Array(segs.prefix(6))
+        do {
+            let urls = try await AudioExporter.write([AudioExporter.Part(name: "Sample", segments: few)], to: dir, format: .m4a, resolver: resolver) { _, _, _ in }
+            let size = urls.first.flatMap { try? $0.resourceValues(forKeys: [.fileSizeKey]).fileSize } ?? 0
+            check("Export Audio writes an M4A file", size > 2000, "\(size) bytes")
+        } catch {
+            check("Export Audio writes an M4A file", false, error.localizedDescription)
+        }
+        try? FileManager.default.removeItem(at: dir)
+        SpeechRenderer.shared.clearCache()
+    }
+
     private static func run() async {
         let project = SeedData.project()
         let doc = InnerVoiceDocument(project: project)
@@ -218,6 +291,8 @@ enum SelfTest {
         }())
         _ = index
 
+        await voices(doc, undo: undo)
+
         if let path = ProcessInfo.processInfo.environment["APP_SELFTEST_MODEL"] {
             await liveModel(path: path)
         }
@@ -232,6 +307,8 @@ enum SelfTest {
             project.lines[i].confidence = 0
         }
         let doc = InnerVoiceDocument(project: project)
+        let toneAsks = doc.project.chapters.indices.map { TonePrompt.chunks(project: doc.project, index: doc.index, chapterIndex: $0).reduce(0) { $0 + $1.labels.count } }
+        print("LIVE tone questions per chapter before tagging: \(toneAsks)")
         let manager = ModelManager.shared
         manager.selection = path == "apple" ? "apple" : "file:" + path
         let start = Date()
@@ -253,6 +330,15 @@ enum SelfTest {
         print("LIVE \(manager.selectionName): \(right)/\(total) lines right (\(Int(score * 100))%) in \(Int(seconds)) s")
         for w in wrong { print("  wrong: \(w)") }
         check("live model tags most sample lines right", score >= 0.6, "\(Int(score * 100))%")
+        // Tones: the AI read the lines the words left open.
+        let byAI = p.lines.filter { $0.toneSource == .ai }
+        let counts = Dictionary(grouping: p.lines.compactMap(\.tone), by: { $0 }).mapValues(\.count)
+        print("LIVE tones: \(byAI.count) read by the AI; " + counts.sorted { $0.value > $1.value }.map { "\($0.key.rawValue) \($0.value)" }.joined(separator: ", "))
+        for l in p.lines where l.toneSource == .ai && (l.tone ?? .neutral) != .neutral {
+            print("  tone: “\(p.text(of: l, index: index).prefix(40))” → \(l.tone!.rawValue) \(Int((l.toneConfidence ?? 0) * 100))%")
+        }
+        check("live model reads tones", byAI.count >= 5, "\(byAI.count)")
+        check("tones are tagged with a date", p.tonesTagged != nil)
         manager.unloadNow()
     }
 }
