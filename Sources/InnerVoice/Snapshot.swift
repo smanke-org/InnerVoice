@@ -39,6 +39,12 @@ enum Snapshot {
                     capture(start, "\(dir)/start-\(mode).png")
                 }
             }
+            // The usual reading look, whatever the person chose (in memory only): pictures
+            // stay the same from run to run.
+            reading("reading.fontSize", ReadingStyle.standardSize)
+            reading("reading.serif", true)
+            reading("reading.lineSpacing", LineSpacing.single.rawValue)
+            reading("reading.marginNames", MarginNames.initials.rawValue)
             guard let newDocument else { print("SNAPSHOT no newDocument action"); finish(); return }
             // Anything else open came from outside this run: close it unsaved, untouched.
             for doc in NSDocumentController.shared.documents { doc.close() }
@@ -96,11 +102,11 @@ enum Snapshot {
                 }
                 await shot("manuscript-first-names", settle: 1.2) {
                     reading("reading.marginNames", MarginNames.firstName.rawValue)
-                    reading("reading.lineSpacing", nil)
+                    reading("reading.lineSpacing", LineSpacing.single.rawValue)
                     document.updateSettings("", undoManager: nil) { $0.style = .outline }
                     document.objectWillChange.send()
                 }
-                reading("reading.marginNames", nil)
+                reading("reading.marginNames", MarginNames.initials.rawValue)
                 document.updateSettings("", undoManager: nil) { $0.style = .highlight }
                 document.objectWillChange.send()
                 if wants("assign-popover"), let red {
