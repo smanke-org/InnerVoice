@@ -103,6 +103,93 @@ enum SelfTest {
         SpeechRenderer.shared.clearCache()
     }
 
+    /// Qwen3-TTS and Orpheus speak real lines (APP_SELFTEST_VOICES=1, with the models in
+    /// APP_VOICE_MODELS). APP_SELFTEST_AUDIO_OUT keeps the audio for listening.
+    private static func modelVoices(_ doc: InnerVoiceDocument, undo: UndoManager) async {
+        let out = ProcessInfo.processInfo.environment["APP_SELFTEST_AUDIO_OUT"].map { URL(fileURLWithPath: $0) }
+        if let out { try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true) }
+        SpeechRenderer.shared.clearCache()
+        for engine in [VoiceEngine.orpheus, .qwen] {
+            guard ModelSpeech.isInstalled(engine) else {
+                check("\(engine.title) is downloaded", false, VoicePack.folder.path)
+                continue
+            }
+            doc.setVoiceEngine(engine, undoManager: undo)
+            let speaking = doc.project.characters.filter { (doc.index.stats[$0.id]?.lines ?? 0) > 0 }
+            check("\(engine.title): casting gives every speaking character a voice", speaking.allSatisfy { $0.voice(for: engine) != nil })
+            let resolver = VoiceResolver(project: doc.project)
+            let segs = SpeechScript.segments(chapter: 0, project: doc.project, index: doc.index, includeNarration: true)
+            // A narration piece and the first two lines of the most talkative character.
+            let top = speaking.max { (doc.index.stats[$0.id]?.lines ?? 0) < (doc.index.stats[$1.id]?.lines ?? 0) }
+            let picks = Array(segs.filter { $0.lineID == nil && $0.text.count > 20 }.prefix(1)) + Array(segs.filter { $0.speakerID == top?.id }.prefix(2))
+            for (n, seg) in picks.enumerated() {
+                guard let request = resolver.request(for: seg) else { continue }
+                do {
+                    let start = Date()
+                    let audio = try await SpeechRenderer.shared.render(request)
+                    let seconds = Double(audio.frameLength) / audio.format.sampleRate
+                    let took = Date().timeIntervalSince(start)
+                    let what = seg.lineID == nil ? "narration" : "a line (\(seg.tone.rawValue))"
+                    check("\(engine.title) speaks \(what)", seconds > 0.5 && seconds < 60, String(format: "%.1f s of audio in %.1f s", seconds, took))
+                    print("VOICE \(engine.rawValue) #\(n) \(seg.sound.map { "<\($0.rawValue)> " } ?? "")\(seg.text.prefix(60)) — \(String(format: "%.1f s audio, %.1f s", seconds, took))")
+                    if let out { SpeechRenderer.write(audio, to: out.appending(path: "\(engine.rawValue)-\(n).caf")) }
+                } catch {
+                    check("\(engine.title) speaks a line", false, error.localizedDescription)
+                }
+            }
+            // A long narration paragraph is read to the end, not cut off after a dozen seconds.
+            let long = Array(repeating: "The lamp turned slowly above the rocks, and the keeper counted every pass of the beam until morning came.", count: 4).joined(separator: " ")
+            if let narrator = resolver.narrator {
+                do {
+                    let audio = try await SpeechRenderer.shared.render(SpeechRequest(text: long, choice: narrator, tone: .neutral, kind: nil))
+                    let seconds = Double(audio.frameLength) / audio.format.sampleRate
+                    let words = Double(long.split(separator: " ").count)
+                    check("\(engine.title) reads a long paragraph to the end", words / seconds > 1.5 && words / seconds < 4.5,
+                          String(format: "%.0f words in %.1f s", words, seconds))
+                    if let out { SpeechRenderer.write(audio, to: out.appending(path: "\(engine.rawValue)-long.caf")) }
+                } catch {
+                    check("\(engine.title) reads a long paragraph to the end", false, error.localizedDescription)
+                }
+            }
+            if let seg = picks.last, let request = resolver.request(for: seg) {
+                let start = Date()
+                _ = try? await SpeechRenderer.shared.render(request)
+                check("\(engine.title): a line plays at once the second time", Date().timeIntervalSince(start) < 0.5)
+            }
+        }
+        doc.setVoiceEngine(.apple, undoManager: undo)
+        await ModelSpeech.unload()
+        SpeechRenderer.shared.clearCache()
+    }
+
+    /// The voice pack download, with the small audio codec only (APP_SELFTEST_DOWNLOAD=1
+    /// and APP_VOICE_MODELS set to an empty folder).
+    private static func voiceDownload() async {
+        let repo = "mlx-community/snac_24khz"
+        let pack = VoicePack(engine: .orpheus, repos: [repo], bytes: 80_000_000, summary: "test")
+        let manager = VoiceModelManager.shared
+        check("the codec isn't there before the download", !VoicePack.isDownloaded(repo), VoicePack.folder.path)
+        var progress: [Double] = []
+        let watch = Task { @MainActor in
+            while !Task.isCancelled {
+                if case .downloading(let p)? = manager.states[.orpheus] { progress.append(p) }
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+        }
+        let start = Date()
+        manager.download(pack)
+        await manager.waitForDownload(.orpheus)
+        watch.cancel()
+        let failed: String? = if case .failed(let m)? = manager.states[.orpheus] { m } else { nil }
+        check("a voice pack downloads", VoicePack.isDownloaded(repo) && failed == nil,
+              failed ?? String(format: "%.1f s", Date().timeIntervalSince(start)))
+        check("the download shows progress", progress.count >= 2 && progress.last ?? 0 > 0.5, "\(progress.count) updates, last \(progress.last ?? 0)")
+        check("a finished download leaves no state", manager.states[.orpheus] == nil)
+        manager.remove(pack)
+        let left = (try? FileManager.default.contentsOfDirectory(atPath: VoicePack.folder.path))?.filter { !$0.hasPrefix(".") && $0 != "mlx-audio" } ?? []
+        check("Remove takes the pack and its download cache away", !VoicePack.isDownloaded(repo) && left.isEmpty, left.joined(separator: ", "))
+    }
+
     private static func run() async {
         let project = SeedData.project()
         let doc = InnerVoiceDocument(project: project)
@@ -292,6 +379,8 @@ enum SelfTest {
         _ = index
 
         await voices(doc, undo: undo)
+        if ProcessInfo.processInfo.environment["APP_SELFTEST_VOICES"] != nil { await modelVoices(doc, undo: undo) }
+        if ProcessInfo.processInfo.environment["APP_SELFTEST_DOWNLOAD"] != nil { await voiceDownload() }
 
         if let path = ProcessInfo.processInfo.environment["APP_SELFTEST_MODEL"] {
             await liveModel(path: path)

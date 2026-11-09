@@ -149,6 +149,16 @@ enum Snapshot {
                     await shot("voices", settle: 1.2) { workspace.voiceTarget = .character(main.id); workspace.page = .voices }
                 }
                 await shot("voices-narrator", settle: 1.0) { workspace.voiceTarget = .narrator; workspace.page = .voices }
+                if let main = document.project.characters.max(by: { (document.index.stats[$0.id]?.lines ?? 0) < (document.index.stats[$1.id]?.lines ?? 0) }) {
+                    for engine in [VoiceEngine.orpheus, .qwen] {
+                        await shot("voices-\(engine.rawValue)", settle: 1.2) {
+                            document.setVoiceEngine(engine, undoManager: nil)
+                            workspace.voiceTarget = .character(main.id)
+                            workspace.page = .voices
+                        }
+                    }
+                    document.setVoiceEngine(.apple, undoManager: nil)
+                }
                 await shot("review-voices", settle: 1.0) { workspace.reviewFilter = "voices"; workspace.page = .review }
                 await shot("audio-export-sheet") { workspace.page = .manuscript; workspace.showAudioExport = true }
                 workspace.showAudioExport = false

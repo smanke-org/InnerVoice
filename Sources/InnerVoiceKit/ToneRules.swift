@@ -33,21 +33,23 @@ public enum ToneRules {
     public static let plain = 0.65
     public static let punctuationGuess = 0.45
 
-    /// The tone the words around a line suggest, with how sure that is.
-    public static func tone(for line: Line, in paragraph: Paragraph, linesInParagraph: [Line]) -> (Tone, Double) {
+    /// The narration that tells how a line is said: after it, up to the next line or 90
+    /// characters, and the last sentence before it ("Her voice shook. “I can’t.”").
+    static func context(for line: Line, in paragraph: Paragraph, linesInParagraph: [Line]) -> (after: String, before: String) {
         let ns = paragraph.text as NSString
-        let lineText = paragraph.substring(line.range)
-        // The narration after the line, up to the next line or the end of the sentence,
-        // then the narration just before it ("Her voice shook. “I can’t.”").
         let later = linesInParagraph.filter { $0.range.location > line.range.location }.map(\.range.location).min() ?? ns.length
         let afterRange = NSRange(location: min(line.range.end, ns.length), length: max(0, min(later, line.range.end + 90, ns.length) - line.range.end))
         let earlier = linesInParagraph.filter { $0.range.end <= line.range.location }.map(\.range.end).max() ?? 0
         let beforeStart = max(earlier, line.range.location - 90)
-        let beforeRange = NSRange(location: beforeStart, length: max(0, line.range.location - beforeStart))
-        let after = ns.substring(with: afterRange).lowercased()
-        let before = ns.substring(with: beforeRange).lowercased()
+        let beforeRange = NSRange(location: beforeStart, length: max(0, min(line.range.location, ns.length) - beforeStart))
+        return (ns.substring(with: afterRange).lowercased(), lastSentence(ns.substring(with: beforeRange).lowercased()))
+    }
 
-        if let t = cue(in: after) ?? cue(in: lastSentence(before)) { return (t, sureCue) }
+    /// The tone the words around a line suggest, with how sure that is.
+    public static func tone(for line: Line, in paragraph: Paragraph, linesInParagraph: [Line]) -> (Tone, Double) {
+        let lineText = paragraph.substring(line.range)
+        let (after, before) = context(for: line, in: paragraph, linesInParagraph: linesInParagraph)
+        if let t = cue(in: after) ?? cue(in: before) { return (t, sureCue) }
 
         let trimmed = lineText.trimmingCharacters(in: .whitespacesAndNewlines)
         if line.kind == .written { return (.neutral, 0.8) }
@@ -68,6 +70,35 @@ public enum ToneRules {
             }
         }
         return best?.0
+    }
+
+    /// Sounds a speech tag asks for, which engines that can make them (Orpheus) add.
+    static let sounds: [(VocalSound, [String])] = [
+        (.laugh, ["laughed", "laughing", "with a laugh", "giggled", "giggling"]),
+        (.chuckle, ["chuckled", "chuckling", "with a chuckle"]),
+        (.sigh, ["sighed", "sighing", "with a sigh"]),
+        (.gasp, ["gasped", "gasping", "with a gasp"]),
+        (.groan, ["groaned", "groaning", "with a groan"]),
+        (.sniffle, ["sniffled", "sniffed", "sniffling"]),
+        (.yawn, ["yawned", "yawning", "with a yawn"]),
+        (.cough, ["coughed", "coughing"]),
+    ]
+
+    /// The sound the narration around a line asks for ("she sighed" → a sigh).
+    public static func sound(for line: Line, in paragraph: Paragraph, linesInParagraph: [Line]) -> VocalSound? {
+        guard line.kind != .written else { return nil }
+        let (after, before) = context(for: line, in: paragraph, linesInParagraph: linesInParagraph)
+        for text in [after, before] where !text.isEmpty {
+            var best: (VocalSound, String.Index)?
+            for (sound, words) in sounds {
+                for w in words {
+                    guard let r = text.range(of: "\\b" + NSRegularExpression.escapedPattern(for: w) + "\\b", options: .regularExpression) else { continue }
+                    if best == nil || r.lowerBound < best!.1 { best = (sound, r.lowerBound) }
+                }
+            }
+            if let best { return best.0 }
+        }
+        return nil
     }
 
     static func lastSentence(_ s: String) -> String {

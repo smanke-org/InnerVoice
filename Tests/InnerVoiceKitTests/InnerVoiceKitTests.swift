@@ -601,6 +601,22 @@ private func deletionProject() -> (Project, UUID, UUID, UUID) {
     #expect(tone("He was")?.tone == .sad)
 }
 
+@Test func speechTagsGiveSounds() {
+    let p = ProjectBuilder.make(from: book([
+        "“Not again,” Tom sighed.",
+        "Pip laughed. “You fell in!”",
+        "“Look out!” Mara gasped, and then said nothing.",
+        "“Fine,” said Tom.",
+    ]), fileName: "t.txt")
+    let index = BookIndex(p)
+    let segs = SpeechScript.segments(chapter: 0, project: p, index: index, includeNarration: false)
+    func sound(_ prefix: String) -> VocalSound? { segs.first { $0.text.hasPrefix(prefix) }?.sound }
+    #expect(sound("Not again") == .sigh)
+    #expect(sound("You fell") == .laugh)
+    #expect(sound("Look out") == .gasp)
+    #expect(sound("Fine") == nil)
+}
+
 @Test func tonePromptAgreementAndNarratorTones() {
     var p = ProjectBuilder.make(from: book(["“We found it!” said Pip.", "“Stop,” said Tom."]), fileName: "t.txt")
     let index = BookIndex(p)

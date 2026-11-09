@@ -1,5 +1,5 @@
 #!/bin/bash
-# Cuts a release: universal build, notarize, disk image, GitHub release at smanke-org/InnerVoice.
+# Cuts a release: Apple silicon build (MLX speech models need it), notarize, disk image, GitHub release at smanke-org/InnerVoice.
 #
 # One command rather than four remembered ones: a release published by hand without the
 # fixed-name disk image once broke the README's download link (and here the updater, which
@@ -61,18 +61,19 @@ if [ -z "${IDENTITY}" ]; then
   exit 1
 fi
 
-echo "==> Building ${VERSION} (universal) with ${IDENTITY}"
+echo "==> Building ${VERSION} (Apple silicon) with ${IDENTITY}"
 # build.sh deletes the product first and refuses a binary the build didn't write, so the
 # bundle is provably this build. BUILD_NUMBER makes CFBundleVersion the version too.
-SIGN_IDENTITY="${IDENTITY}" BUILD_NUMBER="${VERSION}" ./build.sh --universal
+SIGN_IDENTITY="${IDENTITY}" BUILD_NUMBER="${VERSION}" ./build.sh
 APP=".build/app/InnerVoice.app"
 BUILT=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "${APP}/Contents/Info.plist")
 [ "${BUILT}" = "${VERSION}" ] || { echo "Built ${BUILT}, expected ${VERSION}." >&2; exit 1; }
 ARCHS=$(lipo -archs "${APP}/Contents/MacOS/InnerVoice")
 case "${ARCHS}" in
-  *arm64*x86_64*|*x86_64*arm64*) echo "    architectures: ${ARCHS}" ;;
-  *) echo "The binary isn't universal (${ARCHS})." >&2; exit 1 ;;
+  arm64) echo "    architectures: ${ARCHS}" ;;
+  *) echo "The binary isn't Apple silicon (${ARCHS})." >&2; exit 1 ;;
 esac
+[ -f "${APP}/Contents/Resources/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib" ] || { echo "The MLX Metal library is missing." >&2; exit 1; }
 
 ./notarize.sh
 REQUIRE_NOTARIZED=1 ./make_dmg.sh

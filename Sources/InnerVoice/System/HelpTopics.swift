@@ -177,7 +177,13 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
             .heading("Exporting audio"),
             .text("File › Export Audio… saves the whole book, one chapter or one character's lines as M4A or WAV files, one file per chapter or all in one."),
             .heading("Engines"),
-            .text("Apple Voices come with your Mac and work right away; more natural Premium voices are a free download in System Settings › Accessibility › Spoken Content. They can't act, so a tone only changes speed and pitch a little. Qwen3-TTS and Orpheus are AI voices that act out each tone; they're downloaded once from Settings › Voices when they're available."),
+            .text("Choose the engine for each project from the menu at the top of the Voices page. Each engine keeps its own casting, so switching back and forth loses nothing."),
+            .keys([
+                ("Apple Voices", "Come with your Mac and work right away. They can't act, so a tone only changes speed and pitch a little. More natural Premium voices are a free download in System Settings › Accessibility › Spoken Content."),
+                ("Qwen3-TTS", "Designs a voice for each character from a description written from their summary, such as \"An older man with a deep, gravelly voice, speaking English with a Scottish accent.\" Edit the description on the Voices page to change the voice. It records a short sample of each voice in each tone, then speaks every line from that sample, so the voice stays the same and the tone comes through. 6.2 GB."),
+                ("Orpheus", "Eight natural American voices that act from the words. A sigh, laugh, gasp or groan in the speech tag (\"she sighed\") is performed too. 3.6 GB."),
+            ]),
+            .text("Download Qwen3-TTS and Orpheus once from Settings › Voices, or from the Voices page when you choose one. Downloading is the only time they use the internet; your book never leaves the Mac. They need a Mac with Apple silicon, and the first line takes a few seconds while the engine loads."),
             .tip("Made audio is kept in a cache, so a line plays at once the second time. Settings › Voices shows its size and can clear it."),
         ]
 

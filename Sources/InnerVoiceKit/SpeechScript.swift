@@ -14,9 +14,11 @@ public struct SpeechSegment: Hashable, Identifiable, Sendable {
     public var kind: LineKind?
     /// Silence after it, in seconds.
     public var pauseAfter: Double
+    /// A sigh, laugh or gasp the speech tag asks for.
+    public var sound: VocalSound?
 
     public init(id: String, paragraphID: UUID, lineID: UUID? = nil, speakerID: UUID? = nil, text: String,
-                tone: Tone = .neutral, kind: LineKind? = nil, pauseAfter: Double = 0.3) {
+                tone: Tone = .neutral, kind: LineKind? = nil, pauseAfter: Double = 0.3, sound: VocalSound? = nil) {
         self.id = id
         self.paragraphID = paragraphID
         self.lineID = lineID
@@ -25,6 +27,7 @@ public struct SpeechSegment: Hashable, Identifiable, Sendable {
         self.tone = tone
         self.kind = kind
         self.pauseAfter = pauseAfter
+        self.sound = sound
     }
 }
 
@@ -67,7 +70,8 @@ public enum SpeechScript {
             let text = clean(ns.substring(with: r))
             if !text.isEmpty, speaker == nil || line.speakerID == speaker {
                 out.append(SpeechSegment(id: "\(paragraph.id)-\(n)", paragraphID: paragraph.id, lineID: line.id, speakerID: line.speakerID,
-                                         text: apply(say, to: text), tone: line.tone ?? .neutral, kind: line.kind, pauseAfter: 0.25))
+                                         text: apply(say, to: text), tone: line.tone ?? .neutral, kind: line.kind, pauseAfter: 0.25,
+                                         sound: ToneRules.sound(for: line, in: paragraph, linesInParagraph: lines)))
                 n += 1
             }
             cursor = NSMaxRange(r)

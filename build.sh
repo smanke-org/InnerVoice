@@ -6,7 +6,6 @@
 #        ./build.sh --debug    debug build
 #        ./build.sh --install  also replace /Applications/InnerVoice.app (quits the running copy)
 #        ./build.sh --open     install, then open it
-#        ./build.sh --universal  arm64 + x86_64 (release.sh uses this)
 set -euo pipefail
 here=${0:A:h}
 name="InnerVoice"
@@ -15,7 +14,7 @@ bundle="com.smanke.InnerVoice"
 config=release
 [[ " $* " == *" --debug "* ]] && config=debug
 args=(-c $config --package-path "$here")
-[[ " $* " == *" --universal "* ]] && args+=(--arch arm64 --arch x86_64)
+# Apple silicon only: the speech models run on MLX.
 
 [[ -d "$here/Frameworks/llama.xcframework" ]] || "$here/Tools/fetch_llama.sh"
 
@@ -42,6 +41,10 @@ ditto "$here/Frameworks/llama.xcframework/macos-arm64_x86_64/llama.framework" "$
 [[ -f "$here/Resources/AppIcon.icns" ]] || "$here/Tools/make_icns.sh"
 cp -X "$here/Resources/AppIcon.icns" "$app/Contents/Resources/"
 [[ -d "$here/Resources/Help" ]] && ditto "$here/Resources/Help" "$app/Contents/Resources/Help"
+# SwiftPM resource bundles (MLX's Metal library, tokenizer defaults) next to the app's
+# resources, where their Bundle.module looks first. Without the metallib MLX can't run.
+for b in "$bindir"/*.bundle; do ditto "$b" "$app/Contents/Resources/${b:t}"; done
+[[ -f "$app/Contents/Resources/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib" ]] || { echo "build failed: no MLX metallib"; exit 1; }
 xattr -cr "$app"
 
 identity="${SIGN_IDENTITY:-}"

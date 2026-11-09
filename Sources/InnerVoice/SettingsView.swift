@@ -111,6 +111,45 @@ struct RecordingSettings: View {
     }
 }
 
+/// A downloadable speech engine: what it does, its size, and Download, progress or Remove.
+struct VoicePackRow: View {
+    let pack: VoicePack
+    private var manager: VoiceModelManager { .shared }
+
+    var body: some View {
+        LabeledContent {
+            switch manager.states[pack.engine] {
+            case .downloading(let p)?:
+                HStack(spacing: Space.sm) {
+                    ProgressView(value: p).frame(width: 120)
+                    Text("\(Int(p * 100))% of \(pack.sizeDescription)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                    Button("Cancel") { manager.cancel(pack.engine) }.controlSize(.small)
+                }
+            case .failed(let message)?:
+                HStack(spacing: Space.sm) {
+                    Text(message).font(.caption).foregroundStyle(.orange).lineLimit(2)
+                    Button("Download") { manager.download(pack.engine) }.controlSize(.small)
+                }
+            case nil:
+                if manager.isInstalled(pack.engine) {
+                    HStack(spacing: Space.sm) {
+                        Label("Installed", systemImage: "checkmark.circle.fill").labelStyle(.titleAndIcon).foregroundStyle(.secondary)
+                        Button("Remove") { manager.remove(pack.engine) }
+                            .controlSize(.small)
+                            .help("Move the \(pack.engine.title) models to the Trash (\(pack.sizeDescription))")
+                    }
+                } else {
+                    Button("Download (\(pack.sizeDescription))") { manager.download(pack.engine) }
+                        .help("Download \(pack.engine.title) from Hugging Face")
+                }
+            }
+        } label: {
+            Text(pack.engine.title)
+            Text(pack.summary)
+        }
+    }
+}
+
 struct VoicesSettings: View {
     @AppStorage("voices.readNarration") private var readNarration = true
     @AppStorage("voices.followAlong") private var followAlong = true
@@ -131,7 +170,7 @@ struct VoicesSettings: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        Section("Engines") {
+        Section {
             LabeledContent("Apple Voices") {
                 HStack {
                     Text("Built in").foregroundStyle(.secondary)
@@ -141,8 +180,14 @@ struct VoicesSettings: View {
                     .help("Download free Premium voices in System Settings › Accessibility › Spoken Content › System Voice › Manage Voices")
                 }
             }
-            LabeledContent("Qwen3-TTS") { Text(ModelSpeech.isInstalled(.qwen) ? "Installed" : "Not available yet").foregroundStyle(.secondary) }
-            LabeledContent("Orpheus") { Text(ModelSpeech.isInstalled(.orpheus) ? "Installed" : "Not available yet").foregroundStyle(.secondary) }
+            VoicePackRow(pack: .qwen)
+            VoicePackRow(pack: .orpheus)
+        } header: {
+            Text("Engines")
+        } footer: {
+            Text("Qwen3-TTS and Orpheus run on this Mac. Downloading them is the only time they use the internet; your book never leaves the Mac. Choose the engine for each project on its Voices page.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         Section {
             LabeledContent("Saved audio") {

@@ -38,6 +38,7 @@ import SwiftUI
     func setVoiceEngine(_ engine: VoiceEngine, undoManager: UndoManager?) {
         updateSettings("Change Voice Engine", undoManager: undoManager) { $0.voiceEngine = engine == .apple ? nil : engine }
         VoiceCastingRun.castIfNeeded(document: self)
+        ModelSpeech.prepare(engine)
     }
 
     /// Casts every voice again from the summaries; the narrator's choices stay.

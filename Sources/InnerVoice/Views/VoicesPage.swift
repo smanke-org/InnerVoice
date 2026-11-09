@@ -33,7 +33,7 @@ struct VoicesPage: View {
             ToolbarItem {
                 Picker("Engine", selection: Binding(get: { engine }, set: { document.setVoiceEngine($0, undoManager: undoManager) })) {
                     ForEach(VoiceEngine.allCases) { e in
-                        Text(e.title + (ModelSpeech.isInstalled(e) ? "" : " (Not Installed)")).tag(e)
+                        Text(e.title + (ModelSpeech.isInstalled(e) ? "" : " (Not Downloaded)")).tag(e)
                     }
                 }
                 .help("The speech engine the project’s voices use. Each engine keeps its own casting.")
@@ -48,12 +48,13 @@ struct VoicesPage: View {
         }
         .onAppear {
             VoiceCastingRun.castIfNeeded(document: document)
+            ModelSpeech.prepare(engine)
         }
     }
 
     private var subtitle: String {
         let unsure = cast.filter { document.project.voiceNeedsYou($0) }.count
-        return unsure > 0 ? "\(unsure) voices need you" : engine.title
+        return unsure == 1 ? "1 voice needs you" : unsure > 1 ? "\(unsure) voices need you" : engine.title
     }
 
     private var list: some View {
@@ -211,10 +212,13 @@ struct VoiceChooser: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Space.lg) {
             current
-            if !ModelSpeech.isInstalled(engine) {
-                Label("\(engine.title) isn’t installed yet, so these voices can’t be heard. Use Apple Voices for now.", systemImage: "exclamationmark.triangle")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+            if !ModelSpeech.isInstalled(engine), let pack = VoicePack.pack(for: engine) {
+                VStack(alignment: .leading, spacing: Space.sm) {
+                    Label("\(engine.title) isn’t downloaded yet, so these voices can’t be heard.", systemImage: "arrow.down.circle")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    VoicePackRow(pack: pack)
+                }
             }
             if engine == .qwen {
                 design

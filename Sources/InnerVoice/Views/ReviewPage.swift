@@ -79,7 +79,7 @@ struct ReviewPage: View {
                         ContentUnavailableView {
                             Label(filter == .guesses ? "No Unsure Guesses Left" : "Nothing Here", systemImage: "checkmark.circle")
                         } description: {
-                            Text(other == .voices ? "\(count(other)) voices need you." : "\(count(other)) more lines need you.")
+                            Text(other == .voices ? (count(other) == 1 ? "1 voice needs you." : "\(count(other)) voices need you.") : (count(other) == 1 ? "1 more line needs you." : "\(count(other)) more lines need you."))
                         } actions: {
                             Button("Review \(other.title)") { filterRaw = other.rawValue }
                         }

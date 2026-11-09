@@ -25,6 +25,10 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | Tone | How a line is said: neutral, excited, confused, sad, angry, whispered, scared, tender or sarcastic | emotion, mood, style |
 | Voice | The speech voice a character (or the narrator) is read in, on one engine | TTS voice, speaker voice |
 | Engine | Where voices come from: Apple Voices, Qwen3-TTS or Orpheus, all on the Mac | provider, backend |
+| Voice pack | The downloaded models for Qwen3-TTS or Orpheus, in Settings › Voices | model files, weights |
+| Voice description | The words Qwen3-TTS designs a character's voice from | prompt, voice prompt |
+| Voice sample | A few seconds Qwen3-TTS records in a designed voice (one per tone) and speaks every line from | reference clip |
+| Sound | A sigh, laugh, gasp, groan, sniffle, yawn or cough a speech tag asks for; Orpheus performs it | effect, tag |
 | Casting | Choosing a voice for each character from the summary; Cast Voices Again redoes it | auto-assign, matching |
 | Narrator voice | The voice that reads narration and lines nobody is cast for | default voice |
 | Play Line / Play from Here | Hear the selected line, or a table read from it to the end | preview, speak |

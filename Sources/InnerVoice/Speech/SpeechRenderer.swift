@@ -8,11 +8,14 @@ struct SpeechRequest: Hashable, Sendable {
     var choice: VoiceChoice
     var tone: Tone
     var kind: LineKind?
+    /// A sigh or laugh from the speech tag (Orpheus only).
+    var sound: VocalSound? = nil
 
     /// The file name of the rendered audio in the cache. Version 1 of the rendering.
     var cacheKey: String {
-        let parts = ["v1", choice.engine.rawValue, choice.voiceID, choice.design ?? "", String(choice.rate ?? 1), String(choice.pitch ?? 1),
+        var parts = ["v1", choice.engine.rawValue, choice.voiceID, choice.design ?? "", String(choice.rate ?? 1), String(choice.pitch ?? 1),
                      tone.rawValue, kind?.rawValue ?? "narration", text]
+        if choice.engine == .orpheus, let sound { parts.append(sound.rawValue) }
         return SHA256.hash(data: Data(parts.joined(separator: "\u{1F}").utf8)).map { String(format: "%02x", $0) }.joined()
     }
 }
@@ -241,13 +244,3 @@ enum AppleSpeech {
     }
 }
 
-/// Qwen3-TTS and Orpheus run on Apple's MLX. Until their package is part of the build,
-/// they report that they aren't installed.
-enum ModelSpeech {
-    static func isInstalled(_ engine: VoiceEngine) -> Bool { engine == .apple }
-
-    @MainActor
-    static func render(_ request: SpeechRequest) async throws -> AVAudioPCMBuffer {
-        throw SpeechError.engineUnavailable(request.choice.engine)
-    }
-}

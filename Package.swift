@@ -4,6 +4,10 @@ import PackageDescription
 let package = Package(
     name: "InnerVoice",
     platforms: [.macOS(.v26)],
+    dependencies: [
+        // On-device speech models (Qwen3-TTS, Orpheus) on MLX. MIT; pinned. Apple silicon only.
+        .package(url: "https://github.com/Blaizzy/mlx-audio-swift.git", revision: "9d66d6f1da37a4a116c1655e321b167b3013a5cb"),
+    ],
     targets: [
         // Pinned llama.cpp build; fetched by Tools/fetch_llama.sh (not committed).
         .binaryTarget(name: "llama", path: "Frameworks/llama.xcframework"),
@@ -12,7 +16,11 @@ let package = Package(
         .target(name: "InnerVoiceKit"),
         .executableTarget(
             name: "InnerVoice",
-            dependencies: ["InnerVoiceKit", "llama"],
+            dependencies: [
+                "InnerVoiceKit", "llama",
+                .product(name: "MLXAudioTTS", package: "mlx-audio-swift"),
+                .product(name: "MLXAudioCore", package: "mlx-audio-swift"),
+            ],
             // App code runs on the main thread unless you say otherwise.
             swiftSettings: [.defaultIsolation(MainActor.self)],
             linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]

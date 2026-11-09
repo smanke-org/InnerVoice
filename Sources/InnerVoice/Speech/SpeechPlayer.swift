@@ -37,7 +37,7 @@ struct VoiceResolver {
     func request(for segment: SpeechSegment) -> SpeechRequest? {
         guard let choice = choice(for: segment) else { return nil }
         return SpeechRequest(text: segment.text, choice: choice, tone: segment.speakerID == nil && segment.lineID == nil ? .neutral : segment.tone,
-                             kind: segment.lineID == nil ? nil : segment.kind)
+                             kind: segment.lineID == nil ? nil : segment.kind, sound: segment.sound)
     }
 }
 

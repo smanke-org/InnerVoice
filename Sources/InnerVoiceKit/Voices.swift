@@ -54,6 +54,12 @@ public enum Tone: String, Codable, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// A sound a speech tag asks for ("she sighed"). Orpheus makes these; other engines leave
+/// them out.
+public enum VocalSound: String, Codable, CaseIterable, Sendable {
+    case laugh, chuckle, sigh, gasp, groan, sniffle, yawn, cough
+}
+
 /// Who decided a line's tone. The narrator's choice is never changed by the rules or the AI.
 public enum ToneSource: String, Codable, Sendable {
     case rule, ai, user
@@ -393,7 +399,8 @@ public enum VoiceCasting {
         default: who = "An adult"
         }
         var parts = [who]
-        if !p.timbre.isEmpty { parts.append("with a \(p.timbre.prefix(3).joined(separator: ", ")) voice") }
+        // Something about the voice itself, so Qwen3-TTS doesn't make a thin one.
+        parts.append("with a \(p.timbre.isEmpty ? "clear, natural" : p.timbre.prefix(3).joined(separator: ", ")) voice")
         if let a = p.accent { parts.append("speaking English with a \(a) accent") }
         return parts.joined(separator: " ") + "."
     }
