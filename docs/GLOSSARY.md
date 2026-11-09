@@ -30,6 +30,7 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | Voice sample | A few seconds Qwen3-TTS records in a designed voice (one per tone) and speaks every line from | reference clip |
 | Ready-made voice | One of Qwen3-TTS's 16 named voices (Warm Storyteller, Gravelly Elder…), each a fixed description | preset |
 | Mix Engines | A project casting voices from every engine that's on, not one engine | mixed mode, hybrid |
+| Same as Narrator | A character whose lines are read in the narrator's voice | narrator voice, default voice |
 | Sound | A sigh, laugh, gasp, groan, sniffle, yawn or cough a speech tag asks for; Orpheus performs it | effect, tag |
 | Casting | Choosing a voice for each character from the summary; Cast Voices Again redoes it | auto-assign, matching |
 | Narrator voice | The voice that reads narration and lines nobody is cast for | default voice |

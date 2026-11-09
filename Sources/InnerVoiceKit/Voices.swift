@@ -101,6 +101,10 @@ public struct VoiceChoice: Codable, Hashable, Sendable {
     public var rate: Double?
     public var pitch: Double?
 
+    /// "Same as Narrator": the character speaks in whatever voice the narrator has.
+    public static let narratorID = "narrator"
+    public var isNarrator: Bool { voiceID == Self.narratorID }
+
     public init(engine: VoiceEngine, voiceID: String, design: String? = nil, rate: Double? = nil, pitch: Double? = nil) {
         self.engine = engine
         self.voiceID = voiceID

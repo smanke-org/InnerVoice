@@ -90,6 +90,7 @@ enum VoiceCatalog {
 
     /// "Ava (Premium)", "Tara", or the start of a Qwen3-TTS design.
     static func name(of choice: VoiceChoice) -> String {
+        if choice.isNarrator { return "Same as Narrator" }
         switch choice.engine {
         case .qwen where !choice.voiceID.hasPrefix("preset:"):
             // Short enough for a list row, cut at a word.

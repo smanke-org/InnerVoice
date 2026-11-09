@@ -60,7 +60,8 @@ struct VoicesPage: View {
     private var list: some View {
         List(selection: Binding(get: { workspace.voiceTarget }, set: { workspace.voiceTarget = $0 ?? .narrator })) {
             Section("Narration") {
-                row(name: "Narrator", color: nil, voice: document.project.settings.narratorVoice(for: engine), needs: false)
+                row(name: "Narrator", color: nil, voice: document.project.settings.narratorVoice(for: engine), needs: false,
+                    pov: VoiceResolver.povNarrator(project: document.project, engine: engine))
                     .tag(VoiceTarget.narrator)
             }
             Section("Cast") {
@@ -74,7 +75,7 @@ struct VoicesPage: View {
         .searchable(text: $query, placement: .sidebar, prompt: "Find a character")
     }
 
-    private func row(name: String, color: Color?, voice: CastVoice?, needs: Bool) -> some View {
+    private func row(name: String, color: Color?, voice: CastVoice?, needs: Bool, pov: BookCharacter? = nil) -> some View {
         HStack(spacing: Space.sm) {
             if let color {
                 Circle().fill(color).frame(width: 10, height: 10)
@@ -83,7 +84,7 @@ struct VoicesPage: View {
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text(name).lineLimit(1)
-                Text(voice.map { VoiceCatalog.name(of: $0.choice) } ?? "No voice yet")
+                Text(pov.map { "\($0.firstName)’s voice (first person)" } ?? voice.map { VoiceCatalog.name(of: $0.choice) } ?? "No voice yet")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -141,8 +142,13 @@ struct VoiceTargetDetail: View {
                 } else {
                     VStack(alignment: .leading, spacing: Space.xs) {
                         Text("Narrator").font(.title2.weight(.semibold))
-                        Text("Reads the narration in a table read, and lines nobody is cast for.")
+                        Text("Reads the narration in a table read, lines nobody is cast for, and characters set to Same as Narrator. Letters, signs and other written text too, unless Settings › Voices says otherwise.")
                             .foregroundStyle(.secondary)
+                        if let pov = VoiceResolver.povNarrator(project: document.project) {
+                            Label("This book is told in the first person by \(pov.name), so the narration uses \(pov.firstName)’s voice. Choose a voice below to give the narrator a voice of its own.", systemImage: "person.wave.2")
+                                .font(.callout)
+                                .padding(.top, Space.xs)
+                        }
                     }
                 }
                 VoiceChooser(document: document, characterID: character?.id, compact: false)
@@ -298,15 +304,49 @@ struct VoiceChooser: View {
         let voices = VoiceCatalog.voices(for: engine)
         if let c = character {
             let best = VoiceCasting.suggestions(for: c, project: document.project, index: document.index, voices: voices, limit: 3)
-            if !best.isEmpty {
-                VStack(alignment: .leading, spacing: Space.sm) {
-                    Text("Best Fits").font(.headline)
-                    ForEach(best, id: \.voice.id) { item in
-                        voiceRow(item.voice)
-                    }
+            VStack(alignment: .leading, spacing: Space.sm) {
+                Text("Best Fits").font(.headline)
+                ForEach(best, id: \.voice.id) { item in
+                    voiceRow(item.voice)
                 }
+                narratorRow
             }
         }
+    }
+
+    /// "Same as Narrator": the character speaks in the narrator's voice, whatever it is.
+    private var narratorRow: some View {
+        let choice = VoiceChoice(engine: engine, voiceID: VoiceChoice.narratorID)
+        let isCurrent = voice?.choice.isNarrator == true
+        let narrator = VoiceResolver(project: document.project).narrator
+        return HStack(spacing: Space.md) {
+            Button { audition(choice) } label: {
+                Image(systemName: "play.circle").font(.title3)
+            }
+            .buttonStyle(.plain)
+            .help("Hear the narrator’s voice say one of \(character?.firstName ?? "")’s lines")
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: Space.sm) {
+                    Image(systemName: "book.closed").foregroundStyle(.secondary)
+                    Text("Same as Narrator")
+                }
+                Text("Uses the narrator’s voice" + (narrator.map { ", now " + VoiceCatalog.name(of: $0) } ?? "") + ", and follows it if it changes")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            if isCurrent {
+                Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
+            } else {
+                Button("Use") { choose(choice) }
+                    .controlSize(.small)
+                    .help("Read \(character?.name ?? "")’s lines in the narrator’s voice")
+            }
+        }
+        .padding(.horizontal, Space.sm)
+        .padding(.vertical, Space.xs)
+        .background(isCurrent ? Color.accentColor.opacity(0.1) : .clear, in: RoundedRectangle(cornerRadius: 6))
     }
 
     @ViewBuilder

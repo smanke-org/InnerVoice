@@ -61,6 +61,32 @@ enum SelfTest {
             undo.undo()
         }
 
+        // The narrator: Same as Narrator, written text, first-person narration.
+        do {
+            let r0 = VoiceResolver(project: doc.project)
+            let segs = SpeechScript.segments(chapter: 0, chapters: doc.project.chapters.count, project: doc.project, index: doc.index, includeNarration: true)
+            check("the narrator always has a voice", r0.narrator != nil)
+            if let written = segs.first(where: { $0.kind == .written && $0.lineID != nil }) {
+                check("written text is read by the narrator by default", r0.choice(for: written) == r0.narrator)
+            }
+            if let pip = doc.project.characters.first(where: { $0.name.hasPrefix("Pip") }), let line = segs.first(where: { $0.speakerID == pip.id }) {
+                doc.setVoice(VoiceChoice(engine: .apple, voiceID: VoiceChoice.narratorID), for: pip.id, undoManager: undo)
+                let r = VoiceResolver(project: doc.project)
+                check("Same as Narrator reads a character's lines in the narrator's voice", r.choice(for: line) == r.narrator && r.narrator?.isNarrator == false)
+                undo.undo()
+            }
+            if let mara = doc.project.characters.first(where: { $0.name.hasPrefix("Mara") }), let maraVoice = mara.voice(for: .apple)?.choice {
+                doc.change("POV", undoManager: undo) { $0.settings.povCharacterID = mara.id }
+                check("a first-person book's narration uses the POV character's voice", VoiceResolver(project: doc.project).narrator == maraVoice)
+                if let other = VoiceCatalog.appleVoices().first(where: { $0.voiceID != maraVoice.voiceID }) {
+                    doc.setVoice(other.choice, for: nil, undoManager: undo)
+                    check("a narrator voice you choose wins over the POV character's", VoiceResolver(project: doc.project).narrator?.voiceID == other.voiceID)
+                    undo.undo()
+                }
+                undo.undo()
+            }
+        }
+
         // Engine switches (Settings › Voices); test runs never save them.
         let switches = EngineSwitches.shared
         doc.setVoiceEngine(.orpheus, undoManager: undo)

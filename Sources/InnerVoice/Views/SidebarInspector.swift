@@ -11,6 +11,7 @@ struct ProjectSidebar: View {
         case page(Workspace.Page)
         case chapter(Int)
         case character(UUID)
+        case narrator
     }
 
     var body: some View {
@@ -59,6 +60,12 @@ struct ProjectSidebar: View {
             let cast = project.characters.sorted { (index.stats[$0.id]?.lines ?? 0) > (index.stats[$1.id]?.lines ?? 0) }
             if !cast.isEmpty {
                 Section("Cast") {
+                    HStack(spacing: Space.sm) {
+                        Image(systemName: "book.closed").font(.caption).foregroundStyle(.secondary).frame(width: 10)
+                        Text("Narrator").lineLimit(1)
+                    }
+                    .help("The voice for narration and lines nobody is cast for")
+                    .tag(Row.narrator)
                     ForEach(cast.prefix(12)) { c in
                         HStack(spacing: Space.sm) {
                             Circle().fill(Color(hexString: c.colorHex)).frame(width: 10, height: 10)
@@ -96,6 +103,8 @@ struct ProjectSidebar: View {
                 }
             case .character(let id)?:
                 workspace.showCharacter(id)
+            case .narrator?:
+                workspace.showVoice(nil)
             case nil: break
             }
         })

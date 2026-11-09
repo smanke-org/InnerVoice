@@ -180,6 +180,7 @@ struct EngineSwitch: View {
 struct VoicesSettings: View {
     @AppStorage("voices.readNarration") private var readNarration = true
     @AppStorage("voices.followAlong") private var followAlong = true
+    @AppStorage("voices.writtenByNarrator") private var writtenByNarrator = true
     @State private var cacheSize = 0
 
     var body: some View {
@@ -190,10 +191,12 @@ struct VoicesSettings: View {
             }
             .pickerStyle(.radioGroup)
             Toggle("Follow along in the manuscript", isOn: $followAlong)
+            Toggle("Read written text in the narrator’s voice", isOn: $writtenByNarrator)
+                .help("Letters, notes and signs a character wrote are read by the narrator. Off: by the character who wrote them.")
         } header: {
             Text("Table Read")
         } footer: {
-            Text("Narration is read in the narrator’s voice, chosen on the Voices page. Export Audio asks each time.")
+            Text("Narration is read in the narrator’s voice, chosen on the Voices page; in a first-person book, the narrator character’s voice. Export Audio asks each time.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

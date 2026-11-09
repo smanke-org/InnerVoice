@@ -91,10 +91,13 @@ struct AudioExportSheet: View {
             switch self {
             case .book: "The whole book"
             case .chapter: "One chapter"
-            case .character: "One character’s lines"
+            case .character: "One character or the narrator"
             }
         }
     }
+
+    /// The Character menu's narrator choice.
+    static let narratorTag = UUID(uuidString: "00000000-0000-0000-0000-00000000AAAA")!
 
     @State private var scope = Scope.book
     @State private var chapter = 0
@@ -132,6 +135,8 @@ struct AudioExportSheet: View {
                 }
                 if scope == .character {
                     Picker("Character", selection: $characterID) {
+                        Text("Narrator (narration only)").tag(UUID?.some(Self.narratorTag))
+                        Divider()
                         ForEach(cast) { Text($0.name).tag(UUID?.some($0.id)) }
                     }
                 } else {
@@ -199,7 +204,14 @@ struct AudioExportSheet: View {
             return [AudioExporter.Part(name: "\(title) - \(project.chapters[chapter].title)",
                                        segments: SpeechScript.segments(chapter: chapter, project: project, index: index, includeNarration: narration))]
         case .character:
-            guard let id = characterID, let c = project.character(id) else { return [] }
+            guard let id = characterID else { return [] }
+            if id == Self.narratorTag {
+                // Everything the narrator's voice reads, in order.
+                let resolver = VoiceResolver(project: project)
+                let all = SpeechScript.segments(chapter: 0, chapters: project.chapters.count, project: project, index: index, includeNarration: true)
+                return [AudioExporter.Part(name: "\(title) - Narrator", segments: all.filter { resolver.choice(for: $0) == resolver.narrator })]
+            }
+            guard let c = project.character(id) else { return [] }
             return [AudioExporter.Part(name: "\(title) - \(c.name)",
                                        segments: SpeechScript.segments(chapter: 0, chapters: project.chapters.count, project: project, index: index,
                                                                        includeNarration: false, only: id))]

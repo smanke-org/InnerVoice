@@ -18,9 +18,36 @@ struct VoiceResolver {
         var map: [UUID: VoiceChoice] = [:]
         for c in project.characters { if let v = c.voice(for: e) { map[c.id] = v.choice } }
         characters = map
-        usable = Set(VoiceEngine.engines.filter { EngineSwitches.shared.usable($0) })
-        let n = project.settings.narratorVoice(for: e)?.choice
-        narrator = n.flatMap { usable.contains($0.engine) ? $0 : nil } ?? Self.fallback(e) ?? Self.fallback(.apple)
+        let usable = Set(VoiceEngine.engines.filter { EngineSwitches.shared.usable($0) })
+        self.usable = usable
+        writtenByNarrator = UserDefaults.standard.object(forKey: "voices.writtenByNarrator") as? Bool ?? true
+        // The narrator's voice: one the narrator chose; else, in a first-person book, the
+        // POV character's; else the one casting picked; else any voice that works.
+        let n = project.settings.narratorVoice(for: e)
+        if let n, n.source == .user, usable.contains(n.choice.engine) {
+            narrator = n.choice
+        } else if let pov = Self.povNarrator(project: project, engine: e), let v = map[pov.id] {
+            narrator = v
+        } else if let n, usable.contains(n.choice.engine) {
+            narrator = n.choice
+        } else {
+            narrator = Self.fallback(e) ?? Self.fallback(.apple)
+        }
+    }
+
+    /// Whether letters, signs and other written text are read by the narrator
+    /// (Settings › Voices) rather than the character who wrote them.
+    var writtenByNarrator = true
+
+    /// The character whose voice reads the narration of a first-person book: the one marked
+    /// as the book's narrator, unless the narrator has a voice of their own choosing.
+    @MainActor
+    static func povNarrator(project: Project, engine: VoiceEngine? = nil) -> BookCharacter? {
+        let e = engine ?? project.engineInUse
+        if project.settings.narratorVoice(for: e)?.source == .user { return nil }
+        guard let pov = project.character(project.settings.povCharacterID), let v = pov.voice(for: e)?.choice,
+              !v.isNarrator, EngineSwitches.shared.usable(v.engine) else { return nil }
+        return pov
     }
 
     /// A voice when nothing is cast yet: the best Apple voice, Orpheus's first, or a plain
@@ -36,8 +63,10 @@ struct VoiceResolver {
     }
 
     func choice(for segment: SpeechSegment) -> VoiceChoice? {
-        // A voice from an engine that's turned off or not downloaded falls back to the narrator's.
-        if let id = segment.speakerID, let c = characters[id], usable.contains(c.engine) { return c }
+        if segment.lineID != nil, segment.kind == .written, writtenByNarrator { return narrator }
+        // "Same as Narrator", and a voice from an engine that's turned off or not downloaded,
+        // use the narrator's voice.
+        if let id = segment.speakerID, let c = characters[id], !c.isNarrator, usable.contains(c.engine) { return c }
         return narrator
     }
 
@@ -240,8 +269,8 @@ enum PlayCommand {
         }
         let seg = SpeechSegment(id: "audition", paragraphID: UUID(), lineID: character == nil ? nil : UUID(), speakerID: nil,
                                 text: SpeechScript.apply([], to: text), tone: sampleTone, kind: .spoken, pauseAfter: 0)
-        var resolver = VoiceResolver(project: project, engine: choice.engine)
-        resolver.narrator = choice
+        var resolver = VoiceResolver(project: project, engine: choice.isNarrator ? nil : choice.engine)
+        if !choice.isNarrator { resolver.narrator = choice }
         resolver.characters = [:]
         SpeechPlayer.shared.play([seg], resolver: resolver)
     }

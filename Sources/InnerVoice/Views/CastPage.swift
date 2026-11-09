@@ -49,6 +49,16 @@ struct CastPage: View {
             ScrollView {
                 duplicates
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 260, maximum: 360), spacing: Space.lg)], spacing: Space.lg) {
+                    // The narrator first: the voice for everything no character says.
+                    Button { workspace.showVoice(nil) } label: {
+                        NarratorCard(document: document)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Choose the narrator’s voice on the Voices page")
+                    .contextMenu {
+                        Button("Change Narrator Voice…") { workspace.showVoice(nil) }
+                        Button("Play the Narrator Voice") { PlayCommand.audition(VoiceChoice(engine: document.project.engineInUse, voiceID: VoiceChoice.narratorID), character: nil, document: document) }
+                    }
                     ForEach(sorted) { c in
                         // A button, not a NavigationLink: in this grid the link didn't open on a click.
                         Button { workspace.castPath = [c.id] } label: {
@@ -265,5 +275,64 @@ struct NarratorsEditor: View {
         guard !n.isEmpty else { return }
         document.change("Add Narrator", undoManager: undoManager) { $0.narrators.append(Narrator(name: n)) }
         name = ""
+    }
+}
+
+/// The narrator, as the first card on the Cast page: the voice for narration, lines nobody
+/// is cast for, and characters set to Same as Narrator.
+struct NarratorCard: View {
+    @ObservedObject var document: InnerVoiceDocument
+    @State private var hovering = false
+
+    var body: some View {
+        let project = document.project
+        let pov = VoiceResolver.povNarrator(project: project)
+        let voice = VoiceResolver(project: project).narrator
+        let sharing = project.characters.filter { $0.voice(for: project.engineInUse)?.choice.isNarrator == true }
+        VStack(alignment: .leading, spacing: Space.md) {
+            HStack(spacing: Space.md) {
+                Image(systemName: "book.closed.fill")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 44, height: 44)
+                    .background(.quaternary, in: Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Narrator").font(.headline).lineLimit(1).underline(hovering)
+                    Text(pov.map { "\($0.firstName)’s voice (first person)" } ?? voice.map { VoiceCatalog.name(of: $0) } ?? "No voice yet")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer()
+            }
+            Text("Reads the narration and every line nobody is cast for.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .lineLimit(2, reservesSpace: true)
+            HStack(spacing: Space.lg) {
+                metric(project.engineInUse.title, "engine")
+                if !sharing.isEmpty {
+                    metric("\(sharing.count)", sharing.count == 1 ? "character shares it" : "characters share it")
+                }
+            }
+        }
+        .padding(Space.lg)
+        .background {
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(nsColor: .controlBackgroundColor))
+                .shadow(color: .black.opacity(hovering ? 0.12 : 0.05), radius: hovering ? 8 : 3, y: hovering ? 3 : 1)
+        }
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.separator.opacity(0.6)))
+        .contentShape(RoundedRectangle(cornerRadius: 12))
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.15), value: hovering)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func metric(_ value: String, _ label: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(value).font(.callout.weight(.semibold)).lineLimit(1)
+            Text(label).font(.caption).foregroundStyle(.secondary)
+        }
     }
 }
