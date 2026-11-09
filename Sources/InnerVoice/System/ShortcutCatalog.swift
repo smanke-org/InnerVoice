@@ -23,6 +23,8 @@ enum ShortcutCatalog {
                   category: "Book", scope: "app"),
             .init(id: "record", title: "Record", keyCode: 15, carbonModifiers: command | shift,
                   category: "Book", scope: "app"),
+            .init(id: "projectSettings", title: "Project Settings…", keyCode: 43, carbonModifiers: command | option,
+                  category: "Book", scope: "app"),
             .init(id: "nextNeedsYou", title: "Next Line That Needs You", keyCode: 125, carbonModifiers: command,
                   category: "Lines", scope: "app"),
             .init(id: "previousNeedsYou", title: "Previous Line That Needs You", keyCode: 126, carbonModifiers: command,

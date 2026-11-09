@@ -31,6 +31,8 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | Ready-made voice | One of Qwen3-TTS's 16 named voices (Warm Storyteller, Gravelly Elder…), each a fixed description | preset |
 | Mix Engines | A project casting voices from every engine that's on, not one engine | mixed mode, hybrid |
 | Same as Narrator | A character whose lines are read in the narrator's voice | narrator voice, default voice |
+| Project type | What a project is for: Narration Tools or Produce with AI Voices; decides which pages and commands show | mode, workflow |
+| Project Settings | Book › Project Settings: settings that belong to one book (its project type) | document settings |
 | Cloud | Marks ElevenLabs, the one engine that sends text off the Mac | online, remote |
 | Send This Book to ElevenLabs | The per-book permission before any of its text goes to ElevenLabs; Stop Sending This Book ends it | consent, opt in |
 | Sound | A sigh, laugh, gasp, groan, sniffle, yawn or cough a speech tag asks for; Orpheus performs it | effect, tag |

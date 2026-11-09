@@ -54,7 +54,7 @@ struct ReviewPage: View {
 
     private func count(_ f: Filter) -> Int { f == .voices ? unsureVoices.count : items(f).count }
 
-    private var nothingToReview: Bool { Filter.allCases.allSatisfy { count($0) == 0 } }
+    private var nothingToReview: Bool { Filter.allCases.allSatisfy { count($0) == 0 || ($0 == .voices && !document.project.showsVoices) } }
 
     var body: some View {
         let items = items(filter)
@@ -75,7 +75,7 @@ struct ReviewPage: View {
                         toneCard(line, items: items)
                     } else if filter != .voices, filter != .tones, let id = selection, let line = items.first(where: { $0.id == id }) {
                         card(line, items: items)
-                    } else if count(filter) == 0, let other = Filter.allCases.first(where: { $0 != filter && count($0) > 0 }) {
+                    } else if count(filter) == 0, let other = Filter.allCases.first(where: { $0 != filter && count($0) > 0 && ($0 != .voices || document.project.showsVoices) }) {
                         ContentUnavailableView {
                             Label(filter == .guesses ? "No Unsure Guesses Left" : "Nothing Here", systemImage: "checkmark.circle")
                         } description: {
@@ -113,7 +113,7 @@ struct ReviewPage: View {
 
     private var filterPicker: some View {
         Picker("Show", selection: $filterRaw) {
-            ForEach(Filter.allCases) { f in
+            ForEach(Filter.allCases.filter { $0 != .voices || document.project.showsVoices }) { f in
                 Text("\(f.title) (\(count(f)))").tag(f.rawValue)
             }
         }

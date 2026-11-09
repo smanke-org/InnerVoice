@@ -19,7 +19,7 @@ struct CharacterDetail: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.xxl) {
                     header(c)
-                    voice(c)
+                    if document.project.showsVoices { voice(c) }
                     summary(c)
                     notes(c)
                     sampleLines(c)
@@ -31,8 +31,10 @@ struct CharacterDetail: View {
             .navigationTitle(c.name)
             .toolbar {
                 ToolbarItemGroup {
-                    Button("Rehearse", systemImage: "play.rectangle") { workspace.rehearse = c.id }
-                        .help("Step through \(c.name)'s lines with cue lines")
+                    if document.project.showsNarrationTools {
+                        Button("Rehearse", systemImage: "play.rectangle") { workspace.rehearse = c.id }
+                            .help("Step through \(c.name)'s lines with cue lines")
+                    }
                     Menu("Build Summary", systemImage: "text.badge.star") {
                         Button("Build \(c.firstName)’s Summary") {
                             TagCommand.summaries(document: document, workspace: workspace, undoManager: undoManager, only: [c.id])
@@ -141,6 +143,7 @@ struct CharacterDetail: View {
                 }
                 .padding(.top, Space.xs)
                 HStack(spacing: Space.lg) {
+                    if document.project.showsNarrationTools {
                     Picker("Narrator", selection: Binding(get: { c.narratorID }, set: { v in
                         document.updateCharacter(c.id, "Cast Narrator", undoManager: undoManager) { $0.narratorID = v }
                     })) {
@@ -148,10 +151,13 @@ struct CharacterDetail: View {
                         ForEach(document.project.narrators) { Text($0.name).tag(UUID?.some($0.id)) }
                     }
                     .fixedSize()
+                    }
+                    if document.project.showsNarrationTools {
                     Toggle("Show in Index", isOn: Binding(get: { document.index.showsInIndex(c) }, set: { v in
                         document.updateCharacter(c.id, "Show in Index", undoManager: undoManager) { $0.showInIndex = v }
                     }))
                     .toggleStyle(.checkbox)
+                    }
                 }
                 .padding(.top, Space.xs)
             }

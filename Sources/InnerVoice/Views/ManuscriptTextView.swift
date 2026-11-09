@@ -473,10 +473,12 @@ struct ManuscriptTextView: NSViewRepresentable {
                 }
                 toneItem.submenu = tones
                 menu.addItem(toneItem)
-                menu.addItem(ClosureMenuItem(title: ids.count == 1 ? "Play Line" : "Play \(ids.count) Lines") { [weak self] in
-                    guard let self else { return }
-                    PlayCommand.playLine(document: self.document, workspace: self.parent.workspace)
-                })
+                if document.project.showsVoices {
+                    menu.addItem(ClosureMenuItem(title: ids.count == 1 ? "Play Line" : "Play \(ids.count) Lines") { [weak self] in
+                        guard let self else { return }
+                        PlayCommand.playLine(document: self.document, workspace: self.parent.workspace)
+                    })
+                }
                 menu.addItem(ClosureMenuItem(title: ids.count == 1 ? "Mark as Narration" : "Mark \(ids.count) Lines as Narration") { [weak self] in
                     self?.document.removeLines(ids, undoManager: undo)
                 })
@@ -652,7 +654,7 @@ final class ReadingTextView: NSTextView {
         // ⌥Space plays the selected line, ⌥⇧Space a table read from it, ⌥Esc stops (the
         // same as the Book menu, which misses keys while its window isn't key).
         let mods = event.modifierFlags.intersection([.option, .shift, .command, .control])
-        if event.keyCode == 49, mods == .option || mods == [.option, .shift], let c = coordinator {
+        if event.keyCode == 49, mods == .option || mods == [.option, .shift], let c = coordinator, c.document.project.showsVoices {
             if mods == .option, !c.parent.workspace.selectedLines.isEmpty {
                 PlayCommand.playLine(document: c.document, workspace: c.parent.workspace)
             } else {

@@ -60,12 +60,14 @@ struct ProjectSidebar: View {
             let cast = project.characters.sorted { (index.stats[$0.id]?.lines ?? 0) > (index.stats[$1.id]?.lines ?? 0) }
             if !cast.isEmpty {
                 Section("Cast") {
-                    HStack(spacing: Space.sm) {
-                        Image(systemName: "book.closed").font(.caption).foregroundStyle(.secondary).frame(width: 10)
-                        Text("Narrator").lineLimit(1)
+                    if project.showsVoices {
+                        HStack(spacing: Space.sm) {
+                            Image(systemName: "book.closed").font(.caption).foregroundStyle(.secondary).frame(width: 10)
+                            Text("Narrator").lineLimit(1)
+                        }
+                        .help("The voice for narration and lines nobody is cast for")
+                        .tag(Row.narrator)
                     }
-                    .help("The voice for narration and lines nobody is cast for")
-                    .tag(Row.narrator)
                     ForEach(cast.prefix(12)) { c in
                         HStack(spacing: Space.sm) {
                             Circle().fill(Color(hexString: c.colorHex)).frame(width: 10, height: 10)
@@ -84,7 +86,7 @@ struct ProjectSidebar: View {
     }
 
     private var pages: [Workspace.Page] {
-        Workspace.Page.allCases.filter { $0 != .revisions || !document.project.revisions.isEmpty }
+        Workspace.Page.allCases.filter { $0.isShown(in: document.project) }
     }
 
     private var selection: Binding<Row?> {
@@ -231,6 +233,7 @@ struct ProjectInspector: View {
                         .help("Keep this tone. Tag Speakers won’t change it.")
                 }
             }
+            if document.project.showsVoices {
             LabeledContent("Voice") {
                 HStack(spacing: Space.sm) {
                     Button("Play", systemImage: "play.fill") { PlayCommand.playLine(document: document, workspace: workspace) }
@@ -239,6 +242,7 @@ struct ProjectInspector: View {
                         .help("Choose the voice on the Voices page")
                 }
                 .controlSize(.small)
+            }
             }
             LabeledContent("Source") {
                 HStack(spacing: Space.xs) {

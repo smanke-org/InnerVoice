@@ -169,9 +169,11 @@ struct FileCommands: Commands {
             Button("Export…") { focus?.workspace.showExport = true }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
                 .disabled(focus == nil)
-            Button("Export Audio…") { focus?.workspace.showAudioExport = true }
-                .keyboardShortcut("e", modifiers: [.command, .option, .shift])
-                .disabled(focus == nil)
+            if focus?.document.project.showsVoices ?? true {
+                Button("Export Audio…") { focus?.workspace.showAudioExport = true }
+                    .keyboardShortcut("e", modifiers: [.command, .option, .shift])
+                    .disabled(focus == nil)
+            }
         }
     }
 }
@@ -216,6 +218,10 @@ struct BookCommands: Commands {
             .disabled(focus == nil)
             Button("Choose Model…") { focus?.workspace.showModelSheet = true }
                 .disabled(focus == nil)
+            Button("Project Settings…") { focus?.workspace.showProjectSettings = true }
+                .keyboardShortcut(",", modifiers: [.command, .option])
+                .disabled(focus == nil)
+            if focus?.document.project.showsVoices ?? true {
             Divider()
             Button("Play Line") {
                 if let f = focus { PlayCommand.playLine(document: f.document, workspace: f.workspace) }
@@ -234,6 +240,7 @@ struct BookCommands: Commands {
                 if let f = focus { f.document.castVoicesAgain(undoManager: f.undoManager) }
             }
             .disabled(focus == nil)
+            }
         }
     }
 }
@@ -246,14 +253,16 @@ struct ViewCommands: Commands {
 
     var body: some Commands {
         CommandGroup(before: .sidebar) {
-            ForEach(Workspace.Page.allCases.filter { $0.shortcut != nil }) { page in
+            ForEach(Workspace.Page.allCases.filter { page in page.shortcut != nil && (focus.map { page.isShown(in: $0.document.project) } ?? true) }) { page in
                 Button(page.title) { focus?.workspace.page = page }
                     .keyboardShortcut(page.shortcut!)
                     .disabled(focus == nil)
             }
-            Button("Start Recording") { focus?.workspace.page = .record }
-                .keyboardShortcut("r", modifiers: [.command, .shift])
-                .disabled(focus == nil)
+            if focus?.document.project.showsNarrationTools ?? true {
+                Button("Start Recording") { focus?.workspace.page = .record }
+                    .keyboardShortcut("r", modifiers: [.command, .shift])
+                    .disabled(focus == nil)
+            }
             Divider()
             Button("Highlight Lines") { setStyle(.highlight) }
                 .keyboardShortcut("h", modifiers: [.command, .option])

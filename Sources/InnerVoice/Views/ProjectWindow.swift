@@ -5,6 +5,11 @@ import UniformTypeIdentifiers
 
 /// One book's window: sidebar, page, inspector.
 struct ProjectWindow: View {
+    private func askProjectTypeIfNeeded() {
+        guard !SystemHooks.isTestRun, !document.project.isEmpty, document.project.settings.purpose == nil else { return }
+        workspace.showProjectType = true
+    }
+
     @ObservedObject var document: InnerVoiceDocument
     let fileURL: URL?
     @State private var workspace = Workspace()
@@ -24,6 +29,7 @@ struct ProjectWindow: View {
         .sheet(isPresented: $workspace.showModelSheet) {
             ModelSheet { ready in
                 workspace.showModelSheet = false
+                if !ready { workspace.afterTagging = nil }
                 if ready { TagCommand.run(document: document, workspace: workspace, undoManager: undoManager) }
             }
         }
@@ -32,6 +38,24 @@ struct ProjectWindow: View {
         }
         .sheet(isPresented: $workspace.showAudioExport) {
             AudioExportSheet(document: document, isPresented: $workspace.showAudioExport)
+        }
+        .sheet(isPresented: $workspace.showProjectType) {
+            ProjectTypeSheet(document: document, workspace: workspace)
+        }
+        .sheet(isPresented: $workspace.showProjectSettings) {
+            ProjectSettingsSheet(document: document, isPresented: $workspace.showProjectSettings)
+        }
+        // Asked once per project, new or made before the question existed. Test runs don't
+        // ask (snapshots show the sheet on purpose).
+        .onAppear { askProjectTypeIfNeeded() }
+        .onChange(of: document.project.isEmpty) { askProjectTypeIfNeeded() }
+        .onChange(of: document.project.settings.purpose) {
+            if !workspace.page.isShown(in: document.project) { workspace.page = .manuscript }
+        }
+        .onChange(of: document.tagging.isRunning) { _, running in
+            guard !running, let next = workspace.afterTagging else { return }
+            workspace.afterTagging = nil
+            if document.tagging.failure == nil { workspace.page = next }
         }
         .sheet(item: Binding(get: { workspace.rehearse.map(RehearseTarget.init) }, set: { workspace.rehearse = $0?.id })) { target in
             RehearseView(document: document, characterID: target.id, workspace: workspace)
@@ -124,9 +148,11 @@ struct ProjectWindow: View {
                 .help("Go to the next red line (⌘↓). \(needs) lines need you.")
                 .disabled(needs == 0)
             }
-            ToolbarSpacer(.fixed)
-            ToolbarItem {
-                PlayStopButton(document: document, workspace: workspace)
+            if document.project.showsVoices {
+                ToolbarSpacer(.fixed)
+                ToolbarItem {
+                    PlayStopButton(document: document, workspace: workspace)
+                }
             }
         }
         ToolbarItem {

@@ -211,6 +211,30 @@ enum Snapshot {
                 await shot("audio-export-sheet") { workspace.page = .manuscript; workspace.showAudioExport = true }
                 workspace.showAudioExport = false
                 try? await Task.sleep(for: .seconds(0.5))
+                // Project types: the question, the AI voices setup, Project Settings, and the
+                // sidebar for each type.
+                await shot("project-type") { workspace.showProjectType = true }
+                workspace.showProjectType = false
+                try? await Task.sleep(for: .seconds(0.5))
+                if wants("project-type-ai") {
+                    let host = NSHostingController(rootView: ProjectTypeSheet(document: document, workspace: workspace, step: 1))
+                    let w = NSWindow(contentViewController: host)
+                    w.styleMask = [.titled]
+                    w.makeKeyAndOrderFront(nil)
+                    try? await Task.sleep(for: .seconds(1.2))
+                    capture(w, "\(dir)/project-type-ai-\(mode).png")
+                    w.close()
+                }
+                await shot("project-settings") { workspace.showProjectSettings = true }
+                workspace.showProjectSettings = false
+                try? await Task.sleep(for: .seconds(0.5))
+                for purpose in ProjectPurpose.allCases {
+                    await shot("type-\(purpose.rawValue)") {
+                        document.updateSettings("", undoManager: nil) { $0.purpose = purpose }
+                        workspace.page = .cast
+                    }
+                }
+                document.updateSettings("", undoManager: nil) { $0.purpose = nil }
                 await shot("revisions") { workspace.page = .revisions }
                 await shot("export-sheet") { workspace.page = .manuscript; workspace.showExport = true }
                 workspace.showExport = false

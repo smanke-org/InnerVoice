@@ -50,6 +50,7 @@ struct CastPage: View {
                 duplicates
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 260, maximum: 360), spacing: Space.lg)], spacing: Space.lg) {
                     // The narrator first: the voice for everything no character says.
+                    if document.project.showsVoices {
                     Button { workspace.showVoice(nil) } label: {
                         NarratorCard(document: document)
                     }
@@ -58,6 +59,7 @@ struct CastPage: View {
                     .contextMenu {
                         Button("Change Narrator Voice…") { workspace.showVoice(nil) }
                         Button("Play the Narrator Voice") { PlayCommand.audition(VoiceChoice(engine: document.project.engineInUse, voiceID: VoiceChoice.narratorID), character: nil, document: document) }
+                    }
                     }
                     ForEach(sorted) { c in
                         // A button, not a NavigationLink: in this grid the link didn't open on a click.
@@ -72,10 +74,12 @@ struct CastPage: View {
                 .padding(Space.margin)
             }
             .toolbar {
-                ToolbarItem {
-                    Button("Narrators", systemImage: "person.wave.2") { showNarrators = true }
-                        .help("Add narrators and cast characters to them")
-                        .popover(isPresented: $showNarrators) { NarratorsEditor(document: document).padding(Space.lg).frame(width: 340) }
+                if document.project.showsNarrationTools {
+                    ToolbarItem {
+                        Button("Narrators", systemImage: "person.wave.2") { showNarrators = true }
+                            .help("Add narrators and cast characters to them")
+                            .popover(isPresented: $showNarrators) { NarratorsEditor(document: document).padding(Space.lg).frame(width: 340) }
+                    }
                 }
                 ToolbarItem {
                     Picker("Sort", selection: $sort) {
@@ -143,7 +147,7 @@ struct CastPage: View {
     @ViewBuilder
     private func menu(_ c: BookCharacter) -> some View {
         Button("Open") { workspace.castPath = [c.id] }
-        Button("Rehearse Lines…") { workspace.rehearse = c.id }
+        if document.project.showsNarrationTools { Button("Rehearse Lines…") { workspace.rehearse = c.id } }
         Button(c.isPinned ? "Unpin from Speaker Lists" : "Pin to Top of Speaker Lists") {
             document.setPinned(c.id, !c.isPinned, undoManager: undoManager)
         }

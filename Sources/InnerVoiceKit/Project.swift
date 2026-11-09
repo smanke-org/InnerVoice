@@ -316,6 +316,38 @@ public enum ColorStyle: String, Codable, CaseIterable, Sendable {
     }
 }
 
+/// What a project is for. Each shows its own pages and commands; switching hides the other
+/// type's features without deleting anything.
+public enum ProjectPurpose: String, Codable, CaseIterable, Identifiable, Sendable {
+    /// A narrator preparing to read the book: who's speaking, cues, a teleprompter, scripts.
+    case narration
+    /// A writer producing an audiobook with AI voices instead of a human narrator.
+    case aiVoices
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .narration: "Narration Tools"
+        case .aiVoices: "Produce with AI Voices"
+        }
+    }
+
+    public var detail: String {
+        switch self {
+        case .narration: "You’ll narrate the book yourself. See who’s speaking on every line, with character summaries, an index of each part, rehearsal, a teleprompter for the booth, retakes and narrator scripts."
+        case .aiVoices: "You’ll make the audiobook with AI voices. Give every character a voice and a tone, hear a table read, and export the audio, with no human narrator."
+        }
+    }
+
+    public var symbol: String {
+        switch self {
+        case .narration: "mic"
+        case .aiVoices: "person.wave.2"
+        }
+    }
+}
+
 public struct ProjectSettings: Codable, Hashable, Sendable {
     public var style: ColorStyle = .highlight
     /// Lines the AI is less sure of than this show as Unsure.
@@ -329,6 +361,9 @@ public struct ProjectSettings: Codable, Hashable, Sendable {
     public var voiceEngine: VoiceEngine?
     /// The voice that reads narration, per engine (like `BookCharacter.voices`).
     public var narratorVoices: [String: CastVoice]?
+    /// What the project is for: narration tools or producing with AI voices. nil until asked
+    /// (projects made before the question existed are asked once when opened).
+    public var purpose: ProjectPurpose?
     /// When the narrator allowed this book's text to be sent to a cloud voice engine
     /// (ElevenLabs). nil: never sent.
     public var cloudVoicesAllowed: Date?

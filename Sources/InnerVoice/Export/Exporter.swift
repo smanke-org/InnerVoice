@@ -265,9 +265,13 @@ struct ExportSheet: View {
         VStack(alignment: .leading, spacing: Space.lg) {
             Text("Export").font(.title2.weight(.semibold))
             Picker("Export", selection: $options.kind) {
-                ForEach(Exporter.Kind.allCases) { Text($0.title).tag($0) }
+                ForEach(Exporter.Kind.allCases.filter { $0 != .narratorScript || document.project.showsNarrationTools }) { Text($0.title).tag($0) }
             }
             .pickerStyle(.radioGroup)
+            .onAppear {
+                // Narrator Scripts belong to narration projects.
+                if !document.project.showsNarrationTools, options.kind == .narratorScript { options.kind = .manuscript }
+            }
             .labelsHidden()
             .onChange(of: options.kind) { if !options.kind.formats.contains(options.format) { options.format = .pdf } }
             Text(options.kind.detail).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)

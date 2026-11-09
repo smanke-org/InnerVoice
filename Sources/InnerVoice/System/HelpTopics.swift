@@ -72,6 +72,13 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
             .heading("Your first project"),
             .text("Choose File › New from Manuscript… (⌘N), or drop a manuscript on the Start window. InnerVoice makes a project, a .innervoice file with its own copy of the manuscript, and finds every quoted line right away. Lines it hasn't tagged yet show as Who's Speaking?."),
             .text("Then click Tag Speakers (⇧⌘T). The on-device AI reads the book chapter by chapter and assigns each line to a character. You can keep reading while it works, and Stop keeps what's done."),
+            .heading("Two kinds of project"),
+            .text("A new project asks what it's for, and shows the tools for that job. Projects made with an earlier InnerVoice ask once, the next time they're opened."),
+            .keys([
+                ("Narration Tools", "You'll narrate the book yourself: who's speaking on every line, character summaries, the Index and Rehearse, Record and Retakes, and Narrator Scripts."),
+                ("Produce with AI Voices", "You'll make the audiobook with AI voices: a voice and a tone for every character, table reads and Export Audio. The setup chooses an engine, runs Tag Speakers, casts the voices and opens the Voices page."),
+            ]),
+            .text("Both have the Manuscript, Cast, Review, Pronunciations and Revisions. Change a project's type in Book › Project Settings (⌥⌘,): the other type's pages and commands are hidden, never deleted, and come back when you switch again."),
             .heading("The project window"),
             .text("The sidebar has {pages}. ⌘1 to ⌘6 go straight to each one, in that order."),
             .keys([
@@ -279,6 +286,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
                 ("⇧⌘R", "Record"),
                 ("⌘1 – ⌘8", "{pages}"),
                 ("⌥⇧⌘E", "Export Audio…"),
+                ("⌥⌘,", "Project Settings…"),
             ]),
             .heading("Listening"),
             .keys([

@@ -243,6 +243,11 @@ final class Workspace {
     /// The engine to switch to once the narrator allows this book's text to go to
     /// ElevenLabs (the Voices page asks).
     var askCloudEngine: VoiceEngine?
+    /// "What is this project for?" (asked once per project).
+    var showProjectType = false
+    var showProjectSettings = false
+    /// Where to go when the running Tag Speakers finishes (the AI voices setup ends on Voices).
+    var afterTagging: Page?
     /// The narrator or character chosen on the Voices page.
     var voiceTarget: VoiceTarget = .narrator
     var showAudioExport = false

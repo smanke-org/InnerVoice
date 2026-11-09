@@ -17,6 +17,7 @@ Document-based Mac app for audiobook narrators: opens a manuscript, finds every 
 - Apple silicon only: MLX (Qwen3-TTS, Orpheus) has no Intel build. `build.sh` copies the SwiftPM resource bundles (MLX's `default.metallib`, tokenizer defaults) into Contents/Resources; without the metallib MLX can't run. Compiling needs Xcode's Metal Toolchain (`xcodebuild -downloadComponent MetalToolchain`).
 - Qwen3-TTS: the VoiceDesign model records a voice sample per (description, tone), kept in Voice Models/Samples; the Base model clones every line from it. Designing each line separately drifts (measured with the speaker encoder: same-character similarity fell to other-character levels). Model output is leveled to -20 dB.
 - `APP_SELFTEST_VOICES=1 APP_VOICE_MODELS=<folder with mlx-audio/…>` makes the self-test speak with both engines; `APP_SELFTEST_AUDIO_OUT` keeps the audio.
+- Project types (`ProjectSettings.purpose`, `Views/ProjectType.swift`): Narration Tools hides Voices, Play, Export Audio and voice UI; Produce with AI Voices hides Index, Record, Retakes, Rehearse, narrators and Narrator Scripts. nil (not asked yet) shows everything; the window asks once (not in test runs). Gate new features with `project.showsVoices` / `showsNarrationTools` and `Page.isShown(in:)`, in pages, toolbars, context menus and the menu bar.
 - `InnerVoiceDocument` is `nonisolated` (ReferenceFileDocument); its mutation methods are `@MainActor`. @Published can't be used there: send `objectWillChange` by hand.
 
 ## Build and check

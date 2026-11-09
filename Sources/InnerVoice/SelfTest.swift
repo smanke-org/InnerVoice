@@ -87,6 +87,25 @@ enum SelfTest {
             }
         }
 
+        // Project types: each shows its own pages; nothing is deleted when switching.
+        do {
+            let all = Workspace.Page.allCases.filter { $0 != .revisions }
+            var p = doc.project
+            check("a project that hasn't been asked shows every page", all.allSatisfy { $0.isShown(in: p) })
+            p.settings.purpose = .narration
+            check("Narration Tools hides Voices and keeps Record, Retakes and Index",
+                  !Workspace.Page.voices.isShown(in: p) && ([.record, .retakes, .index, .review, .cast] as [Workspace.Page]).allSatisfy { $0.isShown(in: p) })
+            p.settings.purpose = .aiVoices
+            check("Produce with AI Voices hides Record, Retakes and Index and keeps Voices",
+                  Workspace.Page.voices.isShown(in: p) && !([.record, .retakes, .index] as [Workspace.Page]).contains { $0.isShown(in: p) } && Workspace.Page.review.isShown(in: p))
+            let before = doc.project.lines.count
+            doc.updateSettings("Set Project Type", undoManager: undo) { $0.purpose = .aiVoices }
+            doc.updateSettings("Change Project Type", undoManager: undo) { $0.purpose = .narration }
+            check("switching project type keeps everything", doc.project.lines.count == before && doc.project.settings.purpose == .narration)
+            undo.undo(); undo.undo()
+            check("Undo takes the project type back", doc.project.settings.purpose == nil)
+        }
+
         // Engine switches (Settings › Voices); test runs never save them.
         let switches = EngineSwitches.shared
         doc.setVoiceEngine(.orpheus, undoManager: undo)
