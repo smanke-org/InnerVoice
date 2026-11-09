@@ -31,7 +31,11 @@ public enum AttributionPrompt {
     thinks or writes each marked line, so the narrator knows which voice to use.
     Marked lines start with a tag like {L4} just before the line. Lines that are already known \
     start with the speaker's name, like {Tom}. Use the speech tags ("she said"), who is in the \
-    scene, who was addressed, and the turn-taking of the conversation.
+    scene, who was addressed, and the turn-taking of the conversation. When the tag is only a \
+    pronoun ("he said"), the speaker is usually the person doing something in the sentence just \
+    before the line.
+    Always name the most likely speaker. When you are not sure, still name your best guess and \
+    give it a low confidence; the narrator checks every low-confidence line.
     Answer with JSON only.
     """
 
@@ -125,8 +129,9 @@ public enum AttributionPrompt {
         user += "\nPassage from “\(chapter.title)”:\n\n" + result.trimmingCharacters(in: .whitespacesAndNewlines) + "\n\n"
         user += """
         For each of \(order.joined(separator: ", ")): give the speaker's name exactly as in the character list, \
-        or a new name if the passage names someone not in the list, or "?" if the passage does not make it clear. \
-        kind is spoken, thought or written. confidence is 0 to 100.
+        or a new name if the passage names someone not in the list. If the passage doesn't make it certain, \
+        give the most likely speaker with a confidence under 50. Use "?" only when no one in the passage could \
+        have said it. kind is spoken, thought or written. confidence is 0 to 100.
         Reply as {"lines":[{"id":"L1","speaker":"Name","kind":"spoken","confidence":90}]}
         """
         return AttributionChunk(chapterIndex: chapterIndex, labels: labels,
@@ -147,14 +152,18 @@ public enum AttributionPrompt {
     kind ::= "\"spoken\"" | "\"thought\"" | "\"written\""
     string ::= "\"" ( [^"\\\n] | "\\" ["\\/bfnrt] )* "\""
     number ::= [0-9] [0-9]? [0-9]?
-    ws ::= [ \t\n]*
+    ws ::= [ ]?
     """#
 
     /// Pulls the replies out of the model's text, tolerating chatter around the JSON.
     public static func parse(_ text: String) -> [AttributionReply]? {
         struct Wrapper: Codable { var lines: [AttributionReply] }
-        guard let json = JSONText.extract(text) else { return nil }
-        return (try? JSONDecoder().decode(Wrapper.self, from: Data(json.utf8)))?.lines
+        if let json = JSONText.extract(text), let whole = try? JSONDecoder().decode(Wrapper.self, from: Data(json.utf8)) {
+            return whole.lines
+        }
+        // A reply cut off by the token limit still has its finished answers.
+        let partial = JSONText.objects(in: text).compactMap { try? JSONDecoder().decode(AttributionReply.self, from: Data($0.utf8)) }
+        return partial.isEmpty ? nil : partial
     }
 
     /// Writes the replies into the project. Returns the lines before the change, for Undo.
@@ -266,13 +275,16 @@ public enum SummaryPrompt {
     item ::= "{" ws "\"kind\"" ws ":" ws kind ws "," ws "\"text\"" ws ":" ws string ws "," ws "\"paragraph\"" ws ":" ws string ws "," ws "\"quote\"" ws ":" ws string ws "}"
     kind ::= "\"age\"" | "\"gender\"" | "\"accent\"" | "\"voice\"" | "\"appearance\"" | "\"personality\"" | "\"history\"" | "\"relationships\"" | "\"other\""
     string ::= "\"" ( [^"\\\n] | "\\" ["\\/bfnrt] )* "\""
-    ws ::= [ \t\n]*
+    ws ::= [ ]?
     """#
 
     public static func parse(_ text: String) -> [FactReply]? {
         struct Wrapper: Codable { var facts: [FactReply] }
-        guard let json = JSONText.extract(text) else { return nil }
-        return (try? JSONDecoder().decode(Wrapper.self, from: Data(json.utf8)))?.facts
+        if let json = JSONText.extract(text), let whole = try? JSONDecoder().decode(Wrapper.self, from: Data(json.utf8)) {
+            return whole.facts
+        }
+        let partial = JSONText.objects(in: text).compactMap { try? JSONDecoder().decode(FactReply.self, from: Data($0.utf8)) }
+        return partial.isEmpty ? nil : partial
     }
 
     /// Adds supported facts to the character. Facts whose quote is not in the cited
@@ -311,6 +323,31 @@ public enum SummaryPrompt {
 
 /// Finding the JSON object in a model's reply.
 public enum JSONText {
+    /// Every complete innermost `{…}` object in the text, in order: the answers a reply
+    /// finished before it was cut off.
+    public static func objects(in text: String) -> [String] {
+        var out: [String] = []
+        var start: String.Index?
+        var inString = false
+        var escaped = false
+        var i = text.startIndex
+        while i < text.endIndex {
+            let c = text[i]
+            if inString {
+                if escaped { escaped = false } else if c == "\\" { escaped = true } else if c == "\"" { inString = false }
+            } else if c == "\"" {
+                inString = true
+            } else if c == "{" {
+                start = i
+            } else if c == "}", let s = start {
+                out.append(String(text[s...i]))
+                start = nil
+            }
+            i = text.index(after: i)
+        }
+        return out
+    }
+
     public static func extract(_ text: String) -> String? {
         var t = text
         if let r = t.range(of: "</think>") { t = String(t[r.upperBound...]) }

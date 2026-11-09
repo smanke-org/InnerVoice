@@ -194,6 +194,11 @@ enum NextLine {
             target = forward ? needing[0] : needing[needing.count - 1]
         }
         let line = project.lines[target]
+        workspace.page = .manuscript
         workspace.show(paragraph: line.paragraphID, line: line.id)
+        // Assign To opens on it with the AI's guess picked: Return confirms, typing picks
+        // someone else, Esc leaves it.
+        workspace.selectedLines = [line.id]
+        workspace.pendingAssign = line.id
     }
 }

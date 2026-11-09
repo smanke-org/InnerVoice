@@ -19,7 +19,9 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | Color | A character's color in the manuscript | tag color, label |
 | Highlight / Outline / Underline | The three ways a line can show its color | fill, border, rule |
 | Who's Speaking? | A line the AI could not decide on, shown in red | unassigned, unknown, untagged |
-| Unsure | A line the AI tagged but with low confidence; also red | low confidence |
+| Unsure | A line the AI or the rules tagged with a best guess but low confidence; red, with "Name?" in the margin | low confidence |
+| Best guess | The speaker an Unsure line probably has, for the narrator to confirm | suggestion, prediction |
+| Review | The page listing every line that needs the narrator, with context | queue, inbox |
 | Assign | Give a line to a character | tag, retag, set speaker |
 | Pin | Keep a character at the top of every speaker list | favorite, star |
 | Delete Text | Take text the narrator doesn't read out of the project (the imported file never changes) | remove, hide, strike |

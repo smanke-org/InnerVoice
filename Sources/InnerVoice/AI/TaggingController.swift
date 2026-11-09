@@ -65,8 +65,21 @@ final class TaggingController {
             do {
                 let model = try await ModelManager.shared.model()
                 self.model = model
-                let hints = self.hintsFromRules(document)
                 let targets = chapters ?? Array(document.project.chapters.indices)
+                // Lines the AI gave up on ("?") get another try: the rules first (they now
+                // guess from the sentence before "he said"), then the AI, which is asked
+                // for its best guess. Part of this run's one undo step.
+                document.applyQuietly { p in
+                    let ids = Set(targets.flatMap { p.chapters[$0].paragraphs.map(\.id) })
+                    let before = Dictionary(p.lines.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+                    for i in p.lines.indices where ids.contains(p.lines[i].paragraphID) && p.lines[i].source == .ai && p.lines[i].speakerID == nil {
+                        p.lines[i].source = .none
+                        p.lines[i].confidence = 0
+                    }
+                    RuleAttribution.apply(to: &p)
+                    for l in p.lines where before[l.id] != l && changed[l.id] == nil { changed[l.id] = before[l.id] }
+                }
+                let hints = self.hintsFromRules(document)
                 let total = max(1, targets.count)
                 for (n, c) in targets.enumerated() {
                     try Task.checkCancellation()
@@ -83,7 +96,9 @@ final class TaggingController {
                             let text = try await model.complete(chunk.messages, grammar: AttributionPrompt.grammar, maxTokens: maxTokens)
                             try Task.checkCancellation()
                             replies = AttributionPrompt.parse(text)
-                            if replies == nil, attempt == 0 { Self.log("unparseable reply: \(text.prefix(300))") }
+                            if replies == nil, attempt == 0 {
+                                Self.log("unparseable reply (\(text.count) characters, \(maxTokens) tokens allowed): \(text.replacingOccurrences(of: "\n", with: "⏎").prefix(400))")
+                            }
                         }
                         if let replies {
                             document.applyQuietly { p in
@@ -125,7 +140,7 @@ final class TaggingController {
         document.registerRunUndo("Tag Speakers", undoManager: undoManager, restore: { p in
             // Put back only lines the AI still owns; the narrator's later fixes stay.
             for i in p.lines.indices {
-                if let old = changed[p.lines[i].id], p.lines[i].source == .ai { p.lines[i] = old }
+                if let old = changed[p.lines[i].id], p.lines[i].source == .ai || p.lines[i].source == .rule { p.lines[i] = old }
             }
             let used = Set(p.lines.compactMap(\.speakerID))
             let addedIDs = Set(added.map(\.id))

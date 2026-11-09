@@ -138,6 +138,13 @@ public enum RuleAttribution {
                     let named = project.characters.filter { c in c.allNames.contains { containsWord(narration, $0) } }
                     if named.count == 1 {
                         for i in spoken { set(i, named[0].id, 0.7, .rule) }
+                    } else if named.count > 1, let first = spoken.first,
+                              let subject = sentenceSubject(before: project.lines[first].range.location, in: paragraph,
+                                                            lines: indices.map { project.lines[$0] }, candidates: named) {
+                        // 4b. Several people named: the one doing something in the sentence just
+                        // before the line probably speaks ("Cyrus flipped the pages and passed
+                        // the book to Barnabe. 'You can,' he said"). A guess, so it stays Unsure.
+                        for i in spoken { set(i, subject, unsureGuess, .rule) }
                     }
                 }
                 // 5. A back-and-forth between two people with no tags alternates.
@@ -153,6 +160,36 @@ public enum RuleAttribution {
             }
         }
         return hints
+    }
+
+    /// The confidence of a guess the rules can't be sure of: below the Unsure line, so the
+    /// narrator still checks it, but the name is there.
+    public static let unsureGuess = 0.5
+
+    /// The character who starts the last sentence of narration before `location` in the
+    /// paragraph (the sentence's subject): "Cyrus flipped …" is Cyrus.
+    static func sentenceSubject(before location: Int, in paragraph: Paragraph, lines: [Line], candidates: [BookCharacter]) -> UUID? {
+        let ns = paragraph.text as NSString
+        let end = min(location, ns.length)
+        // Only narration counts, not words inside earlier quotes.
+        var narration = ""
+        var cursor = 0
+        for l in lines.sorted(by: { $0.range.location < $1.range.location }) where l.range.location < end {
+            if l.range.location > cursor { narration += ns.substring(with: NSRange(location: cursor, length: l.range.location - cursor)) }
+            narration += " . "
+            cursor = max(cursor, l.range.end)
+        }
+        if end > cursor { narration += ns.substring(with: NSRange(location: cursor, length: end - cursor)) }
+        let sentences = narration.components(separatedBy: CharacterSet(charactersIn: ".!?…"))
+            .map { $0.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "“”\"‘’'«»—–,;:"))) }
+            .filter { Words.count($0) >= 2 }
+        guard let last = sentences.last else { return nil }
+        let names = candidates.flatMap { c in c.allNames.map { (c.id, $0) } }.sorted { $0.1.count > $1.1.count }
+        for (id, name) in names where last.hasPrefix(name + " ") {
+            let rest = last.dropFirst(name.count + 1)
+            if let next = rest.first, next.isLowercase { return id }
+        }
+        return nil
     }
 
     static func match(_ regex: NSRegularExpression, _ text: String) -> String? {

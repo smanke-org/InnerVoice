@@ -103,7 +103,7 @@ struct ProjectSidebar: View {
 
     private func badge(_ page: Workspace.Page) -> Int {
         switch page {
-        case .manuscript: document.project.linesNeedingYou
+        case .review: document.project.linesNeedingYou
         case .retakes: document.project.retakes.filter { !$0.done }.count
         default: 0
         }
@@ -188,6 +188,12 @@ struct ProjectInspector: View {
                 }
                 .fixedSize()
             }
+            if document.project.needsYou(line), let guess = document.project.character(line.speakerID) {
+                LabeledContent("") {
+                    Button("Confirm \(guess.firstName)") { document.assign([line.id], to: guess.id, undoManager: undoManager) }
+                        .help("\(guess.name) is a guess (\(Int(line.confidence * 100))% sure). Confirm it, and the line is yours: Tag Speakers won't change it.")
+                }
+            }
             LabeledContent("Kind") {
                 Picker("Kind", selection: Binding(get: { line.kind }, set: { document.setKind($0, for: [line.id], undoManager: undoManager) })) {
                     ForEach(LineKind.allCases, id: \.self) { Text($0.title).tag($0) }
@@ -198,7 +204,9 @@ struct ProjectInspector: View {
             LabeledContent("Source") {
                 HStack(spacing: Space.xs) {
                     if line.source == .ai { Image(systemName: "sparkles").foregroundStyle(.secondary) }
-                    Text(line.source.title + (line.source == .ai && line.speakerID != nil ? ", \(Int(line.confidence * 100))% sure" : ""))
+                    Text((line.source == .rule && line.confidence < 0.6 ? "Guessed from the paragraph" : line.source.title)
+                         + ((line.source == .ai || line.source == .rule) && line.speakerID != nil && line.confidence < 0.95
+                        ? ", \(Int(line.confidence * 100))% sure" : ""))
                 }
                 .font(.callout)
             }
@@ -261,7 +269,7 @@ struct ProjectInspector: View {
         VStack(alignment: .leading, spacing: Space.sm) {
             Divider()
             Text("Key").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-            legendRow(Image(systemName: "questionmark.circle.fill"), "Red: Who's Speaking? or Unsure", Color(nsColor: .attention))
+            legendRow(Image(systemName: "questionmark.circle.fill"), "Red: Who's Speaking? or a guess (Name?)", Color(nsColor: .attention))
             legendRow(Image(systemName: "rectangle.dashed"), "Dashed: a thought", .secondary)
             legendRow(Image(systemName: "ellipsis.rectangle"), "Dotted: written (a letter, a sign)", .secondary)
         }

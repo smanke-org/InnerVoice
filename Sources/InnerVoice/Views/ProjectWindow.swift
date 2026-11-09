@@ -83,6 +83,7 @@ struct ProjectWindow: View {
         case .pronunciations: PronunciationsPage(document: document, workspace: workspace)
         case .record: RecordPage(document: document, workspace: workspace)
         case .retakes: RetakesPage(document: document, workspace: workspace)
+        case .review: ReviewPage(document: document, workspace: workspace)
         case .revisions: RevisionsPage(document: document, workspace: workspace)
         }
     }

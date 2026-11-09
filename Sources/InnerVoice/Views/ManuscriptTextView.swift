@@ -210,15 +210,16 @@ struct ManuscriptTextView: NSViewRepresentable {
             c.builtMargin = look.margin
             c.textView?.margin.needsDisplay = true
         }
-        if let pending = workspace.pendingAssign {
-            DispatchQueue.main.async {
-                workspace.pendingAssign = nil
-                c.requestAssign(pending)
-            }
-        }
+        // Scroll first, then open Assign To, so the popover points at the line on screen.
         if let reveal = workspace.reveal, reveal != c.handledReveal {
             c.handledReveal = reveal
             DispatchQueue.main.async { c.reveal(reveal) }
+        }
+        if let pending = workspace.pendingAssign {
+            DispatchQueue.main.async {
+                workspace.pendingAssign = nil
+                DispatchQueue.main.async { c.requestAssign(pending) }
+            }
         }
     }
 
@@ -361,7 +362,7 @@ struct ManuscriptTextView: NSViewRepresentable {
         func gutterWidth() -> CGFloat {
             guard project.settings.showInitials else { return 72 }
             let names = parent.look.margin
-            let widest = project.characters.map { LineLayoutManager.markerWidth(names.label(for: $0)) }.max() ?? 0
+            let widest = project.characters.map { LineLayoutManager.markerWidth(names.label(for: $0) + "?") }.max() ?? 0
             return max(72, widest + 40)
         }
 
@@ -697,7 +698,9 @@ final class MarginOverlay: NSView {
             drawn.insert(y)
             let speaker = project.character(line.speakerID)
             let color = needs ? NSColor.attention : NSColor(hexString: speaker?.colorHex ?? "#888888")
-            let label = needs ? "?" : speaker.map { c.builtMargin.label(for: $0) } ?? ""
+            // An unsure guess shows its name with a question mark ("Cyrus?"), in red.
+            let named = speaker.map { c.builtMargin.label(for: $0) }
+            let label = needs ? (named.map { $0 + "?" } ?? "?") : named ?? ""
             LineLayoutManager.drawMarker(label, color: color, rightEdge: origin.x - 18, midY: origin.y + c.textBox(first).midY, dark: dark)
         }
     }

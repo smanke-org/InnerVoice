@@ -131,7 +131,9 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
             .heading("Delete text the narrator doesn't read"),
             .text("Select an ISBN, a copyright page, or an ad for another book and press Delete (or right-click and choose Delete Text). It goes from the project and from every script and export; the manuscript file you imported never changes. Select a chapter's heading and all of its text to delete the whole chapter, or right-click a chapter in the sidebar and choose Delete Chapter. ⌘Z brings it back."),
             .tip("Projects with changes save themselves 30 seconds after you change something, so you can keep working without stopping to save."),
-            .tip("⌘↓ and ⌘↑ jump to the next and previous line that needs you: Who's Speaking? and Unsure lines."),
+            .heading("Review the guesses"),
+            .text("When the AI or the rules aren't sure, they still make a best guess: the margin shows the name with a question mark (\"Cyrus?\") and the line stays red until you check it. Review in the sidebar (⌘7) lists every line that needs you, Unsure Guesses first, each with the paragraphs around it. Return confirms the guess, typing or 1–9 picks someone else, 0 makes it narration, and ↓ ↑ move between lines. A settled line leaves the list and the next one comes up."),
+            .tip("⌘↓ and ⌘↑ jump to the next and previous line that needs you and open Assign To with the guess picked: Return confirms it. The inspector's Confirm button does the same."),
         ]
 
         case .colors: [
@@ -144,7 +146,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
                 ("Written", "Dotted, for letters, signs and texts"),
             ]),
             .heading("Red means it needs you"),
-            .text("Red is kept for lines that need you, and no character is ever red. Who's Speaking? is a line the AI couldn't decide on. Unsure is a line it tagged with low confidence. Both show a \"?\" in the margin."),
+            .text("Red is kept for lines that need you, and no character is ever red. Who's Speaking? is a line the AI couldn't decide on. Unsure is a line it tagged with low confidence: the margin shows its best guess with a question mark (\"Cyrus?\"), and Who's Speaking? lines show just \"?\"."),
             .heading("Speakers in the margin"),
             .text("Each line also shows who says it in the margin, so you never have to rely on color alone. Choose initials, first names or full names in Settings › Manuscript or View › Speakers in Margin; long names are shortened with \"…\". Turn them off for a project with View › Show Speakers in Margin."),
             .heading("Text size and spacing"),

@@ -174,7 +174,7 @@ import SwiftUI
 @Observable
 final class Workspace {
     enum Page: String, CaseIterable, Identifiable {
-        case manuscript, cast, index, pronunciations, record, retakes, revisions
+        case manuscript, cast, index, pronunciations, record, retakes, review, revisions
         var id: String { rawValue }
         var title: String {
             switch self {
@@ -184,6 +184,7 @@ final class Workspace {
             case .pronunciations: "Pronunciations"
             case .record: "Record"
             case .retakes: "Retakes"
+            case .review: "Review"
             case .revisions: "Revisions"
             }
         }
@@ -195,12 +196,13 @@ final class Workspace {
             case .pronunciations: "character.bubble"
             case .record: "mic"
             case .retakes: "arrow.counterclockwise"
+            case .review: "checklist"
             case .revisions: "doc.badge.clock"
             }
         }
         var helpTopic: HelpTopic {
             switch self {
-            case .manuscript: .fixingLines
+            case .manuscript, .review: .fixingLines
             case .cast: .castAndSummaries
             case .index: .indexAndRehearse
             case .pronunciations: .pronunciations
@@ -216,6 +218,7 @@ final class Workspace {
             case .pronunciations: "4"
             case .record: "5"
             case .retakes: "6"
+            case .review: "7"
             case .revisions: nil
             }
         }

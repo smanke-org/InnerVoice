@@ -549,3 +549,31 @@ private func deletionProject() -> (Project, UUID, UUID, UUID) {
     #expect(p.retakes.isEmpty)
     #expect(p.lines.last?.paragraphID == next)
 }
+
+// MARK: - Unsure guesses
+
+@Test func pronounTagGuessesTheSentenceSubject() {
+    let p = ProjectBuilder.make(from: book([
+        "“Sit,” said Cyrus Vane.",
+        "“Thank you,” said Barnabe.",
+        "Cyrus flipped to the second and third pages of the book and passed the volume to Barnabe. “You can,” he said, “if you can explain why some of the words have changed.”",
+        "Barnabe looked up at Cyrus and frowned. “Changed?” he asked.",
+    ]), fileName: "t.txt")
+    let index = BookIndex(p)
+    let you = p.lines.first { p.text(of: $0, index: index).hasPrefix("You can") }
+    #expect(p.character(you?.speakerID)?.name == "Cyrus Vane")
+    #expect(you.map { p.needsYou($0) } == true)   // a guess: still for the narrator to check
+    let rest = p.lines.first { p.text(of: $0, index: index).hasPrefix("if you can") }
+    #expect(p.character(rest?.speakerID)?.name == "Cyrus Vane")
+    let changed = p.lines.first { p.text(of: $0, index: index).hasPrefix("Changed") }
+    #expect(p.character(changed?.speakerID)?.name == "Barnabe")
+}
+
+@Test func cutOffRepliesKeepTheirFinishedAnswers() {
+    let cut = "{\"lines\": [\n  {\n    \"id\": \"L1\",\n    \"speaker\": \"Mara Quinn\",\n    \"kind\": \"spoken\",\n    \"confidence\": 100\n  },\n  {\n    \"id\": \"L2\",\n    \"speaker\": \"Tom"
+    let replies = AttributionPrompt.parse(cut)
+    #expect(replies?.count == 1)
+    #expect(replies?.first?.speaker == "Mara Quinn")
+    #expect(AttributionPrompt.parse("{\"lines\":[{\"id\":\"L1\",\"speaker\":\"A\",\"kind\":\"spoken\",\"confidence\":9}]}")?.count == 1)
+    #expect(AttributionPrompt.grammar.contains("ws ::= [ ]?"))
+}

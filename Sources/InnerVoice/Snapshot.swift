@@ -142,6 +142,7 @@ enum Snapshot {
                     workspace.recordParagraph = document.project.chapters.first?.paragraphs.dropFirst(1).first?.id
                 }
                 await shot("retakes") { workspace.page = .retakes }
+                await shot("review", settle: 1.0) { workspace.page = .review }
                 await shot("revisions") { workspace.page = .revisions }
                 await shot("export-sheet") { workspace.page = .manuscript; workspace.showExport = true }
                 workspace.showExport = false
@@ -163,6 +164,7 @@ enum Snapshot {
                 SettingsWindow.shared.show(tab: .general)
                 SettingsWindow.shared.window?.close()
             }
+            if wants("review-keys") { await reviewKeysTest(document: document, workspace: workspace) }
             // Last: driving real menus leaves the app inactive, which would gray later shots.
             if wants("speaker-menu") {
                 NSApp.appearance = NSAppearance(named: .aqua)
@@ -245,6 +247,64 @@ enum Snapshot {
         let assigned = document.project.lines.first { $0.id == line.id }?.speakerID
         print("SNAPSHOT \(tag) typed “\(query)” for \(target.name): " + (assigned == target.id ? "PASS assigned" : "FAIL got \(document.project.character(assigned)?.name ?? "nobody")"))
         c.parent.undoManager?.undo()
+    }
+
+    /// On the Review page: Return confirms the guess; then for a line with no speaker,
+    /// typing "ed" and Return gives it to Edda. Real key events, sent to this app.
+    @MainActor
+    static func reviewKeysTest(document: InnerVoiceDocument, workspace: Workspace) async {
+        let project = document.project
+        guard let guessLine = project.lines.first(where: { project.needsYou($0) && $0.speakerID != nil }) else {
+            print("SNAPSHOT review-keys: no guess in the sample"); return
+        }
+        let guess = guessLine.speakerID
+        let undo = NSApp.windows.compactMap { find(ReadingTextView.self, in: $0.contentView)?.coordinator?.parent.undoManager }.first
+        workspace.page = .review
+        try? await Task.sleep(for: .seconds(1.2))
+        NSApp.windows.first { $0.isVisible && $0.canBecomeMain }?.makeKeyAndOrderFront(nil)
+        let pid = getpid()
+        func key(_ code: CGKeyCode, _ text: String?) {
+            for down in [true, false] {
+                let ev = CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: down)
+                if let text { let u = Array(text.utf16); ev?.keyboardSetUnicodeString(stringLength: u.count, unicodeString: u) }
+                ev?.postToPid(pid)
+            }
+        }
+        // Typing narrows the speakers; Return gives the line to the first match.
+        let edda = document.project.characters.first { $0.name.hasPrefix("Edda") }
+        for ch in "ed" { key(0, String(ch)) }
+        try? await Task.sleep(for: .seconds(0.4))
+        key(36, "\r")
+        try? await Task.sleep(for: .seconds(0.8))
+        let typed = document.project.lines.first { $0.id == guessLine.id }
+        print("SNAPSHOT review-keys typed: " + (typed?.speakerID == edda?.id && typed?.source == .user ? "PASS gave it to Edda" : "FAIL got \(document.project.character(typed?.speakerID)?.name ?? "nobody")"))
+        undo?.undo()
+        workspace.page = .manuscript
+        try? await Task.sleep(for: .seconds(0.4))
+        workspace.page = .review
+        try? await Task.sleep(for: .seconds(1.2))
+        // Return with nothing typed confirms the guess.
+        key(36, "\r")
+        try? await Task.sleep(for: .seconds(0.8))
+        let after = document.project.lines.first { $0.id == guessLine.id }
+        print("SNAPSHOT review-keys Return: " + (after?.source == .user && after?.speakerID == guess ? "PASS confirmed the guess" : "FAIL source \(after?.source.rawValue ?? "-")"))
+        undo?.undo()
+        // In the manuscript: ⌘↓'s jump opens Assign To with the guess picked; Return confirms.
+        workspace.page = .manuscript
+        workspace.selectedLines = []
+        try? await Task.sleep(for: .seconds(0.8))
+        var tries = 0
+        while tries < 5, document.project.lines.first(where: { $0.id == guessLine.id }).map({ !$0.isConfirmed }) == true {
+            NextLine.go(document: document, workspace: workspace, forward: true)
+            try? await Task.sleep(for: .seconds(1.2))
+            if workspace.selectedLines == [guessLine.id] { key(36, "\r") } else { key(53, nil) }
+            try? await Task.sleep(for: .seconds(0.8))
+            tries += 1
+        }
+        let jumped = document.project.lines.first { $0.id == guessLine.id }
+        print("SNAPSHOT review-keys ⌘↓ then Return: " + (jumped?.source == .user && jumped?.speakerID == guess ? "PASS confirmed in the popover" : "FAIL"))
+        PopoverPresenter.shared.close()
+        while undo?.canUndo == true { undo?.undo() }
     }
 
     static func find<T: NSView>(_ type: T.Type, in view: NSView?) -> T? {

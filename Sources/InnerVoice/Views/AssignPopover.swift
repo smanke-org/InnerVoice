@@ -16,6 +16,12 @@ struct AssignPopover: View {
 
     private var line: Line? { document.index.lineIndexByID[lineID].map { document.project.lines[$0] } }
 
+    /// The AI's or the rules' unsure guess for this line, for the narrator to confirm.
+    private var guess: BookCharacter? {
+        guard let line, document.project.needsYou(line) else { return nil }
+        return document.project.character(line.speakerID)
+    }
+
     /// Pinned speakers first (A to Z by first name), then the most used in this chapter,
     /// then the rest by lines.
     private var ordered: [BookCharacter] {
@@ -114,7 +120,11 @@ struct AssignPopover: View {
             .padding(.vertical, Space.sm)
         }
         .frame(width: 300)
-        .onAppear { focused = true }
+        .onAppear {
+            focused = true
+            // An unsure guess starts picked, so Return confirms it.
+            if let guess, let i = filtered.firstIndex(where: { $0.id == guess.id }) { highlighted = i }
+        }
         .onKeyPress(.downArrow) { highlighted = min(highlighted + 1, filtered.count - (canCreate ? 0 : 1)); return .handled }
         .onKeyPress(.upArrow) { highlighted = max(showsNarration ? -1 : 0, highlighted - 1); return .handled }
         .onKeyPress(.escape) { onClose(); return .handled }
@@ -135,9 +145,15 @@ struct AssignPopover: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
-                Text(line.source == .none ? "Not assigned yet" : line.source.title + (line.source == .ai ? " (\(Int(line.confidence * 100))% sure)" : ""))
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                if let guess {
+                    Text("Best guess: \(guess.name) (\(Int(line.confidence * 100))% sure). Return confirms it.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text(line.source == .none ? "Not assigned yet" : line.source.title + (line.source == .ai ? " (\(Int(line.confidence * 100))% sure)" : ""))
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
             }
         }
         .padding(Space.md)
