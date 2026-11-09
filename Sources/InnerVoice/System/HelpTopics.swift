@@ -184,11 +184,12 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
                 ("Orpheus", "Eight natural American voices that act from the words. A sigh, laugh, gasp or groan in the speech tag (\"she sighed\") is performed too. 3.6 GB."),
             ]),
             .text("Download Qwen3-TTS and Orpheus once from Settings › Voices, or from the Voices page when you choose one. Downloading is the only time they use the internet; your book never leaves the Mac. They need a Mac with Apple silicon, and the first line takes a few seconds while the engine loads."),
+            .text("Don't use an engine? Turn it off with its switch in Settings › Voices and it's no longer offered on the Voices page. A project set to it uses an engine that's on until you turn it back on; its casting is kept. One engine always stays on."),
             .tip("Made audio is kept in a cache, so a line plays at once the second time. Settings › Voices shows its size and can clear it."),
         ]
 
         case .castAndSummaries: [
-            .text("Cast shows every character as a card, with their color, line and word counts, first appearance and narrator. Open a character to read their summary."),
+            .text("Cast shows every character as a card, with their color, line and word counts, first appearance and narrator. Click a card or its name to open that character’s page and read their summary."),
             .heading("Summaries"),
             .text("Build Summaries has the AI read the text around each character and fill in what the book says: age, gender, accent, voice, personality, history and relationships. Each fact has a source, such as \"Ch 3 ¶12\". Click it to see that paragraph in the manuscript."),
             .text("Build Summaries in the Cast toolbar (⇧⌘B) does every character in one go. On a character's page, Build Summary does just that character; click its arrow and choose Build Everyone's Summaries to do them all from there."),

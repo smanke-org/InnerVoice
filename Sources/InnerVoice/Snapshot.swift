@@ -184,11 +184,18 @@ enum Snapshot {
                         if let s = SettingsWindow.shared.window { capture(s, "\(dir)/settings-\(tab.rawValue)-\(mode).png") }
                     }
                 }
+                // Orpheus turned off (test runs never save the switch).
+                EngineSwitches.shared.set(.orpheus, on: false)
+                SettingsWindow.shared.show(tab: .voices)
+                try? await Task.sleep(for: .seconds(0.9))
+                if let s = SettingsWindow.shared.window { capture(s, "\(dir)/settings-voices-orpheus-off-dark.png") }
+                EngineSwitches.shared.set(.orpheus, on: true)
                 // The tab is remembered in the person's real preferences: leave it on General.
                 SettingsWindow.shared.show(tab: .general)
                 SettingsWindow.shared.window?.close()
             }
             if wants("review-keys") { await reviewKeysTest(document: document, workspace: workspace) }
+            if wants("cast-click") { await castClickTest(document: document, workspace: workspace) }
             // Last: driving real menus leaves the app inactive, which would gray later shots.
             if wants("speaker-menu") {
                 NSApp.appearance = NSAppearance(named: .aqua)
@@ -271,6 +278,36 @@ enum Snapshot {
         let assigned = document.project.lines.first { $0.id == line.id }?.speakerID
         print("SNAPSHOT \(tag) typed “\(query)” for \(target.name): " + (assigned == target.id ? "PASS assigned" : "FAIL got \(document.project.character(assigned)?.name ?? "nobody")"))
         c.parent.undoManager?.undo()
+    }
+
+    /// On the Cast page, a real mouse click on a character's name opens their page.
+    @MainActor
+    static func castClickTest(document: InnerVoiceDocument, workspace: Workspace) async {
+        guard let main = document.project.characters.max(by: { (document.index.stats[$0.id]?.lines ?? 0) < (document.index.stats[$1.id]?.lines ?? 0) }) else { return }
+        workspace.castPath = []
+        workspace.page = .cast
+        try? await Task.sleep(for: .seconds(1.2))
+        guard let window = NSApp.windows.first(where: { $0.isVisible && $0.canBecomeMain && !$0.isSheet }), let content = window.contentView,
+              let frame = CastCard.nameFrames[main.id] else {
+            print("SNAPSHOT cast-click: FAIL no name frame"); return
+        }
+        window.makeKeyAndOrderFront(nil)
+        // SwiftUI's global space is the window's content, top-left origin.
+        let inWindow = NSPoint(x: frame.midX, y: content.bounds.height - frame.midY)
+        let hit = content.hitTest(content.convert(inWindow, from: nil))
+        print("SNAPSHOT cast-click: name at \(frame), window point \(inWindow), hits \(hit.map { String(describing: type(of: $0)) } ?? "nothing")")
+        // The click goes through the window's own event path (posting to the process doesn't
+        // reach a test copy launched from the shell).
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            if let ev = NSEvent.mouseEvent(with: type, location: inWindow, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                           windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0) {
+                window.sendEvent(ev)
+            }
+            try? await Task.sleep(for: .milliseconds(60))
+        }
+        try? await Task.sleep(for: .seconds(1.0))
+        print("SNAPSHOT cast-click on \(main.name): " + (workspace.castPath == [main.id] ? "PASS opened their page" : "FAIL path \(workspace.castPath)"))
+        workspace.castPath = []
     }
 
     /// On the Review page: Return confirms the guess; then for a line with no speaker,

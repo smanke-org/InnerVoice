@@ -61,6 +61,22 @@ enum SelfTest {
             undo.undo()
         }
 
+        // Engine switches (Settings › Voices); test runs never save them.
+        let switches = EngineSwitches.shared
+        doc.setVoiceEngine(.orpheus, undoManager: undo)
+        switches.set(.orpheus, on: false)
+        check("a turned-off engine isn't used: the project falls back to one that's on",
+              doc.project.engineInUse == .apple && doc.project.settings.engine == .orpheus && VoiceResolver(project: doc.project).engine == .apple)
+        switches.set(.orpheus, on: true)
+        check("turning it back on brings the project's own engine back", doc.project.engineInUse == .orpheus)
+        switches.set(.apple, on: false)
+        switches.set(.qwen, on: false)
+        switches.set(.orpheus, on: false)
+        check("the last engine that's on stays on", switches.isOn(.orpheus) && !switches.canTurnOff(.orpheus) && switches.enabled == [.orpheus])
+        for e in VoiceEngine.allCases { switches.set(e, on: true) }
+        undo.undo()
+        check("every engine is on again after the test", switches.enabled.count == VoiceEngine.allCases.count && doc.project.engineInUse == .apple)
+
         // Real speech: one line in its voice, cached the second time.
         let resolver = VoiceResolver(project: doc.project)
         let segs = SpeechScript.segments(chapter: 0, project: doc.project, index: doc.index, includeNarration: true)

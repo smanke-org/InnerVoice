@@ -30,7 +30,7 @@ import SwiftUI
 
     /// Keeps the voice casting picked, as if the narrator had chosen it.
     func confirmVoice(for characterID: UUID, undoManager: UndoManager?) {
-        let engine = project.settings.engine
+        let engine = project.engineInUse
         guard let v = project.character(characterID)?.voice(for: engine) else { return }
         setVoice(v.choice, for: characterID, undoManager: undoManager)
     }
@@ -43,7 +43,7 @@ import SwiftUI
 
     /// Casts every voice again from the summaries; the narrator's choices stay.
     func castVoicesAgain(undoManager: UndoManager?) {
-        let engine = project.settings.engine
+        let engine = project.engineInUse
         let voices = VoiceCatalog.voices(for: engine)
         let index = self.index
         change("Cast Voices", undoManager: undoManager) { p in
@@ -60,7 +60,7 @@ import SwiftUI
 enum VoiceCastingRun {
     static func castIfNeeded(document: InnerVoiceDocument) {
         let project = document.project
-        let engine = project.settings.engine
+        let engine = project.engineInUse
         let index = document.index
         let speaking = project.characters.filter { (index.stats[$0.id]?.lines ?? 0) > 0 }
         let open = speaking.filter { c in

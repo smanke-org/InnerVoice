@@ -50,10 +50,12 @@ struct CastPage: View {
                 duplicates
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 260, maximum: 360), spacing: Space.lg)], spacing: Space.lg) {
                     ForEach(sorted) { c in
-                        NavigationLink(value: c.id) {
+                        // A button, not a NavigationLink: in this grid the link didn't open on a click.
+                        Button { workspace.castPath = [c.id] } label: {
                             CastCard(document: document, character: c)
                         }
                         .buttonStyle(.plain)
+                        .help("Open \(c.name)’s page")
                         .contextMenu { menu(c) }
                     }
                 }
@@ -150,6 +152,9 @@ struct CastCard: View {
     let character: BookCharacter
     @State private var hovering = false
 
+    /// Where each name sits in its window, for the snapshot click test.
+    static var nameFrames: [UUID: CGRect] = [:]
+
     var body: some View {
         let stats = document.index.stats[character.id]
         let color = Color(hexString: character.colorHex)
@@ -157,7 +162,15 @@ struct CastCard: View {
             HStack(spacing: Space.md) {
                 Avatar(character: character, size: 44)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(character.name).font(.headline).lineLimit(1)
+                    // Underlined while the pointer is over the card: a click opens their page.
+                    Text(character.name).font(.headline).lineLimit(1).underline(hovering)
+                        .background {
+                            if SystemHooks.isTestRun {
+                                GeometryReader { g in
+                                    Color.clear.onAppear { Self.nameFrames[character.id] = g.frame(in: .global) }
+                                }
+                            }
+                        }
                     if !character.aliases.isEmpty {
                         Text(character.aliases.joined(separator: ", "))
                             .font(.caption)

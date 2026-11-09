@@ -1,3 +1,4 @@
+import InnerVoiceKit
 import SwiftUI
 
 enum SettingsTab: String, CaseIterable, Identifiable {
@@ -118,6 +119,19 @@ struct VoicePackRow: View {
 
     var body: some View {
         LabeledContent {
+            HStack(spacing: Space.sm) {
+                if EngineSwitches.shared.isOn(pack.engine) || manager.states[pack.engine] != nil { controls }
+                EngineSwitch(engine: pack.engine)
+            }
+        } label: {
+            Text(pack.engine.title)
+            Text(pack.summary)
+        }
+        .foregroundStyle(EngineSwitches.shared.isOn(pack.engine) ? .primary : .secondary)
+    }
+
+    @ViewBuilder
+    private var controls: some View {
             switch manager.states[pack.engine] {
             case .downloading(let p)?:
                 HStack(spacing: Space.sm) {
@@ -143,10 +157,23 @@ struct VoicePackRow: View {
                         .help("Download \(pack.engine.title) from Hugging Face")
                 }
             }
-        } label: {
-            Text(pack.engine.title)
-            Text(pack.summary)
-        }
+    }
+}
+
+/// Turns an engine on or off (the last one that's on stays on).
+struct EngineSwitch: View {
+    let engine: VoiceEngine
+    private var switches: EngineSwitches { .shared }
+
+    var body: some View {
+        Toggle("Use \(engine.title)", isOn: switches.binding(engine))
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .controlSize(.small)
+            .disabled(switches.isOn(engine) && !switches.canTurnOff(engine))
+            .help(switches.isOn(engine)
+                  ? (switches.canTurnOff(engine) ? "Turn \(engine.title) off: it won’t be offered on the Voices page" : "At least one engine stays on")
+                  : "Turn \(engine.title) on")
     }
 }
 
@@ -173,11 +200,14 @@ struct VoicesSettings: View {
         Section {
             LabeledContent("Apple Voices") {
                 HStack {
-                    Text("Built in").foregroundStyle(.secondary)
-                    Button("Get More Voices…") {
-                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.universalaccess?SpokenContent")!)
+                    if EngineSwitches.shared.isOn(.apple) {
+                        Text("Built in").foregroundStyle(.secondary)
+                        Button("Get More Voices…") {
+                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.universalaccess?SpokenContent")!)
+                        }
+                        .help("Download free Premium voices in System Settings › Accessibility › Spoken Content › System Voice › Manage Voices")
                     }
-                    .help("Download free Premium voices in System Settings › Accessibility › Spoken Content › System Voice › Manage Voices")
+                    EngineSwitch(engine: .apple)
                 }
             }
             VoicePackRow(pack: .qwen)
@@ -185,7 +215,7 @@ struct VoicesSettings: View {
         } header: {
             Text("Engines")
         } footer: {
-            Text("Qwen3-TTS and Orpheus run on this Mac. Downloading them is the only time they use the internet; your book never leaves the Mac. Choose the engine for each project on its Voices page.")
+            Text("Qwen3-TTS and Orpheus run on this Mac. Downloading them is the only time they use the internet; your book never leaves the Mac. Choose the engine for each project on its Voices page; turn an engine off to hide it there.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

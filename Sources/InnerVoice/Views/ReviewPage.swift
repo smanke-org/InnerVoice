@@ -48,7 +48,7 @@ struct ReviewPage: View {
     private var unsureVoices: [BookCharacter] {
         let index = document.index
         return document.project.characters
-            .filter { (index.stats[$0.id]?.lines ?? 0) > 0 && document.project.voiceNeedsYou($0) }
+            .filter { (index.stats[$0.id]?.lines ?? 0) > 0 && document.project.voiceNeedsYou($0, engine: document.project.engineInUse) }
             .sorted { (index.stats[$0.id]?.lines ?? 0) > (index.stats[$1.id]?.lines ?? 0) }
     }
 
@@ -487,7 +487,7 @@ struct ReviewPage: View {
                     Circle().fill(Color(hexString: c.colorHex)).frame(width: 10, height: 10)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(c.name)
-                        Text(c.voice(for: document.project.settings.engine).map { VoiceCatalog.name(of: $0.choice) + "?" } ?? "No voice yet")
+                        Text(c.voice(for: document.project.engineInUse).map { VoiceCatalog.name(of: $0.choice) + "?" } ?? "No voice yet")
                             .font(.caption)
                             .foregroundStyle(Color(nsColor: .attention))
                     }

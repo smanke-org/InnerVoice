@@ -11,7 +11,7 @@ struct VoiceResolver {
 
     @MainActor
     init(project: Project, engine: VoiceEngine? = nil) {
-        let e = engine ?? project.settings.engine
+        let e = engine ?? project.engineInUse
         self.engine = e
         var map: [UUID: VoiceChoice] = [:]
         for c in project.characters { if let v = c.voice(for: e) { map[c.id] = v.choice } }

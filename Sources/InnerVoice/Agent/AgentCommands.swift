@@ -733,9 +733,9 @@ enum AgentCommands {
                 "chapters": stats?.chapters.count ?? 0, "facts": c.facts.count,
                 "narrator": document.project.narrators.first { $0.id == c.narratorID }?.name ?? NSNull(),
                 "showInIndex": index.showsInIndex(c),
-                "voice": c.voice(for: document.project.settings.engine).map { v -> JSONObject in
+                "voice": c.voice(for: document.project.engineInUse).map { v -> JSONObject in
                     ["engine": v.choice.engine.rawValue, "name": VoiceCatalog.name(of: v.choice), "source": v.source.rawValue,
-                     "confidence": (v.confidence * 100).rounded() / 100, "needsYou": document.project.voiceNeedsYou(c)]
+                     "confidence": (v.confidence * 100).rounded() / 100, "needsYou": document.project.voiceNeedsYou(c, engine: document.project.engineInUse)]
                 } ?? NSNull()]
     }
 

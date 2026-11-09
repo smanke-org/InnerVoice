@@ -118,7 +118,7 @@ struct AudioExportSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Space.lg) {
             Text("Export Audio").font(.title2.weight(.semibold))
-            Text("Each line is read in its character’s voice and tone, with \(document.project.settings.engine.title).")
+            Text("Each line is read in its character’s voice and tone, with \(document.project.engineInUse.title).")
                 .font(.callout)
                 .foregroundStyle(.secondary)
             Form {

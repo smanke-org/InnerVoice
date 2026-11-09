@@ -11,7 +11,7 @@ struct VoicesPage: View {
     @Environment(\.undoManager) private var undoManager
     @State private var query = ""
 
-    private var engine: VoiceEngine { document.project.settings.engine }
+    private var engine: VoiceEngine { document.project.engineInUse }
 
     private var cast: [BookCharacter] {
         let index = document.index
@@ -32,7 +32,7 @@ struct VoicesPage: View {
         .toolbar {
             ToolbarItem {
                 Picker("Engine", selection: Binding(get: { engine }, set: { document.setVoiceEngine($0, undoManager: undoManager) })) {
-                    ForEach(VoiceEngine.allCases) { e in
+                    ForEach(EngineSwitches.shared.enabled) { e in
                         Text(e.title + (ModelSpeech.isInstalled(e) ? "" : " (Not Downloaded)")).tag(e)
                     }
                 }
@@ -53,7 +53,7 @@ struct VoicesPage: View {
     }
 
     private var subtitle: String {
-        let unsure = cast.filter { document.project.voiceNeedsYou($0) }.count
+        let unsure = cast.filter { document.project.voiceNeedsYou($0, engine: engine) }.count
         return unsure == 1 ? "1 voice needs you" : unsure > 1 ? "\(unsure) voices need you" : engine.title
     }
 
@@ -65,7 +65,7 @@ struct VoicesPage: View {
             }
             Section("Cast") {
                 ForEach(cast.filter { query.isEmpty || $0.matches(query) }) { c in
-                    row(name: c.name, color: Color(hexString: c.colorHex), voice: c.voice(for: engine), needs: document.project.voiceNeedsYou(c))
+                    row(name: c.name, color: Color(hexString: c.colorHex), voice: c.voice(for: engine), needs: document.project.voiceNeedsYou(c, engine: engine))
                         .tag(VoiceTarget.character(c.id))
                 }
             }
@@ -203,7 +203,7 @@ struct VoiceChooser: View {
     @State private var filter: VoiceGender?
     @State private var designDraft = ""
 
-    private var engine: VoiceEngine { document.project.settings.engine }
+    private var engine: VoiceEngine { document.project.engineInUse }
     private var character: BookCharacter? { characterID.flatMap { document.project.character($0) } }
     private var voice: CastVoice? {
         characterID == nil ? document.project.settings.narratorVoice(for: engine) : character?.voice(for: engine)
@@ -212,6 +212,11 @@ struct VoiceChooser: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Space.lg) {
             current
+            if document.project.settings.engine != engine {
+                Label("\(document.project.settings.engine.title) is turned off in Settings › Voices, so this project uses \(engine.title).", systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
             if !ModelSpeech.isInstalled(engine), let pack = VoicePack.pack(for: engine) {
                 VStack(alignment: .leading, spacing: Space.sm) {
                     Label("\(engine.title) isn’t downloaded yet, so these voices can’t be heard.", systemImage: "arrow.down.circle")
