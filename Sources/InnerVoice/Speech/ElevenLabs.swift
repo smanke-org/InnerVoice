@@ -49,15 +49,31 @@ final class ElevenLabs {
     var consented: Date? {
         _ = revision
         if SystemHooks.isTestRun { return testConsent }
-        return UserDefaults.standard.object(forKey: Self.consentKey) as? Date
+        if let c = cachedConsent { return c }
+        let c = UserDefaults.standard.object(forKey: Self.consentKey) as? Date
+        cachedConsent = .some(c)
+        return c
     }
 
     @ObservationIgnored private var testConsent: Date?
 
+    /// The key and the yes, read once and kept in memory. Views ask whether ElevenLabs is set
+    /// up many times on every redraw (every engine check does), and each keychain read is a
+    /// round trip to another process (about 0.8 ms): on a big cast that froze the window for
+    /// a few hundred milliseconds at a time. `save` keeps the copies current.
+    @ObservationIgnored private var cachedKey: String??
+    @ObservationIgnored private var cachedConsent: Date??
+    /// Keychain reads so far, for the self-test.
+    @ObservationIgnored private(set) var keychainReads = 0
+
     var apiKey: String? {
         _ = revision
         if SystemHooks.isTestRun { return testKey }
-        return Keychain.read(account: "elevenlabs")
+        if let k = cachedKey { return k }
+        keychainReads += 1
+        let k = Keychain.read(account: "elevenlabs")
+        cachedKey = .some(k)
+        return k
     }
 
     func save(key: String, consent: Bool) {
@@ -67,7 +83,10 @@ final class ElevenLabs {
             testConsent = consent ? .now : nil
         } else {
             if key.isEmpty { Keychain.delete(account: "elevenlabs") } else { Keychain.write(key, account: "elevenlabs") }
-            UserDefaults.standard.set(consent ? Date() : nil, forKey: Self.consentKey)
+            let date = consent ? Date() : nil
+            UserDefaults.standard.set(date, forKey: Self.consentKey)
+            cachedKey = .some(key.isEmpty ? nil : key)
+            cachedConsent = .some(date)
         }
         revision += 1
     }
@@ -212,11 +231,10 @@ final class ElevenLabs {
     func render(_ request: SpeechRequest, allowed: Bool) async throws -> AVAudioPCMBuffer {
         guard allowed else { throw ElevenLabsError.bookNotAllowed }
         guard let key = apiKey, consented != nil else { throw SpeechError.engineUnavailable(.elevenlabs) }
-        var samples: [Float] = []
-        let gap = [Float](repeating: 0, count: Int(SpeechAudio.format.sampleRate * 0.18))
-        for (n, piece) in ModelSpeech.chunks(Self.text(for: request), limit: 2000).enumerated() {
+        var pieces: [Data] = []
+        let gapCount = Int(SpeechAudio.format.sampleRate * 0.18)
+        for piece in ModelSpeech.chunks(Self.text(for: request), limit: 2000) {
             try Task.checkCancellation()
-            if n > 0 { samples += gap }
             var c = URLComponents(url: Self.host.appending(path: "v1/text-to-speech/\(request.choice.voiceID)"), resolvingAgainstBaseURL: false)!
             c.queryItems = [URLQueryItem(name: "output_format", value: "pcm_24000")]
             var req = URLRequest(url: c.url!)
@@ -230,9 +248,19 @@ final class ElevenLabs {
             let (data, response) = try await send(req)
             try Self.throwIfFailed(response, data)
             ActivityStore.shared.record(ActivityKey.elevenLabsCharacters, count: piece.count)
-            samples += Self.pcm16(data)
+            pieces.append(data)
         }
-        return try ModelSpeech.buffer(ModelSpeech.level(samples), volume: request.kind == .thought ? 0.85 : 1)
+        // Decoding and leveling seconds of audio happens off the main thread, so the window
+        // stays responsive while lines arrive.
+        let leveled = await Task.detached(priority: .userInitiated) { () -> [Float] in
+            var samples: [Float] = []
+            for (n, data) in pieces.enumerated() {
+                if n > 0 { samples += [Float](repeating: 0, count: gapCount) }
+                samples += ElevenLabs.pcm16(data)
+            }
+            return ModelSpeech.level(samples)
+        }.value
+        return try ModelSpeech.buffer(leveled, volume: request.kind == .thought ? 0.85 : 1)
     }
 
     /// 16-bit little-endian mono PCM to floats.

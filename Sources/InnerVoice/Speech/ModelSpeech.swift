@@ -88,7 +88,7 @@ enum ModelSpeech {
 
     /// Brings every line to the same loudness (the models vary by 10 dB or more from one
     /// line to the next), without letting the peaks clip.
-    static func level(_ samples: [Float], targetDB: Float = -20) -> [Float] {
+    nonisolated static func level(_ samples: [Float], targetDB: Float = -20) -> [Float] {
         guard !samples.isEmpty else { return samples }
         // Loudness of the speech itself: the louder half of 20 ms frames, so pauses don't count.
         let frame = 480

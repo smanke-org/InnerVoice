@@ -7,6 +7,28 @@ enum VoiceCatalog {
     /// Apple's English voices, best quality first, one per name. Novelty voices (Bells,
     /// Zarvox…) and Siri's voices (which apps can't use) are left out.
     static func appleVoices() -> [VoiceInfo] {
+        // Asking the system for its voices is slow and views ask on every redraw: kept until
+        // macOS says the installed voices changed (a Premium voice downloaded).
+        if let cached = appleCache { return cached }
+        startWatchingVoices()
+        let found = loadAppleVoices()
+        appleCache = found
+        return found
+    }
+
+    private static var appleCache: [VoiceInfo]?
+    private static var appleByID: [String: VoiceInfo] = [:]
+    private static var watching = false
+
+    private static func startWatchingVoices() {
+        guard !watching else { return }
+        watching = true
+        NotificationCenter.default.addObserver(forName: AVSpeechSynthesizer.availableVoicesDidChangeNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { appleCache = nil; appleByID = [:] }
+        }
+    }
+
+    private static func loadAppleVoices() -> [VoiceInfo] {
         var best: [String: AVSpeechSynthesisVoice] = [:]
         for v in AVSpeechSynthesisVoice.speechVoices() where v.language.hasPrefix("en") {
             guard !v.voiceTraits.contains(.isNoveltyVoice), !v.identifier.contains(".siri."),
@@ -84,7 +106,10 @@ enum VoiceCatalog {
     /// The voice a choice names, for showing it.
     static func info(for choice: VoiceChoice) -> VoiceInfo? {
         switch choice.engine {
-        case .apple: AVSpeechSynthesisVoice(identifier: choice.voiceID).map(info)
+        case .apple:
+            if let hit = appleByID[choice.voiceID] { hit } else {
+                AVSpeechSynthesisVoice(identifier: choice.voiceID).map(info).map { v in appleByID[choice.voiceID] = v; return v }
+            }
         case .orpheus: VoiceInfo.orpheus.first { $0.voiceID == choice.voiceID }
         case .qwen: VoiceInfo.qwenPresets.first { $0.voiceID == choice.voiceID }
         case .elevenlabs: ElevenLabs.shared.voices.first { $0.voiceID == choice.voiceID }

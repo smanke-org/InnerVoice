@@ -85,8 +85,16 @@ final class VoiceModelManager {
     func isInstalled(_ engine: VoiceEngine) -> Bool {
         _ = revision
         if engine == .elevenlabs { return ElevenLabs.shared.isSetUp }
-        return engine == .apple || engine == .mixed || (VoicePack.pack(for: engine)?.isInstalled ?? false)
+        if engine == .apple || engine == .mixed { return true }
+        // Checking lists the model folders on disk, and views ask on every redraw: the answer
+        // is kept until a pack is downloaded or removed (`revision` changes).
+        if let hit = installedCache[engine], hit.revision == revision { return hit.value }
+        let value = VoicePack.pack(for: engine)?.isInstalled ?? false
+        installedCache[engine] = (revision, value)
+        return value
     }
+
+    @ObservationIgnored private var installedCache: [VoiceEngine: (revision: Int, value: Bool)] = [:]
 
     func download(_ engine: VoiceEngine) {
         guard let pack = VoicePack.pack(for: engine) else { return }

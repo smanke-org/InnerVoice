@@ -381,6 +381,25 @@ enum SelfTest {
 
     /// ElevenLabs against a fake server inside the app: setup, voices, the book's permission
     /// (nothing is sent without it), audio tags, errors.
+    /// What views ask on every redraw (which engines are on and downloaded, the engine in use,
+    /// the voice lists and names) must be cheap: these used to read the keychain, list the
+    /// model folders and ask the system for its voices each time, and the window lagged.
+    private static func redrawCost(_ doc: InnerVoiceDocument) {
+        _ = VoiceCatalog.voices(for: .apple)
+        let start = Date()
+        for _ in 0..<500 {
+            _ = EngineSwitches.shared.choices
+            _ = doc.project.engineInUse
+            _ = EngineSwitches.shared.usable(.qwen)
+            _ = EngineSwitches.shared.usable(.orpheus)
+            _ = VoiceCatalog.voices(for: .mixed, project: doc.project)
+            for c in doc.project.characters { if let v = c.voice(for: .apple) { _ = VoiceCatalog.name(of: v.choice); _ = VoiceCatalog.info(for: v.choice) } }
+        }
+        let ms = Date().timeIntervalSince(start) / 500 * 1000
+        print(String(format: "REDRAW voice questions: %.3f ms a redraw", ms))
+        check("what a redraw asks about voices is cheap", ms < 1, String(format: "%.3f ms a redraw", ms))
+    }
+
     private static func elevenLabs(_ doc: InnerVoiceDocument, undo: UndoManager) async {
         let eleven = ElevenLabs.shared
         let config = URLSessionConfiguration.ephemeral
@@ -663,6 +682,7 @@ enum SelfTest {
         if ProcessInfo.processInfo.environment["APP_SELFTEST_VOICES"] != nil { await modelVoices(doc, undo: undo) }
         if ProcessInfo.processInfo.environment["APP_SELFTEST_DOWNLOAD"] != nil { await voiceDownload() }
         await elevenLabs(doc, undo: undo)
+        redrawCost(doc)
 
         if let path = ProcessInfo.processInfo.environment["APP_SELFTEST_MODEL"] {
             await liveModel(path: path)
