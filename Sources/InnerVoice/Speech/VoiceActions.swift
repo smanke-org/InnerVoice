@@ -18,11 +18,13 @@ import SwiftUI
     /// narrator's choice: casting never changes it.
     func setVoice(_ choice: VoiceChoice, for characterID: UUID?, undoManager: UndoManager?) {
         let voice = CastVoice(choice: choice, confidence: 1, source: .user)
+        // Mixing engines: the voice is kept with the project's mixed casting, whatever its engine.
+        let key: VoiceEngine = project.engineInUse == .mixed ? .mixed : choice.engine
         change(characterID == nil ? "Choose Narrator Voice" : "Choose Voice", undoManager: undoManager) { p in
             if let id = characterID, let i = p.characterIndex(id) {
-                p.characters[i].setVoice(voice, for: choice.engine)
+                p.characters[i].setVoice(voice, for: key)
             } else if characterID == nil {
-                p.settings.setNarratorVoice(voice, for: choice.engine)
+                p.settings.setNarratorVoice(voice, for: key)
             }
             if p.voicesCast == nil { p.voicesCast = .now }
         }
@@ -65,11 +67,13 @@ enum VoiceCastingRun {
         let speaking = project.characters.filter { (index.stats[$0.id]?.lines ?? 0) > 0 }
         let open = speaking.filter { c in
             guard let v = c.voice(for: engine) else { return true }
+            // Mixing: an automatic voice from an engine that's now off or gone is cast again.
+            if v.source == .auto, !EngineSwitches.shared.usable(v.choice.engine) { return true }
             return v.source == .auto && v.confidence < project.settings.unsureBelow
         }
         guard !open.isEmpty || project.settings.narratorVoice(for: engine) == nil else { return }
         let voices = VoiceCatalog.voices(for: engine)
-        guard engine == .qwen || !voices.isEmpty else { return }
+        guard !voices.isEmpty else { return }
         let sure = Set(speaking.filter { !open.contains($0) }.map(\.id))
         document.applyQuietly { p in
             VoiceCasting.cast(&p, index: index, engine: engine, voices: voices, keep: sure)

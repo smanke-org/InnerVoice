@@ -32,7 +32,7 @@ struct VoicesPage: View {
         .toolbar {
             ToolbarItem {
                 Picker("Engine", selection: Binding(get: { engine }, set: { document.setVoiceEngine($0, undoManager: undoManager) })) {
-                    ForEach(EngineSwitches.shared.enabled) { e in
+                    ForEach(EngineSwitches.shared.choices) { e in
                         Text(e.title + (ModelSpeech.isInstalled(e) ? "" : " (Not Downloaded)")).tag(e)
                     }
                 }
@@ -225,12 +225,9 @@ struct VoiceChooser: View {
                     VoicePackRow(pack: pack)
                 }
             }
-            if engine == .qwen {
-                design
-            } else {
-                suggestions
-                if !compact { allVoices }
-            }
+            suggestions
+            if engine == .qwen || (engine == .mixed && EngineSwitches.shared.usable(.qwen)) { design }
+            if !compact { allVoices }
         }
     }
 
@@ -317,7 +314,7 @@ struct VoiceChooser: View {
         let voices = VoiceCatalog.voices(for: engine).filter { filter == nil || $0.gender == filter }
         VStack(alignment: .leading, spacing: Space.sm) {
             HStack {
-                Text("All \(engine.title)").font(.headline)
+                Text(engine == .mixed ? "All Voices" : "All \(engine.title)").font(.headline)
                 Spacer()
                 Picker("Show", selection: $filter) {
                     Text("All").tag(VoiceGender?.none)
@@ -327,8 +324,16 @@ struct VoiceChooser: View {
                 .fixedSize()
                 .help("Show voices by how they sound")
             }
-            ForEach(voices) { v in voiceRow(v) }
-            if engine == .apple {
+            if engine == .mixed {
+                // Grouped by engine, so it's clear where each voice comes from.
+                ForEach(VoiceEngine.engines.filter { e in voices.contains { $0.engine == e } }) { e in
+                    Text(e.title).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).padding(.top, Space.xs)
+                    ForEach(voices.filter { $0.engine == e }) { v in voiceRow(v) }
+                }
+            } else {
+                ForEach(voices) { v in voiceRow(v) }
+            }
+            if engine == .apple || (engine == .mixed && EngineSwitches.shared.isOn(.apple)) {
                 HStack(spacing: Space.sm) {
                     Text("More natural voices are free to download in System Settings.")
                         .font(.callout)
@@ -344,8 +349,8 @@ struct VoiceChooser: View {
     }
 
     private func voiceRow(_ v: VoiceInfo) -> some View {
-        let choice = VoiceChoice(engine: v.engine, voiceID: v.voiceID)
-        let isCurrent = voice?.choice.voiceID == v.voiceID
+        let choice = v.choice
+        let isCurrent = voice?.choice.voiceID == v.voiceID && voice?.choice.engine == v.engine
         let users = usedBy(v.voiceID)
         return HStack(spacing: Space.md) {
             Button { audition(choice) } label: {
@@ -378,7 +383,8 @@ struct VoiceChooser: View {
     }
 
     private func describe(_ v: VoiceInfo) -> String {
-        [v.gender == .neutral ? nil : v.gender.title, v.age == .adult ? nil : v.age.title, v.accent].compactMap { $0 }.joined(separator: " · ")
+        [engine == .mixed ? v.engine.title : nil, v.gender == .neutral ? nil : v.gender.title, v.age == .adult ? nil : v.age.title, v.accent]
+            .compactMap { $0 }.joined(separator: " · ")
     }
 
     /// Who else has this voice, so two characters in a scene don't sound alike.
@@ -392,8 +398,8 @@ struct VoiceChooser: View {
 
     private var design: some View {
         VStack(alignment: .leading, spacing: Space.sm) {
-            Text("Voice Description").font(.headline)
-            Text("Qwen3-TTS makes a voice from a description. Say who they are and how they sound.")
+            Text("Describe a Voice").font(.headline)
+            Text("Or describe any voice and Qwen3-TTS makes it. Say who they are and how they sound.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
             TextField("A woman in her sixties with a warm, low voice and a soft Scottish accent.", text: $designDraft, axis: .vertical)

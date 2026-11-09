@@ -100,6 +100,7 @@ final class SpeechRenderer {
         switch request.choice.engine {
         case .apple: buffer = try await AppleSpeech.render(request)
         case .qwen, .orpheus: buffer = try await ModelSpeech.render(request)
+        case .mixed: throw SpeechError.engineUnavailable(.mixed)
         }
         Self.write(buffer, to: file)
         pruneIfNeeded()

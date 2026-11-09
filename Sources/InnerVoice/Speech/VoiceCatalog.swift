@@ -72,7 +72,9 @@ enum VoiceCatalog {
         switch engine {
         case .apple: appleVoices()
         case .orpheus: VoiceInfo.orpheus
-        case .qwen: []
+        case .qwen: VoiceInfo.qwenPresets
+        // Every engine that's on and ready, best first within each.
+        case .mixed: VoiceEngine.engines.filter { EngineSwitches.shared.usable($0) }.flatMap { voices(for: $0) }
         }
     }
 
@@ -81,14 +83,15 @@ enum VoiceCatalog {
         switch choice.engine {
         case .apple: AVSpeechSynthesisVoice(identifier: choice.voiceID).map(info)
         case .orpheus: VoiceInfo.orpheus.first { $0.voiceID == choice.voiceID }
-        case .qwen: nil
+        case .qwen: VoiceInfo.qwenPresets.first { $0.voiceID == choice.voiceID }
+        case .mixed: nil
         }
     }
 
     /// "Ava (Premium)", "Tara", or the start of a Qwen3-TTS design.
     static func name(of choice: VoiceChoice) -> String {
         switch choice.engine {
-        case .qwen:
+        case .qwen where !choice.voiceID.hasPrefix("preset:"):
             // Short enough for a list row, cut at a word.
             return choice.design.map { d in
                 guard d.count > 48 else { return d }

@@ -8,6 +8,8 @@ struct VoiceResolver {
     var engine: VoiceEngine
     var characters: [UUID: VoiceChoice]
     var narrator: VoiceChoice?
+    /// Engines that can speak now (on and downloaded).
+    var usable: Set<VoiceEngine>
 
     @MainActor
     init(project: Project, engine: VoiceEngine? = nil) {
@@ -16,7 +18,9 @@ struct VoiceResolver {
         var map: [UUID: VoiceChoice] = [:]
         for c in project.characters { if let v = c.voice(for: e) { map[c.id] = v.choice } }
         characters = map
-        narrator = project.settings.narratorVoice(for: e)?.choice ?? Self.fallback(e)
+        usable = Set(VoiceEngine.engines.filter { EngineSwitches.shared.usable($0) })
+        let n = project.settings.narratorVoice(for: e)?.choice
+        narrator = n.flatMap { usable.contains($0.engine) ? $0 : nil } ?? Self.fallback(e) ?? Self.fallback(.apple)
     }
 
     /// A voice when nothing is cast yet: the best Apple voice, Orpheus's first, or a plain
@@ -26,12 +30,15 @@ struct VoiceResolver {
         switch engine {
         case .apple: VoiceCatalog.appleVoices().first.map { VoiceChoice(engine: .apple, voiceID: $0.voiceID) }
         case .orpheus: VoiceChoice(engine: .orpheus, voiceID: "tara")
-        case .qwen: VoiceChoice(engine: .qwen, voiceID: "design", design: "A calm, clear audiobook narrator with a warm, measured voice.")
+        case .qwen: VoiceInfo.qwenPresets.first?.choice
+        case .mixed: EngineSwitches.shared.enabled.first.flatMap { $0 == .mixed ? nil : fallback($0) }
         }
     }
 
     func choice(for segment: SpeechSegment) -> VoiceChoice? {
-        segment.speakerID.flatMap { characters[$0] } ?? narrator
+        // A voice from an engine that's turned off or not downloaded falls back to the narrator's.
+        if let id = segment.speakerID, let c = characters[id], usable.contains(c.engine) { return c }
+        return narrator
     }
 
     func request(for segment: SpeechSegment) -> SpeechRequest? {
@@ -54,6 +61,8 @@ final class SpeechPlayer {
     private(set) var isPlaying = false
     /// "Making Mara’s voice…" while the first audio is being made.
     private(set) var preparing = false
+    /// The engine making the first audio (for "Getting Qwen3-TTS ready…").
+    private(set) var preparingEngine: VoiceEngine?
     var failure: String?
 
     @ObservationIgnored private let engine = AVAudioEngine()
@@ -78,6 +87,7 @@ final class SpeechPlayer {
         failure = nil
         isPlaying = true
         preparing = true
+        preparingEngine = segments.lazy.compactMap { resolver.request(for: $0)?.choice.engine }.first
         task = Task { [weak self] in
             guard let self else { return }
             defer {
@@ -116,7 +126,10 @@ final class SpeechPlayer {
                 }
             } catch is CancellationError {
             } catch {
-                if !Task.isCancelled { self.failure = error.localizedDescription }
+                if !Task.isCancelled {
+                    self.failure = error.localizedDescription
+                    SpeechLog.write("play failed (\(self.preparingEngine?.rawValue ?? "?")): \(error)")
+                }
             }
         }
     }
@@ -136,6 +149,23 @@ final class SpeechPlayer {
             try engine.start()
         }
         if !node.isPlaying { node.play() }
+    }
+}
+
+/// Speech errors, for diagnosing "nothing plays": NSLog plus
+/// ~/Library/Logs/InnerVoice/speech.log. Never the book's text.
+nonisolated enum SpeechLog {
+    static func write(_ message: String) {
+        NSLog("InnerVoice speech: %@", message)
+        let dir = URL.libraryDirectory.appending(path: "Logs/InnerVoice")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let file = dir.appending(path: "speech.log")
+        let line = "\(Date().formatted(.iso8601)) \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?") \(message)\n"
+        if let h = try? FileHandle(forWritingTo: file) {
+            h.seekToEndOfFile(); h.write(Data(line.utf8)); try? h.close()
+        } else {
+            try? Data(line.utf8).write(to: file)
+        }
     }
 }
 

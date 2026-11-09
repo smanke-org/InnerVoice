@@ -745,3 +745,29 @@ private let appleVoices = [
     #expect(dialogue.map(\.text) == ["Busy.", "Your father wrote to keh-REN-sa."])
     #expect(dialogue.last?.pauseAfter == SpeechScript.chapterPause)
 }
+
+
+@Test func qwenGivesThinCharactersDistinctPresets() {
+    var p = ProjectBuilder.make(from: book([
+        "“Where is it?” asked Ann.", "“Gone,” said Bea.", "“Look again,” said Ann.", "“I did,” said Bea.",
+    ]), fileName: "t.txt")
+    let index = BookIndex(p)
+    VoiceCasting.cast(&p, index: index, engine: .qwen, voices: VoiceInfo.qwenPresets)
+    let speaking = p.characters.filter { (index.stats[$0.id]?.lines ?? 0) > 0 }
+    let ids = speaking.compactMap { $0.voice(for: .qwen)?.choice.voiceID }
+    #expect(ids.count == speaking.count)
+    // The book says nothing about how they sound: ready-made voices, and not the same one.
+    #expect(ids.allSatisfy { $0.hasPrefix("preset:") })
+    #expect(Set(ids).count == ids.count)
+    #expect(speaking.allSatisfy { $0.voice(for: .qwen)?.choice.design?.isEmpty == false })
+}
+
+@Test func mixedCastingUsesRealEngines() {
+    var p = ProjectBuilder.make(from: book(["“Where is it?” asked Ann.", "“Gone,” said Bea.", "“Hush,” said Cal."]), fileName: "t.txt")
+    let index = BookIndex(p)
+    VoiceCasting.cast(&p, index: index, engine: .mixed, voices: VoiceInfo.qwenPresets + VoiceInfo.orpheus)
+    let choices = p.characters.compactMap { $0.voice(for: .mixed)?.choice }
+    #expect(!choices.isEmpty)
+    #expect(choices.allSatisfy { $0.engine == .qwen || $0.engine == .orpheus })
+    #expect(p.settings.narratorVoice(for: .mixed).map { $0.choice.engine != .mixed } == true)
+}

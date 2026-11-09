@@ -150,7 +150,7 @@ enum Snapshot {
                 }
                 await shot("voices-narrator", settle: 1.0) { workspace.voiceTarget = .narrator; workspace.page = .voices }
                 if let main = document.project.characters.max(by: { (document.index.stats[$0.id]?.lines ?? 0) < (document.index.stats[$1.id]?.lines ?? 0) }) {
-                    for engine in [VoiceEngine.orpheus, .qwen] {
+                    for engine in [VoiceEngine.orpheus, .qwen, .mixed] {
                         await shot("voices-\(engine.rawValue)", settle: 1.2) {
                             document.setVoiceEngine(engine, undoManager: nil)
                             // Qwen3-TTS: the character with the fullest description shows it best.

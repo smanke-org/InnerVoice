@@ -31,7 +31,7 @@ enum ModelSpeech {
             try Task.checkCancellation()
             if n > 0 { samples += gap }
             switch engine {
-            case .apple: throw SpeechError.engineUnavailable(engine)
+            case .apple, .mixed: throw SpeechError.engineUnavailable(engine)
             case .orpheus:
                 var r = request
                 r.text = piece
@@ -112,10 +112,11 @@ enum ModelSpeech {
 
     /// Loads the engine's models ahead of the first line (they take several seconds).
     static func prepare(_ engine: VoiceEngine) {
-        guard engine != .apple else { return }
         Task { @MainActor in
-            guard isInstalled(engine) else { return }
-            await MLXSpeech.shared.preload(engine)
+            let wanted = engine == .mixed ? [VoiceEngine.qwen, .orpheus] : [engine]
+            let ready = wanted.filter { $0 != .apple && EngineSwitches.shared.usable($0) }
+            guard !ready.isEmpty else { return }
+            await MLXSpeech.shared.preload(ready)
         }
     }
 
@@ -135,6 +136,7 @@ enum ModelSpeech {
     }
 
     static func unload() async { await MLXSpeech.shared.unload() }
+    static func unload(_ engine: VoiceEngine) async { await MLXSpeech.shared.unload(engine) }
 }
 
 /// What Orpheus is given to say: the text with a sound from the speech tag in front
@@ -231,32 +233,64 @@ actor MLXSpeech {
         return m
     }
 
-    func preload(_ engine: VoiceEngine) async {
+    /// Macs with room for both keep Qwen3-TTS and Orpheus loaded together (about 10 GB), so a
+    /// project that mixes engines doesn't reload a model between lines. Others keep one.
+    private let keepBoth = ProcessInfo.processInfo.physicalMemory >= 32 * 1_073_741_824
+
+    private func loadOrpheus() async throws -> LlamaTTSModel {
+        if let m = orpheusModel { return m }
+        if !keepBoth { designModel = nil; cloneModel = nil }
+        let m = try await Self.load(VoicePack.orpheus.repos[0], as: LlamaTTSModel.self)
+        orpheusModel = m
+        return m
+    }
+
+    private func loadDesign() async throws -> Qwen3TTSModel {
+        if let m = designModel { return m }
+        if !keepBoth { orpheusModel = nil }
+        let m = try await Self.load(VoicePack.qwenDesignRepo, as: Qwen3TTSModel.self)
+        designModel = m
+        return m
+    }
+
+    private func loadClone() async throws -> Qwen3TTSModel {
+        if let m = cloneModel { return m }
+        if !keepBoth { orpheusModel = nil }
+        let m = try await Self.load(VoicePack.qwenCloneRepo, as: Qwen3TTSModel.self)
+        cloneModel = m
+        return m
+    }
+
+    /// Unloads one engine's models (it was turned off).
+    func unload(_ engine: VoiceEngine) async {
         await acquire(); defer { release() }
-        do {
-            switch engine {
-            case .apple: break
-            case .orpheus:
-                if orpheusModel == nil {
-                    designModel = nil; cloneModel = nil
-                    orpheusModel = try await Self.load(VoicePack.orpheus.repos[0], as: LlamaTTSModel.self)
+        switch engine {
+        case .orpheus: orpheusModel = nil
+        case .qwen: designModel = nil; cloneModel = nil
+        case .apple, .mixed: break
+        }
+        Memory.clearCache()
+    }
+
+    func preload(_ engines: [VoiceEngine]) async {
+        await acquire(); defer { release() }
+        for engine in engines {
+            do {
+                switch engine {
+                case .orpheus: _ = try await loadOrpheus()
+                case .qwen: _ = try await loadClone(); _ = try await loadDesign()
+                case .apple, .mixed: break
                 }
-            case .qwen:
-                orpheusModel = nil
-                if cloneModel == nil { cloneModel = try await Self.load(VoicePack.qwenCloneRepo, as: Qwen3TTSModel.self) }
-                if designModel == nil { designModel = try await Self.load(VoicePack.qwenDesignRepo, as: Qwen3TTSModel.self) }
+            } catch {
+                SpeechLog.write("loading \(engine.rawValue) failed: \(error)")
             }
-        } catch {}
+        }
     }
 
     func orpheus(text: String, voice: String, seed: UInt64) async throws -> [Float] {
         await acquire(); defer { release() }
         try Task.checkCancellation()
-        if orpheusModel == nil {
-            designModel = nil; cloneModel = nil
-            orpheusModel = try await Self.load(VoicePack.orpheus.repos[0], as: LlamaTTSModel.self)
-        }
-        let model = orpheusModel!
+        let model = try await loadOrpheus()
         var p = model.defaultGenerationParameters
         p.seed = seed
         MLXRandom.seed(seed)
@@ -267,11 +301,7 @@ actor MLXSpeech {
     func qwenDesign(text: String, description: String, seed: UInt64) async throws -> [Float] {
         await acquire(); defer { release() }
         try Task.checkCancellation()
-        if designModel == nil {
-            orpheusModel = nil
-            designModel = try await Self.load(VoicePack.qwenDesignRepo, as: Qwen3TTSModel.self)
-        }
-        let model = designModel!
+        let model = try await loadDesign()
         var p = model.defaultGenerationParameters
         p.seed = seed
         p.maxTokens = 1200
@@ -283,11 +313,7 @@ actor MLXSpeech {
     func qwenClone(text: String, reference: [Float], referenceText: String, seed: UInt64) async throws -> [Float] {
         await acquire(); defer { release() }
         try Task.checkCancellation()
-        if cloneModel == nil {
-            orpheusModel = nil
-            cloneModel = try await Self.load(VoicePack.qwenCloneRepo, as: Qwen3TTSModel.self)
-        }
-        let model = cloneModel!
+        let model = try await loadClone()
         var p = model.defaultGenerationParameters
         p.seed = seed
         p.maxTokens = 2400

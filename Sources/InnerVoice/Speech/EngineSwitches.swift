@@ -22,13 +22,20 @@ final class EngineSwitches {
         } else {
             let raw = UserDefaults.standard.string(forKey: Self.key) ?? ""
             off = Set(raw.split(separator: ",").compactMap { VoiceEngine(rawValue: String($0)) })
-            if off.count >= VoiceEngine.allCases.count { off = [] }
+            if off.count >= VoiceEngine.engines.count { off = [] }
         }
     }
 
     func isOn(_ engine: VoiceEngine) -> Bool { !off.contains(engine) }
 
-    var enabled: [VoiceEngine] { VoiceEngine.allCases.filter(isOn) }
+    var enabled: [VoiceEngine] { VoiceEngine.engines.filter(isOn) }
+
+    /// On and downloaded: its voices can be used now.
+    func usable(_ engine: VoiceEngine) -> Bool { isOn(engine) && ModelSpeech.isInstalled(engine) }
+
+    /// What the Voices page's engine menu offers: the engines that are on, and Mix Engines
+    /// when two or more are.
+    var choices: [VoiceEngine] { enabled + (enabled.count > 1 ? [.mixed] : []) }
 
     /// The last engine that's on can't be turned off.
     func canTurnOff(_ engine: VoiceEngine) -> Bool { isOn(engine) && enabled.count > 1 }
@@ -38,10 +45,10 @@ final class EngineSwitches {
             guard canTurnOff(engine) else { return }
             off.insert(engine)
             // Free the memory a turned-off model engine was using.
-            if engine != .apple { Task { await ModelSpeech.unload() } }
+            if engine != .apple { Task { await ModelSpeech.unload(engine) } }
         }
         if !SystemHooks.isTestRun {
-            UserDefaults.standard.set(VoiceEngine.allCases.filter { off.contains($0) }.map(\.rawValue).joined(separator: ","), forKey: Self.key)
+            UserDefaults.standard.set(VoiceEngine.engines.filter { off.contains($0) }.map(\.rawValue).joined(separator: ","), forKey: Self.key)
         }
     }
 
@@ -52,6 +59,7 @@ final class EngineSwitches {
     /// The engine a project speaks with: its own choice while that's on.
     func inUse(_ project: Project) -> VoiceEngine {
         let chosen = project.settings.engine
+        if chosen == .mixed { return enabled.count > 1 ? .mixed : enabled.first ?? .apple }
         return isOn(chosen) ? chosen : enabled.first ?? chosen
     }
 }

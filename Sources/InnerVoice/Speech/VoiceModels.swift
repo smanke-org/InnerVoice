@@ -35,7 +35,7 @@ nonisolated struct VoicePack: Sendable {
 
     static func pack(for engine: VoiceEngine) -> VoicePack? {
         switch engine {
-        case .apple: nil
+        case .apple, .mixed: nil
         case .orpheus: orpheus
         case .qwen: qwen
         }
@@ -84,7 +84,7 @@ final class VoiceModelManager {
 
     func isInstalled(_ engine: VoiceEngine) -> Bool {
         _ = revision
-        return engine == .apple || (VoicePack.pack(for: engine)?.isInstalled ?? false)
+        return engine == .apple || engine == .mixed || (VoicePack.pack(for: engine)?.isInstalled ?? false)
     }
 
     func download(_ engine: VoiceEngine) {

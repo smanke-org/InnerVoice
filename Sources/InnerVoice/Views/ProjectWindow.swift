@@ -16,6 +16,7 @@ struct ProjectWindow: View {
                 EmptyProjectView(document: document)
             } else {
                 split
+                    .overlay(alignment: .bottom) { SpeechStatusBar() }
             }
         }
         .frame(minWidth: 900, minHeight: 560)
@@ -277,5 +278,49 @@ struct TextSizeControl: View {
         }
         .help(isDouble ? "Switch to single line spacing (⌥⌘L). Now double spaced."
                        : "Switch to double line spacing (⌥⌘L). Now single spaced.")
+    }
+}
+
+/// While speech is being made for the first time, and when it can't play: a small bar at
+/// the bottom of the window. Without it a model loading for several seconds, or an error,
+/// looked like nothing happening.
+struct SpeechStatusBar: View {
+    private var player: SpeechPlayer { .shared }
+
+    var body: some View {
+        Group {
+            if let failure = player.failure {
+                bar {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                    Text(failure).lineLimit(2)
+                    Button("Dismiss") { player.failure = nil }.controlSize(.small)
+                }
+            } else if player.isPlaying, player.preparing {
+                bar {
+                    ProgressView().controlSize(.small)
+                    Text(message)
+                    Button("Stop") { player.stop() }.controlSize(.small)
+                }
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: player.preparing)
+        .animation(.easeOut(duration: 0.2), value: player.failure)
+    }
+
+    private var message: String {
+        switch player.preparingEngine {
+        case .qwen?, .orpheus?: "Getting \(player.preparingEngine!.title) ready… The first line takes a few seconds."
+        default: "Making the audio…"
+        }
+    }
+
+    private func bar<C: View>(@ViewBuilder _ content: () -> C) -> some View {
+        HStack(spacing: Space.sm) { content() }
+            .font(.callout)
+            .padding(.horizontal, Space.md)
+            .padding(.vertical, Space.sm)
+            .glassEffect(.regular, in: Capsule())
+            .padding(.bottom, Space.lg)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 }

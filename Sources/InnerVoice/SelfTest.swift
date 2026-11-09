@@ -73,9 +73,10 @@ enum SelfTest {
         switches.set(.qwen, on: false)
         switches.set(.orpheus, on: false)
         check("the last engine that's on stays on", switches.isOn(.orpheus) && !switches.canTurnOff(.orpheus) && switches.enabled == [.orpheus])
-        for e in VoiceEngine.allCases { switches.set(e, on: true) }
+        for e in VoiceEngine.engines { switches.set(e, on: true) }
         undo.undo()
-        check("every engine is on again after the test", switches.enabled.count == VoiceEngine.allCases.count && doc.project.engineInUse == .apple)
+        check("every engine is on again after the test", switches.enabled.count == VoiceEngine.engines.count && doc.project.engineInUse == .apple)
+        check("Mix Engines is offered when two or more engines are on", switches.choices.contains(.mixed))
 
         // Real speech: one line in its voice, cached the second time.
         let resolver = VoiceResolver(project: doc.project)
@@ -172,6 +173,56 @@ enum SelfTest {
                 _ = try? await SpeechRenderer.shared.render(request)
                 check("\(engine.title): a line plays at once the second time", Date().timeIntervalSince(start) < 0.5)
             }
+        }
+        // Mix Engines: each character can have a voice from any engine; two engines take turns.
+        if ModelSpeech.isInstalled(.qwen), ModelSpeech.isInstalled(.orpheus) {
+            doc.setVoiceEngine(.mixed, undoManager: undo)
+            let speaking = doc.project.characters.filter { (doc.index.stats[$0.id]?.lines ?? 0) > 0 }
+            let engines = Set(speaking.compactMap { $0.voice(for: .mixed)?.choice.engine })
+            check("Mix Engines: every speaking character gets a voice from a real engine",
+                  speaking.allSatisfy { $0.voice(for: .mixed) != nil } && !engines.contains(.mixed), engines.map(\.rawValue).sorted().joined(separator: ", "))
+            let mara = speaking.first { $0.name.hasPrefix("Mara") }, tom = speaking.first { $0.name.hasPrefix("Tom") }
+            if let mara, let tom, let orph = VoiceInfo.orpheus.first(where: { $0.gender == .female }), let preset = VoiceInfo.qwenPresets.first(where: { $0.voiceID == "preset:elder" }) {
+                doc.setVoice(orph.choice, for: mara.id, undoManager: undo)
+                doc.setVoice(preset.choice, for: tom.id, undoManager: undo)
+                check("Mix Engines: a chosen voice is kept with the mixed casting",
+                      doc.project.character(mara.id)?.voice(for: .mixed)?.choice.engine == .orpheus && doc.project.character(tom.id)?.voice(for: .mixed)?.choice.engine == .qwen)
+                SpeechRenderer.shared.clearCache()
+                let segs = SpeechScript.segments(chapter: 0, project: doc.project, index: doc.index, includeNarration: false)
+                let turns = Array(segs.filter { $0.speakerID == mara.id || $0.speakerID == tom.id }.prefix(4))
+                let player = SpeechPlayer.shared
+                var heard: [UUID?] = []
+                let start = Date()
+                player.play(turns, resolver: VoiceResolver(project: doc.project)) { heard.append($0.speakerID) }
+                while player.isPlaying, Date().timeIntervalSince(start) < 180 { try? await Task.sleep(for: .milliseconds(100)) }
+                let took = Date().timeIntervalSince(start)
+                print(String(format: "VOICE mixed table read: %d lines (Orpheus and Qwen3-TTS taking turns) in %.1f s", heard.count, took))
+                check("Mix Engines: Orpheus and Qwen3-TTS take turns in one table read",
+                      heard.count == turns.count && player.failure == nil && Set(heard.compactMap { $0 }).count == 2, player.failure ?? "\(heard.count) of \(turns.count)")
+            }
+        }
+
+        // Play from a cold start, as a person would: models unloaded, nothing cached.
+        for engine in [VoiceEngine.qwen, .orpheus] where ModelSpeech.isInstalled(engine) {
+            doc.setVoiceEngine(engine, undoManager: undo)
+            await ModelSpeech.unload()
+            QwenSamples.forget()
+            SpeechRenderer.shared.clearCache()
+            guard let c = doc.project.characters.first(where: { $0.voice(for: engine) != nil && (doc.index.stats[$0.id]?.lines ?? 0) > 0 }),
+                  let v = c.voice(for: engine) else { continue }
+            let player = SpeechPlayer.shared
+            let start = Date()
+            PlayCommand.audition(v.choice, character: c, document: doc)
+            var started: Double?
+            while Date().timeIntervalSince(start) < 120 {
+                if started == nil, player.lastStarted?.id == "audition", !player.preparing { started = Date().timeIntervalSince(start) }
+                if !player.isPlaying { break }
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            let total = Date().timeIntervalSince(start)
+            print(String(format: "VOICE cold start %@: first sound after %.1f s, done after %.1f s", engine.rawValue, started ?? -1, total))
+            check("\(engine.title): Play works from a cold start", started != nil && player.failure == nil && !player.isPlaying,
+                  String(format: "started after %.1f s, done after %.1f s%@", started ?? -1, total, player.failure.map { ", " + $0 } ?? ""))
         }
         doc.setVoiceEngine(.apple, undoManager: undo)
         await ModelSpeech.unload()

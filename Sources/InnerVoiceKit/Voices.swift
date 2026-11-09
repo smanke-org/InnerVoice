@@ -68,14 +68,21 @@ public enum ToneSource: String, Codable, Sendable {
 /// A text-to-speech engine. All of them run on the Mac.
 public enum VoiceEngine: String, Codable, CaseIterable, Identifiable, Sendable {
     case apple, qwen, orpheus
+    /// Not an engine itself: each character can have a voice from any engine that's on.
+    /// A voice's own `VoiceChoice.engine` is always a real one.
+    case mixed
 
     public var id: String { rawValue }
+
+    /// The engines that make sound (everything but `.mixed`).
+    public static let engines: [VoiceEngine] = [.apple, .qwen, .orpheus]
 
     public var title: String {
         switch self {
         case .apple: "Apple Voices"
         case .qwen: "Qwen3-TTS"
         case .orpheus: "Orpheus"
+        case .mixed: "Mix Engines"
         }
     }
 
@@ -165,11 +172,16 @@ public struct VoiceInfo: Hashable, Identifiable, Sendable {
     public var quality: Int
     /// A short description for the voice list ("Bright, conversational").
     public var detail: String
+    /// Qwen3-TTS: the description the voice is designed from.
+    public var design: String?
 
     public var id: String { engine.rawValue + ":" + voiceID }
 
+    /// What choosing this voice stores.
+    public var choice: VoiceChoice { VoiceChoice(engine: engine, voiceID: voiceID, design: design) }
+
     public init(engine: VoiceEngine, voiceID: String, name: String, gender: VoiceGender, age: VoiceAge = .adult,
-                accent: String, quality: Int = 0, detail: String = "") {
+                accent: String, quality: Int = 0, detail: String = "", design: String? = nil) {
         self.engine = engine
         self.voiceID = voiceID
         self.name = name
@@ -178,6 +190,7 @@ public struct VoiceInfo: Hashable, Identifiable, Sendable {
         self.accent = accent
         self.quality = quality
         self.detail = detail
+        self.design = design
     }
 
     /// Orpheus's eight voices (its model card's names; all young adult, American).
@@ -186,6 +199,27 @@ public struct VoiceInfo: Hashable, Identifiable, Sendable {
         ("jess", .female, "Lively, expressive"), ("mia", .female, "Soft, light"), ("zoe", .female, "Clear, youthful"),
         ("leo", .male, "Steady, relaxed"), ("dan", .male, "Deep, easygoing"), ("zac", .male, "Energetic, youthful"),
     ].map { VoiceInfo(engine: .orpheus, voiceID: $0.0, name: $0.0.capitalized, gender: $0.1, age: .young, accent: "American", quality: 2, detail: $0.2) }
+
+    /// Ready-made Qwen3-TTS voices: a description each, for characters the book says little
+    /// about and for choosing from a list. Any other description works too.
+    public static let qwenPresets: [VoiceInfo] = [
+        ("narrator", "Audiobook Narrator", VoiceGender.neutral, VoiceAge.adult, "American", "Calm, clear, measured", "A calm, clear audiobook narrator with a warm, measured voice."),
+        ("storyteller", "Warm Storyteller", .female, .adult, "American", "Warm, low, unhurried", "A woman in her forties with a warm, low, unhurried voice."),
+        ("bright", "Bright Young Woman", .female, .young, "American", "Bright, clear, lively", "A young woman with a bright, clear, lively voice."),
+        ("soft", "Soft-Spoken", .female, .young, "American", "Soft, gentle, breathy", "A young woman with a soft, gentle, slightly breathy voice."),
+        ("brisk", "Brisk Professional", .female, .adult, "American", "Crisp, confident", "A woman in her thirties with a crisp, confident, brisk voice."),
+        ("dame", "Grand Dame", .female, .older, "British", "Rich, commanding, cultured", "An older woman with a rich, commanding, cultured voice, speaking English with a British accent."),
+        ("grandmother", "Kind Grandmother", .female, .older, "American", "Soft, kind, a little creaky", "An older woman with a soft, kind, slightly creaky voice."),
+        ("lass", "Highland Lass", .female, .young, "Scottish", "Light, musical", "A young woman with a light, musical voice, speaking English with a Scottish accent."),
+        ("girl", "Little Girl", .female, .child, "American", "High, eager", "A young girl with a high, eager voice."),
+        ("baritone", "Easy Baritone", .male, .adult, "American", "Warm, easygoing", "A man in his forties with a warm, easygoing baritone voice."),
+        ("hero", "Young Hero", .male, .young, "American", "Earnest, energetic", "A young man with an earnest, energetic, clear voice."),
+        ("gentleman", "Gentleman", .male, .adult, "British", "Refined, measured", "A man with a refined, measured voice, speaking English with a British accent."),
+        ("elder", "Gravelly Elder", .male, .older, "American", "Deep, gravelly", "An older man with a deep, gravelly voice."),
+        ("sailor", "Weathered Sailor", .male, .older, "Irish", "Rough, booming", "A man in his fifties with a rough, weathered, booming voice, speaking English with an Irish accent."),
+        ("clerk", "Nervous Clerk", .male, .young, "American", "Thin, quick, nervous", "A young man with a thin, quick, nervous voice."),
+        ("boy", "Little Boy", .male, .child, "American", "High, cheerful", "A young boy with a high, cheerful voice."),
+    ].map { VoiceInfo(engine: .qwen, voiceID: "preset:" + $0.0, name: $0.1, gender: $0.2, age: $0.3, accent: $0.4, quality: 2, detail: $0.5, design: $0.6) }
 }
 
 /// What the book says a character should sound like, read from the summary and the lines.
@@ -468,12 +502,12 @@ public enum VoiceCasting {
         var narratorID: String?
         if let n = project.settings.narratorVoice(for: engine), n.source == .user || !keep.isEmpty {
             narratorID = n.choice.voiceID
-        } else if engine == .qwen {
-            let choice = VoiceChoice(engine: .qwen, voiceID: "design", design: "A calm, clear audiobook narrator with a warm, measured voice.")
-            project.settings.setNarratorVoice(CastVoice(choice: choice, confidence: 0.9, source: .auto), for: engine)
+        } else if engine == .qwen, let preset = VoiceInfo.qwenPresets.first {
+            narratorID = preset.voiceID
+            project.settings.setNarratorVoice(CastVoice(choice: preset.choice, confidence: 0.9, source: .auto), for: engine)
         } else if let best = voices.sorted(by: { ($0.quality, $0.gender == .neutral ? 1 : 0) > ($1.quality, $1.gender == .neutral ? 1 : 0) }).first {
             narratorID = best.voiceID
-            project.settings.setNarratorVoice(CastVoice(choice: VoiceChoice(engine: engine, voiceID: best.voiceID), confidence: 0.9, source: .auto), for: engine)
+            project.settings.setNarratorVoice(CastVoice(choice: best.choice, confidence: 0.9, source: .auto), for: engine)
         }
 
         var count = 0
@@ -482,8 +516,9 @@ public enum VoiceCasting {
             if kept(project.characters[i]) { continue }
             let p = profile(project.characters[i], project: project, index: index)
             let chapters = index.stats[c.id]?.chapters ?? []
-            if engine == .qwen {
-                // Every character gets a voice designed for them.
+            if engine == .qwen, !p.timbre.isEmpty || p.accent != nil {
+                // The book says how they sound: a voice designed from it. (Characters it says
+                // little about get a distinct ready-made voice below, not the same generic one.)
                 let choice = VoiceChoice(engine: .qwen, voiceID: "design", design: describe(p, name: c.name), pitch: nil)
                 project.characters[i].setVoice(CastVoice(choice: choice, confidence: confidence(p, sharedOverlap: 0), source: .auto), for: engine)
                 count += 1
@@ -501,9 +536,9 @@ public enum VoiceCasting {
                 project.characters[i].setVoice(nil, for: engine)
                 continue
             }
-            var choice = VoiceChoice(engine: engine, voiceID: voice.voiceID)
+            var choice = voice.choice
             // Apple's voices are all adults: a child sounds higher, an older voice lower and slower.
-            if engine == .apple, let a = p.age, a != voice.age {
+            if voice.engine == .apple, let a = p.age, a != voice.age {
                 switch a {
                 case .child: choice.pitch = 1.3; choice.rate = 1.05
                 case .young: choice.pitch = 1.08
