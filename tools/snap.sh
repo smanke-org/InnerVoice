@@ -5,5 +5,5 @@
 set -u
 app="${0:A:h:h}/.build/app/Inner Voice.app/Contents/MacOS/InnerVoice"
 shots=/tmp/InnerVoice-shots
-rm -rf ~/Library/Saved\ Application\ State/com.smanke.InnerVoice.savedState $shots
+rm -rf $shots
 APP_SNAPSHOT=$shots "$app"

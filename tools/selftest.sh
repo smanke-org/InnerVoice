@@ -2,5 +2,4 @@
 # Runs the in-app self-test on the sample book. Exit code 0 when every check passed.
 # APP_SELFTEST_MODEL=<model.gguf> tools/selftest.sh also tags the sample with a real model and scores it.
 set -u
-rm -rf ~/Library/Saved\ Application\ State/com.smanke.InnerVoice.savedState
 "${0:A:h:h}/.build/app/Inner Voice.app/Contents/MacOS/InnerVoice" --selftest

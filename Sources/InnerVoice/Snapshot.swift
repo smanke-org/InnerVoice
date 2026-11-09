@@ -14,9 +14,13 @@ enum Snapshot {
     static var newDocument: NewDocumentAction?
     static var openSettings: OpenSettingsAction?
 
-    /// Called by every project window; snapshot mode drives the first one.
+    /// The sample book this run created. Only its window is ever driven or photographed.
+    private static var sample: InnerVoiceDocument?
+
+    /// Called by every project window; snapshot mode drives the sample book's, never a real
+    /// project that macOS reopened.
     static func attach(document: InnerVoiceDocument, workspace: Workspace) {
-        guard requested, attached == nil else { return }
+        guard requested, attached == nil, let sample, document === sample else { return }
         attached = (document, workspace)
     }
 
@@ -37,13 +41,33 @@ enum Snapshot {
                 }
             }
             guard let newDocument else { print("SNAPSHOT no newDocument action"); finish(); return }
-            newDocument { InnerVoiceDocument(project: SeedData.project()) }
+            // Anything else open came from outside this run: close it unsaved, untouched.
+            for doc in NSDocumentController.shared.documents { doc.close() }
+            let seed = InnerVoiceDocument(project: SeedData.project())
+            sample = seed
+            newDocument { seed }
             for _ in 0..<40 where attached == nil { try? await Task.sleep(for: .seconds(0.25)) }
             guard let (document, workspace) = attached else { print("SNAPSHOT no project window"); finish(); return }
             NSApp.windows.first { $0.title == "Welcome to Inner Voice" }?.close()
             try? await Task.sleep(for: .seconds(1))
             let window = { NSApp.windows.first { $0.isVisible && $0.canBecomeMain && !$0.isSheet && $0.title != "Welcome to Inner Voice" } }
-            if let w = window() { w.setFrame(NSRect(x: 80, y: 80, width: 1360, height: 860), display: true) }
+            // The same size on a Retina screen for every page, set again before each shot:
+            // SwiftUI restores the window frame the person's own copy saved (the preferences
+            // are shared), which made a run come out tall and at 1×.
+            let place = {
+                guard let w = window() else { return }
+                let screen = NSScreen.screens.first { $0.backingScaleFactor >= 2 } ?? w.screen ?? NSScreen.main
+                guard let area = screen?.visibleFrame else { return }
+                let size = NSSize(width: min(1280, area.width - 80), height: min(800, area.height - 80))
+                let frame = NSRect(x: area.midX - size.width / 2, y: area.midY - size.height / 2, width: size.width, height: size.height)
+                if w.frame != frame { w.setFrame(frame, display: true) }
+            }
+            place()
+            // A project window's title is its file name; the sample has none.
+            for doc in NSDocumentController.shared.documents {
+                doc.displayName = SeedData.project().title
+                doc.windowControllers.forEach { $0.synchronizeWindowTitleWithDocumentName() }
+            }
             let lines = document.project.lines
             let red = lines.first { document.project.needsYou($0) }
 
@@ -51,6 +75,7 @@ enum Snapshot {
                 NSApp.appearance = NSAppearance(named: mode == "light" ? .aqua : .darkAqua)
                 @MainActor func shot(_ name: String, settle: Double = 0.8, _ setup: () -> Void) async {
                     guard wants(name) else { return }
+                    place()
                     setup()
                     try? await Task.sleep(for: .seconds(settle))
                     if let w = window() { capture(w, "\(dir)/\(name)-\(mode).png") }
