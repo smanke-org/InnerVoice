@@ -286,8 +286,34 @@ enum PDFReader {
         return s[s.count / 2]
     }
 
-    static func paragraphs(from lines: [PDFLine]) -> [RawBlock] {
-        guard !lines.isEmpty else { return [] }
+    /// The left edge of each page's text block. A printed book mirrors its margins (the text
+    /// sits further right on one side of the spread), so one margin for the whole book reads
+    /// every indent on the other side as a plain line and runs those paragraphs together.
+    /// Indents and centered lines only sit to the right of the edge, so a low percentile of
+    /// the page's line starts finds it; a page with few lines uses its side of the spread.
+    static func pageLefts(_ lines: [PDFLine]) -> [Int: CGFloat] {
+        func edge(_ xs: [CGFloat]) -> CGFloat { let s = xs.sorted(); return s[s.count / 10] }
+        var byPage: [Int: [CGFloat]] = [:]
+        var bySide: [Int: [CGFloat]] = [:]
+        for l in lines {
+            byPage[l.page, default: []].append(l.rect.minX)
+            bySide[l.page % 2, default: []].append(l.rect.minX)
+        }
+        let side = bySide.mapValues(edge)
+        return byPage.reduce(into: [:]) { result, entry in
+            result[entry.key] = entry.value.count >= 4 ? edge(entry.value) : side[entry.key % 2] ?? edge(entry.value)
+        }
+    }
+
+    static func paragraphs(from pdfLines: [PDFLine]) -> [RawBlock] {
+        guard !pdfLines.isEmpty else { return [] }
+        // Measure every line from its own page's left edge, so all pages share one text block.
+        let lefts = pageLefts(pdfLines)
+        let lines = pdfLines.map { l in
+            var l = l
+            l.rect.origin.x -= lefts[l.page] ?? 0
+            return l
+        }
         let bodySize = median(lines.map(\.fontSize).filter { $0 > 0 })
         let left = median(lines.map(\.rect.minX))
         let right = median(lines.map(\.rect.maxX))

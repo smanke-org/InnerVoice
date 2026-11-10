@@ -369,6 +369,28 @@ func importsEveryFormat(_ format: String) throws {
     #expect(blocks.contains { $0.text.contains("wraps onto a second line") && $0.text.contains("on page one") })
 }
 
+/// A printed book's PDF has mirrored margins: the text block sits further right on one side
+/// of the spread. An indent on the narrow-margin pages must still start a paragraph, even
+/// when the paragraph before ends on a full line.
+@Test func pdfIndentsOnMirroredMargins() {
+    var lines: [PDFReader.PDFLine] = []
+    var n = 0
+    for page in 0..<6 {
+        let left: CGFloat = page.isMultiple(of: 2) ? 63 : 54
+        let right = left + 315
+        for row in 0..<24 {
+            let indented = row % 3 == 0
+            let x = indented ? left + 11.3 : left
+            lines.append(.init(text: indented ? "P\(n) starts" : "and goes on", rect: CGRect(x: x, y: 600 - CGFloat(row) * 14, width: right - x, height: 12),
+                               page: page, fontSize: 11, italic: [], bold: false))
+            if indented { n += 1 }
+        }
+    }
+    let blocks = PDFReader.paragraphs(from: lines)
+    #expect(blocks.count == n, "\(blocks.count) paragraphs, expected \(n)")
+    #expect(blocks.allSatisfy { $0.text.hasPrefix("P") && $0.text.components(separatedBy: "starts").count == 2 })
+}
+
 @Test func scannedPDFSaysSo() throws {
     let dir = tempDir()
     let url = dir.appending(path: "scan.pdf")
