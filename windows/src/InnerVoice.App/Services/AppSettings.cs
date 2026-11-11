@@ -24,6 +24,8 @@ public sealed class AppSettings
     public bool RecordMarkOnAdvance { get; set; } = true;
     public NextKey RecordNextKey { get; set; } = NextKey.Space;
     public bool StepsHidden { get; set; }
+    /// Paragraphs shown before and after each line on the Review page (0–5).
+    public int ReviewContext { get; set; } = 2;
     public string? ModelID { get; set; }
     public string? ModelsFolder { get; set; }
     public List<string> RecentProjects { get; set; } = [];
