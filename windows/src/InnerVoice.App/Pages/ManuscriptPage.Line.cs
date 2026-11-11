@@ -128,13 +128,7 @@ public sealed partial class ManuscriptPage
         if (menu.Items.Count == 0 && paragraph is not null)
         {
             var pid = paragraph.Id;
-            menu.Items.Add(Item("Record from Here", () => { Workspace.RecordParagraph = pid; Workspace.Go(PageKind.Record); }));
-            menu.Items.Add(Item(Document.Project.Recorded.Contains(pid) ? "Mark Not Recorded" : "Mark Recorded", () => Document.ToggleRecorded(pid)));
-            menu.Items.Add(Item("Mark Retake…", async () =>
-            {
-                var note = await Dialogs.Ask(this, "Mark Retake", "", "Mark Retake", "", "What to fix (optional)");
-                if (note is not null) Document.AddRetake(pid, note.Trim());
-            }));
+            menu.Items.Add(Item("Open Teleprompter Here", () => { Workspace.TeleprompterParagraph = pid; Workspace.Go(PageKind.Teleprompter); }));
         }
         if (menu.Items.Count == 0) return;
         var anchor = AnchorAt(new Rect(point, new Size(1, 1)));
@@ -198,7 +192,7 @@ public sealed partial class ManuscriptPage
         }
         int words = selection.Sum(s => Words.Count(s.Paragraph?.Substring(s.Range) ?? ""));
         var what = whole.Count > 0 && cuts.Count == 0 && headings.Count == 0 ? (whole.Count == 1 ? "this chapter" : $"these {whole.Count} chapters") : $"the selected text ({words:N0} words)";
-        if (!await Dialogs.Confirm(this, "Delete Text?", $"Delete {what} from this project? Lines, recorded marks and retakes inside it go too. The manuscript file you imported doesn't change, and you can undo this.", "Delete"))
+        if (!await Dialogs.Confirm(this, "Delete Text?", $"Delete {what} from this project? Lines inside it go too. The manuscript file you imported doesn't change, and you can undo this.", "Delete"))
             return;
         Canvas.ClearSelection();
         Document.DeleteText(cuts, whole, headings);

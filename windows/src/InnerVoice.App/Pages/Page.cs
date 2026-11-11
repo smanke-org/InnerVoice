@@ -3,7 +3,7 @@ using InnerVoice.App.Document;
 
 namespace InnerVoice.App.Pages;
 
-public enum PageKind { Manuscript, Cast, Index, Pronunciations, Record, Retakes, Review, Revisions }
+public enum PageKind { Manuscript, Cast, Index, Teleprompter, Review, Revisions }
 
 public static class PageKinds
 {
@@ -12,22 +12,21 @@ public static class PageKinds
         PageKind.Manuscript => "Manuscript",
         PageKind.Cast => "Cast",
         PageKind.Index => "Index",
-        PageKind.Pronunciations => "Pronunciations",
-        PageKind.Record => "Record",
-        PageKind.Retakes => "Retakes",
+        PageKind.Teleprompter => "Teleprompter",
         PageKind.Review => "Review",
         _ => "Revisions",
     };
 
-    /// Ctrl+1 … Ctrl+6, like the Mac's ⌘1 … ⌘6.
-    public static readonly PageKind[] Numbered = [PageKind.Manuscript, PageKind.Cast, PageKind.Index, PageKind.Pronunciations, PageKind.Record, PageKind.Retakes];
+    /// Ctrl+1 … Ctrl+4.
+    public static readonly PageKind[] Numbered = [PageKind.Manuscript, PageKind.Cast, PageKind.Index, PageKind.Teleprompter];
 }
 
 /// Per-window state that is not part of the book (the Mac's Workspace).
 public sealed class Workspace
 {
     public PageKind Page { get; set; } = PageKind.Manuscript;
-    public Guid? RecordParagraph { get; set; }
+    /// The paragraph the Teleprompter shows (null: where the narrator left off in this book).
+    public Guid? TeleprompterParagraph { get; set; }
     public Guid? SelectedCharacter { get; set; }
     public event Action? PageChanged;
     public event Action<Guid>? ShowParagraphRequested;

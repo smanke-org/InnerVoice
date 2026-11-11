@@ -126,7 +126,7 @@ final class SpeechPlayer {
         engine.connect(node, to: timePitch, format: SpeechAudio.format)
         engine.connect(timePitch, to: engine.mainMixerNode, format: SpeechAudio.format)
         speed = PauseStore.shared.speed
-        // Test runs play silently (snapshots open Rehearse, which speaks its cue).
+        // Test runs play silently (snapshots play lines and voices).
         if SystemHooks.isTestRun, ProcessInfo.processInfo.environment["INNERVOICE_SPEECH_AUDIBLE"] == nil {
             engine.mainMixerNode.outputVolume = 0
         }

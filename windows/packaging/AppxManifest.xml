@@ -52,8 +52,6 @@
   <Capabilities>
     <!-- Model downloads from Hugging Face; manuscripts never leave the PC. -->
     <Capability Name="internetClient" />
-    <!-- Pronunciation samples. -->
-    <DeviceCapability Name="microphone" />
     <rescap:Capability Name="runFullTrust" />
   </Capabilities>
 </Package>

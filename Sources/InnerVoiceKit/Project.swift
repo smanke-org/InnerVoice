@@ -352,7 +352,7 @@ public enum ProjectPurpose: String, Codable, CaseIterable, Identifiable, Sendabl
 
     public var detail: String {
         switch self {
-        case .narration: "You’ll narrate the book yourself. See who’s speaking on every line, with character summaries, an index of each part, rehearsal, a teleprompter for the booth, retakes and narrator scripts."
+        case .narration: "You’ll narrate the book yourself. See who’s speaking on every line, with character summaries, an index of each part, a teleprompter for the booth and narrator scripts."
         case .aiVoices: "You’ll make the audiobook with AI voices. Give every character a voice and a tone, hear a table read, and export the audio, with no human narrator."
         }
     }

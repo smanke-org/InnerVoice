@@ -20,9 +20,11 @@ public sealed class AppSettings
     public bool ReadingSerif { get; set; } = true;
     public LineSpacing LineSpacing { get; set; } = LineSpacing.Single;
     public MarginNames MarginNames { get; set; } = MarginNames.Initials;
+    /// The Teleprompter's text size and the key that moves on (named for its old page, Record).
     public double RecordFontSize { get; set; } = 30;
-    public bool RecordMarkOnAdvance { get; set; } = true;
     public NextKey RecordNextKey { get; set; } = NextKey.Space;
+    /// The paragraph each book's Teleprompter was last on, by the project file's full path.
+    public Dictionary<string, Guid> TeleprompterPlaces { get; set; } = new();
     public bool StepsHidden { get; set; }
     /// Paragraphs shown before and after each line on the Review page (0–5).
     public int ReviewContext { get; set; } = 2;
@@ -53,6 +55,19 @@ public sealed class AppSettings
     {
         change(Current);
         Changed?.Invoke();
+        Save();
+    }
+
+    /// Changes settings and saves them without redrawing anything, for values only one place
+    /// reads (the Teleprompter's place in each book).
+    public static void UpdateQuietly(Action<AppSettings> change)
+    {
+        change(Current);
+        Save();
+    }
+
+    static void Save()
+    {
         if (AppPaths.IsTestRun) return;
         try { File.WriteAllText(FilePath, JsonSerializer.Serialize(Current, Json)); } catch { }
     }

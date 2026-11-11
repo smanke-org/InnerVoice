@@ -144,7 +144,7 @@ struct GuidedStepsBar: View {
     }
 
     struct Card {
-        enum Kind { case manuscriptReady, tag, review, summaries, castVoices, showVoices, exportAudio, pronunciations, record }
+        enum Kind { case manuscriptReady, tag, review, summaries, castVoices, showVoices, exportAudio, teleprompter }
         struct Action { var title: String; var kind: Kind }
         var symbol: String
         var title: String
@@ -199,14 +199,10 @@ struct GuidedStepsBar: View {
             return Card(symbol: "play.circle", title: "Listen to the book",
                         text: "Play a table read from anywhere with ⌥⇧Space, then export the book, a chapter or one character’s lines as audio.",
                         action: .init(title: "Export Audio…", kind: .exportAudio))
-        case .pronunciations?:
-            return Card(symbol: "character.bubble", title: "Add pronunciations",
-                        text: "InnerVoice lists the names, places and invented words it found. Add how to say each one, or dismiss the ones you already know.",
-                        action: page == .pronunciations ? nil : .init(title: "Show Pronunciations", kind: .pronunciations))
-        case .record?:
-            return Card(symbol: "mic", title: "Record the book",
-                        text: "A large-type teleprompter for the booth. Space moves on and marks the paragraph recorded; R marks a retake.",
-                        action: page == .record ? nil : .init(title: "Start Recording", kind: .record))
+        case .teleprompter?:
+            return Card(symbol: "text.alignleft", title: "Read in the booth",
+                        text: "A large-type teleprompter, one paragraph at a time with who speaks it. Record in your own audio app; Space moves on and it starts where you left off.",
+                        action: page == .teleprompter ? nil : .init(title: "Open Teleprompter", kind: .teleprompter))
         case nil:
             return Card(symbol: "checkmark.circle", title: "Every step is done",
                         text: "Hide the steps if you don’t need them. Show them again with View › Show Steps.")
@@ -221,8 +217,7 @@ struct GuidedStepsBar: View {
         case .characters: "The AI reads the book again for how each character sounds (⇧⌘B)"
         case .voices: "Cast and audition a voice for every character"
         case .listen: "Play a table read and export the audio"
-        case .pronunciations: "Say how to pronounce names, places and invented words"
-        case .record: "Record with the teleprompter"
+        case .teleprompter: "Read the book in the booth with the teleprompter"
         }
     }
 
@@ -234,8 +229,7 @@ struct GuidedStepsBar: View {
         case .review: workspace.page = .review
         case .characters: workspace.page = .cast; workspace.castPath = []
         case .voices: workspace.page = .voices
-        case .pronunciations: workspace.page = .pronunciations
-        case .record: workspace.page = .record
+        case .teleprompter: workspace.page = .teleprompter
         }
     }
 
@@ -260,8 +254,7 @@ struct GuidedStepsBar: View {
             document.castVoicesAgain(undoManager: undoManager)
         case .showVoices: workspace.page = .voices
         case .exportAudio: workspace.showAudioExport = true
-        case .pronunciations: workspace.page = .pronunciations
-        case .record: workspace.page = .record
+        case .teleprompter: workspace.page = .teleprompter
         }
     }
 }

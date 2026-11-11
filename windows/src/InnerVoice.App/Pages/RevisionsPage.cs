@@ -30,7 +30,7 @@ public sealed class RevisionsPage : Page
         col.Children.Add(Ui.Caption($"“{record.FileName}”, {record.Date.ToLocal():MMM d, yyyy h:mm tt}"));
         col.Children.Add(Ui.Row(Look.Xxl, Stat(record.Unchanged, "unchanged", Look.SecondaryInk), Stat(record.Changed.Count, "changed", Look.Retake),
             Stat(record.Added.Count, "added", Look.Recorded), Stat(record.Removed.Count, "removed", Look.Attention)));
-        col.Children.Add(Ui.Text("Tags, notes, recorded marks and retakes were kept on unchanged paragraphs. Changed paragraphs keep the speakers of lines whose words still match; their recorded marks were cleared.", 13, brush: Look.Brush(Look.SecondaryInk), wrap: TextWrapping.Wrap));
+        col.Children.Add(Ui.Text("Tags and notes were kept on unchanged paragraphs. Changed paragraphs keep the speakers of lines whose words still match.", 13, brush: Look.Brush(Look.SecondaryInk), wrap: TextWrapping.Wrap));
         if (p.UntaggedCount > 0) col.Children.Add(Ui.Button("Tag New Lines", Workspace.RequestTag, primary: true));
         Section(col, "Changed", record.Changed, record);
         Section(col, "Added", record.Added, record);

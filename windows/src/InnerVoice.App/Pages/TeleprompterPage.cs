@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
-using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -12,27 +11,21 @@ using InnerVoice.Core;
 namespace InnerVoice.App.Pages;
 
 /// The teleprompter for the booth: one paragraph at a time in large type, the speaker's
-/// color and voice cue, the next speaker below. Space or → moves on, ← goes back, R marks a
-/// retake, M marks recorded. Foot pedals that send keys work too.
-public sealed class RecordPage : Page
+/// color and voice cue, the next speaker below. Space or → moves on, ← goes back; foot pedals
+/// that send keys work too. It opens where the narrator left off in this book (remembered on
+/// this PC, in the app's settings). InnerVoice doesn't record sound.
+public sealed class TeleprompterPage : Page
 {
-    public override PageKind Kind => PageKind.Record;
+    public override PageKind Kind => PageKind.Teleprompter;
     readonly StackPanel toolbar;
-    readonly ToggleButton recordedToggle = new() { Content = "Recorded" };
-    bool updating;
+    Guid? shownParagraph;
 
-    public RecordPage(ProjectDocument document, Workspace workspace) : base(document, workspace)
+    public TeleprompterPage(ProjectDocument document, Workspace workspace) : base(document, workspace)
     {
         Focusable = true;
-        recordedToggle.IsCheckedChanged += (_, _) =>
-        {
-            if (updating || Current() is not { } p) return;
-            Document.SetRecorded(p.Paragraph.Id, recordedToggle.IsChecked == true);
-        };
-        ToolTip.SetTip(recordedToggle, "Mark this paragraph recorded (M)");
         var smaller = Ui.Button("A−", () => AppSettings.Update(s => s.RecordFontSize = Math.Max(18, s.RecordFontSize - 4)), tip: "Smaller text");
         var larger = Ui.Button("A+", () => AppSettings.Update(s => s.RecordFontSize = Math.Min(64, s.RecordFontSize + 4)), tip: "Bigger text");
-        toolbar = Ui.Row(Look.Sm, recordedToggle, smaller, larger);
+        toolbar = Ui.Row(Look.Sm, smaller, larger);
         AppSettings.Changed += () => Refresh(false);
         Refresh(true);
     }
@@ -44,16 +37,33 @@ public sealed class RecordPage : Page
         Document.Project.Chapters.SelectMany((ch, c) => ch.Paragraphs
             .Where(p => p.Style is ParagraphStyle.Body or ParagraphStyle.BlockQuote).Select(p => (c, p))).ToList();
 
+    /// The paragraph shown in this window, else the one the narrator left off at in this book,
+    /// else the first.
     int CurrentIndex(List<(int Chapter, Paragraph Paragraph)> all)
     {
-        if (Workspace.RecordParagraph is { } id)
+        Guid?[] candidates = [Workspace.TeleprompterParagraph, RememberedParagraph()];
+        foreach (var candidate in candidates)
         {
+            if (candidate is not { } id) continue;
             int i = all.FindIndex(x => x.Paragraph.Id == id);
             if (i >= 0) return i;
         }
-        // Start at the first paragraph not yet recorded.
-        int first = all.FindIndex(x => !Document.Project.Recorded.Contains(x.Paragraph.Id));
-        return first < 0 ? 0 : first;
+        return 0;
+    }
+
+    /// The book's key in Settings: projects have no id of their own, so it's the file's path.
+    string? PlaceKey => Document.FilePath is { } path ? Path.GetFullPath(path) : null;
+
+    Guid? RememberedParagraph() =>
+        PlaceKey is { } key && AppSettings.Current.TeleprompterPlaces.TryGetValue(key, out var id) ? id : null;
+
+    /// Shows a paragraph and remembers it as this book's place on this PC (test runs never save).
+    void Remember(Guid paragraphID)
+    {
+        Workspace.TeleprompterParagraph = paragraphID;
+        if (PlaceKey is not { } key) return;
+        if (AppSettings.Current.TeleprompterPlaces.TryGetValue(key, out var old) && old == paragraphID) return;
+        AppSettings.UpdateQuietly(s => s.TeleprompterPlaces[key] = paragraphID);
     }
 
     (int Chapter, Paragraph Paragraph)? Current()
@@ -66,9 +76,8 @@ public sealed class RecordPage : Page
     {
         get
         {
-            var all = All();
-            int done = all.Count(x => Document.Project.Recorded.Contains(x.Paragraph.Id));
-            return $"{done:N0} of {all.Count:N0} paragraphs recorded";
+            int n = All().Count;
+            return $"{n:N0} {(n == 1 ? "paragraph" : "paragraphs")}";
         }
     }
 
@@ -77,42 +86,33 @@ public sealed class RecordPage : Page
         var all = All();
         if (all.Count == 0)
         {
-            Content = Ui.Empty("Nothing to Read", "This manuscript has no paragraphs to record.");
+            shownParagraph = null;
+            Content = Ui.Empty("Nothing to Read", "This manuscript has no paragraphs to read.");
             return;
         }
         int i = CurrentIndex(all);
-        var (chapterIndex, current) = all[i];
-        var p = Document.Project;
-        updating = true;
-        recordedToggle.IsChecked = p.Recorded.Contains(current.Id);
-        updating = false;
+        var chapterIndex = all[i].Chapter;
+        shownParagraph = all[i].Paragraph.Id;
 
         var root = new DockPanel { Background = Look.Brush(Look.Paper) };
-        var header = ProgressHeader(all, i, chapterIndex);
+        var header = PositionHeader(all, i, chapterIndex);
         DockPanel.SetDock(header, Dock.Top);
         root.Children.Add(header);
-        var controls = Controls(all, i);
+        var controls = Controls();
         DockPanel.SetDock(controls, Dock.Bottom);
         root.Children.Add(controls);
         root.Children.Add(Prompter(all, i));
         Content = root;
     }
 
-    Control ProgressHeader(List<(int Chapter, Paragraph Paragraph)> all, int i, int chapterIndex)
+    Control PositionHeader(List<(int Chapter, Paragraph Paragraph)> all, int i, int chapterIndex)
     {
         var p = Document.Project;
-        var inChapter = all.Where(x => x.Chapter == chapterIndex).ToList();
-        int done = inChapter.Count(x => p.Recorded.Contains(x.Paragraph.Id));
-        int total = all.Count(x => p.Recorded.Contains(x.Paragraph.Id));
-        var bar = new ProgressBar { Minimum = 0, Maximum = Math.Max(1, inChapter.Count), Value = done, Width = 220 };
-        var right = Ui.Column(Look.Xs,
-            Ui.Caption($"{done * 100 / Math.Max(1, inChapter.Count)}% of chapter · {total * 100 / Math.Max(1, all.Count)}% of book recorded"),
-            bar);
-        right.HorizontalAlignment = HorizontalAlignment.Right;
+        var bar = new ProgressBar { Minimum = 0, Maximum = Math.Max(1, all.Count), Value = i + 1, Width = 220, VerticalAlignment = VerticalAlignment.Center };
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(Look.Xl, Look.Md) };
-        grid.Children.Add(Ui.Column(2, Ui.Headline(p.Chapters[chapterIndex].ShownTitle()), Ui.Caption($"Paragraph {i + 1} of {all.Count}")));
-        Grid.SetColumn(right, 1);
-        grid.Children.Add(right);
+        grid.Children.Add(Ui.Column(2, Ui.Headline(p.Chapters[chapterIndex].ShownTitle()), Ui.Caption($"Paragraph {i + 1:N0} of {all.Count:N0}")));
+        Grid.SetColumn(bar, 1);
+        grid.Children.Add(bar);
         return new Border { Child = grid, BorderBrush = Look.Brush(Look.Separator), BorderThickness = new Thickness(0, 0, 0, 1), Background = Look.Brush(Look.Chrome) };
     }
 
@@ -136,10 +136,6 @@ public sealed class RecordPage : Page
             col.Children.Add(chips);
         }
         col.Children.Add(Colored(current, lines, size, family));
-        if (p.Recorded.Contains(current.Id))
-            col.Children.Add(Ui.Text("✓ Recorded", 14, FontWeight.SemiBold, Look.Brush(Look.Recorded)));
-        if (p.Retakes.FirstOrDefault(r => r.ParagraphID == current.Id && !r.Done) is { } retake)
-            col.Children.Add(Ui.Text("↺ Retake" + (retake.Note.Length == 0 ? "" : ": " + retake.Note), 14, FontWeight.SemiBold, Look.Brush(Look.Retake), TextWrapping.Wrap));
         if (next is not null)
         {
             var nextSpeakers = UniqueSpeakers(index.LinesIn(next.Id).Select(x => p.Lines[x]).ToList());
@@ -196,17 +192,14 @@ public sealed class RecordPage : Page
         return tb;
     }
 
-    Control Controls(List<(int Chapter, Paragraph Paragraph)> all, int i)
+    Control Controls()
     {
         var previous = Ui.Button("‹ Previous", () => Move(-1), tip: "Go back a paragraph (←)");
-        var next = Ui.Button("Next ›", () => Move(1), primary: true, tip: "Move on and mark this paragraph recorded (Space or →)");
-        var retake = Ui.Button("↺ Retake…", () => _ = MarkRetake(), tip: "Mark this paragraph to read again, with a note (R)");
+        var next = Ui.Button("Next ›", () => Move(1), primary: true, tip: "Next paragraph (Space or →)");
         var row = new DockPanel { Margin = new Thickness(Look.Xl, Look.Md) };
         var left = Ui.Row(Look.Md, previous, next);
         DockPanel.SetDock(left, Dock.Left);
         row.Children.Add(left);
-        retake.HorizontalAlignment = HorizontalAlignment.Right;
-        row.Children.Add(retake);
         return new Border { Child = row, BorderBrush = Look.Brush(Look.Separator), BorderThickness = new Thickness(0, 1, 0, 0), Background = Look.Brush(Look.Chrome) };
     }
 
@@ -214,20 +207,9 @@ public sealed class RecordPage : Page
     {
         var all = All();
         if (all.Count == 0) return;
-        int i = CurrentIndex(all);
-        if (delta > 0 && AppSettings.Current.RecordMarkOnAdvance) Document.SetRecorded(all[i].Paragraph.Id, true);
-        int next = Math.Clamp(i + delta, 0, all.Count - 1);
-        Workspace.RecordParagraph = all[next].Paragraph.Id;
+        int next = Math.Clamp(CurrentIndex(all) + delta, 0, all.Count - 1);
+        Remember(all[next].Paragraph.Id);
         Refresh(false);
-        Focus();
-    }
-
-    async Task MarkRetake()
-    {
-        if (Current() is not { } c) return;
-        var existing = Document.Project.Retakes.FirstOrDefault(r => r.ParagraphID == c.Paragraph.Id && !r.Done);
-        var note = await Dialogs.Ask(this, "Mark Retake", "", "Mark Retake", existing?.Note ?? "", "What to fix (optional)");
-        if (note is not null) Document.AddRetake(c.Paragraph.Id, note.Trim());
         Focus();
     }
 
@@ -244,10 +226,17 @@ public sealed class RecordPage : Page
         if (e.Source is TextBox) { base.OnKeyDown(e); return; }
         if (MatchesNext(e.Key) || e.Key == Key.Right) { Move(1); e.Handled = true; }
         else if (e.Key is Key.Left or Key.Up or Key.PageUp) { Move(-1); e.Handled = true; }
-        else if (e.Key == Key.R && e.KeyModifiers == KeyModifiers.None) { _ = MarkRetake(); e.Handled = true; }
-        else if (e.Key == Key.M && e.KeyModifiers == KeyModifiers.None && Current() is { } c) { Document.ToggleRecorded(c.Paragraph.Id); e.Handled = true; }
         else base.OnKeyDown(e);
     }
 
-    public override void Shown() => Focus();
+    public override void Shown()
+    {
+        // Opening the page (from the sidebar, a shortcut or Open Teleprompter Here) keeps its place.
+        if (Current() is { } c)
+        {
+            Remember(c.Paragraph.Id);
+            if (c.Paragraph.Id != shownParagraph) Refresh(false);
+        }
+        Focus();
+    }
 }

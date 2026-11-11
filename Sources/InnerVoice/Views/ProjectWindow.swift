@@ -75,14 +75,11 @@ struct ProjectWindow: View {
             workspace.afterTagging = nil
             if document.tagging.failure == nil { workspace.page = next }
         }
-        .sheet(item: Binding(get: { workspace.rehearse.map(RehearseTarget.init) }, set: { workspace.rehearse = $0?.id })) { target in
-            RehearseView(document: document, characterID: target.id, workspace: workspace)
-        }
         .onReceive(NotificationCenter.default.publisher(for: SystemHooks.tagSpeakers)) { _ in
             if isFrontProject { TagCommand.run(document: document, workspace: workspace, undoManager: undoManager) }
         }
-        .onReceive(NotificationCenter.default.publisher(for: SystemHooks.record)) { _ in
-            if isFrontProject { workspace.page = .record }
+        .onReceive(NotificationCenter.default.publisher(for: SystemHooks.teleprompter)) { _ in
+            if isFrontProject, Workspace.Page.teleprompter.isShown(in: document.project) { workspace.page = .teleprompter }
         }
         .task { Snapshot.attach(document: document, workspace: workspace) }
         // Automatic colors follow what the book says about each character (and bring
@@ -142,8 +139,7 @@ struct ProjectWindow: View {
         case .voices: VoicesPage(document: document, workspace: workspace)
         case .index: IndexPage(document: document, workspace: workspace)
         case .pronunciations: PronunciationsPage(document: document, workspace: workspace)
-        case .record: RecordPage(document: document, workspace: workspace)
-        case .retakes: RetakesPage(document: document, workspace: workspace)
+        case .teleprompter: TeleprompterPage(document: document, workspace: workspace)
         case .review: ReviewPage(document: document, workspace: workspace)
         case .revisions: RevisionsPage(document: document, workspace: workspace)
         }
@@ -206,10 +202,6 @@ struct ProjectWindow: View {
     }
 }
 
-struct RehearseTarget: Identifiable {
-    var id: UUID
-}
-
 /// What menu commands act on: the frontmost book window.
 struct ProjectFocus {
     var document: InnerVoiceDocument
@@ -222,7 +214,7 @@ extension FocusedValues {
 }
 
 extension Notification.Name {
-    /// Actions from the menu bar item and ToolHUD: object is "tag", "record", "newFromManuscript".
+    /// Actions from the menu bar item and ToolHUD: object is "tag", "teleprompter", "newFromManuscript".
     static let innerVoiceAction = Notification.Name("InnerVoice.action")
 }
 

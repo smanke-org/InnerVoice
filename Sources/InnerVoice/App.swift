@@ -220,13 +220,15 @@ struct BookCommands: Commands {
             .keyboardShortcut(.upArrow)
             .disabled(focus == nil)
             Divider()
-            Button("Find Pronunciations") {
-                if let f = focus {
-                    f.document.change("Find Terms", undoManager: f.undoManager) { PronunciationFinder.refresh(&$0, isKnownWord: SpellCheck.isKnown) }
-                    f.workspace.page = .pronunciations
+            if focus?.document.project.showsPronunciations ?? true {
+                Button("Find Pronunciations") {
+                    if let f = focus {
+                        f.document.change("Find Terms", undoManager: f.undoManager) { PronunciationFinder.refresh(&$0, isKnownWord: SpellCheck.isKnown) }
+                        f.workspace.page = .pronunciations
+                    }
                 }
+                .disabled(focus == nil)
             }
-            .disabled(focus == nil)
             Button("Choose Model…") { focus?.workspace.showModelSheet = true }
                 .disabled(focus == nil)
             Button("Book Stats…") { focus?.workspace.showBookStats = true }
@@ -281,11 +283,6 @@ struct ViewCommands: Commands {
                     .keyboardShortcut(page.shortcut!)
                     .disabled(focus == nil)
             }
-            if focus?.document.project.showsNarrationTools ?? true {
-                Button("Start Recording") { focus?.workspace.page = .record }
-                    .keyboardShortcut("r", modifiers: [.command, .shift])
-                    .disabled(focus == nil)
-            }
             Divider()
             Button(stepsHidden ? "Show Steps" : "Hide Steps") { stepsHidden.toggle() }
             Divider()
@@ -336,7 +333,7 @@ enum RevisionImport {
     static func run(_ focus: ProjectFocus) {
         let panel = NSOpenPanel()
         panel.title = "Import Revised Manuscript"
-        panel.message = "Choose the author's new draft. Your tags, notes and recorded marks stay on the paragraphs that didn't change."
+        panel.message = "Choose the author's new draft. Your tags and notes stay on the paragraphs that didn't change."
         panel.prompt = "Import"
         panel.allowedContentTypes = Importer.contentTypes
         guard panel.runModal() == .OK, let url = panel.url else { return }

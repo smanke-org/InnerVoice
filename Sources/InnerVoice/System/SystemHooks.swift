@@ -28,8 +28,8 @@ enum SystemHooks {
     static let newFromManuscript = Notification.Name("InnerVoice.newFromManuscript")
     /// Tag Speakers on the project in front (ToolHUD's menu).
     static let tagSpeakers = Notification.Name("InnerVoice.tagSpeakers")
-    /// Record on the project in front (ToolHUD's menu).
-    static let record = Notification.Name("InnerVoice.record")
+    /// The Teleprompter on the project in front (ToolHUD's menu).
+    static let teleprompter = Notification.Name("InnerVoice.teleprompter")
 
     // MARK: Set by the app
 

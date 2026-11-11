@@ -5,14 +5,14 @@ import Foundation
 /// work only while it is in front. Keep in step with the menus (App.swift's commands).
 enum ShortcutCatalog {
     /// The project window's pages, in sidebar order: ⌘1 is the first.
-    static let pages = ["Manuscript", "Cast", "Index", "Pronunciations", "Record", "Retakes", "Review", "Voices"]
+    static let pages = ["Manuscript", "Cast", "Index", "Pronunciations", "Teleprompter", "Review", "Voices"]
 
     // Carbon modifiers.
     private static let command = 0x100
     private static let shift = 0x200
 
-    /// Virtual key codes (kVK_ANSI_…) for ⌘1–⌘8.
-    private static let digitKeyCodes = [18, 19, 20, 21, 23, 22, 26, 28]
+    /// Virtual key codes (kVK_ANSI_…) for ⌘1–⌘7.
+    private static let digitKeyCodes = [18, 19, 20, 21, 23, 22, 26]
     private static let option = 0x800
 
     static var reported: [ShortcutsLensReport.Shortcut] {
@@ -20,8 +20,6 @@ enum ShortcutCatalog {
             .init(id: "newFromManuscript", title: "New from Manuscript…", keyCode: 45, carbonModifiers: command,
                   category: "File", scope: "app"),
             .init(id: "tagSpeakers", title: "Tag Speakers", keyCode: 17, carbonModifiers: command | shift,
-                  category: "Book", scope: "app"),
-            .init(id: "record", title: "Record", keyCode: 15, carbonModifiers: command | shift,
                   category: "Book", scope: "app"),
             .init(id: "projectSettings", title: "Project Settings…", keyCode: 43, carbonModifiers: command | option,
                   category: "Book", scope: "app"),

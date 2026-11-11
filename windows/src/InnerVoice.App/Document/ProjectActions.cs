@@ -169,40 +169,7 @@ public static class ProjectActions
 
     public static void UpdateSettings(this ProjectDocument d, string name, Action<ProjectSettings> body) => d.Change(name, p => body(p.Settings));
 
-    public static void ToggleRecorded(this ProjectDocument d, Guid paragraphID)
-    {
-        bool on = !d.Project.Recorded.Contains(paragraphID);
-        if (on) Activity.Record(ActivityKey.ParagraphsRecorded);
-        d.Change(on ? "Mark Recorded" : "Mark Not Recorded", p => { if (on) p.Recorded.Add(paragraphID); else p.Recorded.Remove(paragraphID); });
-    }
-
-    public static void SetRecorded(this ProjectDocument d, Guid paragraphID, bool on)
-    {
-        if (d.Project.Recorded.Contains(paragraphID) == on) return;
-        d.ToggleRecorded(paragraphID);
-    }
-
-    public static void AddRetake(this ProjectDocument d, Guid paragraphID, string note)
-    {
-        if (!d.Project.Retakes.Any(r => r.ParagraphID == paragraphID && !r.Done)) Activity.Record(ActivityKey.RetakesMarked);
-        d.Change("Mark Retake", p =>
-        {
-            var open = p.Retakes.FirstOrDefault(r => r.ParagraphID == paragraphID && !r.Done);
-            if (open is not null) open.Note = note;
-            else p.Retakes.Add(new Retake { ParagraphID = paragraphID, Note = note });
-        });
-    }
-
-    public static void SetRetakeDone(this ProjectDocument d, Guid retakeID, bool done)
-    {
-        if (done) Activity.Record(ActivityKey.RetakesCleared);
-        d.Change(done ? "Finish Retake" : "Reopen Retake", p => { if (p.Retakes.Find(r => r.Id == retakeID) is { } r) r.Done = done; });
-    }
-
-    public static void DeleteRetake(this ProjectDocument d, Guid retakeID) =>
-        d.Change("Delete Retake", p => p.Retakes.RemoveAll(r => r.Id == retakeID));
-
-    /// The speaker and summary text used as a voice cue (Record, scripts).
+    /// The speaker and summary text used as a voice cue (Teleprompter, scripts).
     public static string VoiceCue(BookCharacter c)
     {
         FactKind[] order = [FactKind.Age, FactKind.Gender, FactKind.Accent, FactKind.Voice];

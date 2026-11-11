@@ -83,9 +83,7 @@ public class ExportTests
                             var bytes = File.ReadAllBytes(path);
                             Assert.Equal(new byte[] { 0xEF, 0xBB, 0xBF }, bytes[..3]);
                             var header = Encoding.UTF8.GetString(bytes[3..]).Split('\n')[0];
-                            Assert.Equal(kind == Exporter.Kind.Pronunciations
-                                ? "Term,Say It As,Notes,Confirmed,Count"
-                                : "Name,Also Called,Narrator,Lines,Words,First Chapter,Age,Gender,Accent & Origin,Voice,Personality,Appearance,History,Relationships,Other,Voice Notes,Notes",
+                            Assert.Equal("Name,Also Called,Narrator,Lines,Words,First Chapter,Age,Gender,Accent & Origin,Voice,Personality,Appearance,History,Relationships,Other,Voice Notes,Notes",
                                 header);
                             break;
                         }

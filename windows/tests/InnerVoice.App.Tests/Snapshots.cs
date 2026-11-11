@@ -54,12 +54,10 @@ public class Snapshots
         {
             Application.Current!.RequestedThemeVariant = variant;
             var doc = ProjectDocument.Unsaved(TestApp.Sample());
-            PronunciationFinder.Refresh(doc.Project, w => w.Length < 6);
-            doc.Project.Pronunciations[0].SayItAs = "keh-REN-sah";
             var w = new ProjectWindow(doc) { Width = 1280, Height = 820 };
             w.Show();
             Pump();
-            foreach (var page in new[] { PageKind.Manuscript, PageKind.Review, PageKind.Cast, PageKind.Index, PageKind.Pronunciations, PageKind.Record, PageKind.Retakes })
+            foreach (var page in new[] { PageKind.Manuscript, PageKind.Review, PageKind.Cast, PageKind.Index, PageKind.Teleprompter })
             {
                 w.Workspace.Go(page);
                 Pump();
@@ -119,7 +117,8 @@ public class Books
         return Path.Combine(dir!.FullName, "Fixtures", name);
     }
 
-    /// A project the Mac saved opens, shows every page, and saves with nothing lost.
+    /// A project the Mac saved opens, shows every page, and saves with nothing lost: recorded
+    /// marks, retakes and pronunciation samples aren't shown any more, but stay in the file.
     [AvaloniaFact]
     public void OpensAMacProject()
     {
@@ -131,20 +130,25 @@ public class Books
             Assert.False(doc.IsReadOnly);
             var w = new ProjectWindow(doc) { Width = 1280, Height = 820 };
             w.Show();
-            foreach (var page in new[] { PageKind.Manuscript, PageKind.Cast, PageKind.Record, PageKind.Retakes })
+            foreach (var page in new[] { PageKind.Manuscript, PageKind.Cast, PageKind.Index, PageKind.Teleprompter })
             {
                 w.Workspace.Go(page);
                 Pump();
             }
-            doc.ToggleRecorded(doc.Project.Chapters[0].Paragraphs[5].Id);
+            int pronunciations = doc.Project.Pronunciations.Count;
+            bool initials = doc.Project.Settings.ShowInitials;
+            doc.UpdateSettings("Hide Initials", s => s.ShowInitials = !initials);
             Assert.True(doc.TrySave(out var error), error);
             var again = ProjectArchive.Read(File.ReadAllBytes(tmp));
             var p = ProjectJson.Decode(again.ProjectJson);
-            Assert.Equal(3, p.Recorded.Count);
+            Assert.Equal(!initials, p.Settings.ShowInitials);
+            Assert.Equal(2, p.Recorded.Count);
+            Assert.Single(p.Retakes);
+            Assert.Equal(pronunciations, p.Pronunciations.Count);
             Assert.True(p.Settings.Extra!.ContainsKey("voiceEngine"));
             Assert.True(again.Audio.ContainsKey("Kerensa.m4a"));
             doc.Undo();
-            Assert.Equal(2, doc.Project.Recorded.Count);
+            Assert.Equal(initials, doc.Project.Settings.ShowInitials);
             w.Close();
         }
         finally { File.Delete(tmp); }

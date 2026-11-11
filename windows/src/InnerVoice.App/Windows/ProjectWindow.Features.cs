@@ -16,9 +16,7 @@ public sealed partial class ProjectWindow
         yield return PageKind.Review;
         yield return PageKind.Cast;
         yield return PageKind.Index;
-        yield return PageKind.Pronunciations;
-        yield return PageKind.Record;
-        yield return PageKind.Retakes;
+        yield return PageKind.Teleprompter;
         if (Document.Project.Revisions.Count > 0) yield return PageKind.Revisions;
     }
 
@@ -26,7 +24,6 @@ public sealed partial class ProjectWindow
     {
         PageKind.Review => new ReviewPage(Document, Workspace),
         PageKind.Index => new IndexPage(Document, Workspace),
-        PageKind.Pronunciations => new PronunciationsPage(Document, Workspace),
         PageKind.Revisions => new RevisionsPage(Document, Workspace),
         _ => new ManuscriptPage(Document, Workspace),
     };
@@ -57,7 +54,6 @@ public sealed partial class ProjectWindow
     void AddBookItems(MenuItem book)
     {
         book.Items.Add(new Separator());
-        book.Items.Add(Item("Find _Pronunciations", null, () => { Workspace.Go(PageKind.Pronunciations); (Get(PageKind.Pronunciations) as PronunciationsPage)?.FindTerms(); }));
         book.Items.Add(Item("_Narrators…", null, () => NarratorsWindow.Show(this, Document)));
         book.Items.Add(Item("_Next Line That Needs You", "Ctrl+Down", () => { Workspace.Go(PageKind.Manuscript); (Get(PageKind.Manuscript) as ManuscriptPage)?.NextNeedingYou(1); }));
         book.Items.Add(Item("Pre_vious Line That Needs You", "Ctrl+Up", () => { Workspace.Go(PageKind.Manuscript); (Get(PageKind.Manuscript) as ManuscriptPage)?.NextNeedingYou(-1); }));
@@ -68,8 +64,9 @@ public sealed partial class ProjectWindow
 
     void AddHelpWindowItem(MenuItem help) => help.Items.Add(Item("InnerVoice _Help", "F1", () => InnerVoice.App.Help.HelpWindow.Show()));
 
-    /// Brings in the author's new draft, keeping every tag, note and mark on the paragraphs
-    /// that didn't change.
+    /// Brings in the author's new draft, keeping every tag and note on the paragraphs that
+    /// didn't change. Recorded marks, retakes and pronunciations from older versions are
+    /// carried along unseen, so nothing in the file is lost.
     async Task ImportRevision()
     {
         var path = await Dialogs.OpenFile(this, "Choose the Revised Manuscript", Dialogs.Manuscripts);
@@ -113,8 +110,7 @@ public sealed partial class ProjectWindow
     {
         GuidedStep.Review => PageKind.Review,
         GuidedStep.Characters => PageKind.Cast,
-        GuidedStep.Pronunciations => VisiblePages().Contains(PageKind.Pronunciations) ? PageKind.Pronunciations : PageKind.Cast,
-        GuidedStep.Record => PageKind.Record,
+        GuidedStep.Teleprompter => PageKind.Teleprompter,
         _ => PageKind.Manuscript,
     });
 

@@ -2,7 +2,7 @@ import AppKit
 import InnerVoiceKit
 import SwiftUI
 
-/// Reading settings shared by the manuscript and Record (per Mac, not per project).
+/// Reading settings shared by the manuscript and the Teleprompter (per Mac, not per project).
 enum ReadingStyle {
     static let sizes: ClosedRange<Double> = 12...26
     static let standardSize = 16.0

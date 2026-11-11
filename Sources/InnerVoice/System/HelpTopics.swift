@@ -11,10 +11,10 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
     case colors
     case castAndSummaries
     case voices
-    case indexAndRehearse
+    case index
     case narratorsAndScripts
     case pronunciations
-    case record
+    case teleprompter
     case revisedManuscripts
     case choosingModel
     case keyboardShortcuts
@@ -32,10 +32,10 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
         case .colors: "Colors"
         case .castAndSummaries: "Cast & Summaries"
         case .voices: "Voices & Listening"
-        case .indexAndRehearse: "Index & Rehearse"
+        case .index: "Index"
         case .narratorsAndScripts: "Narrators & Scripts"
         case .pronunciations: "Pronunciations"
-        case .record: "Record"
+        case .teleprompter: "Teleprompter"
         case .revisedManuscripts: "Revised Manuscripts"
         case .choosingModel: "Choosing a Model"
         case .keyboardShortcuts: "Keyboard Shortcuts"
@@ -53,10 +53,10 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
         case .colors: "paintpalette"
         case .castAndSummaries: "person.3"
         case .voices: "person.wave.2"
-        case .indexAndRehearse: "list.bullet.indent"
+        case .index: "list.bullet.indent"
         case .narratorsAndScripts: "mic"
         case .pronunciations: "character.bubble"
-        case .record: "record.circle"
+        case .teleprompter: "text.alignleft"
         case .revisedManuscripts: "arrow.triangle.2.circlepath.doc.on.clipboard"
         case .choosingModel: "cpu"
         case .keyboardShortcuts: "keyboard"
@@ -68,32 +68,31 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
     var blocks: [HelpBlock] {
         switch self {
         case .gettingStarted: [
-            .text("InnerVoice reads your audiobook manuscript with an AI that runs on your Mac, colors every spoken line by the character who says it, and gives you the cast, the pronunciations and a teleprompter for the booth."),
+            .text("InnerVoice reads your audiobook manuscript with an AI that runs on your Mac, colors every spoken line by the character who says it, and gives you the cast with a summary of each character, and a voice for each one: notes on how they sound when you narrate, or an AI voice when you produce with AI voices."),
             .heading("Your first project"),
             .text("Choose File › New from Manuscript… (⌘N), or drop a manuscript on the Start window. InnerVoice makes a project, a .innervoice file with its own copy of the manuscript, and finds every quoted line right away. Lines it hasn't tagged yet show as Who's Speaking?."),
             .text("Then click Tag Speakers (⇧⌘T). The on-device AI reads the book chapter by chapter and assigns each line to a character. You can keep reading while it works, and Stop keeps what's done."),
             .heading("Follow the steps"),
-            .text("The steps across the top of the window show where the book stands and what comes next: Manuscript, Speakers, Review, Characters, then Voices and Listen when you produce with AI voices, or Pronunciations and Record when you narrate it yourself. Each step says how far along it is (\"3 to review\", \"2 need a voice\"), and the next step has a button to start it. Nothing starts until you click."),
+            .text("The steps across the top of the window show where the book stands and what comes next: Manuscript, Speakers, Review, Characters, then Voices and Listen when you produce with AI voices, or the Teleprompter when you narrate it yourself. Each step says how far along it is (\"3 to review\", \"2 need a voice\"), and the next step has a button to start it. Nothing starts until you click."),
             .text("1. Manuscript: delete anything you won't read aloud, like a copyright page or an ISBN, then click It's Ready. 2. Speakers: Tag Speakers finds who says each line. 3. Review: confirm the lines the AI wasn't sure of; typing a name that isn't in the cast adds a new character. 4. Characters: Build Summaries reads the book again for how each character sounds and writes a voice brief into their Voice Notes. 5. Voices: cast and audition a voice for every character, including the ones you added in Review. 6. Listen: play a table read and export the audio."),
             .text("Click any step to go to its page. Skip moves on without it; right-click a step to bring it back. Click × or choose View › Hide Steps to hide them, and View › Show Steps to bring them back."),
             .heading("Two kinds of project"),
             .text("A new project asks what it's for, and shows the tools for that job. Projects made with an earlier InnerVoice ask once, the next time they're opened."),
             .keys([
-                ("Narration Tools", "You'll narrate the book yourself: who's speaking on every line, character summaries, the Index and Rehearse, Record and Retakes, and Narrator Scripts."),
-                ("Produce with AI Voices", "You'll make the audiobook with AI voices: a voice and a tone for every character, table reads and Export Audio. The setup chooses an engine, runs Tag Speakers, casts the voices and opens the Voices page."),
+                ("Narration Tools", "You'll narrate the book yourself: who's speaking on every line, character summaries and voice notes, the Index, a teleprompter for the booth, and Narrator Scripts. You record in your own audio app."),
+                ("Produce with AI Voices", "You'll make the audiobook with AI voices: a voice and a tone for every character, pronunciations for names, table reads and Export Audio. The setup chooses an engine, runs Tag Speakers, casts the voices and opens the Voices page."),
             ]),
-            .text("Both have the Manuscript, Cast, Review, Pronunciations and Revisions. Change a project's type in Book › Project Settings (⌥⌘,): the other type's pages and commands are hidden, never deleted, and come back when you switch again."),
+            .text("Both have the Manuscript, Cast, Review and Revisions. Change a project's type in Book › Project Settings (⌥⌘,): the other type's pages and commands are hidden, never deleted, and come back when you switch again."),
             .heading("The project window"),
-            .text("The sidebar has {pages}. ⌘1 to ⌘6 go straight to each one, in that order."),
+            .text("The sidebar has {pages}, as the project type shows them. ⌘1 to ⌘7 go straight to each one, in that order."),
             .keys([
                 ("Manuscript", "Read the colored book and fix lines"),
                 ("Cast", "Every character, with a summary, line counts and narrator"),
                 ("Index", "Each character's lines by chapter, with links"),
-                ("Pronunciations", "Names and made-up words, how to say them, and samples"),
-                ("Record", "The teleprompter for the booth"),
-                ("Retakes", "Every paragraph marked to read again, with your notes"),
-                ("Review", "Lines, tones and voices that need you"),
-                ("Voices", "A voice for each character and the narrator (⌘8)"),
+                ("Pronunciations", "Names and made-up words, and how the AI voices should say them"),
+                ("Teleprompter", "The book in large type for the booth, one paragraph at a time"),
+                ("Review", "Lines, tones and voices that need you (⌘6)"),
+                ("Voices", "A voice for each character and the narrator (⌘7)"),
             ]),
             .tip("Your manuscript stays on this Mac. The only downloads are the AI models themselves. The one exception is ElevenLabs voices, which you have to set up and allow for each book: see Voices & Listening."),
             .tip("Quitting asks first. Turn off \"Ask before quitting\" in Settings › General, or tick \"Don't ask again\" when it asks."),
@@ -150,7 +149,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
             .text("In the sidebar, \"2 to review\" beside a chapter means two of its lines still need you to confirm who says them. A checkmark means every line in the chapter has a speaker. The numbers beside the cast are how many lines each character speaks."),
             .tip("Projects with changes save themselves 30 seconds after you change something, so you can keep working without stopping to save."),
             .heading("Review the guesses"),
-            .text("When the AI or the rules aren't sure, they still make a best guess: the margin shows the name with a question mark (\"Cyrus?\") and the line stays red until you check it. Review in the sidebar (⌘7) lists every line that needs you, Unsure Guesses first. Return confirms the guess, typing or 1–9 picks someone else, 0 makes it narration, and ↓ ↑ move between lines. A settled line leaves the list and the next one comes up."),
+            .text("When the AI or the rules aren't sure, they still make a best guess: the margin shows the name with a question mark (\"Cyrus?\") and the line stays red until you check it. Review in the sidebar (⌘6) lists every line that needs you, Unsure Guesses first. Return confirms the guess, typing or 1–9 picks someone else, 0 makes it narration, and ↓ ↑ move between lines. A settled line leaves the list and the next one comes up."),
             .text("Each card shows the line's whole paragraph, headed with its chapter's title and paragraph number (\"Chapter 6 · ¶26\"). Lines in the same paragraph that need you share one card, with a row for each: its best guess, its words, and Confirm, Assign… and Show. Click a row to make it the line the keys act on. The lines under review are red; the paragraphs around them are smaller and dimmer, keep their speakers' colors, and start with who speaks in them."),
             .text("Context in the toolbar sets how many paragraphs show before and after the line, from This paragraph only up to 5 paragraphs around; click − or + to change it. Cards never reach past the chapter's edges, and the setting stays the same for every book."),
             .tip("⌘↓ and ⌘↑ jump to the next and previous line that needs you and open Assign To with the guess picked: Return confirms it. The inspector's Confirm button does the same."),
@@ -181,7 +180,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
             .text("InnerVoice can read the book aloud with a different voice for each character, so you can hear a scene before you record it, check who says what, or rehearse against the other parts. Apple Voices, Qwen3-TTS and Orpheus run on your Mac and send nothing anywhere. ElevenLabs, if you set it up, runs in the cloud (see below)."),
             .heading("Voices for the cast"),
             .text("After Tag Speakers and Build Summaries, InnerVoice casts a voice for each character from what the book says about them: gender, age and accent from the summary, or a title like Mrs. or a \"she said\" when the summary is quiet. Main characters choose first, and two characters who share a scene get different voices. The narrator gets the best voice of all."),
-            .text("Open the Voices page (⌘8) to hear and change them. Click a character, then play any voice: it says one of that character's own lines. Click Use to give them that voice, or Confirm to keep the one casting picked. Speed and pitch make an Apple voice older, younger or more distinct."),
+            .text("Open the Voices page (⌘7) to hear and change them. Click a character, then play any voice: it says one of that character's own lines. Click Use to give them that voice, or Confirm to keep the one casting picked. Speed and pitch make an Apple voice older, younger or more distinct."),
             .text("The Narrator is always first: on the Voices page, the Cast page and in the sidebar's Cast list. The narrator's voice reads the narration, every line nobody is cast for, and letters, signs and other written text (Settings › Voices can give written text to the character who wrote it). Give a minor character Same as Narrator and their lines are read in the narrator's voice. In a first-person book, mark the character who tells the story as the narrator on their page and the narration uses their voice, unless you choose a separate narrator voice. Export Audio can save the narrator's part on its own."),
             .text("A red ? means casting wasn't sure, usually because the book hasn't said whether the character is a woman or a man. Those wait for you in Review › Unsure Voices."),
             .heading("How each line is said"),
@@ -250,12 +249,10 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
             .text("What you type in these fields is saved when you pause, press Return or click elsewhere, so typing stays quick on a long book. A burst of typing is one step to undo (⌘Z)."),
         ]
 
-        case .indexAndRehearse: [
+        case .index: [
             .text("Index lists each character's lines by chapter. Click a line to go to it in the manuscript."),
             .heading("Show in Index"),
             .text("Each character has a Show in Index switch. Main characters with a large share of the lines start hidden, so the index stays useful for finding the smaller parts; turn them on whenever you like."),
-            .heading("Rehearse"),
-            .text("Choose Rehearse for a character to step through only their lines. Each line comes with its cue, the line just before it, so you hear what you're answering."),
             .tip("⌘F finds text anywhere in the manuscript, and ⌘G goes to the next match."),
         ]
 
@@ -264,36 +261,32 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
             .heading("Narrator Scripts"),
             .text("Export a Narrator Script for each narrator as PDF or Word. It has only their lines, each with its cue line and its chapter and paragraph, and the summaries of the characters they voice. Send it to the narrator; they don't need InnerVoice."),
             .heading("The whole manuscript"),
-            .text("You can also export the tagged manuscript as a PDF with colors, initials and a key to the characters, for printing or reading on an iPad, and the cast and pronunciation lists as PDF or CSV."),
+            .text("You can also export the tagged manuscript as a PDF with colors, initials and a key to the characters, for printing or reading on an iPad, and the cast list as PDF or CSV."),
         ]
 
         case .pronunciations: [
-            .text("Pronunciations lists the names, places and unusual words the AI found, with how often and where each one appears."),
+            .text("Pronunciations lists the names, places and unusual words the AI found, with how often and where each one appears. What you type in Say It As is how the AI voices say the word. It's part of Produce with AI Voices projects; a narrator says names in their own voice."),
             .keys([
                 ("Say It As", "How to say it, in your own spelling: \"SHEV-on\""),
                 ("Note", "Anything else: where it comes from, what the author said"),
                 ("Confirmed", "Mark it once the author has confirmed it"),
-                ("Record", "Record a short sample in your own voice; click Play to hear it"),
             ]),
-            .text("InnerVoice asks for the microphone only the first time you click Record here. Samples are kept in the project."),
         ]
 
-        case .record: [
-            .text("Record is a teleprompter for the booth. It shows one paragraph at a time in large type, with the speaker's name and color, and who speaks next below it."),
+        case .teleprompter: [
+            .text("The Teleprompter shows the book in large type for the booth, one paragraph at a time, with the speaker's name, color and voice cue, and who speaks next below it. Each book opens where you left off."),
             .keys([
-                ("Space or →", "Next paragraph; the one you read is marked Recorded"),
+                ("Space or →", "Next paragraph"),
                 ("←", "Back one paragraph"),
-                ("R", "Mark a retake and add a note"),
             ]),
-            .text("Foot pedals work too: most send Space or the arrow keys, which is all Record needs."),
-            .text("Retakes lists every paragraph marked for a retake (a pickup, in studio terms), with your notes, so you can go back to each one. Record also shows how much of each chapter is recorded."),
-            .tip("InnerVoice doesn't record the narration itself. Keep using your recording app for that; Record only keeps your place."),
+            .text("Foot pedals work too: most send Space, Page Down or the arrow keys. Pick the key in Settings › Teleprompter, along with the text size."),
+            .tip("InnerVoice doesn't record sound. Record in your own audio app while you read; the Teleprompter only keeps your place."),
         ]
 
         case .revisedManuscripts: [
             .text("When the author sends a new draft, choose File › Import Revised Manuscript… and pick it. InnerVoice compares it with the manuscript in your project, paragraph by paragraph."),
             .heading("What is kept"),
-            .text("Every paragraph that didn't change keeps its tags, your corrections, notes, Recorded state and retakes, even when paragraphs were added, removed or moved around it. In a lightly edited paragraph, lines whose text still matches keep their character."),
+            .text("Every paragraph that didn't change keeps its tags, your corrections and notes, even when paragraphs were added, removed or moved around it. In a lightly edited paragraph, lines whose text still matches keep their character."),
             .heading("Review what changed"),
             .text("A list shows the added, changed and removed paragraphs; click one to go to it. Changed paragraphs go through Tag Speakers again, and your own assignments still win."),
         ]
@@ -319,8 +312,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
                 ("⌘O", "Open…"),
                 ("⇧⌘T", "Tag Speakers"),
                 ("⌘.", "Stop Tag Speakers"),
-                ("⇧⌘R", "Record"),
-                ("⌘1 – ⌘8", "{pages}"),
+                ("⌘1 – ⌘7", "{pages}"),
                 ("⌥⇧⌘E", "Export Audio…"),
                 ("⌥⌘,", "Project Settings…"),
             ]),
@@ -340,11 +332,10 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
                 ("⌘G", "Find Next"),
                 ("⌘Z", "Undo"),
             ]),
-            .heading("Record"),
+            .heading("Teleprompter"),
             .keys([
                 ("Space or →", "Next paragraph"),
                 ("←", "Previous paragraph"),
-                ("R", "Retake"),
             ]),
             .heading("Everywhere"),
             .keys([
@@ -360,16 +351,16 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
                 ("Manuscript", "The typeface, text size, line spacing, and initials, first names or full names in the margin"),
                 ("AI", "The model"),
                 ("Voices", "Table reads, written text, the voice engines and saved audio"),
-                ("Recording", "Record's font size and keys"),
+                ("Teleprompter", "The Teleprompter's text size and keys"),
                 ("Accent", "The color for selections, main buttons and switches"),
                 ("Activity", "What InnerVoice has done for you: lines tagged, how often the AI's guesses held up (by model), time saved, audio made"),
             ]),
             .heading("Activity and Book Stats"),
-            .text("Settings › Activity counts what InnerVoice did across all your books: lines tagged by the rules and the AI, guesses you kept or changed, tones, facts, recording and audio. Time saved is an estimate, about six seconds for each line you didn't have to tag by hand. With settings sync on, All Macs adds up every Mac. Only numbers are kept; nothing from your books is counted or sent."),
+            .text("Settings › Activity counts what InnerVoice did across all your books: lines tagged by the rules and the AI, guesses you kept or changed, tones, facts and audio. Time saved is an estimate, about six seconds for each line you didn't have to tag by hand. With settings sync on, All Macs adds up every Mac. Only numbers are kept; nothing from your books is counted or sent."),
             .text("Book › Book Stats shows the same kind of numbers for the open book. Choose a Model shows how each model did on your books once you've checked enough of its guesses."),
             .heading("Where InnerVoice appears"),
             .text("Show InnerVoice in the Dock, the menu bar, both, or neither. The menu bar menu has New from Manuscript…, Open…, Open Recent and Settings…. With neither, open InnerVoice again from Applications or Spotlight to get back to Settings. With the Dock icon on, its right-click menu has Settings…."),
-            .text("While ToolHUD is running, InnerVoice's menu moves into ToolHUD's menu bar menu as a submenu, with Tag Speakers and Record for the project in front. To keep the icon in the menu bar, turn off \"Put in ToolHUD's menu while ToolHUD is running\" in Settings › General."),
+            .text("While ToolHUD is running, InnerVoice's menu moves into ToolHUD's menu bar menu as a submenu, with Tag Speakers and Teleprompter for the project in front. To keep the icon in the menu bar, turn off \"Put in ToolHUD's menu while ToolHUD is running\" in Settings › General."),
             .heading("Sync"),
             .text("With \"Sync settings with your other Macs\" on, appearance, the accent color, asking before quitting, where InnerVoice appears and the update choices follow you to every Mac signed in to the same iCloud account. Projects never sync; they are files you keep where you like."),
         ]

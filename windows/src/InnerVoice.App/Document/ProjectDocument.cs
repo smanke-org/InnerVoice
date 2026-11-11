@@ -9,7 +9,8 @@ public sealed class ProjectDocument
 {
     public Project Project { get; private set; }
     public BookIndex Index { get; private set; }
-    /// Pronunciation samples (Audio/ in the archive).
+    /// Pronunciation samples (Audio/ in the archive) from older versions and the Mac: nothing
+    /// here shows or edits them, but they're saved back unchanged.
     public Dictionary<string, byte[]> Audio { get; private set; }
     /// The imported manuscript file (Original/ in the archive).
     public (string Name, byte[] Data)? Original { get; private set; }
@@ -206,10 +207,5 @@ public sealed class ProjectDocument
     {
         autosave?.Cancel();
         if (IsDirty && FilePath is not null && !IsReadOnly) TrySave(out _);
-    }
-
-    public void SetAudio(string name, byte[]? data)
-    {
-        if (data is null) Audio.Remove(name); else Audio[name] = data;
     }
 }

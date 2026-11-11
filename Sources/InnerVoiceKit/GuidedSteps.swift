@@ -4,13 +4,15 @@ import Foundation
 /// it is; the first one not done is the current step. Nothing is locked: the narrator can
 /// skip a step or go back to any of them, and a step finished by hand stays finished.
 public enum GuidedStep: String, CaseIterable, Sendable, Identifiable {
-    case manuscript, speakers, review, characters, voices, listen, pronunciations, record
+    case manuscript, speakers, review, characters, voices, listen
+    /// Stored as "record" (its old name) so a step marked done in an older version stays done.
+    case teleprompter = "record"
 
     public var id: String { rawValue }
 
     /// The steps for a project: narrating it yourself, or producing it with AI voices.
     public static func steps(narration: Bool) -> [GuidedStep] {
-        narration ? [.manuscript, .speakers, .review, .characters, .pronunciations, .record]
+        narration ? [.manuscript, .speakers, .review, .characters, .teleprompter]
                   : [.manuscript, .speakers, .review, .characters, .voices, .listen]
     }
 
@@ -22,13 +24,12 @@ public enum GuidedStep: String, CaseIterable, Sendable, Identifiable {
         case .characters: "Characters"
         case .voices: "Voices"
         case .listen: "Listen"
-        case .pronunciations: "Pronunciations"
-        case .record: "Record"
+        case .teleprompter: "Teleprompter"
         }
     }
 
     /// The last step has no end of its own: it's done when the narrator says so.
-    public var isLast: Bool { self == .listen || self == .record }
+    public var isLast: Bool { self == .listen || self == .teleprompter }
 }
 
 /// Where one step stands.
@@ -60,9 +61,6 @@ public struct GuidedSteps: Equatable, Sendable {
         let marked = Set(p.settings.stepsDone ?? [])
         let tagged = p.lastTagged != nil
         let needing = p.linesNeedingYou
-        let paragraphs = p.chapters.reduce(0) { $0 + $1.paragraphs.count }
-        let terms = p.pronunciations.filter { !$0.dismissed }
-        let unsaid = terms.filter { $0.sayItAs.trimmingCharacters(in: .whitespaces).isEmpty }.count
         func plural(_ n: Int, _ one: String, _ many: String) -> String { "\(n.formatted()) \(n == 1 ? one : many)" }
 
         all = Self.steps(narration).enumerated().map { i, step in
@@ -88,12 +86,10 @@ public struct GuidedSteps: Equatable, Sendable {
             case .listen:
                 done = false
                 detail = "Export audio"
-            case .pronunciations:
-                done = !terms.isEmpty && unsaid == 0
-                detail = terms.isEmpty ? "Names and places" : (unsaid == 0 ? "All added" : "\(unsaid.formatted()) to add")
-            case .record:
-                done = paragraphs > 0 && p.recorded.count >= paragraphs
-                detail = "\(min(p.recorded.count, paragraphs).formatted()) of \(paragraphs.formatted()) recorded"
+            case .teleprompter:
+                // InnerVoice doesn't record: reading in the booth is done when the narrator says so.
+                done = false
+                detail = "Read in the booth"
             }
             return GuidedStepStatus(step: step, number: i + 1, isDone: done || isMarked, isMarked: isMarked,
                                     isSkipped: isMarked && !done && !step.isLast, detail: detail)

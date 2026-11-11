@@ -134,7 +134,6 @@ struct ProjectSidebar: View {
     private func badge(_ page: Workspace.Page) -> Int {
         switch page {
         case .review: document.project.linesNeedingYou
-        case .retakes: document.project.retakes.filter { !$0.done }.count
         case .voices: document.project.characters.filter { (document.index.stats[$0.id]?.lines ?? 0) > 0 && document.project.voiceNeedsYou($0, engine: document.project.engineInUse) }.count
         default: 0
         }

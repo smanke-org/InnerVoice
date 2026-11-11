@@ -146,7 +146,7 @@ enum AgentCommands {
     // MARK: Chapters and lines
 
     private static var lines: [AgentCommand] { [
-        AgentCommand(name: "chapters list", summary: "List the chapters in book order. Returns `chapters` (number, title, paragraphs, words, lines, linesNeedingYou, recorded).",
+        AgentCommand(name: "chapters list", summary: "List the chapters in book order. Returns `chapters` (number, title, paragraphs, words, lines, linesNeedingYou).",
                      params: [projectParam],
                      example: "innervoice chapters list --json", readOnly: true) { args in
             let (entry, document) = try project(args)
@@ -157,8 +157,7 @@ enum AgentCommands {
                         let inChapter = p.lines.filter { ids.contains($0.paragraphID) }
                         return ["number": n + 1, "title": chapter.title, "paragraphs": chapter.paragraphs.count,
                                 "words": chapter.wordCount, "lines": inChapter.count,
-                                "linesNeedingYou": inChapter.filter(p.needsYou).count,
-                                "recorded": chapter.paragraphs.filter { p.recorded.contains($0.id) }.count]
+                                "linesNeedingYou": inChapter.filter(p.needsYou).count]
                     }]
         },
         AgentCommand(name: "lines list", summary: "List lines in book order. Returns `lines` (id, ref like \"Ch 3 ¶12\", speaker, kind, source, confidence, needsYou, text, tone, toneSource, toneConfidence, toneNeedsYou), `total` and `nextOffset` when there are more.",
