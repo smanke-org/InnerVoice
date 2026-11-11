@@ -10,7 +10,7 @@ struct PronunciationsPage: View {
     @State private var selection: Set<UUID> = []
     @State private var showDismissed = false
     @State private var search = ""
-    @State private var player = SamplePlayer()
+    @State private var player = PronunciationSamplePlayer()
 
     private var rows: [Pronunciation] {
         document.project.pronunciations
@@ -131,7 +131,7 @@ struct PronunciationsPage: View {
 
 /// Plays a pronunciation sample kept in the project (InnerVoice no longer records them).
 @Observable
-final class SamplePlayer {
+final class PronunciationSamplePlayer {
     @ObservationIgnored private var player: AVAudioPlayer?
 
     func play(_ data: Data) {
