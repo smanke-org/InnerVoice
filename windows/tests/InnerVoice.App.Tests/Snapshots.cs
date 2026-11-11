@@ -103,6 +103,112 @@ public class Snapshots
     }
 }
 
+/// Microsoft Store screenshots (1600 × 900, over the Store's 1366 × 768 minimum) of the sample
+/// book in INNERVOICE_STORE_DIR: the manuscript, Review, a character and the Teleprompter.
+public class StoreShots
+{
+    static void Pump()
+    {
+        for (int i = 0; i < 8; i++) Dispatcher.UIThread.RunJobs();
+    }
+
+    /// The sample story as the Mac's snapshots show it (SeedData): tagged by the AI with one
+    /// unsure guess and one line nobody was found for, four characters with summaries,
+    /// voice notes and two narrators.
+    static Project Tagged()
+    {
+        var blocks = PlainTextReader.Blocks(SampleStory.Markdown, markdown: true);
+        var p = ProjectBuilder.Make(new ImportedBook("The Keeper of Penhallow Light", SampleStory.Author,
+            ChapterDetector.Chapters(blocks, "The Keeper of Penhallow Light")), "Penhallow.docx");
+        Guid Id(string name)
+        {
+            var first = name.Split(' ')[0];
+            var c = p.Characters.FirstOrDefault(c => c.Name == name || c.AllNames.Contains(name) || c.Name == first);
+            if (c is not null) { c.Name = name; return c.Id; }
+            c = new BookCharacter(name, CharacterPalette.ForNew(name, p.Characters.Select(x => x.ColorHex)));
+            p.Characters.Add(c);
+            return c.Id;
+        }
+        var ids = new Dictionary<string, Guid> { ["tom"] = Id("Tom Hale"), ["mara"] = Id("Mara Quinn"), ["edda"] = Id("Edda Voss"), ["pip"] = Id("Pip Aelwyn") };
+        (string, string)[] table = [
+            ("You're late", "tom"), ("The path was", "mara"), ("Then you'll be", "tom"), ("I'll be wanting", "mara"),
+            ("Towels are", "tom"), ("Same as always", "mara"), ("He hasn't asked", "mara"), ("Maybe he doesn't", "mara"),
+            ("Doctor Voss came", "tom"), ("What did you", "mara"), ("That you'd be", "tom"), ("Miss Quinn!", "pip"),
+            ("Slow down", "mara"), ("Da says if", "pip"), ("You have been avoiding", "edda"), ("I've been busy", "mara"),
+            ("Busy.", "edda"), ("Your father wrote", "edda"), ("Who is Kerensa", "mara"),
+            ("Read the rest", "edda"), ("I can't", "mara"), ("You can.", "edda"), ("That's what frightens", "mara"),
+            ("Is it treasure", "pip"), ("Out", "edda"), ("Your father and I", "tom"), ("She was his sister", "tom"),
+            ("Is she alive", "mara"), ("Aye.", "tom"), ("And you didn't", "mara"), ("I'm telling you", "tom"),
+        ];
+        var index = new BookIndex(p);
+        foreach (var line in p.Lines.Where(l => l.Source is AssignmentSource.None or AssignmentSource.Exchange))
+        {
+            var text = p.TextOf(line, index).Trim('\u2014', '\u2013', ' ');
+            var who = table.FirstOrDefault(t => text.StartsWith(t.Item1)).Item2;
+            line.SpeakerID = who is null ? null : ids[who];
+            line.Source = AssignmentSource.Ai;
+            line.Confidence = text.StartsWith("Is it treasure") ? 0.4 : 0.86;
+            if (text.StartsWith("Who is Kerensa")) { line.SpeakerID = null; line.Confidence = 0; }
+        }
+        p.LastTagged = AppleDate.Now;
+        p.SummariesBuilt = AppleDate.Now;
+        Guid? Para(string s) => p.Chapters.SelectMany(c => c.Paragraphs).FirstOrDefault(x => x.Text.Contains(s))?.Id;
+        void Fact(string who, FactKind kind, string text, string source) =>
+            p.Characters[p.CharacterIndex(ids[who])].Facts.Add(new Fact { Kind = kind, Text = text, SourceParagraphID = Para(source), Quote = source, FromAI = true });
+        Fact("tom", FactKind.Age, "About sixty", "sixty if he was a day");
+        Fact("tom", FactKind.Voice, "Gravelly from shouting over gales", "the gravel of a man");
+        Fact("tom", FactKind.Accent, "Soft Highland Scottish burr (from Inverness)", "soft burr of the Highlands");
+        Fact("tom", FactKind.History, "Kept the light with Mara's father for thirty years", "kept this light together for thirty years");
+        Fact("tom", FactKind.Appearance, "Broad man gone narrow with age", "broad man gone narrow");
+        Fact("edda", FactKind.Accent, "German, from Hamburg; clipped, careful vowels", "clipped, careful vowels");
+        Fact("edda", FactKind.History, "Came from Hamburg twenty years ago", "come from Hamburg twenty years ago");
+        Fact("edda", FactKind.Personality, "Firm but kind", "not unkindly");
+        Fact("mara", FactKind.Relationships, "Daughter of the late keeper, old Quinn", "You are your father's daughter");
+        Fact("pip", FactKind.Age, "A small boy", "one small fist");
+        Fact("pip", FactKind.Voice, "Breathless, tumbling", "Miss Quinn! Miss Quinn");
+        var tom = p.Characters[p.CharacterIndex(ids["tom"])];
+        tom.VoiceNotes = "Low and slow, chest voice, Highland lilt on the vowels";
+        tom.Aliases = ["Tom"];
+        p.Characters[p.CharacterIndex(ids["mara"])].Aliases = ["Mara", "Miss Quinn"];
+        p.Characters[p.CharacterIndex(ids["edda"])].Aliases = ["Doctor Voss", "the doctor"];
+        p.Characters[p.CharacterIndex(ids["pip"])].Aliases = ["Pip"];
+        var jane = new Narrator { Name = "Jane Doe" };
+        var sam = new Narrator { Name = "Sam Roe" };
+        p.Narrators = [jane, sam];
+        foreach (var c in p.Characters) c.NarratorID = c.Id == ids["mara"] || c.Id == ids["edda"] ? jane.Id : sam.Id;
+        p.Settings.Purpose = ProjectPurpose.Narration;
+        CharacterPalette.RecolorAutomatic(p, new BookIndex(p));
+        return p;
+    }
+
+    [AvaloniaFact]
+    public void Listing()
+    {
+        if (Environment.GetEnvironmentVariable("INNERVOICE_STORE_DIR") is not { } dir) return;
+        Directory.CreateDirectory(dir);
+        foreach (var (variant, name) in new[] { (ThemeVariant.Light, "light"), (ThemeVariant.Dark, "dark") })
+        {
+            Application.Current!.RequestedThemeVariant = variant;
+            var doc = ProjectDocument.Unsaved(Tagged());
+            var w = new ProjectWindow(doc) { Width = 1600, Height = 900 };
+            w.Show();
+            Pump();
+            foreach (var page in new[] { PageKind.Manuscript, PageKind.Review, PageKind.Teleprompter })
+            {
+                w.Workspace.Go(page);
+                Pump();
+                w.CaptureRenderedFrame()?.Save(Path.Combine(dir, $"store-{page}-{name}.png"), (int?)null);
+            }
+            w.Workspace.Go(PageKind.Cast);
+            var main = doc.Project.Characters.OrderByDescending(c => c.Facts.Count).First();
+            (w.FindPage(PageKind.Cast) as CastPage)?.ShowCharacter(main.Id);
+            Pump();
+            w.CaptureRenderedFrame()?.Save(Path.Combine(dir, $"store-Character-{name}.png"), (int?)null);
+            w.Close();
+        }
+    }
+}
+
 public class Books
 {
     static void Pump()
@@ -110,7 +216,7 @@ public class Books
         for (int i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
     }
 
-    static string Fixture(string name)
+    internal static string Fixture(string name)
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "Fixtures"))) dir = dir.Parent;
