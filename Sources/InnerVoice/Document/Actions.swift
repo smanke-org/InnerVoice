@@ -327,6 +327,16 @@ final class Workspace {
         castPath = [id]
     }
 
+    /// Clone a Voice (ElevenLabs), and who the new voice is first meant for.
+    var showCloneVoice = false
+    var cloneFor: VoiceTarget = .narrator
+
+    /// Opens Clone a Voice for a character (nil: the narrator).
+    func cloneVoice(for id: UUID?) {
+        cloneFor = id.map { .character($0) } ?? .narrator
+        showCloneVoice = true
+    }
+
     func showVoice(_ id: UUID?) {
         page = .voices
         voiceTarget = id.map { .character($0) } ?? .narrator

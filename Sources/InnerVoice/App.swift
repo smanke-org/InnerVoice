@@ -238,6 +238,13 @@ struct BookCommands: Commands {
             Divider()
             Button("Use Voices from Another Project…") { focus?.workspace.showSeriesVoices = true }
                 .disabled(focus == nil)
+            // Only for a book that uses ElevenLabs (set up, allowed, and the book's engine).
+            if let f = focus, ElevenLabs.cloningOffered(for: f.document.project) {
+                Button("Clone a Voice…") {
+                    let w = f.workspace
+                    w.cloneVoice(for: w.page == .voices ? w.voiceTarget.characterID : nil)
+                }
+            }
             Button("Play Line") {
                 if let f = focus { PlayCommand.playLine(document: f.document, workspace: f.workspace) }
             }

@@ -21,8 +21,12 @@ final class ElevenLabs {
     private static let consentKey = "elevenlabs.consent"
     private static let voicesKey = "elevenlabs.voices"
 
-    /// The account's voices (premade and the person's own), from the last fetch.
+    /// The account's voices (premade and the person's own), from the last fetch. Cloned
+    /// voices come first.
     private(set) var voices: [VoiceInfo] = []
+    /// Voices cloned from recordings (here or on elevenlabs.io). Never given out by casting:
+    /// a real person's voice goes only where the narrator puts it.
+    private(set) var clonedIDs: Set<String> = []
     /// Bumped when the key or consent changes.
     private(set) var revision = 0
 
@@ -35,7 +39,34 @@ final class ElevenLabs {
         if let data = UserDefaults.standard.data(forKey: Self.voicesKey), !SystemHooks.isTestRun,
            let saved = try? JSONDecoder().decode([SavedVoice].self, from: data) {
             voices = saved.map(\.info)
+            clonedIDs = Set(saved.filter { $0.cloned == true }.map(\.id))
         }
+    }
+
+    /// Clones first, then by name; saved for the next launch.
+    private func setVoices(_ list: [VoiceInfo], cloned: Set<String>) {
+        clonedIDs = cloned
+        voices = list.sorted { a, b in
+            let ca = cloned.contains(a.voiceID), cb = cloned.contains(b.voiceID)
+            if ca != cb { return ca }
+            return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+        }
+        if !SystemHooks.isTestRun, let data = try? JSONEncoder().encode(voices.map { SavedVoice($0, cloned: cloned.contains($0.voiceID)) }) {
+            UserDefaults.standard.set(data, forKey: Self.voicesKey)
+        }
+    }
+
+    /// Voices casting may choose from: every voice except clones.
+    func castable(_ list: [VoiceInfo]) -> [VoiceInfo] {
+        clonedIDs.isEmpty ? list : list.filter { $0.engine != .elevenlabs || !clonedIDs.contains($0.voiceID) }
+    }
+
+    /// Voice cloning is offered only to a book that uses ElevenLabs: set up, allowed for
+    /// this book, and the book's engine (or one of Mix Engines') is ElevenLabs.
+    static func cloningOffered(for project: Project) -> Bool {
+        guard shared.isSetUp, project.showsVoices, project.settings.cloudVoicesAllowed != nil else { return false }
+        let engine = project.engineInUse
+        return engine == .elevenlabs || (engine == .mixed && EngineSwitches.shared.isOn(.elevenlabs))
     }
 
     // MARK: Setup
@@ -96,6 +127,7 @@ final class ElevenLabs {
     func disconnect() {
         save(key: "", consent: false)
         voices = []
+        clonedIDs = []
         UserDefaults.standard.removeObject(forKey: Self.voicesKey)
     }
 
@@ -122,6 +154,7 @@ final class ElevenLabs {
     func refreshVoices() async throws -> [VoiceInfo] {
         guard let key = apiKey else { throw SpeechError.engineUnavailable(.elevenlabs) }
         var found: [VoiceInfo] = []
+        var cloned: Set<String> = []
         var token: String?
         repeat {
             var c = URLComponents(url: Self.host.appending(path: "v2/voices"), resolvingAgainstBaseURL: false)!
@@ -132,15 +165,22 @@ final class ElevenLabs {
             try Self.throwIfFailed(response, data)
             let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
             for v in obj["voices"] as? [[String: Any]] ?? [] {
-                if let info = Self.voice(from: v) { found.append(info) }
+                guard var info = Self.voice(from: v) else { continue }
+                if Self.isClone(v) {
+                    cloned.insert(info.voiceID)
+                    info.detail = "Cloned"
+                }
+                found.append(info)
             }
             token = (obj["has_more"] as? Bool ?? false) ? obj["next_page_token"] as? String : nil
         } while token != nil && found.count < 1000
-        voices = found.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        if !SystemHooks.isTestRun, let data = try? JSONEncoder().encode(voices.map(SavedVoice.init)) {
-            UserDefaults.standard.set(data, forKey: Self.voicesKey)
-        }
+        setVoices(found, cloned: cloned)
         return voices
+    }
+
+    /// Instant and Professional Voice Cloning both make a voice from a real person's recordings.
+    static func isClone(_ v: [String: Any]) -> Bool {
+        ["cloned", "professional"].contains((v["category"] as? String)?.lowercased() ?? "")
     }
 
     static func voice(from v: [String: Any]) -> VoiceInfo? {
@@ -205,14 +245,130 @@ final class ElevenLabs {
         guard let id = saved["voice_id"] as? String else { throw ElevenLabsError.server(0, "The voice wasn’t saved") }
         var info = Self.voice(from: ["voice_id": id, "name": name, "labels": labels]) ?? VoiceInfo(engine: .elevenlabs, voiceID: id, name: name, gender: .neutral, age: .adult, accent: "American")
         info.detail = "Designed from Voice Notes"
-        voices.removeAll { $0.voiceID == id }
-        voices.append(info)
-        voices.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        if !SystemHooks.isTestRun, let data = try? JSONEncoder().encode(voices.map(SavedVoice.init)) {
-            UserDefaults.standard.set(data, forKey: Self.voicesKey)
-        }
+        setVoices(voices.filter { $0.voiceID != id } + [info], cloned: clonedIDs)
         ActivityStore.shared.record(ActivityKey.elevenLabsCharacters, count: text.count)
         return info
+    }
+
+    // MARK: Voice Cloning
+
+    /// What the plan allows: Instant Voice Cloning needs a paid plan (Starter or above), and
+    /// each clone takes one of the plan's custom voice slots.
+    struct CloneAllowance: Sendable, Equatable {
+        var canClone: Bool
+        var slotsUsed: Int
+        var slotLimit: Int
+        var tier: String
+        var slotsFull: Bool { slotLimit > 0 && slotsUsed >= slotLimit }
+    }
+
+    static let plansPage = URL(string: "https://elevenlabs.io/pricing")!
+    /// ElevenLabs needs at least 10 seconds; 1 to 2 minutes clones best, and past 3 adds little.
+    static let cloneMinimumSeconds: Double = 10
+    static let cloneBestSeconds: ClosedRange<Double> = 60...120
+    static let cloneMostSeconds: Double = 180
+
+    /// Reads the plan (no book text, no audio).
+    func cloneAllowance() async throws -> CloneAllowance {
+        guard let key = apiKey else { throw SpeechError.engineUnavailable(.elevenlabs) }
+        var req = URLRequest(url: Self.host.appending(path: "v1/user/subscription"))
+        req.setValue(key, forHTTPHeaderField: "xi-api-key")
+        let (data, response) = try await send(req)
+        try Self.throwIfFailed(response, data)
+        let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        let tier = obj["tier"] as? String ?? ""
+        return CloneAllowance(canClone: obj["can_use_instant_voice_cloning"] as? Bool ?? (tier.lowercased() != "free"),
+                              slotsUsed: obj["voice_slots_used"] as? Int ?? 0,
+                              slotLimit: obj["voice_limit"] as? Int ?? 0,
+                              tier: tier)
+    }
+
+    /// Makes a voice from recordings of one person (Instant Voice Cloning) and saves it under
+    /// the narrator's name for it in their ElevenLabs voices, where every project (and
+    /// elevenlabs.io) can use it. The recordings and the name leave the Mac here, and only
+    /// after the narrator has confirmed they have the right to clone this voice. No book text
+    /// is sent.
+    func cloneVoice(name: String, samples: [URL], removeBackgroundNoise: Bool, labels: [String: String], rightsConfirmed: Bool) async throws -> VoiceInfo {
+        guard rightsConfirmed else { throw ElevenLabsError.cloneNeedsConsent }
+        guard let key = apiKey, consented != nil else { throw SpeechError.engineUnavailable(.elevenlabs) }
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { throw ElevenLabsError.cloneNeedsName }
+        guard !samples.isEmpty else { throw ElevenLabsError.cloneNeedsSample }
+        var form = MultipartForm()
+        form.field("name", name)
+        form.field("description", "Cloned in InnerVoice")
+        form.field("remove_background_noise", removeBackgroundNoise ? "true" : "false")
+        if !labels.isEmpty, let json = try? JSONSerialization.data(withJSONObject: labels), let s = String(data: json, encoding: .utf8) {
+            form.field("labels", s)
+        }
+        for url in samples {
+            let data = try await Task.detached { try Data(contentsOf: url) }.value
+            form.file("files", filename: url.lastPathComponent, contentType: Self.audioType(url), data: data)
+        }
+        var req = URLRequest(url: Self.host.appending(path: "v1/voices/add"))
+        req.httpMethod = "POST"
+        req.timeoutInterval = 300
+        req.setValue(key, forHTTPHeaderField: "xi-api-key")
+        req.setValue(form.contentType, forHTTPHeaderField: "Content-Type")
+        req.httpBody = form.finish()
+        let (data, response) = try await send(req)
+        try Self.throwIfFailed(response, data)
+        let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        guard let id = obj["voice_id"] as? String else { throw ElevenLabsError.server(0, "The voice wasn’t saved") }
+        var info = Self.voice(from: ["voice_id": id, "name": name, "labels": labels])
+            ?? VoiceInfo(engine: .elevenlabs, voiceID: id, name: name, gender: .neutral, age: .adult, accent: "American")
+        info.name = name
+        info.detail = "Cloned"
+        setVoices(voices.filter { $0.voiceID != id } + [info], cloned: clonedIDs.union([id]))
+        ActivityStore.shared.record(ActivityKey.voicesCloned)
+        return info
+    }
+
+    /// Renames a voice in the narrator's ElevenLabs account (every project sees the new name).
+    func renameVoice(_ id: String, to name: String) async throws {
+        guard let key = apiKey else { throw SpeechError.engineUnavailable(.elevenlabs) }
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { throw ElevenLabsError.cloneNeedsName }
+        var form = MultipartForm()
+        form.field("name", name)
+        var req = URLRequest(url: Self.host.appending(path: "v1/voices/\(id)/edit"))
+        req.httpMethod = "POST"
+        req.setValue(key, forHTTPHeaderField: "xi-api-key")
+        req.setValue(form.contentType, forHTTPHeaderField: "Content-Type")
+        req.httpBody = form.finish()
+        let (data, response) = try await send(req)
+        try Self.throwIfFailed(response, data)
+        setVoices(voices.map { v in
+            guard v.voiceID == id else { return v }
+            var r = v
+            r.name = name
+            return r
+        }, cloned: clonedIDs)
+    }
+
+    /// Deletes a voice from the narrator's ElevenLabs account, which frees its voice slot.
+    /// Characters that used it, in any book, need another voice.
+    func deleteVoice(_ id: String) async throws {
+        guard let key = apiKey else { throw SpeechError.engineUnavailable(.elevenlabs) }
+        var req = URLRequest(url: Self.host.appending(path: "v1/voices/\(id)"))
+        req.httpMethod = "DELETE"
+        req.setValue(key, forHTTPHeaderField: "xi-api-key")
+        let (data, response) = try await send(req)
+        try Self.throwIfFailed(response, data)
+        setVoices(voices.filter { $0.voiceID != id }, cloned: clonedIDs.subtracting([id]))
+    }
+
+    nonisolated static func audioType(_ url: URL) -> String {
+        switch url.pathExtension.lowercased() {
+        case "mp3": "audio/mpeg"
+        case "wav", "wave": "audio/wav"
+        case "m4a", "mp4", "aac": "audio/mp4"
+        case "flac": "audio/flac"
+        case "ogg", "oga": "audio/ogg"
+        case "aif", "aiff": "audio/aiff"
+        case "caf": "audio/x-caf"
+        default: "application/octet-stream"
+        }
     }
 
     /// The same text in the same voice comes out the same. Kept under 2^31: some ElevenLabs
@@ -309,6 +465,8 @@ final class ElevenLabs {
         case 401: throw status.contains("quota") ? ElevenLabsError.outOfCredits : ElevenLabsError.badKey
         case 402: throw ElevenLabsError.outOfCredits
         case 429: throw ElevenLabsError.busy
+        case _ where status.contains("voice_limit") || status.contains("voice_slots"): throw ElevenLabsError.voiceSlotsFull
+        case _ where status.contains("voice_cloning") || status.contains("can_not_use_instant"): throw ElevenLabsError.cloningNeedsPaidPlan
         default:
             if status.contains("quota") { throw ElevenLabsError.outOfCredits }
             throw ElevenLabsError.server(http.statusCode, message)
@@ -318,8 +476,11 @@ final class ElevenLabs {
     /// A saved voice list entry (VoiceInfo isn't Codable).
     private struct SavedVoice: Codable {
         var id, name, gender, age, accent, detail: String
-        init(_ v: VoiceInfo) {
+        /// nil in lists saved before cloning.
+        var cloned: Bool?
+        init(_ v: VoiceInfo, cloned: Bool) {
             id = v.voiceID; name = v.name; gender = v.gender.rawValue; age = v.age.rawValue; accent = v.accent; detail = v.detail
+            self.cloned = cloned
         }
         var info: VoiceInfo {
             VoiceInfo(engine: .elevenlabs, voiceID: id, name: name, gender: VoiceGender(rawValue: gender) ?? .neutral,
@@ -330,6 +491,7 @@ final class ElevenLabs {
 
 enum ElevenLabsError: LocalizedError {
     case bookNotAllowed, badKey, outOfCredits, busy, offline, descriptionTooShort
+    case cloneNeedsConsent, cloneNeedsName, cloneNeedsSample, cloningNeedsPaidPlan, voiceSlotsFull
     case server(Int, String)
 
     var errorDescription: String? {
@@ -339,6 +501,11 @@ enum ElevenLabsError: LocalizedError {
         case .outOfCredits: "Your ElevenLabs plan is out of credits for this month. Add credits at elevenlabs.io, or use a voice engine on this Mac."
         case .busy: "ElevenLabs is busy. Wait a moment, then play the line again."
         case .descriptionTooShort: "There isn’t enough to design a voice from. Add a few words about how this character sounds to their Voice Notes."
+        case .cloneNeedsConsent: "Confirm that you have the right and the consent to clone this voice."
+        case .cloneNeedsName: "Give the voice a name."
+        case .cloneNeedsSample: "Add a recording of the voice first."
+        case .cloningNeedsPaidPlan: "Voice cloning needs a paid ElevenLabs plan (Starter or above). Change plans at elevenlabs.io, then try again."
+        case .voiceSlotsFull: "All of your ElevenLabs plan’s voice slots are in use. Delete a voice you no longer need in Settings › Voices, or at elevenlabs.io."
         case .offline: "Unable to reach ElevenLabs. Check the internet connection, or use a voice engine on this Mac."
         case .server(let code, let message): "ElevenLabs couldn’t make the audio (\(code))\(message.isEmpty ? "" : ": " + message)."
         }
@@ -368,5 +535,28 @@ enum Keychain {
     static func delete(account: String) {
         let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
         SecItemDelete(q as CFDictionary)
+    }
+}
+
+/// A multipart/form-data body, for ElevenLabs' voice endpoints (they take files).
+struct MultipartForm {
+    let boundary = "InnerVoice-" + UUID().uuidString
+    private var body = Data()
+
+    var contentType: String { "multipart/form-data; boundary=\(boundary)" }
+
+    mutating func field(_ name: String, _ value: String) {
+        body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".utf8))
+    }
+
+    mutating func file(_ name: String, filename: String, contentType: String, data: Data) {
+        let safe = filename.replacingOccurrences(of: "\"", with: "'").replacingOccurrences(of: "\r", with: "").replacingOccurrences(of: "\n", with: "")
+        body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"; filename=\"\(safe)\"\r\nContent-Type: \(contentType)\r\n\r\n".utf8))
+        body.append(data)
+        body.append(Data("\r\n".utf8))
+    }
+
+    func finish() -> Data {
+        body + Data("--\(boundary)--\r\n".utf8)
     }
 }

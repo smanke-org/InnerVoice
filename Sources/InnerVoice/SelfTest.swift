@@ -524,6 +524,70 @@ enum SelfTest {
         check("what a redraw asks about voices is cheap", ms < 1, String(format: "%.3f ms a redraw", ms))
     }
 
+    /// Clone a Voice: offered only to a book that uses ElevenLabs, sends the recordings and
+    /// the name (never book text), only after the narrator confirms the right to clone; the
+    /// clone is listed first, never cast on its own, and can be renamed and deleted.
+    private static func voiceCloning(_ doc: InnerVoiceDocument, undo: UndoManager) async {
+        let eleven = ElevenLabs.shared
+        check("Clone a Voice is offered to a book that uses ElevenLabs", ElevenLabs.cloningOffered(for: doc.project))
+        doc.setVoiceEngine(.apple, undoManager: undo)
+        let offeredOnApple = ElevenLabs.cloningOffered(for: doc.project)
+        doc.setVoiceEngine(.elevenlabs, undoManager: undo)
+        let notAllowed = InnerVoiceDocument(project: SeedData.project())
+        notAllowed.setVoiceEngine(.elevenlabs, undoManager: nil)
+        check("Clone a Voice isn't offered to a book on another engine, or one that hasn't allowed ElevenLabs",
+              !offeredOnApple && !ElevenLabs.cloningOffered(for: notAllowed.project))
+
+        let allowance = try? await eleven.cloneAllowance()
+        check("the plan's voice slots are read", allowance == ElevenLabs.CloneAllowance(canClone: true, slotsUsed: 3, slotLimit: 10, tier: "creator"))
+
+        let sample = FileManager.default.temporaryDirectory.appending(path: "InnerVoice-selftest-sample-\(UUID().uuidString).m4a")
+        try? Data("fake audio for the self-test".utf8).write(to: sample)
+        defer { try? FileManager.default.removeItem(at: sample) }
+        FakeElevenLabs.cloneRequests = []
+        let refused = try? await eleven.cloneVoice(name: "Ellen", samples: [sample], removeBackgroundNoise: false, labels: [:], rightsConfirmed: false)
+        check("nothing is sent until the right to clone is confirmed", refused == nil && FakeElevenLabs.cloneRequests.isEmpty)
+
+        do {
+            let v = try await eleven.cloneVoice(name: "Ellen, warm and low", samples: [sample], removeBackgroundNoise: false, labels: [:], rightsConfirmed: true)
+            let sent = FakeElevenLabs.cloneRequests.first ?? ""
+            let bookText = doc.project.lines.prefix(20).map { doc.project.text(of: $0, index: doc.index) }.filter { $0.count > 12 }
+            check("cloning sends the name and the recording", sent.contains("name=\"name\"\r\n\r\nEllen, warm and low") && sent.contains("fake audio for the self-test")
+                  && sent.contains("filename=\"\(sample.lastPathComponent)\"") && sent.contains("Content-Type: audio/mp4"), String(sent.prefix(200)))
+            check("cloning sends no book text", !bookText.isEmpty && !bookText.contains { sent.contains($0) })
+            check("the clone is saved under its name and listed first", v.voiceID == "clone1" && v.name == "Ellen, warm and low"
+                  && eleven.clonedIDs.contains("clone1") && eleven.voices.prefix(2).allSatisfy { eleven.clonedIDs.contains($0.voiceID) })
+            check("other projects see the clone (it's in the account's voice list)", VoiceCatalog.voices(for: .elevenlabs).contains { $0.voiceID == "clone1" })
+            doc.castVoicesAgain(undoManager: undo)
+            let given = doc.project.characters.compactMap { $0.voice(for: .elevenlabs)?.choice.voiceID } + [doc.project.settings.narratorVoice(for: .elevenlabs)?.choice.voiceID].compactMap { $0 }
+            check("casting never gives out a cloned voice", !given.isEmpty && !given.contains { eleven.clonedIDs.contains($0) }, given.joined(separator: ","))
+            if let c = doc.project.characters.first(where: { (doc.index.stats[$0.id]?.lines ?? 0) > 0 }) {
+                doc.setVoice(v.choice, for: c.id, undoManager: undo)
+                doc.castVoicesAgain(undoManager: undo)
+                check("a clone the narrator gives stays", doc.project.character(c.id)?.voice(for: .elevenlabs)?.choice.voiceID == "clone1")
+                undo.undo(); undo.undo()
+            }
+            try await eleven.renameVoice("clone1", to: "Ellen")
+            check("renaming a clone changes its name everywhere", FakeElevenLabs.editRequests.last?.contains("Ellen") == true && eleven.voices.contains { $0.voiceID == "clone1" && $0.name == "Ellen" })
+            try await eleven.deleteVoice("clone1")
+            check("deleting a clone removes it", FakeElevenLabs.deleted == ["clone1"] && !eleven.voices.contains { $0.voiceID == "clone1" } && !eleven.clonedIDs.contains("clone1"))
+        } catch {
+            check("cloning a voice works", false, error.localizedDescription)
+        }
+
+        // A free plan: said before anything is sent, and in plain words if it's tried anyway.
+        FakeElevenLabs.freePlan = true
+        defer { FakeElevenLabs.freePlan = false }
+        let free = try? await eleven.cloneAllowance()
+        check("a free plan can't clone, and the sheet says so up front", free?.canClone == false)
+        do {
+            _ = try await eleven.cloneVoice(name: "Ellen", samples: [sample], removeBackgroundNoise: false, labels: [:], rightsConfirmed: true)
+            check("cloning on a free plan explains the plan", false)
+        } catch {
+            check("cloning on a free plan explains the plan", error.localizedDescription.contains("paid ElevenLabs plan"), error.localizedDescription)
+        }
+    }
+
     private static func elevenLabs(_ doc: InnerVoiceDocument, undo: UndoManager) async {
         let eleven = ElevenLabs.shared
         let config = URLSessionConfiguration.ephemeral
@@ -536,7 +600,8 @@ enum SelfTest {
         eleven.save(key: "test-key", consent: true)
         EngineSwitches.shared.set(.elevenlabs, on: true)
         let voices = (try? await eleven.refreshVoices()) ?? []
-        check("ElevenLabs voices are listed with their labels", voices.count == 2 && voices.contains { $0.gender == .female && $0.accent == "British" })
+        check("ElevenLabs voices are listed with their labels", voices.count == 3 && voices.contains { $0.gender == .female && $0.accent == "British" })
+        check("a voice cloned at elevenlabs.io is marked Cloned and listed first", eleven.clonedIDs == ["webclone"] && voices.first?.voiceID == "webclone" && voices.first?.detail == "Cloned")
         check("ElevenLabs is offered once it's set up", EngineSwitches.shared.choices.contains(.elevenlabs))
 
         // Set up, but this book hasn't allowed it: nothing may be sent.
@@ -591,6 +656,7 @@ enum SelfTest {
                 check("Voice Design sends the character's Voice Notes to ElevenLabs", false, error.localizedDescription)
             }
         }
+        await voiceCloning(doc, undo: undo)
         // Errors say what to do.
         FakeElevenLabs.status = 401
         SpeechRenderer.shared.clearCache()
@@ -966,8 +1032,23 @@ nonisolated final class FakeElevenLabs: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var speechRequests: [[String: Any]] = []
     nonisolated(unsafe) static var designRequests: [[String: Any]] = []
     nonisolated(unsafe) static var status = 200
+    nonisolated(unsafe) static var cloneRequests: [String] = []
+    nonisolated(unsafe) static var editRequests: [String] = []
+    nonisolated(unsafe) static var deleted: [String] = []
+    nonisolated(unsafe) static var freePlan = false
 
-    static func reset() { speechRequests = []; designRequests = []; status = 200 }
+    static func reset() { speechRequests = []; designRequests = []; status = 200; cloneRequests = []; editRequests = []; deleted = []; freePlan = false }
+
+    private func rawBody() -> String {
+        var data = request.httpBody ?? Data()
+        if data.isEmpty, let stream = request.httpBodyStream {
+            stream.open()
+            var buf = [UInt8](repeating: 0, count: 65536)
+            while stream.hasBytesAvailable { let n = stream.read(&buf, maxLength: buf.count); if n <= 0 { break }; data.append(buf, count: n) }
+            stream.close()
+        }
+        return String(decoding: data, as: UTF8.self)
+    }
 
     private func bodyJSON() -> [String: Any] {
         var data = request.httpBody ?? Data()
@@ -1004,10 +1085,26 @@ nonisolated final class FakeElevenLabs: URLProtocol, @unchecked Sendable {
             } else {
                 body = Data(#"{"detail":{"status":"invalid_api_key","message":"Invalid API key"}}"#.utf8)
             }
+        } else if url.path == "/v1/voices/add" {
+            Self.cloneRequests.append(rawBody())
+            if Self.freePlan {
+                code = 403
+                body = Data(#"{"detail":{"status":"can_not_use_instant_voice_cloning","message":"Your subscription does not include instant voice cloning."}}"#.utf8)
+            } else {
+                body = Data(#"{"voice_id":"clone1","requires_verification":false}"#.utf8)
+            }
+        } else if url.path.hasPrefix("/v1/voices/"), url.path.hasSuffix("/edit") {
+            Self.editRequests.append(rawBody())
+            body = Data(#"{"status":"ok"}"#.utf8)
+        } else if url.path.hasPrefix("/v1/voices/"), request.httpMethod == "DELETE" {
+            Self.deleted.append(url.lastPathComponent)
+            body = Data(#"{"status":"ok"}"#.utf8)
         } else if url.path == "/v1/user/subscription" {
-            body = Data(#"{"tier":"creator","character_count":1200,"character_limit":100000}"#.utf8)
+            body = Data((Self.freePlan
+                ? #"{"tier":"free","character_count":1200,"character_limit":10000,"can_use_instant_voice_cloning":false,"voice_limit":3,"voice_slots_used":0}"#
+                : #"{"tier":"creator","character_count":1200,"character_limit":100000,"can_use_instant_voice_cloning":true,"voice_limit":10,"voice_slots_used":3}"#).utf8)
         } else if url.path == "/v2/voices" {
-            body = Data(#"{"voices":[{"voice_id":"v1","name":"Alice - clear narrator","labels":{"gender":"female","age":"middle_aged","accent":"british","description":"clear"}},{"voice_id":"v2","name":"Bram","labels":{"gender":"male","age":"old","accent":"american"}}],"has_more":false}"#.utf8)
+            body = Data(#"{"voices":[{"voice_id":"v1","name":"Alice - clear narrator","labels":{"gender":"female","age":"middle_aged","accent":"british","description":"clear"}},{"voice_id":"v2","name":"Bram","labels":{"gender":"male","age":"old","accent":"american"}},{"voice_id":"webclone","name":"Web Clone","category":"cloned","labels":{}}],"has_more":false}"#.utf8)
         } else {
             code = 404
         }

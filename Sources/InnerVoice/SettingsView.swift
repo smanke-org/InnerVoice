@@ -226,6 +226,9 @@ struct VoicesSettings: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+        if ElevenLabs.shared.isSetUp, EngineSwitches.shared.isOn(.elevenlabs) {
+            ClonedVoicesSection()
+        }
         Section {
             LabeledContent("Saved audio") {
                 HStack {
@@ -276,6 +279,76 @@ struct ElevenLabsRow: View {
     }
 }
 
+/// Settings › Voices: the ElevenLabs voices cloned from recordings (here or at
+/// elevenlabs.io), to rename or delete. Deleting frees a voice slot.
+struct ClonedVoicesSection: View {
+    @State private var renaming: VoiceInfo?
+    @State private var newName = ""
+    @State private var deleting: VoiceInfo?
+    @State private var busy: String?
+    @State private var error: String?
+    private var eleven: ElevenLabs { .shared }
+    private var clones: [VoiceInfo] { eleven.voices.filter { eleven.clonedIDs.contains($0.voiceID) } }
+
+    var body: some View {
+        Section {
+            if clones.isEmpty {
+                Text("None yet. To clone a voice, open a book that uses ElevenLabs and choose Book › Clone a Voice….")
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(clones) { v in
+                LabeledContent(v.name) {
+                    HStack {
+                        if busy == v.voiceID { ProgressView().controlSize(.small) }
+                        Button("Rename…") { newName = v.name; renaming = v }
+                            .help("Change the name it has in every project and at elevenlabs.io")
+                        Button("Delete…") { deleting = v }
+                            .help("Delete it from your ElevenLabs account and free its voice slot")
+                    }
+                    .controlSize(.small)
+                    .disabled(busy != nil)
+                }
+            }
+            if let error {
+                Label(error, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.secondary)
+            }
+        } header: {
+            HStack(spacing: Space.xs) {
+                Text("Cloned Voices")
+                CloudBadge()
+            }
+        } footer: {
+            Text("Voices you cloned from recordings are kept in your ElevenLabs account, so every project can use them. Casting never chooses them on its own.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .task { if eleven.voices.isEmpty { try? await eleven.refreshVoices() } }
+        .alert("Rename Voice", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("Name", text: $newName)
+            Button("Rename") { if let v = renaming { run(v) { try await eleven.renameVoice(v.voiceID, to: newName) } } }
+                .disabled(newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The new name shows in every project and at elevenlabs.io.")
+        }
+        .alert("Delete “\(deleting?.name ?? "")”?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
+            Button("Delete", role: .destructive) { if let v = deleting { run(v) { try await eleven.deleteVoice(v.voiceID) } } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("It’s removed from your ElevenLabs account, which frees a voice slot. Characters that use it, in any book, will need another voice. This can’t be undone.")
+        }
+    }
+
+    private func run(_ v: VoiceInfo, _ work: @escaping () async throws -> Void) {
+        busy = v.voiceID
+        error = nil
+        Task {
+            defer { busy = nil }
+            do { try await work() } catch { self.error = error.localizedDescription }
+        }
+    }
+}
+
 /// "Cloud", wherever ElevenLabs is named: the one place the book's text leaves the Mac.
 struct CloudBadge: View {
     var body: some View {
@@ -311,7 +384,7 @@ struct ElevenLabsSetupSheet: View {
             warning
             VStack(alignment: .leading, spacing: Space.sm) {
                 Text("1. Get an API key").font(.headline)
-                Text("In ElevenLabs, create an API key (Text to Speech, and read access to Voices and User), then copy it. A free account works to try it.")
+                Text("In ElevenLabs, create an API key (Text to Speech, read access to User, and access to Voices: read, or write to clone voices), then copy it. A free account works to try it; cloning voices needs a paid plan.")
                     .font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack {

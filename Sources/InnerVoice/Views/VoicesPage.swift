@@ -168,7 +168,8 @@ struct VoiceTargetDetail: View {
                     }
                 }
                 if character == nil { CloudNotice(document: document, workspace: workspace) }
-                VoiceChooser(document: document, characterID: character?.id, compact: false)
+                VoiceChooser(document: document, characterID: character?.id, compact: false,
+                             onClone: { workspace.cloneVoice(for: character?.id) })
             }
             .padding(Space.margin)
             .frame(maxWidth: 760, alignment: .leading)
@@ -222,6 +223,8 @@ struct VoiceChooser: View {
     /// nil is the narrator.
     let characterID: UUID?
     var compact = false
+    /// Opens Clone a Voice for this character (only where a window's workspace is at hand).
+    var onClone: (() -> Void)? = nil
     @Environment(\.undoManager) private var undoManager
     @State private var filter: VoiceGender?
     @State private var designDraft = ""
@@ -256,6 +259,7 @@ struct VoiceChooser: View {
             suggestions
             if engine == .qwen || (engine == .mixed && EngineSwitches.shared.usable(.qwen)) { design }
             if let c = character, showsCloudDesign { cloudDesign(c) }
+            if showsCloudDesign, let onClone { cloneOffer(onClone) }
             if !compact { allVoices }
         }
     }
@@ -324,7 +328,8 @@ struct VoiceChooser: View {
 
     @ViewBuilder
     private var suggestions: some View {
-        let voices = VoiceCatalog.voices(for: engine)
+        // Clones are never suggested: a real person's voice goes only where it's put.
+        let voices = ElevenLabs.shared.castable(VoiceCatalog.voices(for: engine))
         if let c = character {
             let best = VoiceCasting.suggestions(for: c, project: document.project, index: document.index, voices: voices, limit: 3)
             VStack(alignment: .leading, spacing: Space.sm) {
@@ -536,9 +541,23 @@ struct VoiceChooser: View {
     // MARK: ElevenLabs designs
 
     /// ElevenLabs can design a voice from a description, for a book that allows ElevenLabs.
-    private var showsCloudDesign: Bool {
-        guard ElevenLabs.shared.isSetUp, document.project.settings.cloudVoicesAllowed != nil else { return false }
-        return engine == .elevenlabs || (engine == .mixed && EngineSwitches.shared.isOn(.elevenlabs))
+    private var showsCloudDesign: Bool { ElevenLabs.cloningOffered(for: document.project) }
+
+    // MARK: ElevenLabs clones
+
+    private func cloneOffer(_ open: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: Space.sm) {
+            HStack(spacing: Space.sm) {
+                Text("Clone a Voice").font(.headline)
+                CloudBadge()
+            }
+            Text("Make a voice from a recording of a real person, with their consent, and save it under a name you choose. It’s kept in your ElevenLabs voices, so every project can use it.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Clone a Voice…", action: open)
+                .help("Record or add a sample of a voice and clone it with ElevenLabs (Book › Clone a Voice…)")
+        }
     }
 
     /// What ElevenLabs is sent: who they are, then their Voice Notes.

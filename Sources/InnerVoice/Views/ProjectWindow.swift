@@ -57,6 +57,9 @@ struct ProjectWindow: View {
         .sheet(isPresented: $workspace.showSeriesVoices, onDismiss: { workspace.seriesSource = nil }) {
             SeriesVoicesSheet(document: document, isPresented: $workspace.showSeriesVoices, preset: workspace.seriesSource)
         }
+        .sheet(isPresented: $workspace.showCloneVoice) {
+            CloneVoiceSheet(document: document, isPresented: $workspace.showCloneVoice, initialTarget: workspace.cloneFor)
+        }
         .sheet(isPresented: $workspace.showBookStats) {
             BookStatsSheet(document: document, isPresented: $workspace.showBookStats)
         }

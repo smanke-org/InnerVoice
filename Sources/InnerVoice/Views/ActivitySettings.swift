@@ -68,6 +68,9 @@ struct ActivitySettings: View {
             if let chars = totals[ActivityKey.elevenLabsCharacters], chars > 0 {
                 LabeledContent("Characters sent to ElevenLabs") { Text(chars.formatted()).monospacedDigit().foregroundStyle(.secondary) }
             }
+            if let cloned = totals[ActivityKey.voicesCloned], cloned > 0 {
+                LabeledContent("Voices cloned") { Text(cloned.formatted()).monospacedDigit().foregroundStyle(.secondary) }
+            }
         }
         .onAppear { store.loadRemotes() }
     }

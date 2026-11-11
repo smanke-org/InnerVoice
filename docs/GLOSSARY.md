@@ -44,7 +44,9 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | Pause | A gap of silence after a sentence, line, paragraph, scene break, chapter title or chapter, set in Settings › Voices › Pauses | gap, silence, break |
 | Playback speed | How fast Play plays (0.75× to 2×), pauses included; Export Audio is always 1× | rate, tempo |
 | From the book | The part of a character's Voice Notes Build Summary writes (age, gender, accent, voice, manner); the narrator's once edited | AI notes, auto notes |
-| Design a Voice from Voice Notes | ElevenLabs designs a new voice from a character's description and Voice Notes (Cloud; uses credits and a voice slot) | clone, generate voice |
+| Design a Voice from Voice Notes | ElevenLabs designs a new voice from a character's description and Voice Notes (Cloud; uses credits and a voice slot) | generate voice |
+| Clone a Voice | Book › Clone a Voice…: ElevenLabs makes a voice from recordings of a real person, saved under a name the narrator chooses in their ElevenLabs account (Cloud; paid plan, one voice slot). Offered only to a book that uses ElevenLabs | voice copy, voice twin, custom voice |
+| Cloned voice | A voice made by Clone a Voice (or at elevenlabs.io); marked Cloned, listed first, never chosen by casting | clone (as a noun in UI), copy |
 | Use Voices from Another Project | Copy voices (and optionally Voice Notes, narrator voice, engine) from an earlier book in a series, after matching its characters to this book's | import cast, series voices, voice transfer |
 | Voice brief | The AI's casting note in Voice Notes: pitch, pace, texture, attitude, and the contrast with scene partners | voice profile, direction |
 | Cloud | Marks ElevenLabs, the one engine that sends text off the Mac | online, remote |

@@ -58,7 +58,7 @@ import SwiftUI
     /// Casts every voice again from the summaries; the narrator's choices stay.
     func castVoicesAgain(undoManager: UndoManager?) {
         let engine = project.engineInUse
-        let voices = VoiceCatalog.voices(for: engine, project: project)
+        let voices = ElevenLabs.shared.castable(VoiceCatalog.voices(for: engine, project: project))
         let index = self.index
         change("Cast Voices", undoManager: undoManager) { p in
             VoiceCasting.cast(&p, index: index, engine: engine, voices: voices)
@@ -84,7 +84,7 @@ enum VoiceCastingRun {
             return v.source == .auto && v.confidence < project.settings.unsureBelow
         }
         guard !open.isEmpty || project.settings.narratorVoice(for: engine) == nil else { return }
-        let voices = VoiceCatalog.voices(for: engine, project: project)
+        let voices = ElevenLabs.shared.castable(VoiceCatalog.voices(for: engine, project: project))
         guard !voices.isEmpty else { return }
         let sure = Set(speaking.filter { !open.contains($0) }.map(\.id))
         document.applyQuietly { p in

@@ -245,6 +245,38 @@ enum Snapshot {
                         capture(w, "\(dir)/elevenlabs-setup-\(mode).png")
                         w.close()
                     }
+                    // Clone a Voice: filled in, and the voice made.
+                    let main = document.project.characters.max(by: { (document.index.stats[$0.id]?.lines ?? 0) < (document.index.stats[$1.id]?.lines ?? 0) })
+                    let target: VoiceTarget = main.map { .character($0.id) } ?? .narrator
+                    let tmp = FileManager.default.temporaryDirectory
+                    let samples = [CloneSample(url: tmp.appending(path: "Ellen reading, take 2.m4a"), seconds: 64, recorded: false),
+                                   CloneSample(url: tmp.appending(path: "rec.m4a"), seconds: 31, recorded: true)]
+                    let allowance = ElevenLabs.CloneAllowance(canClone: true, slotsUsed: 3, slotLimit: 10, tier: "creator")
+                    let made = VoiceInfo(engine: .elevenlabs, voiceID: "clone1", name: "Ellen, warm and low", gender: .neutral, age: .adult, accent: "American", quality: 3, detail: "Cloned")
+                    for (name, result) in [("clone-voice", VoiceInfo?.none), ("clone-voice-done", made)] {
+                        for mode in ["light", "dark"] {
+                            NSApp.appearance = NSAppearance(named: mode == "light" ? .aqua : .darkAqua)
+                            let host = NSHostingController(rootView: CloneVoiceSheet(document: document, isPresented: .constant(true), initialTarget: target,
+                                                                                     presetSamples: samples, presetAllowance: allowance, presetResult: result))
+                            let w = NSWindow(contentViewController: host)
+                            w.styleMask = [.titled]
+                            w.makeKeyAndOrderFront(nil)
+                            try? await Task.sleep(for: .seconds(1.2))
+                            capture(w, "\(dir)/\(name)-\(mode).png")
+                            w.close()
+                        }
+                    }
+                    for mode in ["light", "dark"] {
+                        NSApp.appearance = NSAppearance(named: mode == "light" ? .aqua : .darkAqua)
+                        let host = NSHostingController(rootView: CloneVoiceSheet(document: document, isPresented: .constant(true), initialTarget: target,
+                                                                                 presetSamples: [], presetAllowance: ElevenLabs.CloneAllowance(canClone: false, slotsUsed: 0, slotLimit: 3, tier: "free")))
+                        let w = NSWindow(contentViewController: host)
+                        w.styleMask = [.titled]
+                        w.makeKeyAndOrderFront(nil)
+                        try? await Task.sleep(for: .seconds(1.2))
+                        capture(w, "\(dir)/clone-voice-free-\(mode).png")
+                        w.close()
+                    }
                     SettingsWindow.shared.show(tab: .voices)
                     try? await Task.sleep(for: .seconds(0.9))
                     if let s = SettingsWindow.shared.window { capture(s, "\(dir)/settings-voices-elevenlabs-dark.png") }
