@@ -529,6 +529,67 @@ enum SelfTest {
     /// Clone a Voice: offered only to a book that uses ElevenLabs, sends the recordings and
     /// the name (never book text), only after the narrator confirms the right to clone; the
     /// clone is listed first, never cast on its own, and can be renamed and deleted.
+    /// Clone a Voice on this Mac: the clip is kept in a test folder, listed with the
+    /// Qwen3-TTS voices, never cast on its own, and can be renamed and deleted. With the
+    /// models (APP_SELFTEST_VOICES), a clip made from an Apple voice is cloned and speaks a
+    /// line; APP_SELFTEST_TRANSCRIBE also finds its words with on-device recognition.
+    private static func localClones(_ doc: InnerVoiceDocument, undo: UndoManager) async {
+        let store = LocalClones.shared
+        check("test runs keep cloned voices in a test folder", LocalClones.folder.path.contains("InnerVoice-test-clones"), LocalClones.folder.path)
+        let rate = SpeechAudio.format.sampleRate
+        let tone = (0..<Int(rate * 6)).map { Float(sin(Double($0) * 2 * .pi * 180 / rate) * 0.2) }
+        guard let c = try? store.add(name: "Test Voice", gender: .female, audio: tone, text: "Testing one two three.") else {
+            check("a voice cloned on this Mac is saved", false); return
+        }
+        let info = LocalClones.info(c)
+        check("a voice cloned on this Mac is saved and listed first with Qwen3-TTS",
+              VoiceCatalog.voices(for: .qwen).first?.voiceID == c.voiceID && VoiceCatalog.info(for: info.choice)?.name == "Test Voice"
+              && VoiceCatalog.name(of: info.choice) == "Test Voice")
+        check("casting never gives out a voice cloned on this Mac", !ElevenLabs.shared.castable(VoiceCatalog.voices(for: .qwen)).contains { $0.voiceID == c.voiceID })
+        check("its clip and words are read back", (try? store.sample(for: c.voiceID))?.text == "Testing one two three.")
+        store.rename(c.id, to: "Renamed")
+        check("renaming a cloned voice changes its name everywhere", VoiceCatalog.name(of: info.choice) == "Renamed")
+        // A clip cut at a pause, from a long recording, with the words it says.
+        let clip = CloneAudio.trim([Float](repeating: 0, count: Int(rate)) + tone + [Float](repeating: 0, count: Int(rate)))
+        check("silence before and after a recording is trimmed", abs(Double(clip.count) / rate - 6.2) < 0.1, String(format: "%.2f s", Double(clip.count) / rate))
+
+        if ProcessInfo.processInfo.environment["APP_SELFTEST_VOICES"] != nil, ModelSpeech.isInstalled(.qwen),
+           let apple = VoiceCatalog.appleVoices().first(where: { $0.quality >= 2 }) ?? VoiceCatalog.appleVoices().first {
+            // The "recording": an Apple voice reading two sentences, written to a file.
+            let said = "The train was late again, so I walked. It was the kind of autumn morning that makes you forgive the whole year."
+            do {
+                let source = try await SpeechRenderer.shared.render(SpeechRequest(text: said, choice: apple.choice, tone: .neutral, kind: .spoken))
+                let file = FileManager.default.temporaryDirectory.appending(path: "InnerVoice-test-recording.caf")
+                SpeechRenderer.write(source, to: file)
+                let audio = try CloneAudio.load([file])
+                var words = said
+                if ProcessInfo.processInfo.environment["APP_SELFTEST_TRANSCRIBE"] != nil {
+                    let found = await CloneAudio.transcribe(audio)
+                    check("the words in a recording are found on this Mac", found.map { $0.text.lowercased().contains("autumn morning") } == true, found?.text ?? "none")
+                    if let found, let span = CloneClip.span(found.words) { words = CloneClip.text(found.text, upTo: span.textEnd) }
+                }
+                let made = try store.add(name: "Apple Reader", gender: apple.gender, audio: ModelSpeech.level(audio), text: words)
+                let start = Date()
+                let line = try await SpeechRenderer.shared.render(SpeechRequest(text: "I told you the tide would turn before morning, and it did.",
+                                                                                choice: LocalClones.info(made).choice, tone: .neutral, kind: .spoken))
+                let seconds = Double(line.frameLength) / line.format.sampleRate
+                check("a voice cloned on this Mac speaks a line", seconds > 1.5 && seconds < 20,
+                      String(format: "%.1f s of audio in %.1f s", seconds, Date().timeIntervalSince(start)))
+                if let out = ProcessInfo.processInfo.environment["APP_SELFTEST_AUDIO_OUT"].map({ URL(fileURLWithPath: $0) }) {
+                    SpeechRenderer.write(source, to: out.appending(path: "clone-source.caf"))
+                    SpeechRenderer.write(line, to: out.appending(path: "clone-line.caf"))
+                }
+                store.delete(made.id)
+                try? FileManager.default.removeItem(at: file)
+            } catch {
+                check("a voice cloned on this Mac speaks a line", false, error.localizedDescription)
+            }
+        }
+        store.delete(c.id)
+        check("deleting a cloned voice removes it and its clip", !store.clones.contains { $0.id == c.id } && (try? store.sample(for: c.voiceID)) == nil
+              && VoiceCatalog.name(of: info.choice) == "Missing voice")
+    }
+
     private static func voiceCloning(_ doc: InnerVoiceDocument, undo: UndoManager) async {
         let eleven = ElevenLabs.shared
         check("Clone a Voice is offered to a book that uses ElevenLabs", ElevenLabs.cloningOffered(for: doc.project))
@@ -920,6 +981,7 @@ enum SelfTest {
         if ProcessInfo.processInfo.environment["APP_SELFTEST_VOICES"] != nil { await modelVoices(doc, undo: undo) }
         if ProcessInfo.processInfo.environment["APP_SELFTEST_DOWNLOAD"] != nil { await voiceDownload() }
         await elevenLabs(doc, undo: undo)
+        await localClones(doc, undo: undo)
         redrawCost(doc)
         seriesVoices(doc, undo: undo)
 

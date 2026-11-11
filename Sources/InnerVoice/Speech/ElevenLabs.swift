@@ -56,9 +56,11 @@ final class ElevenLabs {
         }
     }
 
-    /// Voices casting may choose from: every voice except clones.
+    /// Voices casting may choose from: every voice except clones (ElevenLabs' and this Mac's).
     func castable(_ list: [VoiceInfo]) -> [VoiceInfo] {
-        clonedIDs.isEmpty ? list : list.filter { $0.engine != .elevenlabs || !clonedIDs.contains($0.voiceID) }
+        list.filter { v in
+            !(v.engine == .elevenlabs && clonedIDs.contains(v.voiceID)) && !LocalClones.isClone(v.choice)
+        }
     }
 
     /// Voice cloning is offered only to a book that uses ElevenLabs: set up, allowed for

@@ -39,6 +39,11 @@ enum ModelSpeech {
                 if n > 0 { r.sound = nil }
                 samples += try await MLXSpeech.shared.orpheus(text: OrpheusText.make(r), voice: request.choice.voiceID,
                                                               seed: seed(piece + request.choice.voiceID))
+            case .qwen where LocalClones.isClone(request.choice):
+                // A voice cloned on this Mac: every line from the narrator's own clip.
+                let sample = try LocalClones.shared.sample(for: request.choice.voiceID)
+                samples += try await MLXSpeech.shared.qwenClone(text: piece, reference: sample.audio, referenceText: sample.text,
+                                                                seed: seed(piece + request.choice.voiceID))
             case .qwen:
                 let design = request.choice.design ?? VoiceResolver.fallback(.qwen)?.design ?? ""
                 let sample = try await QwenSamples.sample(design: design, tone: QwenSamples.sampleTone(for: request))

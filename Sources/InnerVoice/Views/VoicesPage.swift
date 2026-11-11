@@ -257,9 +257,9 @@ struct VoiceChooser: View {
             }
             if ElevenLabs.shared.isSetUp, ElevenLabs.shared.voices.isEmpty, engine == .elevenlabs || engine == .mixed { cloudVoicesMissing }
             suggestions
+            if let onClone { cloneOffer(onClone) }
             if engine == .qwen || (engine == .mixed && EngineSwitches.shared.usable(.qwen)) { design }
             if let c = character, showsCloudDesign { cloudDesign(c) }
-            if showsCloudDesign, let onClone { cloneOffer(onClone) }
             if !compact { allVoices }
         }
     }
@@ -543,20 +543,17 @@ struct VoiceChooser: View {
     /// ElevenLabs can design a voice from a description, for a book that allows ElevenLabs.
     private var showsCloudDesign: Bool { ElevenLabs.cloningOffered(for: document.project) }
 
-    // MARK: ElevenLabs clones
+    // MARK: Clones
 
     private func cloneOffer(_ open: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: Space.sm) {
-            HStack(spacing: Space.sm) {
-                Text("Clone a Voice").font(.headline)
-                CloudBadge()
-            }
-            Text("Make a voice from a recording of a real person, with their consent, and save it under a name you choose. It’s kept in your ElevenLabs voices, so every project can use it.")
+            Text("Clone a Voice").font(.headline)
+            Text("Make a voice from a recording of a real person, with their consent: on this Mac with Qwen3-TTS (free, nothing leaves the Mac), or with ElevenLabs. Every project can use it.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             Button("Clone a Voice…", action: open)
-                .help("Record or add a sample of a voice and clone it with ElevenLabs (Book › Clone a Voice…)")
+                .help("Record or add a sample of a voice and clone it (Book › Clone a Voice…)")
         }
     }
 

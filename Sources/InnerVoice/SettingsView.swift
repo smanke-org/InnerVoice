@@ -222,6 +222,7 @@ struct VoicesSettings: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+        LocalClonesSection()
         if ElevenLabs.shared.isSetUp, EngineSwitches.shared.isOn(.elevenlabs) {
             ClonedVoicesSection()
         }
@@ -275,6 +276,57 @@ struct ElevenLabsRow: View {
     }
 }
 
+/// Settings › Voices: voices cloned on this Mac (Qwen3-TTS), to listen to, rename or delete.
+struct LocalClonesSection: View {
+    @State private var renaming: LocalClones.Clone?
+    @State private var newName = ""
+    @State private var deleting: LocalClones.Clone?
+    private var store: LocalClones { .shared }
+
+    var body: some View {
+        Section {
+            if store.clones.isEmpty {
+                Text("None yet. To clone a voice, choose Book › Clone a Voice… in a book with voices.")
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(store.clones) { c in
+                LabeledContent {
+                    HStack {
+                        Button("Rename…") { newName = c.name; renaming = c }
+                            .help("Change the name it has in every project")
+                        Button("Delete…") { deleting = c }
+                            .help("Delete the voice and its recording from this Mac")
+                    }
+                    .controlSize(.small)
+                } label: {
+                    Text(c.name)
+                    Text("\(c.gender.title) · \(CloneVoiceSheet.clock(c.seconds)) clip · \(c.created.formatted(date: .abbreviated, time: .omitted))")
+                }
+            }
+        } header: {
+            Text("Voices Cloned on This Mac")
+        } footer: {
+            Text("Qwen3-TTS speaks these from a short recording kept on this Mac, so every project here can use them. Casting never chooses them on its own.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .alert("Rename Voice", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("Name", text: $newName)
+            Button("Rename") { if let c = renaming { store.rename(c.id, to: newName) } }
+                .disabled(newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The new name shows in every project.")
+        }
+        .alert("Delete “\(deleting?.name ?? "")”?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
+            Button("Delete", role: .destructive) { if let c = deleting { store.delete(c.id) } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The voice and its recording are removed from this Mac. Characters that use it, in any book, will need another voice. This can’t be undone.")
+        }
+    }
+}
+
 /// Settings › Voices: the ElevenLabs voices cloned from recordings (here or at
 /// elevenlabs.io), to rename or delete. Deleting frees a voice slot.
 struct ClonedVoicesSection: View {
@@ -289,7 +341,7 @@ struct ClonedVoicesSection: View {
     var body: some View {
         Section {
             if clones.isEmpty {
-                Text("None yet. To clone a voice, open a book that uses ElevenLabs and choose Book › Clone a Voice….")
+                Text("None yet. To clone a voice with ElevenLabs, choose Book › Clone a Voice… and ElevenLabs (Cloud).")
                     .foregroundStyle(.secondary)
             }
             ForEach(clones) { v in

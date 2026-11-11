@@ -1077,3 +1077,29 @@ private let appleVoices = [
     #expect(index.contextRange(third, around: 5, in: p) == 0...5)
     #expect(index.contextRange(p.chapters[0].paragraphs[0].id, around: 5, in: p) == 0...0)
 }
+
+// MARK: - Cloning a voice on this Mac
+
+@Test func cloneClipCutsAtAPause() {
+    // Words every 0.5 s, with a long pause after the word ending at 9.3 s.
+    var words: [CloneClip.Word] = []
+    var t = 0.4
+    var text = 0
+    for i in 0..<60 {
+        let end = t + 0.4
+        text += 5
+        words.append(.init(start: t, end: end, textEnd: text))
+        t = end + (abs(end - 9.3) < 0.01 ? 0.9 : 0.1)
+        _ = i
+    }
+    let span = CloneClip.span(words)!
+    #expect(span.seconds <= CloneClip.longest)
+    #expect(abs(span.start - 0.25) < 0.001)
+    // The longest pause after 8 s wins.
+    #expect(abs(words.first { $0.textEnd == span.textEnd }!.end - 9.3) < 0.01)
+    // A short recording is used whole.
+    let short = Array(words.prefix(10))
+    #expect(CloneClip.span(short)?.textEnd == short.last!.textEnd)
+    #expect(CloneClip.span([]) == nil)
+    #expect(CloneClip.text("Hello there. More words", upTo: 12) == "Hello there.")
+}

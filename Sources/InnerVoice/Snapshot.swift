@@ -249,11 +249,16 @@ enum Snapshot {
                                    CloneSample(url: tmp.appending(path: "rec.m4a"), seconds: 31, recorded: true)]
                     let allowance = ElevenLabs.CloneAllowance(canClone: true, slotsUsed: 3, slotLimit: 10, tier: "creator")
                     let made = VoiceInfo(engine: .elevenlabs, voiceID: "clone1", name: "Ellen, warm and low", gender: .neutral, age: .adult, accent: "American", quality: 3, detail: "Cloned")
-                    for (name, result) in [("clone-voice", VoiceInfo?.none), ("clone-voice-done", made)] {
+                    let madeHere = VoiceInfo(engine: .qwen, voiceID: LocalClones.prefix + "x", name: "Ellen, warm and low", gender: .female, accent: "", quality: 3, detail: "Cloned on this Mac")
+                    let words = "The train was late again, so I walked. It was the kind of autumn morning that makes you forgive the whole year."
+                    let shots: [(String, VoiceInfo?, CloneVoiceSheet.Place)] = [("clone-voice", nil, .elevenlabs), ("clone-voice-done", made, .elevenlabs),
+                                                                                ("clone-voice-mac", nil, .mac), ("clone-voice-mac-done", madeHere, .mac)]
+                    for (name, result, place) in shots {
                         for mode in ["light", "dark"] {
                             NSApp.appearance = NSAppearance(named: mode == "light" ? .aqua : .darkAqua)
                             let host = NSHostingController(rootView: CloneVoiceSheet(document: document, isPresented: .constant(true), initialTarget: target,
-                                                                                     presetSamples: samples, presetAllowance: allowance, presetResult: result))
+                                                                                     presetSamples: samples, presetAllowance: allowance, presetResult: result,
+                                                                                     presetPlace: place, presetClip: (12.4, words)))
                             let w = NSWindow(contentViewController: host)
                             w.styleMask = [.titled]
                             w.makeKeyAndOrderFront(nil)
@@ -265,7 +270,8 @@ enum Snapshot {
                     for mode in ["light", "dark"] {
                         NSApp.appearance = NSAppearance(named: mode == "light" ? .aqua : .darkAqua)
                         let host = NSHostingController(rootView: CloneVoiceSheet(document: document, isPresented: .constant(true), initialTarget: target,
-                                                                                 presetSamples: [], presetAllowance: ElevenLabs.CloneAllowance(canClone: false, slotsUsed: 0, slotLimit: 3, tier: "free")))
+                                                                                 presetSamples: [], presetAllowance: ElevenLabs.CloneAllowance(canClone: false, slotsUsed: 0, slotLimit: 3, tier: "free"),
+                                                                                 presetPlace: .elevenlabs))
                         let w = NSWindow(contentViewController: host)
                         w.styleMask = [.titled]
                         w.makeKeyAndOrderFront(nil)

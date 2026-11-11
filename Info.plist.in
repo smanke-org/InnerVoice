@@ -56,8 +56,10 @@
 	<true/>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 Steve Manke. All rights reserved.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>InnerVoice finds the words in a recording you clone a voice from, on this Mac, so the clone knows what the recording says.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>InnerVoice records short pronunciation samples when you click Record in the Pronunciations list.</string>
+	<string>InnerVoice records short pronunciation samples when you click Record in the Pronunciations list, and a voice to clone when you click Record in Clone a Voice.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>UTExportedTypeDeclarations</key>

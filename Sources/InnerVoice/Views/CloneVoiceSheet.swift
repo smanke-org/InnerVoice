@@ -16,24 +16,37 @@ struct CloneSample: Identifiable, Equatable {
 }
 
 /// Clone a Voice (Book › Clone a Voice…, or the Voices page): record or add a sample of a
-/// real person's voice, name it, confirm the right to clone it, and ElevenLabs makes a voice
-/// that's saved in the narrator's ElevenLabs account, so every project can use it. Offered
-/// only to a book that uses ElevenLabs. The recordings and the name are all that's sent;
-/// no book text. Nothing is kept here: added files stay where they are, recordings are
-/// deleted when the sheet closes unless saved.
+/// real person's voice, name it, confirm the right to clone it, and make a voice every
+/// project can use. Two ways:
+/// - On This Mac: Qwen3-TTS speaks from a clip of up to 15 seconds and what it says (found
+///   on this Mac); nothing leaves the Mac; free. Saved in Cloned Voices (`LocalClones`).
+/// - ElevenLabs: the recordings and the name go to ElevenLabs and the voice is kept in the
+///   narrator's account. Needs ElevenLabs set up, the book's OK, and a paid plan. No book text.
+/// Nothing else is kept: added files stay where they are, recordings are deleted when the
+/// sheet closes unless saved.
 struct CloneVoiceSheet: View {
+    enum Place: String, CaseIterable, Identifiable {
+        case mac, elevenlabs
+        var id: String { rawValue }
+        var title: String { self == .mac ? "On This Mac" : "ElevenLabs (Cloud)" }
+    }
+
     @ObservedObject var document: InnerVoiceDocument
     @Binding var isPresented: Bool
     let initialTarget: VoiceTarget
-    /// Snapshots: samples and the plan, without a microphone or a network.
+    /// Snapshots: samples, the plan and the clip, without a microphone, a network or a model.
     var presetSamples: [CloneSample]? = nil
     var presetAllowance: ElevenLabs.CloneAllowance? = nil
     var presetResult: VoiceInfo? = nil
+    var presetPlace: Place? = nil
+    var presetClip: (seconds: Double, text: String)? = nil
 
     @Environment(\.undoManager) private var undoManager
+    @State private var place: Place = .mac
     @State private var name = ""
     /// nil: no one yet, just save the voice.
     @State private var target: VoiceTarget?
+    @State private var gender: VoiceGender = .neutral
     @State private var samples: [CloneSample] = []
     @State private var removeNoise = false
     @State private var rightsConfirmed = false
@@ -44,9 +57,19 @@ struct CloneVoiceSheet: View {
     @State private var recorder = CloneRecorder()
     @State private var player = SamplePlayer()
     @State private var dropping = false
+    // On This Mac: the clip and what it says.
+    @State private var clip: [Float] = []
+    @State private var clipSeconds: Double = 0
+    @State private var clipText = ""
+    @State private var clipFile: URL?
+    @State private var preparing = false
+    @State private var recognized = true
+    @State private var prepareTask: Task<Void, Never>?
     @FocusState private var nameFocused: Bool
 
     private var totalSeconds: Double { samples.reduce(0) { $0 + $1.seconds } }
+    private var qwenReady: Bool { ModelSpeech.isInstalled(.qwen) }
+    private var elevenReady: Bool { ElevenLabs.cloningOffered(for: document.project) }
 
     private var cast: [BookCharacter] {
         let index = document.index
@@ -66,7 +89,7 @@ struct CloneVoiceSheet: View {
         VStack(alignment: .leading, spacing: Space.lg) {
             HStack(spacing: Space.sm) {
                 Text("Clone a Voice").font(.title2.weight(.semibold))
-                CloudBadge()
+                if place == .elevenlabs { CloudBadge() }
             }
             if let result {
                 done(result)
@@ -78,27 +101,50 @@ struct CloneVoiceSheet: View {
         .frame(width: 600)
         .onAppear {
             target = initialTarget
+            gender = Self.gender(for: initialTarget, document: document)
+            // ElevenLabs first only for a book that speaks with it; otherwise this Mac.
+            place = presetPlace ?? (elevenReady && document.project.engineInUse == .elevenlabs ? .elevenlabs : .mac)
             if let presetSamples { samples = presetSamples }
-            if let presetAllowance { allowance = presetAllowance } else { loadAllowance() }
+            if let presetAllowance { allowance = presetAllowance } else if elevenReady { loadAllowance() }
             if let presetResult { result = presetResult }
+            if let presetClip { clipSeconds = presetClip.seconds; clipText = presetClip.text }
             nameFocused = true
         }
         .onDisappear {
+            prepareTask?.cancel()
             recorder.cancel()
             player.stop()
             for s in samples where s.recorded { try? FileManager.default.removeItem(at: s.url) }
+            if let clipFile { try? FileManager.default.removeItem(at: clipFile) }
         }
+        .onChange(of: samples) { if presetClip == nil { prepareClip() } }
+        .onChange(of: target) { _, t in gender = Self.gender(for: t, document: document) }
+    }
+
+    /// The gender the book gives the character the voice is for, as a starting point.
+    static func gender(for target: VoiceTarget?, document: InnerVoiceDocument) -> VoiceGender {
+        guard let id = target?.characterID, let c = document.project.character(id) else { return .neutral }
+        return VoiceCasting.profile(c, project: document.project, index: document.index).gender ?? .neutral
     }
 
     // MARK: The form
 
     private var form: some View {
         VStack(alignment: .leading, spacing: Space.lg) {
-            Text("ElevenLabs makes a voice from a recording of one person and saves it in your ElevenLabs voices under the name you choose, so every InnerVoice project (and elevenlabs.io) can use it.")
+            Picker("Clone", selection: $place) {
+                ForEach(Place.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .help("Where the voice is made and kept")
+
+            Text(place == .mac
+                 ? "Qwen3-TTS learns the voice from up to 15 seconds of a recording and speaks any line in it. The recording and the voice stay on this Mac, and every InnerVoice project can use it. Free."
+                 : "ElevenLabs makes a voice from a recording of one person and saves it in your ElevenLabs voices under the name you choose, so every InnerVoice project (and elevenlabs.io) can use it.")
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            planNotice
+            if place == .mac { macNotice } else { cloudNotice }
 
             Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: Space.md, verticalSpacing: Space.md) {
                 GridRow {
@@ -106,7 +152,8 @@ struct CloneVoiceSheet: View {
                     TextField("Name", text: $name, prompt: Text("Ellen, warm and low"))
                         .textFieldStyle(.roundedBorder)
                         .focused($nameFocused)
-                        .help("The name the voice has in every project’s voice list and at elevenlabs.io")
+                        .help(place == .mac ? "The name the voice has in every project’s voice list"
+                                            : "The name the voice has in every project’s voice list and at elevenlabs.io")
                 }
                 GridRow {
                     Text("Use for:")
@@ -120,25 +167,44 @@ struct CloneVoiceSheet: View {
                     .fixedSize()
                     .help("Who gets the new voice in this book once it’s made. You can give it to anyone later.")
                 }
+                if place == .mac {
+                    GridRow {
+                        Text("Voice:")
+                        Picker("Voice", selection: $gender) {
+                            ForEach(VoiceGender.allCases, id: \.self) { Text($0.title).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .fixedSize()
+                        .help("Lists the voice with the female, male or neutral voices")
+                    }
+                }
             }
 
             samplesSection
+            if place == .mac, !samples.isEmpty { clipSection }
 
             VStack(alignment: .leading, spacing: Space.sm) {
-                Toggle("Remove background noise", isOn: $removeNoise)
-                    .help("ElevenLabs cleans up the recordings first. Leave it off for clean recordings: it can make them sound worse.")
+                if place == .elevenlabs {
+                    Toggle("Remove background noise", isOn: $removeNoise)
+                        .help("ElevenLabs cleans up the recordings first. Leave it off for clean recordings: it can make them sound worse.")
+                }
                 Toggle(isOn: $rightsConfirmed) {
-                    Text("I have the right and the consent of the person whose voice this is to clone it, and I accept ElevenLabs’ terms for voice cloning.")
+                    Text(place == .mac
+                         ? "I have the right and the consent of the person whose voice this is to clone it."
+                         : "I have the right and the consent of the person whose voice this is to clone it, and I accept ElevenLabs’ terms for voice cloning.")
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                Text("The recordings and the name are sent to ElevenLabs and kept in your ElevenLabs account. Cloning uses one of your plan’s voice slots. No text from your book is sent.")
+                Text(place == .mac
+                     ? "The recordings never leave this Mac. The words in them are found on this Mac too."
+                     : "The recordings and the name are sent to ElevenLabs and kept in your ElevenLabs account. Cloning uses one of your plan’s voice slots. No text from your book is sent.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             if cloning {
-                ProgressView { Text("Cloning the voice with ElevenLabs…").font(.callout) }
+                ProgressView { Text(place == .mac ? "Saving the voice…" : "Cloning the voice with ElevenLabs…").font(.callout) }
                     .progressViewStyle(.linear)
             }
             if let error {
@@ -160,24 +226,77 @@ struct CloneVoiceSheet: View {
         }
     }
 
+    private var minimumSeconds: Double { place == .mac ? CloneClip.shortest : ElevenLabs.cloneMinimumSeconds }
+
     private var canClone: Bool {
-        !cloning && !recorder.isRecording && rightsConfirmed
-            && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && totalSeconds >= ElevenLabs.cloneMinimumSeconds
-            && allowance?.canClone != false && allowance?.slotsFull != true
+        guard !cloning, !recorder.isRecording, rightsConfirmed, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        switch place {
+        case .mac:
+            return qwenReady && !preparing && clipSeconds >= CloneClip.shortest
+                && !clipText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .elevenlabs:
+            return elevenReady && totalSeconds >= ElevenLabs.cloneMinimumSeconds
+                && allowance?.canClone != false && allowance?.slotsFull != true
+        }
     }
 
     private var cloneHelp: String {
+        if place == .mac, !qwenReady { return "Download Qwen3-TTS first" }
+        if place == .elevenlabs, !elevenReady { return "Set up ElevenLabs for this book first" }
         if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Name the voice first" }
-        if totalSeconds < ElevenLabs.cloneMinimumSeconds { return "Add at least 10 seconds of the voice" }
+        if place == .mac, preparing { return "Finding the words in the recording…" }
+        if place == .mac, clipSeconds < CloneClip.shortest { return "Add at least \(Int(CloneClip.shortest)) seconds of the voice" }
+        if place == .mac, clipText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Type what the clip says" }
+        if place == .elevenlabs, totalSeconds < ElevenLabs.cloneMinimumSeconds { return "Add at least 10 seconds of the voice" }
         if !rightsConfirmed { return "Confirm you have the right to clone this voice" }
-        return "Send the recordings to ElevenLabs and save the voice as “\(name)”"
+        return place == .mac ? "Save the voice as “\(name)” on this Mac" : "Send the recordings to ElevenLabs and save the voice as “\(name)”"
+    }
+
+    /// On This Mac needs Qwen3-TTS downloaded (about 6 GB, once).
+    @ViewBuilder
+    private var macNotice: some View {
+        if !qwenReady, let pack = VoicePack.pack(for: .qwen) {
+            VStack(alignment: .leading, spacing: Space.sm) {
+                Label("Cloning on this Mac uses Qwen3-TTS, a free download (\(pack.sizeDescription), once).", systemImage: "arrow.down.circle")
+                    .font(.callout)
+                VoicePackRow(pack: pack)
+            }
+            .padding(Space.md)
+            .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 10))
+        } else if !(document.project.engineInUse == .qwen || document.project.engineInUse == .mixed) {
+            Text("This book speaks with \(document.project.engineInUse.title). Voices cloned on this Mac speak with Qwen3-TTS: to hear one in this book, choose Qwen3-TTS or Mix Engines in the toolbar.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// ElevenLabs needs a key and the narrator's yes (Settings), this book's OK, and a paid plan.
+    @ViewBuilder
+    private var cloudNotice: some View {
+        if !ElevenLabs.shared.isSetUp {
+            notice("Set up ElevenLabs in Settings › Voices first: your API key and your OK to send text to ElevenLabs.",
+                   button: "Open Settings") { SystemHooks.openSettings() }
+        } else if document.project.settings.cloudVoicesAllowed == nil {
+            notice("This book hasn’t allowed ElevenLabs yet. Allowing it sends the lines its ElevenLabs voices speak, as text.",
+                   button: "Allow for This Book") {
+                document.setCloudVoicesAllowed(true, undoManager: undoManager)
+                loadAllowance()
+            }
+        } else if !elevenReady {
+            Text("This book speaks with \(document.project.engineInUse.title). You can still clone a voice with ElevenLabs; to hear it in this book, choose ElevenLabs or Mix Engines in the toolbar.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        } else {
+            planNotice
+        }
     }
 
     @ViewBuilder
     private var planNotice: some View {
         if let a = allowance, !a.canClone {
-            notice("Voice cloning needs a paid ElevenLabs plan (Starter or above). Your plan doesn’t include it.",
+            notice("Voice cloning needs a paid ElevenLabs plan (Starter or above). Your plan doesn’t include it. Cloning On This Mac is free.",
                    button: "See Plans") { NSWorkspace.shared.open(ElevenLabs.plansPage) }
         } else if let a = allowance, a.slotsFull {
             notice("All \(a.slotLimit) of your plan’s voice slots are in use. Delete a voice you no longer need in Settings › Voices, or at elevenlabs.io.",
@@ -210,7 +329,7 @@ struct CloneVoiceSheet: View {
                 Text(durationSummary)
                     .font(.callout)
                     .monospacedDigit()
-                    .foregroundStyle(totalSeconds > 0 && totalSeconds < ElevenLabs.cloneMinimumSeconds ? Color(nsColor: .attention) : .secondary)
+                    .foregroundStyle(totalSeconds > 0 && totalSeconds < minimumSeconds ? Color(nsColor: .attention) : .secondary)
             }
             VStack(spacing: 0) {
                 if samples.isEmpty, !recorder.isRecording {
@@ -239,7 +358,9 @@ struct CloneVoiceSheet: View {
                 Spacer()
             }
             if recorder.isRecording || samples.isEmpty { readAloud }
-            Text("1 to 2 minutes of one person speaking clearly works best, with no music, echo or other voices. Keep the same tone and distance from the microphone throughout.")
+            Text(place == .mac
+                 ? "15 to 30 seconds of one person speaking clearly is plenty, with no music, echo or other voices. The first 15 seconds of speech are used."
+                 : "1 to 2 minutes of one person speaking clearly works best, with no music, echo or other voices. Keep the same tone and distance from the microphone throughout.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -248,9 +369,11 @@ struct CloneVoiceSheet: View {
 
     private var durationSummary: String {
         let t = totalSeconds
-        if t == 0 { return "At least 10 seconds" }
+        let least = Int(minimumSeconds)
+        if t == 0 { return "At least \(least) seconds" }
         let time = Self.clock(t)
-        if t < ElevenLabs.cloneMinimumSeconds { return "\(time) in all. At least 0:10 is needed." }
+        if t < minimumSeconds { return "\(time) in all. At least \(Self.clock(minimumSeconds)) is needed." }
+        if place == .mac { return t > CloneClip.longest ? "\(time) in all. The first 0:15 is used." : "\(time) in all" }
         if t < ElevenLabs.cloneBestSeconds.lowerBound { return "\(time) in all. A minute or more sounds better." }
         if t > ElevenLabs.cloneMostSeconds { return "\(time) in all. Past 3:00 adds little." }
         return "\(time) in all, a good length"
@@ -324,23 +447,114 @@ struct CloneVoiceSheet: View {
     We stood at the door for a long moment. Then I laughed, because what else could I do, and I knocked three times.
     """
 
+    // MARK: The clip (On This Mac)
+
+    /// The part the voice is learned from, and what it says (editable: the clone copies the
+    /// voice best when the words match exactly).
+    private var clipSection: some View {
+        VStack(alignment: .leading, spacing: Space.sm) {
+            HStack {
+                Text("The Clip").font(.headline)
+                Spacer()
+                if preparing {
+                    ProgressView().controlSize(.small)
+                    Text("Finding the words…").font(.callout).foregroundStyle(.secondary)
+                } else if clipSeconds > 0 {
+                    if let clipFile {
+                        Button { player.toggle(clipFile) } label: {
+                            Label(player.playing == clipFile ? "Stop" : "Play Clip", systemImage: player.playing == clipFile ? "stop.fill" : "play.fill")
+                        }
+                        .controlSize(.small)
+                        .help("Hear the part the voice is learned from")
+                    }
+                    Text(Self.clock(clipSeconds)).monospacedDigit().foregroundStyle(.secondary)
+                }
+            }
+            Text(recognized ? "What the clip says. Fix any word that’s wrong: the clone copies the voice best when every word matches."
+                            : "InnerVoice couldn’t find the words on this Mac. Type exactly what the clip says.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            TextEditor(text: $clipText)
+                .font(.callout)
+                .frame(height: 64)
+                .scrollContentBackground(.hidden)
+                .padding(Space.xs)
+                .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 6))
+                .disabled(preparing)
+                .accessibilityLabel("What the clip says")
+        }
+    }
+
+    /// Joins the recordings, finds the words on this Mac, and cuts the clip at a pause.
+    private func prepareClip() {
+        prepareTask?.cancel()
+        let urls = samples.map(\.url)
+        guard !urls.isEmpty else {
+            clip = []; clipSeconds = 0; clipText = ""
+            return
+        }
+        preparing = true
+        prepareTask = Task {
+            defer { if !Task.isCancelled { preparing = false } }
+            do {
+                let audio = try await Task.detached { try CloneAudio.load(urls) }.value
+                guard !Task.isCancelled else { return }
+                let rate = SpeechAudio.format.sampleRate
+                var piece = audio
+                var text = ""
+                recognized = false
+                if let found = await CloneAudio.transcribe(audio), let span = CloneClip.span(found.words) {
+                    let from = Int(span.start * rate), to = min(audio.count, Int(span.end * rate))
+                    if from < to { piece = Array(audio[from..<to]) }
+                    text = CloneClip.text(found.text, upTo: span.textEnd)
+                    recognized = true
+                } else {
+                    piece = Array(audio.prefix(Int(CloneClip.longest * rate)))
+                }
+                guard !Task.isCancelled else { return }
+                clip = ModelSpeech.level(piece)
+                clipSeconds = Double(clip.count) / rate
+                clipText = text
+                if let old = clipFile { try? FileManager.default.removeItem(at: old) }
+                let file = FileManager.default.temporaryDirectory.appending(path: "InnerVoice-clip-\(UUID().uuidString).caf")
+                SpeechRenderer.write(try ModelSpeech.buffer(clip), to: file)
+                clipFile = file
+                if clipSeconds < CloneClip.shortest { error = LocalClones.CloneError.tooShort.localizedDescription } else { error = nil }
+            } catch {
+                self.error = error.localizedDescription
+            }
+        }
+    }
+
     // MARK: Done
 
     private func done(_ v: VoiceInfo) -> some View {
         let character: BookCharacter? = target?.characterID.flatMap { document.project.character($0) }
+        let engine = document.project.engineInUse
+        // A voice is heard in a book that speaks with its engine, or mixes engines.
+        let fits = engine == .mixed || engine == v.engine
         return VStack(alignment: .leading, spacing: Space.lg) {
-            Label("“\(v.name)” is saved in your ElevenLabs voices.", systemImage: "checkmark.circle.fill")
+            Label(v.engine == .qwen ? "“\(v.name)” is saved on this Mac." : "“\(v.name)” is saved in your ElevenLabs voices.",
+                  systemImage: "checkmark.circle.fill")
                 .font(.headline)
-            Text("It’s listed first among the ElevenLabs voices in every project, marked Cloned. Casting never chooses it on its own: it goes only where you put it. Rename or delete it in Settings › Voices.")
+            Text(v.engine == .qwen
+                 ? "It’s listed first among the Qwen3-TTS voices in every project, marked Cloned. Casting never chooses it on its own: it goes only where you put it. Rename or delete it in Settings › Voices."
+                 : "It’s listed first among the ElevenLabs voices in every project, marked Cloned. Casting never chooses it on its own: it goes only where you put it. Rename or delete it in Settings › Voices.")
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            if !fits {
+                Text("This book speaks with \(engine.title). To hear “\(v.name)” in it, choose \(v.engine.title) or Mix Engines in the toolbar, then pick it on the Voices page.")
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Button("Play", systemImage: "play.fill") {
                 PlayCommand.audition(v.choice, character: character, document: document)
             }
             .help("Hear the new voice say \(character.map { "one of \($0.firstName)’s lines" } ?? "a line")")
             HStack {
                 Spacer()
-                if let who = targetName(target) {
+                if fits, let who = targetName(target) {
                     Button("Done") { isPresented = false }
                         .keyboardShortcut(.cancelAction)
                     Button("Use for \(who)") {
@@ -412,18 +626,28 @@ struct CloneVoiceSheet: View {
     private func clone() {
         guard canClone else { return }
         player.stop()
-        cloning = true
         error = nil
-        let urls = samples.map(\.url)
-        Task {
-            defer { cloning = false }
+        switch place {
+        case .mac:
             do {
-                result = try await ElevenLabs.shared.cloneVoice(name: name, samples: urls, removeBackgroundNoise: removeNoise,
-                                                                labels: [:], rightsConfirmed: rightsConfirmed)
-            } catch is CancellationError {
+                let c = try LocalClones.shared.add(name: name, gender: gender, audio: clip, text: clipText)
+                result = LocalClones.info(c)
             } catch {
                 self.error = error.localizedDescription
-                if case ElevenLabsError.voiceSlotsFull = error { allowance?.slotsUsed = allowance?.slotLimit ?? 0 }
+            }
+        case .elevenlabs:
+            cloning = true
+            let urls = samples.map(\.url)
+            Task {
+                defer { cloning = false }
+                do {
+                    result = try await ElevenLabs.shared.cloneVoice(name: name, samples: urls, removeBackgroundNoise: removeNoise,
+                                                                    labels: [:], rightsConfirmed: rightsConfirmed)
+                } catch is CancellationError {
+                } catch {
+                    self.error = error.localizedDescription
+                    if case ElevenLabsError.voiceSlotsFull = error { allowance?.slotsUsed = allowance?.slotLimit ?? 0 }
+                }
             }
         }
     }
