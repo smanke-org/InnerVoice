@@ -71,8 +71,8 @@ enum DebugSystemTest {
         check(status.items.contains { $0.plainTitle == "New from Manuscript…" }, "menu bar menu has New from Manuscript…")
         check(status.items.contains { $0.plainTitle == "Open Recent" && $0.submenu != nil }, "menu bar menu has Open Recent")
         check(!status.items.contains { $0.plainTitle == "Tag Speakers" }, "menu bar menu leaves Tag Speakers to ToolHUD")
-        check(hub.items.contains { $0.plainTitle == "Tag Speakers" } && hub.items.contains { $0.plainTitle == "Record" },
-              "ToolHUD menu has Tag Speakers and Record")
+        check(hub.items.contains { $0.plainTitle == "Tag Speakers" } && hub.items.contains { $0.plainTitle == "Teleprompter" },
+              "ToolHUD menu has Tag Speakers and Teleprompter")
         let hubItems = HubItem.items(of: hub)
         check(!hubItems.isEmpty && hubItems.contains { $0.imageInTitle == true }, "ToolHUD snapshot encodes icons in titles")
         report.append("--- menu bar menu\n" + dump(status))

@@ -22,7 +22,7 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | Who's Speaking? | A line the AI could not decide on, shown in red | unassigned, unknown, untagged |
 | Unsure | A line the AI or the rules tagged with a best guess but low confidence; red, with "Name?" in the margin | low confidence |
 | Best guess | The speaker an Unsure line probably has, for the narrator to confirm | suggestion, prediction |
-| Steps | The bar across the top of the window: Manuscript, Speakers, Review, Characters, then Voices and Listen (AI voices) or Pronunciations and Record (narration), each with how far along it is; the next step has a button | wizard, tour, onboarding, checklist |
+| Steps | The bar across the top of the window: Manuscript, Speakers, Review, Characters, then Voices and Listen (AI voices) or Teleprompter (narration), each with how far along it is; the next step has a button | wizard, tour, onboarding, checklist |
 | Skip | Mark a step done without doing it; right-click the step to bring it back | dismiss, ignore |
 | To review | Lines in a chapter that still need the narrator ("2 to review" in the sidebar) | needs attention, flagged |
 | Review | The page listing every line, tone and voice that needs the narrator, with context | queue, inbox |
@@ -67,13 +67,10 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | Merge | Make two characters one; the other name becomes an alias | combine, join |
 | Index | Every character's lines by chapter, with links | line list, lookup |
 | Show in Index | The per-character switch for the index | visible, enabled |
-| Rehearse | Step through one character's lines with cue lines | practice |
 | Cue | The line just before one of yours | prompt, previous line |
 | Narrator | A person reading the audiobook; characters are cast to narrators | reader, voice actor |
 | Narrator Script | An export with one narrator's lines | sides, part |
-| Pronunciation | A term and how to say it | glossary entry, word |
-| Record | The teleprompter mode for the booth | studio, session, prompter |
-| Recorded | A paragraph the narrator has read in Record | done, complete |
-| Retake | A paragraph marked to read again, with a note | pickup (said once in Help), redo |
+| Pronunciation | A term and how the AI voices should say it (Produce with AI Voices) | glossary entry, word |
+| Teleprompter | The book in large type for the booth, one paragraph at a time; it keeps your place but doesn't record | Record, prompter, studio |
 | Revised Manuscript | A new draft imported into an existing project | update, new version |
 | Model | The on-device AI that reads the book | engine, LLM |

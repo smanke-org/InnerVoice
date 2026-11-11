@@ -174,35 +174,12 @@ import SwiftUI
         change(name, undoManager: undoManager) { body(&$0.settings) }
     }
 
-    func toggleRecorded(_ paragraphID: UUID, undoManager: UndoManager?) {
-        if !project.recorded.contains(paragraphID) { ActivityStore.shared.record(ActivityKey.paragraphsRecorded) }
-        change(project.recorded.contains(paragraphID) ? "Mark Not Recorded" : "Mark Recorded", undoManager: undoManager) { p in
-            if p.recorded.contains(paragraphID) { p.recorded.remove(paragraphID) } else { p.recorded.insert(paragraphID) }
-        }
-    }
-
-    func setRecorded(_ paragraphID: UUID, _ on: Bool, undoManager: UndoManager?) {
-        guard project.recorded.contains(paragraphID) != on else { return }
-        toggleRecorded(paragraphID, undoManager: undoManager)
-    }
-
-    func addRetake(_ paragraphID: UUID, note: String, undoManager: UndoManager?) {
-        if !project.retakes.contains(where: { $0.paragraphID == paragraphID && !$0.done }) { ActivityStore.shared.record(ActivityKey.retakesMarked) }
-        change("Mark Retake", undoManager: undoManager) { p in
-            if let i = p.retakes.firstIndex(where: { $0.paragraphID == paragraphID && !$0.done }) {
-                p.retakes[i].note = note
-            } else {
-                p.retakes.append(Retake(paragraphID: paragraphID, note: note))
-            }
-        }
-    }
-
     /// Paragraphs that hold lines needing the narrator, in book order.
     func linesNeedingYou() -> [Line] {
         project.lines.filter { project.needsYou($0) }
     }
 
-    /// The speaker and summary text used as a voice cue (Record, scripts).
+    /// The speaker and summary text used as a voice cue (Teleprompter, scripts).
     func voiceCue(for character: BookCharacter) -> String {
         let order: [FactKind] = [.age, .gender, .accent, .voice]
         let parts = order.compactMap { kind in character.facts.first { $0.kind == kind }?.text }
@@ -216,7 +193,7 @@ import SwiftUI
 @Observable
 final class Workspace {
     enum Page: String, CaseIterable, Identifiable {
-        case manuscript, cast, voices, index, pronunciations, record, retakes, review, revisions
+        case manuscript, cast, voices, index, pronunciations, teleprompter, review, revisions
         var id: String { rawValue }
         var title: String {
             switch self {
@@ -225,8 +202,7 @@ final class Workspace {
             case .voices: "Voices"
             case .index: "Index"
             case .pronunciations: "Pronunciations"
-            case .record: "Record"
-            case .retakes: "Retakes"
+            case .teleprompter: "Teleprompter"
             case .review: "Review"
             case .revisions: "Revisions"
             }
@@ -238,8 +214,7 @@ final class Workspace {
             case .voices: "person.wave.2"
             case .index: "list.bullet.indent"
             case .pronunciations: "character.bubble"
-            case .record: "mic"
-            case .retakes: "arrow.counterclockwise"
+            case .teleprompter: "text.alignleft"
             case .review: "checklist"
             case .revisions: "doc.badge.clock"
             }
@@ -249,9 +224,9 @@ final class Workspace {
             case .manuscript, .review: .fixingLines
             case .cast: .castAndSummaries
             case .voices: .voices
-            case .index: .indexAndRehearse
+            case .index: .index
             case .pronunciations: .pronunciations
-            case .record, .retakes: .record
+            case .teleprompter: .teleprompter
             case .revisions: .revisedManuscripts
             }
         }
@@ -261,10 +236,9 @@ final class Workspace {
             case .cast: "2"
             case .index: "3"
             case .pronunciations: "4"
-            case .record: "5"
-            case .retakes: "6"
-            case .review: "7"
-            case .voices: "8"
+            case .teleprompter: "5"
+            case .review: "6"
+            case .voices: "7"
             case .revisions: nil
             }
         }
@@ -305,15 +279,15 @@ final class Workspace {
     /// Lines to swap after a fix in a back-and-forth.
     var exchange: [Exchange.Proposal] = []
     var showInspector = true
-    var rehearse: UUID?
     var showExport = false
     var showModelSheet = false
-    var recordParagraph: UUID?
+    /// The paragraph the teleprompter shows (it starts where this book was left off).
+    var teleprompterParagraph: UUID?
     /// Opens Assign To on this line (menu commands, snapshots).
     var pendingAssign: UUID?
     var message: String?
     var error: String?
-    /// The paragraph shown in Record and highlighted while reading.
+    /// The chapter showing in the manuscript.
     var visibleChapter: Int = 0
 
     func show(paragraph: UUID, line: UUID? = nil) {

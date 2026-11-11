@@ -49,7 +49,7 @@ enum SystemMenu {
     }
 
     /// The menu bar menu: New from Manuscript…, Open…, Open Recent, Settings…, Help, the update
-    /// item, About and Quit. ToolHUD's copy adds Tag Speakers and Record for the project in front.
+    /// item, About and Quit. ToolHUD's copy adds Tag Speakers and Teleprompter for the project in front.
     static func fill(_ menu: NSMenu, forHub: Bool) {
         menu.removeAllItems()
         let target = SystemMenuTarget.shared
@@ -80,9 +80,10 @@ enum SystemMenu {
             tag.showIcon("sparkles")
             tag.isEnabled = hasProject
             tag.toolTip = "Use the on-device AI to find who speaks each line in the project in front."
-            let record = menu.addItem(withTitle: "Record", action: #selector(SystemMenuTarget.record), target: target)
-            record.showIcon("record.circle")
-            record.isEnabled = hasProject
+            let prompter = menu.addItem(withTitle: "Teleprompter", action: #selector(SystemMenuTarget.teleprompter), target: target)
+            prompter.showIcon("text.alignleft")
+            prompter.isEnabled = hasProject
+            prompter.toolTip = "Read the project in front in large type, one paragraph at a time."
         }
 
         menu.addItem(.separator())
@@ -139,9 +140,9 @@ final class SystemMenuTarget: NSObject {
         NotificationCenter.default.post(name: SystemHooks.tagSpeakers, object: nil)
     }
 
-    @objc func record() {
+    @objc func teleprompter() {
         bringForward()
-        NotificationCenter.default.post(name: SystemHooks.record, object: nil)
+        NotificationCenter.default.post(name: SystemHooks.teleprompter, object: nil)
     }
 
     @objc func settings() { SystemHooks.openSettings() }

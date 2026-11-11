@@ -155,11 +155,13 @@ enum SelfTest {
             var p = doc.project
             check("a project that hasn't been asked shows every page", all.allSatisfy { $0.isShown(in: p) })
             p.settings.purpose = .narration
-            check("Narration Tools hides Voices and keeps Record, Retakes and Index",
-                  !Workspace.Page.voices.isShown(in: p) && ([.record, .retakes, .index, .review, .cast] as [Workspace.Page]).allSatisfy { $0.isShown(in: p) })
+            check("Narration Tools hides Voices and Pronunciations and keeps the Teleprompter and Index",
+                  !Workspace.Page.voices.isShown(in: p) && !Workspace.Page.pronunciations.isShown(in: p)
+                    && ([.teleprompter, .index, .review, .cast] as [Workspace.Page]).allSatisfy { $0.isShown(in: p) })
             p.settings.purpose = .aiVoices
-            check("Produce with AI Voices hides Record, Retakes and Index and keeps Voices",
-                  Workspace.Page.voices.isShown(in: p) && !([.record, .retakes, .index] as [Workspace.Page]).contains { $0.isShown(in: p) } && Workspace.Page.review.isShown(in: p))
+            check("Produce with AI Voices hides the Teleprompter and Index and keeps Voices and Pronunciations",
+                  Workspace.Page.voices.isShown(in: p) && Workspace.Page.pronunciations.isShown(in: p)
+                    && !([.teleprompter, .index] as [Workspace.Page]).contains { $0.isShown(in: p) } && Workspace.Page.review.isShown(in: p))
             let before = doc.project.lines.count
             doc.updateSettings("Set Project Type", undoManager: undo) { $0.purpose = .aiVoices }
             doc.updateSettings("Change Project Type", undoManager: undo) { $0.purpose = .narration }

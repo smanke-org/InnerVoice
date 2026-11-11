@@ -163,17 +163,13 @@ enum Snapshot {
                         document.tagging.debugSummaries(main.name, character: 0.75, overall: 0.75)
                     }
                     document.tagging.debugSummaries(nil)
-                    await shot("rehearse") { workspace.rehearse = main.id }
-                    workspace.rehearse = nil
-                    try? await Task.sleep(for: .seconds(0.5))
                 }
                 await shot("index") { workspace.page = .index }
                 await shot("pronunciations") { workspace.page = .pronunciations }
-                await shot("record") {
-                    workspace.page = .record
-                    workspace.recordParagraph = document.project.chapters.first?.paragraphs.dropFirst(1).first?.id
+                await shot("teleprompter") {
+                    workspace.page = .teleprompter
+                    workspace.teleprompterParagraph = document.project.chapters.first?.paragraphs.dropFirst(1).first?.id
                 }
-                await shot("retakes") { workspace.page = .retakes }
                 await shot("review", settle: 1.0) { workspace.reviewFilter = "guesses"; workspace.page = .review }
                 // Context at its least: the paragraph alone, − disabled (test runs keep their own store).
                 await shot("review-context", settle: 1.0) {

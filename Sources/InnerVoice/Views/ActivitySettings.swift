@@ -56,9 +56,6 @@ struct ActivitySettings: View {
         Section("Narration") {
             row("Character facts gathered", totals[ActivityKey.facts])
             row("Pronunciations confirmed", totals[ActivityKey.pronunciations])
-            row("Paragraphs recorded", totals[ActivityKey.paragraphsRecorded])
-            row("Retakes marked", totals[ActivityKey.retakesMarked])
-            row("Retakes done", totals[ActivityKey.retakesCleared])
             row("Tags carried over to new drafts", totals[ActivityKey.linesCarriedOver])
         }
         Section("AI Voices") {

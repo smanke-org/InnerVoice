@@ -10,7 +10,7 @@ struct PronunciationsPage: View {
     @State private var selection: Set<UUID> = []
     @State private var showDismissed = false
     @State private var search = ""
-    @State private var recorder = SampleRecorder()
+    @State private var player = SamplePlayer()
 
     private var rows: [Pronunciation] {
         document.project.pronunciations
@@ -55,7 +55,18 @@ struct PronunciationsPage: View {
     private var table: some View {
         Table(rows, selection: $selection) {
             TableColumn("Term") { p in
-                DraftTextField("Term", text: binding(p, \.term)).textFieldStyle(.plain).font(.body.weight(.medium))
+                HStack(spacing: Space.xs) {
+                    DraftTextField("Term", text: binding(p, \.term)).textFieldStyle(.plain).font(.body.weight(.medium))
+                    // Samples recorded with an earlier InnerVoice still play.
+                    if let file = p.audioFile, let data = document.audio[file] {
+                        Button { player.play(data) } label: {
+                            Image(systemName: "play.circle").foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Play the sample you recorded")
+                        .accessibilityLabel("Play sample")
+                    }
+                }
             }
             .width(min: 120, ideal: 160)
             TableColumn("Say It As") { p in
@@ -66,10 +77,6 @@ struct PronunciationsPage: View {
                 DraftTextField("Origin, stress, source", text: binding(p, \.notes)).textFieldStyle(.plain).foregroundStyle(.secondary)
             }
             .width(min: 140, ideal: 220)
-            TableColumn("Sample") { p in
-                SampleControls(document: document, pronunciation: p, recorder: recorder)
-            }
-            .width(78)
             TableColumn("Count") { p in
                 Text(p.occurrences > 0 ? "\(p.occurrences)" : "—").monospacedDigit().foregroundStyle(.secondary)
             }
@@ -122,91 +129,10 @@ struct PronunciationsPage: View {
     }
 }
 
-/// Record and play a short sample, stored in the project's Audio folder.
-struct SampleControls: View {
-    @ObservedObject var document: InnerVoiceDocument
-    let pronunciation: Pronunciation
-    var recorder: SampleRecorder
-    @Environment(\.undoManager) private var undoManager
-
-    var body: some View {
-        let recording = recorder.recordingID == pronunciation.id
-        HStack(spacing: Space.xs) {
-            Button {
-                if recording {
-                    if let data = recorder.stop() {
-                        let name = "\(pronunciation.id.uuidString).m4a"
-                        document.setAudio(data, name: name)
-                        document.change("Record Sample", undoManager: undoManager) { p in
-                            if let i = p.pronunciations.firstIndex(where: { $0.id == pronunciation.id }) { p.pronunciations[i].audioFile = name }
-                        }
-                    }
-                } else {
-                    recorder.start(id: pronunciation.id)
-                }
-            } label: {
-                Image(systemName: recording ? "stop.circle.fill" : "record.circle")
-                    .foregroundStyle(recording ? Color(nsColor: .attention) : .secondary)
-                    .symbolEffect(.pulse, isActive: recording)
-            }
-            .buttonStyle(.plain)
-            .help(recording ? "Stop recording" : "Record a short sample of how to say it")
-            .accessibilityLabel(recording ? "Stop recording" : "Record sample")
-            if let file = pronunciation.audioFile, let data = document.audio[file] {
-                Button {
-                    recorder.play(data)
-                } label: {
-                    Image(systemName: "play.circle").foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("Play the sample")
-                .accessibilityLabel("Play sample")
-            }
-        }
-    }
-}
-
+/// Plays a pronunciation sample kept in the project (InnerVoice no longer records them).
 @Observable
-final class SampleRecorder: NSObject {
-    private(set) var recordingID: UUID?
-    @ObservationIgnored private var recorder: AVAudioRecorder?
+final class SamplePlayer {
     @ObservationIgnored private var player: AVAudioPlayer?
-    @ObservationIgnored private var url: URL?
-
-    func start(id: UUID) {
-        // The microphone is asked for only now, on the first Record click.
-        AVCaptureDevice.requestAccess(for: .audio) { granted in
-            Task { @MainActor in
-                guard granted else {
-                    let alert = NSAlert()
-                    alert.messageText = "InnerVoice Can't Use the Microphone"
-                    alert.informativeText = "Turn on InnerVoice in System Settings › Privacy & Security › Microphone to record samples."
-                    alert.runModal()
-                    return
-                }
-                self.begin(id: id)
-            }
-        }
-    }
-
-    private func begin(id: UUID) {
-        let url = FileManager.default.temporaryDirectory.appending(path: "InnerVoice-sample-\(UUID().uuidString).m4a")
-        let settings: [String: Any] = [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: 44_100, AVNumberOfChannelsKey: 1,
-                                       AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue]
-        guard let r = try? AVAudioRecorder(url: url, settings: settings), r.record(forDuration: 15) else { return }
-        recorder = r
-        self.url = url
-        recordingID = id
-    }
-
-    func stop() -> Data? {
-        recorder?.stop()
-        recorder = nil
-        recordingID = nil
-        guard let url else { return nil }
-        defer { try? FileManager.default.removeItem(at: url) }
-        return try? Data(contentsOf: url)
-    }
 
     func play(_ data: Data) {
         player = try? AVAudioPlayer(data: data)

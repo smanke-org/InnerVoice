@@ -12,7 +12,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .manuscript: "Manuscript"
         case .ai: "AI"
         case .voices: "Voices"
-        case .recording: "Recording"
+        case .recording: "Teleprompter"
         case .appearance: "Accent"
         case .activity: "Activity"
         }
@@ -24,7 +24,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .manuscript: "book.pages"
         case .ai: "sparkles"
         case .voices: "person.wave.2"
-        case .recording: "mic"
+        case .recording: "text.alignleft"
         case .appearance: "paintpalette"
         case .activity: "chart.bar"
         }
@@ -81,18 +81,16 @@ struct ManuscriptSettings: View {
 
 struct RecordingSettings: View {
     @AppStorage("record.fontSize") private var fontSize = 30.0
-    @AppStorage("record.markOnAdvance") private var markOnAdvance = true
     @AppStorage("record.nextKey") private var nextKey = "space"
 
     var body: some View {
-        Section("Record") {
+        Section("Teleprompter") {
             LabeledContent("Text size") {
                 HStack {
                     Slider(value: $fontSize, in: 18...64, step: 2).frame(width: 200)
                     Text("\(Int(fontSize)) pt").monospacedDigit().frame(width: 44, alignment: .trailing)
                 }
             }
-            Toggle("Mark a paragraph recorded when you move on", isOn: $markOnAdvance)
         }
         Section {
             Picker("Next paragraph", selection: $nextKey) {
@@ -102,8 +100,6 @@ struct RecordingSettings: View {
                 Text("Return").tag("return")
             }
             LabeledContent("Previous paragraph") { Text("Left Arrow, Up Arrow or Page Up").foregroundStyle(.secondary) }
-            LabeledContent("Mark retake") { Text("R").foregroundStyle(.secondary) }
-            LabeledContent("Mark recorded") { Text("M").foregroundStyle(.secondary) }
         } header: {
             Text("Keys")
         } footer: {

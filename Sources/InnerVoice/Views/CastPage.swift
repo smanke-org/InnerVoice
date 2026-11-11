@@ -140,7 +140,6 @@ struct CastPage: View {
     @ViewBuilder
     private func menu(_ c: BookCharacter) -> some View {
         Button("Open") { workspace.castPath = [c.id] }
-        if document.project.showsNarrationTools { Button("Rehearse Lines…") { workspace.rehearse = c.id } }
         Button(c.isPinned ? "Unpin from Speaker Lists" : "Pin to Top of Speaker Lists") {
             document.setPinned(c.id, !c.isPinned, undoManager: undoManager)
         }

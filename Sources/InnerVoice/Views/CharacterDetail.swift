@@ -32,10 +32,6 @@ struct CharacterDetail: View {
             .pageSubtitle()
             .toolbar {
                 ToolbarItemGroup {
-                    if document.project.showsNarrationTools {
-                        Button("Rehearse", systemImage: "play.rectangle") { workspace.rehearse = c.id }
-                            .help("Step through \(c.name)'s lines with cue lines")
-                    }
                     Menu("Build Summary", systemImage: "text.badge.star") {
                         Button("Build \(c.firstName)’s Summary") {
                             TagCommand.summaries(document: document, workspace: workspace, undoManager: undoManager, only: [c.id])
@@ -90,7 +86,7 @@ struct CharacterDetail: View {
             VoiceChooser(document: document, characterID: c.id, compact: true)
             Button("All Voices…") { workspace.showVoice(c.id) }
                 .controlSize(.small)
-                .help("Hear and choose from every voice on the Voices page (⌘8)")
+                .help("Hear and choose from every voice on the Voices page (⌘7)")
         }
         .padding(Space.lg)
         .frame(maxWidth: .infinity, alignment: .leading)

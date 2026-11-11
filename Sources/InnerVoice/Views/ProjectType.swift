@@ -5,17 +5,21 @@ import SwiftUI
 extension Project {
     /// Voices, Play, Export Audio: everything for producing with AI voices.
     var showsVoices: Bool { settings.purpose != .narration }
-    /// Index, Rehearse, Record, Retakes, narrators and Narrator Scripts.
+    /// Index, the Teleprompter, narrators and Narrator Scripts.
     var showsNarrationTools: Bool { settings.purpose != .aiVoices }
+    /// Pronunciations: they tell the AI voices how to say names, so a narrator (who says
+    /// them in their own voice) doesn't see them. The terms stay in the project.
+    var showsPronunciations: Bool { settings.purpose != .narration }
 }
 
 extension Workspace.Page {
     func isShown(in project: Project) -> Bool {
         switch self {
         case .voices: project.showsVoices
-        case .index, .record, .retakes: project.showsNarrationTools
+        case .index, .teleprompter: project.showsNarrationTools
+        case .pronunciations: project.showsPronunciations
         case .revisions: !project.revisions.isEmpty
-        case .manuscript, .cast, .pronunciations, .review: true
+        case .manuscript, .cast, .review: true
         }
     }
 }
@@ -291,11 +295,9 @@ struct BookStatsSheet: View {
                     let toned = lines.filter { $0.tone != nil && $0.tone != .neutral }.count
                     row("Lines with a tone other than neutral", toned.formatted())
                 }
-                if p.showsNarrationTools {
-                    Section("Narration") {
+                if p.showsPronunciations {
+                    Section("Pronunciations") {
                         row("Pronunciations confirmed", "\(p.pronunciations.filter(\.confirmed).count) of \(p.pronunciations.count)")
-                        row("Paragraphs recorded", "\(p.recorded.count) of \(paragraphs)")
-                        row("Retakes still to do", p.retakes.filter { !$0.done }.count.formatted())
                     }
                 }
                 if p.showsVoices {

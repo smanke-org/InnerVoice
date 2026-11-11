@@ -127,8 +127,6 @@ struct IndexPage: View {
                                 Text(c.name).font(.headline)
                                 Text("\(index.stats[c.id]?.lines ?? 0) lines").foregroundStyle(.secondary)
                                 Spacer()
-                                Button("Rehearse") { workspace.rehearse = c.id }
-                                    .controlSize(.small)
                             }
                             .padding(.vertical, Space.xs)
                         }
@@ -165,120 +163,5 @@ struct IndexLineRow: View {
         }
         .buttonStyle(.plain)
         .help("Show this line in the manuscript")
-    }
-}
-
-/// One character's lines, one at a time, each with the line before it as a cue.
-struct RehearseView: View {
-    @ObservedObject var document: InnerVoiceDocument
-    let characterID: UUID
-    @Bindable var workspace: Workspace
-    @Environment(\.dismiss) private var dismiss
-    @State private var position = 0
-    @AppStorage("rehearse.speakCues") private var speakCues = true
-
-    private var lines: [Line] { document.project.lines.filter { $0.speakerID == characterID } }
-
-    /// Says a line in its character's voice and tone.
-    private func play(_ line: Line) {
-        VoiceCastingRun.castIfNeeded(document: document)
-        let project = document.project
-        let index = document.index
-        guard let p = project.paragraph(line.paragraphID, index: index) else { return }
-        let segs = SpeechScript.segments(for: p, project: project, index: index, includeNarration: false).filter { $0.lineID == line.id }
-        SpeechPlayer.shared.play(segs, resolver: VoiceResolver(project: project))
-    }
-
-    private func speakCue() {
-        guard speakCues, lines.indices.contains(position), let cue = cue(for: lines[position]) else { return }
-        play(cue)
-    }
-
-    /// The line spoken just before (any speaker), as the cue.
-    private func cue(for line: Line) -> Line? {
-        guard let i = document.index.lineIndexByID[line.id], i > 0 else { return nil }
-        return document.project.lines[i - 1]
-    }
-
-    var body: some View {
-        let character = document.project.character(characterID)
-        VStack(spacing: 0) {
-            HStack {
-                if let character { Avatar(character: character, size: 28) }
-                Text("Rehearse \(character?.name ?? "")").font(.headline)
-                Spacer()
-                Text(lines.isEmpty ? "" : "\(position + 1) of \(lines.count)")
-                    .font(.callout.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-            .padding(Space.lg)
-            Divider()
-            if lines.indices.contains(position) {
-                let line = lines[position]
-                VStack(alignment: .leading, spacing: Space.xl) {
-                    if let cue = cue(for: line) {
-                        VStack(alignment: .leading, spacing: Space.xs) {
-                            HStack(spacing: Space.sm) {
-                                Text("Cue · " + (document.project.character(cue.speakerID)?.name ?? "Who's Speaking?"))
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                                Button { play(cue) } label: { Image(systemName: "play.circle") }
-                                    .buttonStyle(.plain)
-                                    .help("Hear the cue in \(document.project.character(cue.speakerID)?.firstName ?? "its speaker")’s voice")
-                            }
-                            Text("“" + document.project.text(of: cue, index: document.index) + "”")
-                                .font(.system(size: 15, design: .serif))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(4)
-                        }
-                    }
-                    VStack(alignment: .leading, spacing: Space.xs) {
-                        Text(document.index.reference(line.paragraphID) + (line.kind == .spoken ? "" : " · " + line.kind.title))
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(Color(hexString: character?.colorHex ?? "#888888"))
-                        Text("“" + document.project.text(of: line, index: document.index) + "”")
-                            .font(.system(size: 24, design: .serif))
-                            .textSelection(.enabled)
-                    }
-                    if let character, !document.voiceCue(for: character).isEmpty {
-                        Label(document.voiceCue(for: character), systemImage: "waveform")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(Space.xxl)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            } else {
-                ContentUnavailableView("No Lines", systemImage: "text.quote")
-            }
-            Divider()
-            HStack {
-                Toggle("Speak Cues", isOn: $speakCues)
-                    .toggleStyle(.checkbox)
-                    .help("Read each cue line aloud in its character’s voice when you move to a line")
-                Button("Show in Manuscript") {
-                    if lines.indices.contains(position) {
-                        let l = lines[position]
-                        dismiss()
-                        workspace.show(paragraph: l.paragraphID, line: l.id)
-                    }
-                }
-                Spacer()
-                Button("Previous", systemImage: "chevron.left") { position = max(0, position - 1) }
-                    .keyboardShortcut(.leftArrow, modifiers: [])
-                    .disabled(position == 0)
-                Button("Next", systemImage: "chevron.right") { position = min(lines.count - 1, position + 1) }
-                    .keyboardShortcut(.rightArrow, modifiers: [])
-                    .disabled(position >= lines.count - 1)
-                Button("Done") { dismiss() }
-                    .keyboardShortcut(.defaultAction)
-            }
-            .padding(Space.lg)
-        }
-        .frame(width: 680, height: 460)
-        .noInitialFocus()
-        .onChange(of: position) { speakCue() }
-        .onAppear { speakCue() }
-        .onDisappear { SpeechPlayer.shared.stop() }
     }
 }

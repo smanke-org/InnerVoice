@@ -1049,8 +1049,12 @@ private let appleVoices = [
     #expect(GuidedSteps(project: p, narration: false, speaking: 1, voicesNeeded: 0).current?.step == .review)
     // Narration has its own last steps.
     let n = GuidedSteps(project: p, narration: true, speaking: 1, voicesNeeded: 0)
-    #expect(n.all.map(\.step) == [.manuscript, .speakers, .review, .characters, .pronunciations, .record])
-    #expect(n.all.last?.detail == "0 of 1 recorded")
+    #expect(n.all.map(\.step) == [.manuscript, .speakers, .review, .characters, .teleprompter])
+    #expect(n.all.last?.detail == "Read in the booth")
+    #expect(n.all.last?.isDone == false)
+    // A Record step marked done in an older version is the Teleprompter, still done.
+    p.settings.stepsDone = (p.settings.stepsDone ?? []) + ["record", "pronunciations"]
+    #expect(GuidedSteps(project: p, narration: true, speaking: 1, voicesNeeded: 0).all.last?.isDone == true)
 }
 
 @Test func reviewReferencesAndContextStayInTheChapter() {
