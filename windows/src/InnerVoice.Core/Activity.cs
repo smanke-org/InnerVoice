@@ -71,7 +71,10 @@ public static class ActivityKey
     public const string LinesAI = "linesAI";
     public const string LinesByHand = "linesByHand";
     public const string GuessesKept = "guessesKept", GuessesChanged = "guessesChanged";
-    public const string Facts = "facts", Pronunciations = "pronunciations";
+    public const string Facts = "facts";
+    /// No longer counted or shown (pronunciations, recording and retakes left the app); kept so
+    /// older counts still load and the keys stay the Mac's.
+    public const string Pronunciations = "pronunciations";
     public const string ParagraphsRecorded = "paragraphsRecorded", RetakesMarked = "retakesMarked", RetakesCleared = "retakesCleared";
     public const string LinesCarriedOver = "linesCarriedOver";
     public static string AiKept(string model) => "aiKept|" + model;

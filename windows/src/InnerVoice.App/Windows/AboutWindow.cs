@@ -53,7 +53,7 @@ public sealed class AboutWindow : Window
             col.Children.Add(Ui.Text($"{r.Version} · {r.Date}", 13, FontWeight.SemiBold));
             foreach (var n in r.Notes) col.Children.Add(Ui.Text("• " + n, 12, wrap: TextWrapping.Wrap));
         }
-        col.Children.Add(Ui.Caption("Uses llama.cpp (MIT), Avalonia (MIT), PdfPig (Apache 2.0), AngleSharp (MIT), RtfPipe (MIT), QuestPDF (Community license), Open XML SDK (MIT) and NAudio (MIT).", TextWrapping.Wrap));
+        col.Children.Add(Ui.Caption("Uses llama.cpp (MIT), Avalonia (MIT), PdfPig (Apache 2.0), AngleSharp (MIT), RtfPipe (MIT), QuestPDF (Community license) and Open XML SDK (MIT).", TextWrapping.Wrap));
         Content = Ui.Scroll(col);
     }
 }

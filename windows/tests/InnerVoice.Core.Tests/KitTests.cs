@@ -508,7 +508,7 @@ public class KitTests
         p.Lines = [new Line(para, new TextSpan(0, 6), LineKind.Spoken, speakerID: null, confidence: 0, source: AssignmentSource.None)];
         var steps = new GuidedSteps(p, speaking: 0);
         Assert.Equal(
-            [GuidedStep.Manuscript, GuidedStep.Speakers, GuidedStep.Review, GuidedStep.Characters, GuidedStep.Pronunciations, GuidedStep.Record],
+            [GuidedStep.Manuscript, GuidedStep.Speakers, GuidedStep.Review, GuidedStep.Characters, GuidedStep.Teleprompter],
             steps.All.Select(s => s.Step));
         Assert.Equal(GuidedStep.Manuscript, steps.Current?.Step);
         // Marking the manuscript ready moves on to Tag Speakers.
@@ -526,12 +526,17 @@ public class KitTests
         Assert.Equal(GuidedStep.Characters, steps.Current?.Step);
         p.SummariesBuilt = AppleDate.Now;
         steps = new GuidedSteps(p, speaking: 1);
-        Assert.Equal(GuidedStep.Pronunciations, steps.Current?.Step);
-        GuidedSteps.MarkStep(p.Settings, GuidedStep.Pronunciations, done: true);
-        steps = new GuidedSteps(p, speaking: 1);
-        Assert.Equal(GuidedStep.Record, steps.Current?.Step);
-        Assert.Equal("0 of 1 recorded", steps.All[^1].Detail);
-        GuidedSteps.MarkStep(p.Settings, GuidedStep.Record, done: true);
+        // The Teleprompter is last, and done only when the narrator marks it (InnerVoice doesn't record).
+        Assert.Equal(GuidedStep.Teleprompter, steps.Current?.Step);
+        Assert.Equal("Read in the booth", steps.All[^1].Detail);
+        p.Recorded = [para];
+        Assert.False(new GuidedSteps(p, speaking: 1).All[^1].IsDone);
+        GuidedSteps.MarkStep(p.Settings, GuidedStep.Teleprompter, done: true);
+        Assert.Contains("record", p.Settings.StepsDone!);
+        Assert.True(new GuidedSteps(p, speaking: 1).AllDone);
+        // A Record step marked done in an older version is the Teleprompter, still done; an old
+        // Pronunciations mark is ignored.
+        p.Settings.StepsDone = ["manuscript", "review", "pronunciations", "record"];
         Assert.True(new GuidedSteps(p, speaking: 1).AllDone);
         // Taking a mark off brings the step back.
         GuidedSteps.MarkStep(p.Settings, GuidedStep.Review, done: false);

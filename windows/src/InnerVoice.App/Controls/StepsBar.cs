@@ -9,8 +9,8 @@ using InnerVoice.Core;
 namespace InnerVoice.App.Controls;
 
 /// The Steps bar across the top of the window: Manuscript, Speakers, Review, Characters,
-/// Pronunciations, Record, each with how far along it is; the next step has a button.
-/// Right-click a step to mark it done (skip) or bring it back.
+/// Teleprompter, each with how far along it is; the next step is highlighted. Right-click a
+/// step to mark it done (skip) or bring it back; the Teleprompter is done only when marked.
 public sealed class StepsBar : Border
 {
     readonly ProjectDocument document;

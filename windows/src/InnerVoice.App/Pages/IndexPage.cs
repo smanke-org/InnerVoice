@@ -4,7 +4,6 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using InnerVoice.App.Document;
 using InnerVoice.App.UI;
-using InnerVoice.App.Windows;
 using InnerVoice.Core;
 
 namespace InnerVoice.App.Pages;
@@ -108,10 +107,8 @@ public sealed class IndexPage : Page
         var column = new StackPanel { Spacing = Look.Md, Margin = new Thickness(Look.Xl) };
         foreach (var c in shown)
         {
-            var cid = c.Id;
             column.Children.Add(Ui.Row(Look.Sm, Ui.Avatar(c.ColorHex, c.Initials, 24), Ui.Headline(c.Name),
-                Ui.Caption($"{index.StatsFor(c.Id)?.Lines ?? 0} lines"),
-                Ui.Button("Rehearse", () => RehearseWindow.Show(TopLevel.GetTopLevel(this) as Window, Document, cid))));
+                Ui.Caption($"{index.StatsFor(c.Id)?.Lines ?? 0} lines")));
             var lines = p.Lines.Where(l => l.SpeakerID == c.Id).ToList();
             foreach (var group in lines.GroupBy(l => index.Positions.TryGetValue(l.ParagraphID, out var pos) ? pos.Chapter : 0).OrderBy(g => g.Key))
             {

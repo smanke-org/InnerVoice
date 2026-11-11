@@ -1,7 +1,7 @@
 namespace InnerVoice.App.Help;
 
 // The pages of Help, ported from the Mac's System/HelpTopics.swift with only what the
-// Windows app has (Narration Tools: no voices, Play or Export Audio). Words follow
+// Windows app has (Narration Tools: no voices, Play, Export Audio or pronunciations). Words follow
 // docs/GLOSSARY.md. When a feature or shortcut changes, change its page here too.
 
 /// One block of a Help page.
@@ -36,10 +36,9 @@ public enum HelpTopic
     FixingLines,
     Colors,
     CastAndSummaries,
-    IndexAndRehearse,
+    Index,
     NarratorsAndScripts,
-    Pronunciations,
-    Record,
+    Teleprompter,
     RevisedManuscripts,
     ChoosingModel,
     KeyboardShortcuts,
@@ -59,10 +58,9 @@ public static class HelpContent
         HelpTopic.FixingLines => "Fixing Lines",
         HelpTopic.Colors => "Colors",
         HelpTopic.CastAndSummaries => "Cast & Summaries",
-        HelpTopic.IndexAndRehearse => "Index & Rehearse",
+        HelpTopic.Index => "Index",
         HelpTopic.NarratorsAndScripts => "Narrators & Scripts",
-        HelpTopic.Pronunciations => "Pronunciations",
-        HelpTopic.Record => "Record",
+        HelpTopic.Teleprompter => "Teleprompter",
         HelpTopic.RevisedManuscripts => "Revised Manuscripts",
         HelpTopic.ChoosingModel => "Choosing a Model",
         HelpTopic.KeyboardShortcuts => "Keyboard Shortcuts",
@@ -86,35 +84,32 @@ public static class HelpContent
     {
         HelpTopic.GettingStarted =>
         [
-            T("InnerVoice reads your audiobook manuscript with an AI that runs on your PC, colors every spoken line by the character who says it, and gives you the cast, the pronunciations and a teleprompter for the booth."),
+            T("InnerVoice reads your audiobook manuscript with an AI that runs on your PC, colors every spoken line by the character who says it, and gives you the cast, character summaries and a teleprompter for the booth."),
             H("Your first project"),
             T("Choose File › New from Manuscript… (Ctrl+N), or drop a manuscript on the Start window. InnerVoice makes a project, a .innervoice file with its own copy of the manuscript, and finds every quoted line right away. Lines it hasn't tagged yet show as Who's Speaking?."),
             T("Then choose Book › Tag Speakers (Ctrl+Shift+T). The AI reads the book chapter by chapter on your PC and assigns each line to a character. You can keep reading while it works, and Stop keeps what's done. The first time, choose a model in Settings › AI (see Choosing a Model)."),
             H("Follow the steps"),
-            T("The Steps bar across the top of the window shows where the book stands and what comes next: Manuscript, Speakers, Review, Characters, Pronunciations and Record. Each step says how far along it is (\"3 to review\", \"4 to add\"), and the next step is highlighted. Nothing starts until you click."),
+            T("The Steps bar across the top of the window shows where the book stands and what comes next: Manuscript, Speakers, Review, Characters and Teleprompter. Each step says how far along it is (\"3 to review\", \"Not read yet\"), and the next step is highlighted. Nothing starts until you click."),
             Steps(
                 "Manuscript: delete anything you won't read aloud, like a copyright page or an ISBN.",
                 "Speakers: Tag Speakers finds who says each line.",
                 "Review: confirm the lines the AI wasn't sure of; typing a name that isn't in the cast adds a new character.",
                 "Characters: Build Summaries reads the book again for what it says about each character and writes a voice brief into their Voice Notes.",
-                "Pronunciations: list the names and unusual words, say how to say each one, and record a sample.",
-                "Record: read the book in the booth with the teleprompter."),
+                "Teleprompter: read the book in the booth with the teleprompter. This step is done when you say so: right-click it and choose Mark Done."),
             T("Click any step to go to its page. To skip a step, right-click it and choose Mark Done; right-click it again and choose Bring Back. View › Show/Hide Steps hides the bar or brings it back, and so does Steps bar in Settings › General."),
             H("The project window"),
-            T("The sidebar has the book's pages, then its chapters and the main characters. Ctrl+1 to Ctrl+6 go straight to Manuscript, Cast, Index, Pronunciations, Record and Retakes; Review is in the sidebar and the View menu."),
+            T("The sidebar has the book's pages, then its chapters and the main characters. Ctrl+1 to Ctrl+4 go straight to Manuscript, Cast, Index and Teleprompter; Review is in the sidebar and the View menu."),
             Keys(
                 ("Manuscript", "Read the colored book and fix lines"),
                 ("Review", "Every line that needs you"),
                 ("Cast", "Every character, with a summary, line counts and narrator"),
                 ("Index", "Each character's lines by chapter, with links"),
-                ("Pronunciations", "Names and made-up words, how to say them, and samples"),
-                ("Record", "The teleprompter for the booth"),
-                ("Retakes", "Every paragraph marked to read again, with your notes"),
+                ("Teleprompter", "The teleprompter for the booth"),
                 ("Revisions", "What changed, after File › Import Revised Manuscript…")),
             H("Saving"),
             T("A project is one .innervoice file. Save it once with File › Save (Ctrl+S); from then on InnerVoice saves by itself a couple of seconds after each change. File › Save As… (Ctrl+Shift+S) saves a copy under a new name or in another folder."),
             H("A book on your PC and your Mac"),
-            T("The same .innervoice file opens in InnerVoice on a Mac, so you can tag a book on one computer and record from it on the other. Keep it in OneDrive, Dropbox or any synced folder, or carry it on a USB stick."),
+            T("The same .innervoice file opens in InnerVoice on a Mac, so you can tag a book on one computer and read it in the booth on the other. Keep it in OneDrive, Dropbox or any synced folder, or carry it on a USB stick."),
             T("There's no merging: the last save wins. If the file changed on another computer since you opened it, saving asks before replacing it."),
             T("A book set up for AI voices on the Mac opens here with the Narration Tools pages. Its voices are kept, and they're all there again when you open the book on the Mac."),
             Tip("Your manuscript stays on this PC. The only thing InnerVoice downloads is the AI model you choose, once."),
@@ -225,17 +220,11 @@ public static class HelpContent
             T("What you type in these fields is saved when you pause, press Enter or click elsewhere, so typing stays quick on a long book. A burst of typing is one step to undo (Ctrl+Z)."),
         ],
 
-        HelpTopic.IndexAndRehearse =>
+        HelpTopic.Index =>
         [
             T("Index lists each character's lines by chapter. Click a line to go to it in the manuscript."),
             H("Show in Index"),
             T("Each character has a Show in Index switch. Main characters with a large share of the lines start hidden, so the index stays useful for finding the smaller parts; turn them on whenever you like. Show All and Hide All switch every character at once."),
-            H("Rehearse"),
-            T("Click Rehearse beside a character in the Index, or on their page in Cast, to step through only their lines. Each line comes with its cue, the line just before it, so you hear what you're answering."),
-            Keys(
-                ("Space, → or ↓", "Next line"),
-                ("← or ↑", "Previous line"),
-                ("Esc", "Close Rehearse")),
             Tip("Ctrl+F finds text anywhere in the manuscript; F3 goes to the next match and Shift+F3 to the one before."),
         ],
 
@@ -245,41 +234,27 @@ public static class HelpContent
             H("Narrator Scripts"),
             T("Choose File › Export…, pick Narrator Script and the narrator, and save it as PDF or Word. It has only their lines, each with its cue line and its chapter and paragraph, and the summaries of the characters they voice. Send it to the narrator; they don't need InnerVoice."),
             H("The whole manuscript"),
-            T("File › Export… also saves the Tagged Manuscript as PDF or Word, with colors, initials and a key to the characters, for printing or reading on a tablet, and the Cast List and Pronunciation Guide as PDF, Word or CSV."),
+            T("File › Export… also saves the Tagged Manuscript as PDF or Word, with colors, initials and a key to the characters, for printing or reading on a tablet, and the Cast List as PDF, Word or CSV."),
         ],
 
-        HelpTopic.Pronunciations =>
+        HelpTopic.Teleprompter =>
         [
-            T("Pronunciations lists the names, places and unusual words in the book, with how often and where each one appears. Find Terms (or Book › Find Pronunciations) looks through the manuscript for them again, and Add Term adds one of your own."),
+            T("The Teleprompter is for the booth. It shows one paragraph at a time in large type, with the speaker's name, color and voice cue, and who speaks next below it. The top shows the chapter and where you are in the book (\"Paragraph 12 of 840\")."),
             Keys(
-                ("Say It As", "How to say it, in your own spelling: \"SHEV-on\""),
-                ("Note", "Anything else: where it comes from, what the author said"),
-                ("Confirmed", "Tick it once the author has confirmed it"),
-                ("● and ▶", "Record a short sample in your own voice with the microphone, then play it back")),
-            T("Windows asks whether InnerVoice may use the microphone the first time you record a sample. Samples are kept in the project and play on a Mac too."),
-            T("Right-click a term to show its first use in the manuscript, dismiss it (Show Dismissed brings it back), or delete it."),
-        ],
-
-        HelpTopic.Record =>
-        [
-            T("Record is a teleprompter for the booth. It shows one paragraph at a time in large type, with the speaker's name and color, and who speaks next below it."),
-            Keys(
-                ("Space or →", "Next paragraph; the one you read is marked Recorded"),
-                ("←", "Back one paragraph"),
-                ("R", "Mark a retake and add a note"),
-                ("M", "Mark the paragraph Recorded, or not")),
-            T("Settings › Record chooses the key that moves on (Space, Down Arrow, Page Down or Enter; → always works too), whether moving on marks the paragraph Recorded, and the text size. A− and A+ on the Record page change the size too."),
-            T("Foot pedals work too: set the pedal to send the key Record moves on with."),
-            T("In the manuscript, right-click a paragraph to Record from Here, mark it Recorded, or mark a retake."),
-            T("Retakes lists every paragraph marked for a retake (a pickup, in studio terms), with your notes. Click Record to read it again, or Show to see it in the manuscript."),
-            Tip("InnerVoice doesn't record the narration itself. Keep using your recording app for that; Record only keeps your place."),
+                ("Space or →", "Next paragraph"),
+                ("←", "Back one paragraph")),
+            T("It starts where you left off in that book: InnerVoice remembers the last paragraph you had on screen, on this PC. A book you haven't read from yet starts at its first paragraph. To start somewhere else, right-click a paragraph in the manuscript and choose Open Teleprompter Here."),
+            T("Settings › Teleprompter chooses the key that moves on (Space, Down Arrow, Page Down or Enter; → always works too) and the text size. A− and A+ on the Teleprompter page change the size too."),
+            T("Foot pedals work too: set the pedal to send the key the Teleprompter moves on with."),
+            T("When you've read the whole book, right-click Teleprompter in the Steps bar and choose Mark Done."),
+            Tip("InnerVoice doesn't record sound: record in your own audio app while you read."),
         ],
 
         HelpTopic.RevisedManuscripts =>
         [
             T("When the author sends a new draft, choose File › Import Revised Manuscript… and pick it. InnerVoice compares it with the manuscript in your project, paragraph by paragraph."),
             H("What is kept"),
-            T("Every paragraph that didn't change keeps its tags, your corrections, notes, Recorded state and retakes, even when paragraphs were added, removed or moved around it. In a lightly edited paragraph, lines whose text still matches keep their character."),
+            T("Every paragraph that didn't change keeps its tags, your corrections and notes, even when paragraphs were added, removed or moved around it. In a lightly edited paragraph, lines whose text still matches keep their character."),
             H("Review what changed"),
             T("The Revisions page lists the added, changed and removed paragraphs; click one to go to it. Changed paragraphs go through Tag Speakers again, and your own assignments still win."),
         ],
@@ -325,9 +300,7 @@ public static class HelpContent
                 ("Ctrl+1", "Manuscript"),
                 ("Ctrl+2", "Cast"),
                 ("Ctrl+3", "Index"),
-                ("Ctrl+4", "Pronunciations"),
-                ("Ctrl+5", "Record"),
-                ("Ctrl+6", "Retakes")),
+                ("Ctrl+4", "Teleprompter")),
             H("Manuscript"),
             Keys(
                 ("Enter", "Assign To for the selected line"),
@@ -343,17 +316,10 @@ public static class HelpContent
                 ("Ctrl+Y", "Redo"),
                 ("Ctrl+=", "Bigger Text"),
                 ("Ctrl+-", "Smaller Text")),
-            H("Record"),
+            H("Teleprompter"),
             Keys(
                 ("Space or →", "Next paragraph"),
-                ("←", "Previous paragraph"),
-                ("R", "Retake"),
-                ("M", "Recorded")),
-            H("Rehearse"),
-            Keys(
-                ("Space or →", "Next line"),
-                ("←", "Previous line"),
-                ("Esc", "Close")),
+                ("←", "Previous paragraph")),
         ],
 
         HelpTopic.Settings =>
@@ -362,10 +328,10 @@ public static class HelpContent
             Keys(
                 ("General", "Appearance (System, Light or Dark), the reading text size, typeface and line spacing, what the margin shows, and the Steps bar"),
                 ("AI", "The model"),
-                ("Record", "The key that moves on, whether moving on marks a paragraph Recorded, and Record's text size"),
+                ("Teleprompter", "The key that moves on and the Teleprompter's text size"),
                 ("Activity", "What InnerVoice has done for you, in numbers")),
             H("Activity"),
-            T("Settings › Activity counts what InnerVoice did across all your books: lines tagged by the rules and the AI, guesses you kept or changed, facts, pronunciations and recording. Only numbers are kept; nothing from your books is counted or sent."),
+            T("Settings › Activity counts what InnerVoice did across all your books: lines tagged by the rules and the AI, guesses you kept or changed, lines you assigned, summary facts and lines carried to a revision. Only numbers are kept; nothing from your books is counted or sent."),
             T("Settings are kept on this PC. Projects are files you keep where you like."),
         ],
 

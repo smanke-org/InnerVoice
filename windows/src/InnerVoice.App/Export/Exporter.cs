@@ -16,30 +16,27 @@ using W = DocumentFormat.OpenXml.Wordprocessing;
 
 namespace InnerVoice.App.Export;
 
-/// Narrator Scripts, the tagged manuscript, the cast list and the pronunciation guide,
-/// as PDF, Word or CSV.
+/// Narrator Scripts, the tagged manuscript and the cast list, as PDF, Word or CSV.
 public static class Exporter
 {
-    public enum Kind { NarratorScript, Manuscript, Cast, Pronunciations }
+    public enum Kind { NarratorScript, Manuscript, Cast }
 
     public enum Format { Pdf, Word, Csv }
 
-    public static readonly Kind[] Kinds = [Kind.NarratorScript, Kind.Manuscript, Kind.Cast, Kind.Pronunciations];
+    public static readonly Kind[] Kinds = [Kind.NarratorScript, Kind.Manuscript, Kind.Cast];
 
     public static string Title(this Kind k) => k switch
     {
         Kind.NarratorScript => "Narrator Script",
         Kind.Manuscript => "Tagged Manuscript",
-        Kind.Cast => "Cast List",
-        _ => "Pronunciation Guide",
+        _ => "Cast List",
     };
 
     public static string Detail(this Kind k) => k switch
     {
         Kind.NarratorScript => "One narrator's lines, each with the cue line before it, and their characters' summaries.",
         Kind.Manuscript => "The whole book with colors and initials, and a character key. For printing or reading on an iPad.",
-        Kind.Cast => "Every character with their summary, voice notes, narrator and line counts.",
-        _ => "Every term with how to say it and your notes.",
+        _ => "Every character with their summary, voice notes, narrator and line counts.",
     };
 
     public static Format[] Formats(Kind k) => k switch
@@ -195,21 +192,6 @@ public static class Exporter
                 output.Add(Text("Cast List", H2, Weight.SemiBold, gray, spacing: 16));
                 foreach (var c in project.Characters.OrderByDescending(c => Lines(index, c.Id)))
                     output.AddRange(CharacterBlock(c, document));
-                break;
-            case Kind.Pronunciations:
-                output.Add(Text(project.Title, H1, Weight.Bold, spacing: 4));
-                output.Add(Text("Pronunciation Guide", H2, Weight.SemiBold, gray, spacing: 16));
-                var terms = project.Pronunciations.Where(p => !p.Dismissed).ToList();
-                terms.Sort((a, b) => string.Compare(a.Term, b.Term, CultureInfo.CurrentCulture, CompareOptions.IgnoreCase));
-                foreach (var p in terms)
-                {
-                    var s = new Para { SpacingAfter = 1 };
-                    s.Runs.Add(new Run(p.Term, H3, Weight.SemiBold, Rgba.Black));
-                    s.Runs.Add(BodyRun(p.SayItAs.Length == 0 ? "  —" : $"  {p.SayItAs}"));
-                    if (p.Confirmed) s.Runs.Add(SmallRun("  ✓ confirmed", gray));
-                    output.Add(s);
-                    if (p.Notes.Length > 0) output.Add(Text(p.Notes, Small, color: gray, spacing: 8, indent: 12));
-                }
                 break;
         }
         return output;
@@ -432,13 +414,6 @@ public static class Exporter
         static string Q(string s) => "\"" + s.Replace("\"", "\"\"") + "\"";
         var project = document.Project;
         var rows = new List<string>();
-        if (o.Kind == Kind.Pronunciations)
-        {
-            rows.Add("Term,Say It As,Notes,Confirmed,Count");
-            foreach (var p in project.Pronunciations.Where(p => !p.Dismissed))
-                rows.Add(string.Join(",", Q(p.Term), Q(p.SayItAs), Q(p.Notes), p.Confirmed ? "yes" : "no", p.Occurrences.ToString(CultureInfo.InvariantCulture)));
-            return string.Join("\n", rows);
-        }
         rows.Add("Name,Also Called,Narrator,Lines,Words,First Chapter," + string.Join(",", FactKinds.NarratorOrder.Select(k => k.Title())) + ",Voice Notes,Notes");
         foreach (var c in project.Characters)
         {

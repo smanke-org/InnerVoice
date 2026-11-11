@@ -9,7 +9,7 @@ using InnerVoice.Core.AI;
 
 namespace InnerVoice.App.Windows;
 
-/// Settings: General (appearance, reading text), AI (the model), Record, Activity.
+/// Settings: General (appearance, reading text), AI (the model), Teleprompter, Activity.
 public sealed partial class SettingsWindow : Window
 {
     static SettingsWindow? shown;
@@ -56,7 +56,7 @@ public sealed partial class SettingsWindow : Window
         tabs.Items.Clear();
         tabs.Items.Add(new TabItem { FontSize = 16, Header = "General", Content = Ui.Scroll(General()) });
         tabs.Items.Add(new TabItem { FontSize = 16, Header = "AI", Content = Ui.Scroll(AIPane()) });
-        tabs.Items.Add(new TabItem { FontSize = 16, Header = "Record", Content = Ui.Scroll(RecordPane()) });
+        tabs.Items.Add(new TabItem { FontSize = 16, Header = "Teleprompter", Content = Ui.Scroll(TeleprompterPane()) });
         AddActivityTab(tabs);
         Select(selected);
     }
@@ -101,7 +101,7 @@ public sealed partial class SettingsWindow : Window
         return pane;
     }
 
-    Control RecordPane()
+    Control TeleprompterPane()
     {
         var s = AppSettings.Current;
         var pane = Pane();
@@ -109,8 +109,6 @@ public sealed partial class SettingsWindow : Window
             [("Space", NextKey.Space), ("Down Arrow", NextKey.Down), ("Page Down", NextKey.PageDown), ("Enter", NextKey.Return)],
             v => AppSettings.Update(x => x.RecordNextKey = v)));
         pane.Children.Add(Ui.Caption("→ always moves on and ← goes back. Foot pedals that send keys work too: set the pedal to send the key above.", TextWrapping.Wrap));
-        pane.Children.Add(Choice("Moving on", s.RecordMarkOnAdvance, [("Marks the paragraph recorded", true), ("Leaves it as it is", false)],
-            v => AppSettings.Update(x => x.RecordMarkOnAdvance = v)));
         var size = new NumericUpDown { Minimum = 18, Maximum = 64, Value = (decimal)s.RecordFontSize, Increment = 2, Width = 140 };
         size.ValueChanged += (_, e) => { if (e.NewValue is { } v && (double)v != AppSettings.Current.RecordFontSize) AppSettings.Update(x => x.RecordFontSize = (double)v); };
         pane.Children.Add(Row("Text size", size));

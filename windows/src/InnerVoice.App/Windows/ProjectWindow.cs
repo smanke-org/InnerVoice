@@ -122,8 +122,7 @@ public sealed partial class ProjectWindow : Window
         p = kind switch
         {
             PageKind.Cast => new CastPage(Document, Workspace),
-            PageKind.Record => new RecordPage(Document, Workspace),
-            PageKind.Retakes => new RetakesPage(Document, Workspace),
+            PageKind.Teleprompter => new TeleprompterPage(Document, Workspace),
             _ => MakeOtherPage(kind),
         };
         pages[kind] = p;
@@ -186,7 +185,6 @@ public sealed partial class ProjectWindow : Window
             string? badge = kind switch
             {
                 PageKind.Review => p.LinesNeedingYou > 0 ? $"{p.LinesNeedingYou:N0}" : null,
-                PageKind.Retakes => p.Retakes.Count(r => !r.Done) is var n && n > 0 ? $"{n}" : null,
                 PageKind.Cast => p.Characters.Count > 0 ? $"{p.Characters.Count}" : null,
                 _ => null,
             };

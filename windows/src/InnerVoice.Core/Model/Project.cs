@@ -435,8 +435,9 @@ public sealed class Project : ModelObject
     public List<Line> Lines { get; set; } = [];
     public List<BookCharacter> Characters { get; set; } = [];
     public List<Narrator> Narrators { get; set; } = [];
+    /// Pronunciations, recorded marks and retakes from older versions and the Mac: kept in the
+    /// file and carried through revisions, but nothing in the Windows app shows or edits them.
     public List<Pronunciation> Pronunciations { get; set; } = [];
-    /// Paragraphs read in Record.
     public HashSet<Guid> Recorded { get; set; } = [];
     public List<Retake> Retakes { get; set; } = [];
     public ProjectSettings Settings { get; set; } = new();

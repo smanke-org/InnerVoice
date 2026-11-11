@@ -4,34 +4,34 @@ namespace InnerVoice.Core;
 
 /// The steps from a manuscript to a finished book, in order. The first one not done is the
 /// current step. Nothing is locked: the narrator can skip a step or go back to any of them.
-public enum GuidedStep { Manuscript, Speakers, Review, Characters, Pronunciations, Record }
+public enum GuidedStep { Manuscript, Speakers, Review, Characters, Teleprompter }
 
 public sealed record GuidedStepStatus(GuidedStep Step, int Number, bool IsDone, bool IsMarked, bool IsSkipped, string Detail);
 
 public sealed class GuidedSteps
 {
     public static readonly GuidedStep[] Narration =
-        [GuidedStep.Manuscript, GuidedStep.Speakers, GuidedStep.Review, GuidedStep.Characters, GuidedStep.Pronunciations, GuidedStep.Record];
+        [GuidedStep.Manuscript, GuidedStep.Speakers, GuidedStep.Review, GuidedStep.Characters, GuidedStep.Teleprompter];
 
     public List<GuidedStepStatus> All { get; }
     public GuidedStepStatus? Current => All.FirstOrDefault(s => !s.IsDone);
     public bool AllDone => Current is null;
 
-    /// The raw value the Mac stores in `stepsDone` ("manuscript", "speakers", …).
-    public static string RawValue(GuidedStep s) => s.ToString().ToLowerInvariant();
+    /// The raw value the Mac stores in `stepsDone` ("manuscript", "speakers", …). The
+    /// Teleprompter is stored as "record" (its old name), so a step marked done in an older
+    /// version stays done.
+    public static string RawValue(GuidedStep s) => s == GuidedStep.Teleprompter ? "record" : s.ToString().ToLowerInvariant();
 
     public static string Title(GuidedStep s) => s.ToString();
 
-    public static bool IsLast(GuidedStep s) => s == GuidedStep.Record;
+    /// The last step has no end of its own: it's done when the narrator says so.
+    public static bool IsLast(GuidedStep s) => s == GuidedStep.Teleprompter;
 
     public GuidedSteps(Project p, int speaking)
     {
         var marked = (p.Settings.StepsDone ?? []).ToHashSet();
         bool tagged = p.LastTagged is not null;
         int needing = p.LinesNeedingYou;
-        int paragraphs = p.Chapters.Sum(c => c.Paragraphs.Count);
-        var terms = p.Pronunciations.Where(t => !t.Dismissed).ToList();
-        int unsaid = terms.Count(t => t.SayItAs.Trim().Length == 0);
         static string Plural(int n, string one, string many) => $"{n:N0} {(n == 1 ? one : many)}";
 
         All = Narration.Select((step, i) =>
@@ -49,10 +49,9 @@ public sealed class GuidedSteps
                     done = tagged && needing == 0; detail = !tagged ? "After tagging" : needing == 0 ? "All confirmed" : $"{needing:N0} to review"; break;
                 case GuidedStep.Characters:
                     done = p.SummariesBuilt is not null; detail = done ? Plural(speaking, "character", "characters") : "Not read yet"; break;
-                case GuidedStep.Pronunciations:
-                    done = terms.Count > 0 && unsaid == 0; detail = terms.Count == 0 ? "Names and places" : unsaid == 0 ? "All added" : $"{unsaid:N0} to add"; break;
                 default:
-                    done = paragraphs > 0 && p.Recorded.Count >= paragraphs; detail = $"{Math.Min(p.Recorded.Count, paragraphs):N0} of {paragraphs:N0} recorded"; break;
+                    // InnerVoice doesn't record: reading in the booth is done when the narrator says so.
+                    done = false; detail = "Read in the booth"; break;
             }
             return new GuidedStepStatus(step, i + 1, done || isMarked, isMarked, isMarked && !done && !IsLast(step), detail);
         }).ToList();
