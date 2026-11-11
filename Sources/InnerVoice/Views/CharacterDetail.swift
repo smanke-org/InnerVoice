@@ -114,9 +114,11 @@ struct CharacterDetail: View {
             }
             .buttonStyle(.plain)
             .help("Change \(c.name)'s color")
-            .popover(isPresented: $showColors) { ColorPickerGrid(selected: c.colorHex) { hex in
-                document.updateCharacter(c.id, "Change Color", undoManager: undoManager) { $0.colorHex = hex }
-            } }
+            .popover(isPresented: $showColors) {
+                ColorPickerGrid(selected: c.colorHex, automatic: c.colorIsAutomatic) { hex in
+                    document.setColor(c.id, hex: hex, undoManager: undoManager)
+                }
+            }
             VStack(alignment: .leading, spacing: Space.sm) {
                 DraftTextField("Name", text: binding(c, \.name, "Rename Character"))
                     .id(c.id)
@@ -370,27 +372,43 @@ struct FactRow: View {
     }
 }
 
-/// The highlight palette, with a custom color well for anything else (never red).
+/// Automatic (the default: a color from the character's gender, kept up to date), the
+/// palette by family, and a custom color well for anything else (never red).
+/// `pick(nil)` means Automatic.
 struct ColorPickerGrid: View {
     let selected: String
-    var pick: (String) -> Void
+    var automatic: Bool
+    var pick: (String?) -> Void
     @State private var custom = Color.gray
     @State private var warning = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.md) {
             Text("Color").font(.headline)
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(28), spacing: Space.sm), count: 6), spacing: Space.sm) {
-                ForEach(CharacterPalette.swatches) { s in
-                    Button { pick(s.hex) } label: {
-                        Circle()
-                            .fill(Color(hexString: s.hex))
-                            .frame(width: 24, height: 24)
-                            .overlay(Circle().strokeBorder(.primary.opacity(selected.uppercased() == s.hex.uppercased() ? 0.9 : 0), lineWidth: 2).padding(-3))
+            Button { pick(nil) } label: {
+                HStack(spacing: Space.sm) {
+                    Image(systemName: automatic ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(automatic ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Automatic")
+                        Text("Blues and greens for men, pinks and purples for women, warm colors until the book says")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    .buttonStyle(.plain)
-                    .help(s.name)
-                    .accessibilityLabel(s.name)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Let InnerVoice match the color to the character")
+            .accessibilityLabel("Automatic")
+            .accessibilityValue(automatic ? "On" : "Off")
+            ForEach(CharacterPalette.Family.allCases, id: \.self) { family in
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    Text(family.title).font(.caption).foregroundStyle(.secondary)
+                    LazyVGrid(columns: Array(repeating: GridItem(.fixed(28), spacing: Space.sm), count: 6), alignment: .leading, spacing: Space.sm) {
+                        ForEach(CharacterPalette.swatches(family)) { s in swatch(s) }
+                    }
                 }
             }
             HStack {
@@ -408,7 +426,21 @@ struct ColorPickerGrid: View {
             }
         }
         .padding(Space.lg)
-        .frame(width: 232)
+        .frame(width: 248)
+    }
+
+    private func swatch(_ s: CharacterPalette.Swatch) -> some View {
+        let isSelected = !automatic && selected.uppercased() == s.hex.uppercased()
+        return Button { pick(s.hex) } label: {
+            Circle()
+                .fill(Color(hexString: s.hex))
+                .frame(width: 24, height: 24)
+                .overlay(Circle().strokeBorder(.primary.opacity(isSelected ? 0.9 : 0), lineWidth: 2).padding(-3))
+        }
+        .buttonStyle(.plain)
+        .help(s.name)
+        .accessibilityLabel(s.name)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

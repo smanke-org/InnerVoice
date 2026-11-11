@@ -96,7 +96,7 @@ enum SeedData {
                 project.characters[i].name = name
                 return project.characters[i].id
             }
-            let c = BookCharacter(name: name, colorHex: CharacterPalette.next(used: project.characters.map(\.colorHex)))
+            let c = BookCharacter(name: name, colorHex: CharacterPalette.forNew(named: name, used: project.characters.map(\.colorHex)))
             project.characters.append(c)
             return c.id
         }
@@ -164,6 +164,7 @@ enum SeedData {
                                                 removed: [.init(text: "The gulls had gone quiet.", chapterTitle: "Chapter 2: The Letter")],
                                                 unchanged: 41)]
         }
+        CharacterPalette.recolorAutomatic(&project, index: BookIndex(project))
         return project
     }
 

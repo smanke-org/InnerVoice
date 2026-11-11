@@ -129,6 +129,16 @@ enum Snapshot {
                 }
                 document.tagging.debugStatus(nil, 0)
                 await shot("cast") { workspace.castPath = []; workspace.page = .cast }
+                if wants("color-picker"), let main = document.project.characters.first {
+                    let host = NSHostingController(rootView: ColorPickerGrid(selected: main.colorHex, automatic: main.colorIsAutomatic) { _ in })
+                    let w = NSWindow(contentViewController: host)
+                    w.isReleasedWhenClosed = false
+                    w.styleMask = [.titled]
+                    w.makeKeyAndOrderFront(nil)
+                    try? await Task.sleep(for: .seconds(1))
+                    capture(w, "\(dir)/color-picker-\(mode).png")
+                    w.close()
+                }
                 await shot("analyze-again") { workspace.castPath = []; workspace.page = .cast; workspace.askAnalyzeCastAgain = true }
                 workspace.askAnalyzeCastAgain = false
                 try? await Task.sleep(for: .seconds(0.5))

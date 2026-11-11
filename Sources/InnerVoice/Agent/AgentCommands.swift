@@ -349,14 +349,20 @@ enum AgentCommands {
             return ["project": entry.name, "changed": true, "was": c.name,
                     "character": characterJSON(document.project.character(c.id) ?? c, document)]
         },
-        AgentCommand(name: "characters color", summary: "Change a character's color in the manuscript. Takes #RRGGBB or a palette name (Amber, Sky, Emerald…). Reddish colors are refused: red means Who's Speaking?",
+        AgentCommand(name: "characters color", summary: "Change a character's color in the manuscript. Takes auto (the default: blues and greens for men, pinks and purples for women, warm colors when the book doesn't say), #RRGGBB or a palette name (Blue, Pink, Amber…). Reddish colors are refused: red means Who's Speaking?",
                      params: [characterParam,
-                              .init(name: "color", required: true, positional: true, help: "#RRGGBB, or a palette name: \(CharacterPalette.swatches.map(\.name).joined(separator: ", "))"),
+                              .init(name: "color", required: true, positional: true, help: "auto, #RRGGBB, or a palette name: \(CharacterPalette.swatches.map(\.name).joined(separator: ", "))"),
                               projectParam],
                      example: "innervoice characters color Mara \"#0EA5E9\" --json") { args in
             let (entry, document) = try project(args)
             let c = try character(try args.required("name"), in: document)
             let raw = try args.required("color").trimmingCharacters(in: .whitespaces)
+            if ["auto", "automatic"].contains(raw.lowercased()) {
+                let was = (c.colorHex, c.colorIsAutomatic)
+                document.setColor(c.id, hex: nil, undoManager: entry.undoManager)
+                let now = document.project.character(c.id) ?? c
+                return ["project": entry.name, "changed": was != (now.colorHex, true), "character": c.name, "color": now.colorHex, "automatic": true]
+            }
             let hex: String
             if let swatch = CharacterPalette.swatches.first(where: { $0.name.caseInsensitiveCompare(raw) == .orderedSame }) {
                 hex = swatch.hex
@@ -370,9 +376,9 @@ enum AgentCommands {
             guard !CharacterPalette.isTooRed(hex) else {
                 throw AgentError.invalid("\(hex) is too close to red, which InnerVoice keeps for Who's Speaking? and Unsure lines. Pick another color, like \(CharacterPalette.next(used: document.project.characters.map(\.colorHex)))")
             }
-            let changed = c.colorHex.caseInsensitiveCompare(hex) != .orderedSame
-            if changed { document.updateCharacter(c.id, "Change Color", undoManager: entry.undoManager) { $0.colorHex = hex } }
-            return ["project": entry.name, "changed": changed, "character": c.name, "color": hex]
+            let changed = c.colorHex.caseInsensitiveCompare(hex) != .orderedSame || c.colorChosen != true
+            if changed { document.setColor(c.id, hex: hex, undoManager: entry.undoManager) }
+            return ["project": entry.name, "changed": changed, "character": c.name, "color": hex, "automatic": false]
         },
     ] }
 
@@ -727,7 +733,7 @@ enum AgentCommands {
     private static func characterJSON(_ c: BookCharacter, _ document: InnerVoiceDocument) -> JSONObject {
         let index = document.index
         let stats = index.stats[c.id]
-        return ["id": short(c.id), "name": c.name, "aliases": c.aliases, "color": c.colorHex,
+        return ["id": short(c.id), "name": c.name, "aliases": c.aliases, "color": c.colorHex, "colorAutomatic": c.colorIsAutomatic,
                 "lines": stats?.lines ?? 0, "words": stats?.words ?? 0,
                 "firstLine": stats?.firstLine.map { "Ch \($0.chapter + 1) ¶\($0.paragraph + 1)" } ?? NSNull(),
                 "chapters": stats?.chapters.count ?? 0, "facts": c.facts.count,

@@ -511,6 +511,47 @@ private func sampleContents() -> ProjectArchive.Contents {
     let json = ##"{"id":"6F1E3C2A-0000-4000-8000-000000000001","name":"Ada","aliases":[],"colorHex":"#0EA5E9","facts":[],"notes":"","voiceNotes":""}"##
     let c = try JSONDecoder().decode(BookCharacter.self, from: Data(json.utf8))
     #expect(!c.isPinned)
+    // A palette color from before Automatic existed is Automatic; a picked one isn't.
+    #expect(c.colorChosen == nil && c.colorIsAutomatic)
+    #expect(!BookCharacter(name: "Bo", colorHex: "#336699").colorIsAutomatic)
+}
+
+@Test func automaticColorsFollowGender() {
+    var p = ProjectBuilder.make(from: book([
+        "“Ready?” asked Tom. He looked tired.", "“Yes,” said Ada. She smiled.", "“Now?” asked Tom.", "“Now,” said Ada.",
+        "“Tea?” asked Quill.", "“Please,” said Mrs. Penrose.", "“Go,” said Bo.", "“Stop,” said Cal. He meant it.",
+    ]), fileName: "t")
+    func i(_ n: String) -> Int { p.characters.firstIndex { $0.name == n }! }
+    func family(_ n: String) -> CharacterPalette.Family? { CharacterPalette.family(of: p.characters[i(n)].colorHex) }
+    p.characters[i("Tom")].facts = [Fact(kind: .gender, text: "Male")]
+    p.characters[i("Ada")].facts = [Fact(kind: .gender, text: "Female")]
+    p.characters[i("Bo")].colorHex = "#336699"                       // picked with Other… before Automatic existed
+    p.characters[i("Cal")].colorHex = "#EC4899"                      // pink, chosen by the narrator
+    p.characters[i("Cal")].colorChosen = true
+    // A title picks the family the moment the character is made.
+    #expect(family("Mrs. Penrose") == .feminine)
+    CharacterPalette.recolorAutomatic(&p, index: BookIndex(p))
+    #expect(family("Tom") == .masculine)
+    #expect(family("Ada") == .feminine)
+    #expect(family("Mrs. Penrose") == .feminine)
+    #expect(family("Quill") == .neutral)
+    #expect(p.characters[i("Bo")].colorHex == "#336699")
+    #expect(p.characters[i("Cal")].colorHex == "#EC4899")
+    // Automatic characters don't share a color while the family has one free.
+    let auto = p.characters.filter(\.colorIsAutomatic).map { $0.colorHex.uppercased() }
+    #expect(Set(auto).count == auto.count)
+    #expect(!auto.contains("#EC4899"))
+    // Running it again changes nothing: colors don't shuffle.
+    let before = p.characters.map(\.colorHex)
+    #expect(CharacterPalette.recolorAutomatic(&p, index: BookIndex(p)) == 0)
+    #expect(p.characters.map(\.colorHex) == before)
+    // The book says more: Quill is a woman. Only Quill moves.
+    p.characters[i("Quill")].facts = [Fact(kind: .gender, text: "A woman in her forties")]
+    #expect(CharacterPalette.recolorAutomatic(&p, index: BookIndex(p)) == 1)
+    #expect(family("Quill") == .feminine)
+    // A big cast shares colors within its family, never across.
+    #expect(CharacterPalette.next(used: CharacterPalette.swatches(.masculine).map(\.hex), family: .masculine).isEmpty == false)
+    #expect(CharacterPalette.family(of: CharacterPalette.next(used: CharacterPalette.swatches.map(\.hex), family: .feminine)) == .feminine)
 }
 
 // MARK: - Deleting text

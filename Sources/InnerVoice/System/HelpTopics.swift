@@ -155,7 +155,11 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
         ]
 
         case .colors: [
-            .text("Every character has a color, and each line shows the color of the character who says it. New characters get the next color that's easy to tell apart. Change a character's color in Cast."),
+            .text("Every character has a color, and each line shows the color of the character who says it. Red is never a character's color: it's kept for lines that need you."),
+            .heading("Automatic colors"),
+            .text("Colors start on Automatic: blues and greens for men, pinks and purples for women, and warm colors (amber, orange, gold) for anyone the book hasn't said yet. Main characters get the clearest colors. When Tag Speakers or Build Summaries learns more about someone (\"she said\", a title like Mrs., their summary), their color follows, and two characters share a color only when a family runs out."),
+            .heading("Choose a color"),
+            .text("To choose a character's color yourself, open their page in Cast and click their picture. Pick any color, or Other… for one of your own. A color you choose stays until you choose Automatic again."),
             .heading("Highlight, Outline or Underline"),
             .text("Highlight fills each line with its color; Outline draws a line around it; Underline draws a colored line under the words and keeps the page calmest. Choose in the toolbar or the View menu (⌥⌘H, ⌥⌘O, ⌥⌘U). Each project keeps its own choice."),
             .keys([

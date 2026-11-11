@@ -17,6 +17,7 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | Alias | Another name the same character goes by | nickname field |
 | Cast | All the characters in a project | roster, people |
 | Color | A character's color in the manuscript | tag color, label |
+| Automatic (color) | The default: InnerVoice picks the color from the character's gender (masculine blues and greens, feminine pinks and purples, neutral warm colors) and keeps it up to date | auto, default color |
 | Highlight / Outline / Underline | The three ways a line can show its color | fill, border, rule |
 | Who's Speaking? | A line the AI could not decide on, shown in red | unassigned, unknown, untagged |
 | Unsure | A line the AI or the rules tagged with a best guess but low confidence; red, with "Name?" in the margin | low confidence |

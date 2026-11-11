@@ -29,7 +29,7 @@ background. If `innervoice` isn't on PATH, use
 - Tag Speakers and Build Summaries run in the background: start, then poll `innervoice tag status`.
   `no_model`: no model is ready; `innervoice model list`, then `model select <id>` (downloaded
   ones only). Lines the narrator assigned are never changed by the AI.
-- Character colors are never reddish (red means Who's Speaking?); the app refuses them.
+- Character colors are never reddish (red means Who's Speaking?); the app refuses them. `characters color <name> auto` puts a character back on Automatic (blues and greens for men, pinks and purples for women, warm colors when the book doesn't say).
 - To try something without real data, run a Debug build (`./build.sh --debug`, then
   `.build/app/InnerVoice.app/Contents/MacOS/InnerVoice`) with `APP_STORE=/tmp/iv-test` in front, and
   `INNERVOICE_DEMO=1` to open the sample book (or `innervoice projects demo`). A test copy only

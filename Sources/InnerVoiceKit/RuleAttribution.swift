@@ -1,33 +1,126 @@
 import Foundation
 
 /// Character colors made for highlighting text. Red is never used: it means Who's Speaking?
+/// Three families: masculine (blues and greens) for men, feminine (pinks and purples) for
+/// women, and neutral (warm colors) for anyone the book hasn't said yet.
 public enum CharacterPalette {
+    public enum Family: String, CaseIterable, Sendable {
+        case masculine, feminine, neutral
+
+        public var title: String {
+            switch self {
+            case .masculine: "Masculine"
+            case .feminine: "Feminine"
+            case .neutral: "Neutral"
+            }
+        }
+
+        public init(_ gender: VoiceGender?) {
+            switch gender {
+            case .male?: self = .masculine
+            case .female?: self = .feminine
+            default: self = .neutral
+            }
+        }
+    }
+
     public struct Swatch: Hashable, Sendable, Identifiable {
         public var name: String
         public var hex: String
+        public var family: Family
         public var id: String { hex }
     }
 
+    /// Each family in the order new characters get them: neighbors are the easiest to tell apart.
     public static let swatches: [Swatch] = [
-        Swatch(name: "Amber", hex: "#F59E0B"), Swatch(name: "Sky", hex: "#0EA5E9"),
-        Swatch(name: "Emerald", hex: "#10B981"), Swatch(name: "Violet", hex: "#8B5CF6"),
-        Swatch(name: "Orange", hex: "#F97316"), Swatch(name: "Teal", hex: "#14B8A6"),
-        Swatch(name: "Indigo", hex: "#6366F1"), Swatch(name: "Lime", hex: "#84CC16"),
-        Swatch(name: "Fuchsia", hex: "#D946EF"), Swatch(name: "Cyan", hex: "#06B6D4"),
-        Swatch(name: "Gold", hex: "#CA8A04"), Swatch(name: "Blue", hex: "#3B82F6"),
-        Swatch(name: "Green", hex: "#22C55E"), Swatch(name: "Purple", hex: "#A855F7"),
-        Swatch(name: "Brown", hex: "#A16207"), Swatch(name: "Pink", hex: "#EC4899"),
-        Swatch(name: "Slate", hex: "#64748B"), Swatch(name: "Olive", hex: "#65A30D"),
-    ]
+        ("Blue", "#3B82F6"), ("Emerald", "#10B981"), ("Indigo", "#6366F1"), ("Teal", "#14B8A6"),
+        ("Sky", "#0EA5E9"), ("Green", "#22C55E"), ("Slate", "#64748B"), ("Cyan", "#06B6D4"),
+    ].map { Swatch(name: $0.0, hex: $0.1, family: .masculine) } + [
+        // Pinks come later: highlighted, they sit closest to the red of Who's Speaking?
+        ("Fuchsia", "#D946EF"), ("Violet", "#8B5CF6"), ("Lavender", "#A78BFA"), ("Orchid", "#C026D3"),
+        ("Pink", "#EC4899"), ("Purple", "#A855F7"), ("Lilac", "#E879F9"), ("Blush", "#F472B6"),
+    ].map { Swatch(name: $0.0, hex: $0.1, family: .feminine) } + [
+        ("Amber", "#F59E0B"), ("Lime", "#84CC16"), ("Orange", "#F97316"), ("Brown", "#A16207"),
+        ("Gold", "#CA8A04"), ("Olive", "#65A30D"),
+    ].map { Swatch(name: $0.0, hex: $0.1, family: .neutral) }
+
+    public static func swatches(_ family: Family) -> [Swatch] { swatches.filter { $0.family == family } }
+
+    /// The family a palette color belongs to; nil for a color picked with Other….
+    public static func family(of hex: String) -> Family? {
+        swatches.first { $0.hex.caseInsensitiveCompare(hex) == .orderedSame }?.family
+    }
 
     /// The color for Who's Speaking? and Unsure lines.
     public static let attentionHex = "#EF4444"
 
-    /// The first swatch no character uses yet, or the least used one.
-    public static func next(used: [String]) -> String {
-        let counts = Dictionary(used.map { ($0.uppercased(), 1) }, uniquingKeysWith: +)
-        if let free = swatches.first(where: { counts[$0.hex.uppercased()] == nil }) { return free.hex }
-        return swatches.min { (counts[$0.hex.uppercased()] ?? 0) < (counts[$1.hex.uppercased()] ?? 0) }!.hex
+    /// The first color in the family no character uses yet, or the family's least used one.
+    public static func next(used: [String], family: Family = .neutral) -> String {
+        next(counts: Dictionary(used.map { ($0.uppercased(), 1) }, uniquingKeysWith: +), family: family)
+    }
+
+    static func next(counts: [String: Int], family: Family) -> String {
+        let pool = swatches(family)
+        if let free = pool.first(where: { counts[$0.hex.uppercased()] == nil }) { return free.hex }
+        return pool.min { (counts[$0.hex.uppercased()] ?? 0) < (counts[$1.hex.uppercased()] ?? 0) }!.hex
+    }
+
+    /// The color a new character starts with: a title ("Mrs.", "Sir") already says which
+    /// family; anyone else starts neutral until the book says more.
+    public static func forNew(named name: String, used: [String]) -> String {
+        next(used: used, family: Family(VoiceCasting.titleGender(name)))
+    }
+
+    /// The family for each character on Automatic. Finding gender reads the whole book for
+    /// pronouns (over a second for a novel's cast the first time), so the app runs this off
+    /// the main thread and hands the result to `recolorAutomatic`.
+    public static func families(_ p: Project, index: BookIndex) -> [UUID: Family] {
+        var result: [UUID: Family] = [:]
+        for c in p.characters where c.colorIsAutomatic {
+            result[c.id] = Family(VoiceCasting.profile(c, project: p, index: index).gender)
+        }
+        return result
+    }
+
+    /// Gives every character on Automatic a color from their gender's family: main characters
+    /// first, so they get the most distinct colors. A character whose color already fits keeps
+    /// it, so colors don't shuffle each time; colors the narrator chose are never changed.
+    /// `only` recolors one character and leaves everyone else as they are. `families` comes
+    /// from `families(_:index:)` run off the main thread; characters it doesn't list keep
+    /// their colors. Returns how many characters changed color.
+    @discardableResult
+    public static func recolorAutomatic(_ p: inout Project, index: BookIndex, families known: [UUID: Family]? = nil, only: UUID? = nil) -> Int {
+        let moving = p.characters.indices.filter { i in
+            let c = p.characters[i]
+            return c.colorIsAutomatic && (only == nil || c.id == only) && (known == nil || known?[c.id] != nil)
+        }
+        guard !moving.isEmpty else { return 0 }
+        var counts: [String: Int] = [:]
+        for (i, c) in p.characters.enumerated() where !moving.contains(i) { counts[c.colorHex.uppercased(), default: 0] += 1 }
+        let count = Dictionary(uniqueKeysWithValues: moving.map { ($0, index.stats[p.characters[$0].id]?.lines ?? 0) })
+        let names = Dictionary(uniqueKeysWithValues: moving.map { ($0, p.characters[$0].name) })
+        let order = moving.sorted { count[$0]! != count[$1]! ? count[$0]! > count[$1]! : names[$0]! < names[$1]! }
+        var family: [Int: Family] = [:]
+        for i in order { family[i] = known?[p.characters[i].id] ?? Family(VoiceCasting.profile(p.characters[i], project: p, index: index).gender) }
+        // Keep every color that already fits and nobody earlier holds.
+        var placed: Set<Int> = []
+        for i in order {
+            let hex = p.characters[i].colorHex.uppercased()
+            if Self.family(of: hex) == family[i], counts[hex] == nil {
+                counts[hex] = 1
+                placed.insert(i)
+            }
+        }
+        var changed = 0
+        for i in order where !placed.contains(i) {
+            let hex = next(counts: counts, family: family[i]!)
+            counts[hex.uppercased(), default: 0] += 1
+            if p.characters[i].colorHex.caseInsensitiveCompare(hex) != .orderedSame {
+                p.characters[i].colorHex = hex
+                changed += 1
+            }
+        }
+        return changed
     }
 
     /// Reddish colors are too close to Who's Speaking? to tell apart.
@@ -244,7 +337,7 @@ public enum RuleAttribution {
             return c.id
         }
         guard create, name.count >= 2, !words.allSatisfy({ Names.titles.contains($0) }) else { return nil }
-        let character = BookCharacter(name: name, colorHex: CharacterPalette.next(used: project.characters.map(\.colorHex)))
+        let character = BookCharacter(name: name, colorHex: CharacterPalette.forNew(named: name, used: project.characters.map(\.colorHex)))
         project.characters.append(character)
         return character.id
     }

@@ -82,6 +82,9 @@ struct ProjectWindow: View {
             if isFrontProject { workspace.page = .record }
         }
         .task { Snapshot.attach(document: document, workspace: workspace) }
+        // Automatic colors follow what the book says about each character (and bring
+        // projects from before color families up to date).
+        .task { document.recolorAutomatic() }
         // The agent CLI finds open projects through OpenProjects (Agent/AgentCommands.swift).
         .task(id: fileURL) { OpenProjects.register(document, workspace: workspace, undoManager: undoManager, fileURL: fileURL) }
         .onChange(of: undoManager) { OpenProjects.register(document, workspace: workspace, undoManager: undoManager, fileURL: fileURL) }

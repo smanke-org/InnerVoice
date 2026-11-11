@@ -175,6 +175,9 @@ public struct BookCharacter: Codable, Identifiable, Hashable, Sendable {
     public var aliases: [String]
     /// "#RRGGBB" from `CharacterPalette`.
     public var colorHex: String
+    /// true: the narrator picked the color. false: Automatic, picked by the narrator.
+    /// nil (every character before 0.2.5): Automatic while it's a palette color.
+    public var colorChosen: Bool?
     public var facts: [Fact]
     public var notes: String
     /// How the narrator plans to voice the character.
@@ -196,6 +199,11 @@ public struct BookCharacter: Codable, Identifiable, Hashable, Sendable {
     public var voiceBriefGenerated: String?
 
     public var isPinned: Bool { pinned ?? false }
+
+    /// InnerVoice keeps the color matched to the character (`CharacterPalette.recolorAutomatic`).
+    public var colorIsAutomatic: Bool {
+        colorChosen == false || (colorChosen == nil && CharacterPalette.family(of: colorHex) != nil)
+    }
 
     public func voice(for engine: VoiceEngine) -> CastVoice? { voices?[engine.rawValue] }
 

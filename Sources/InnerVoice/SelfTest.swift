@@ -734,6 +734,24 @@ enum SelfTest {
             check("Undo brings a skipped step back", GuidedStepsBar.steps(doc).current?.step == .review)
             let card = GuidedStepsBar.card(for: .review, steps: steps, document: doc, page: .manuscript)
             check("the Review step offers Start Review", card.action?.title == "Start Review" && card.title.contains("3 lines"), card.title)
+            // Colors: Automatic by default, from each character's gender; a picked color stays.
+            if let tom = doc.project.characters.first(where: { $0.name == "Tom Hale" }),
+               let mara = doc.project.characters.first(where: { $0.name == "Mara Quinn" }) {
+                check("automatic colors: blue-green for Tom, pink-purple for Mara",
+                      tom.colorIsAutomatic && CharacterPalette.family(of: tom.colorHex) == .masculine
+                      && CharacterPalette.family(of: mara.colorHex) == .feminine, "\(tom.colorHex) \(mara.colorHex)")
+                doc.setColor(tom.id, hex: "#F59E0B", undoManager: undo)
+                let picked = doc.project.character(tom.id)!
+                check("a picked color sticks", picked.colorHex == "#F59E0B" && !picked.colorIsAutomatic)
+                var p = doc.project
+                CharacterPalette.recolorAutomatic(&p, index: doc.index)
+                check("recoloring leaves a picked color alone", p.character(tom.id)?.colorHex == "#F59E0B")
+                doc.setColor(tom.id, hex: nil, undoManager: undo)
+                let back = doc.project.character(tom.id)!
+                check("Automatic gives Tom a masculine color again", back.colorIsAutomatic && CharacterPalette.family(of: back.colorHex) == .masculine, back.colorHex)
+                undo.undo(); undo.undo()
+                check("Undo restores the color", doc.project.character(tom.id)?.colorHex == tom.colorHex && doc.project.character(tom.id)?.colorChosen == tom.colorChosen)
+            }
             // Pins: pinned speakers head the list, A to Z by first name; the menu's search narrows it.
             if doc.project.characters.count >= 3 {
                 let chosen = Array(doc.project.characters.sorted(by: Project.byFirstName).suffix(2))

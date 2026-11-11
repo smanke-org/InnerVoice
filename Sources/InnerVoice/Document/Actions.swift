@@ -90,9 +90,43 @@ import SwiftUI
         if let existing = project.characters.first(where: { $0.name.caseInsensitiveCompare(trimmed) == .orderedSame }) {
             return existing.id
         }
-        let c = BookCharacter(name: trimmed, colorHex: CharacterPalette.next(used: project.characters.map(\.colorHex)))
+        let c = BookCharacter(name: trimmed, colorHex: CharacterPalette.forNew(named: trimmed, used: project.characters.map(\.colorHex)))
         change("New Character", undoManager: undoManager) { $0.characters.append(c) }
         return c.id
+    }
+
+    /// Sets a character's color, or puts it back on Automatic (`hex == nil`): a color from
+    /// their gender's family, kept up to date as the book says more about them.
+    func setColor(_ id: UUID, hex: String?, undoManager: UndoManager?) {
+        let index = self.index
+        change(hex == nil ? "Automatic Color" : "Change Color", undoManager: undoManager) { p in
+            guard let i = p.characterIndex(id) else { return }
+            if let hex {
+                p.characters[i].colorHex = hex
+                p.characters[i].colorChosen = true
+            } else {
+                p.characters[i].colorChosen = false
+                // A color picked with Other… isn't in the palette: start from the family's next one.
+                if CharacterPalette.family(of: p.characters[i].colorHex) == nil {
+                    p.characters[i].colorHex = CharacterPalette.next(used: p.characters.map(\.colorHex))
+                }
+                CharacterPalette.recolorAutomatic(&p, index: index, only: id)
+            }
+        }
+    }
+
+    /// Matches every Automatic color to what the book now says about each character.
+    /// Runs after Tag Speakers and Build Summaries, and when a project opens. No undo step:
+    /// nothing the narrator chose changes.
+    func recolorAutomatic() {
+        let project = self.project
+        let index = self.index
+        Task {
+            // Gender reads the whole book: off the main thread, then the colors on it.
+            let families = await Task.detached(priority: .utility) { CharacterPalette.families(project, index: index) }.value
+            let now = self.index
+            applyQuietly { CharacterPalette.recolorAutomatic(&$0, index: now, families: families) }
+        }
     }
 
     func updateCharacter(_ id: UUID, _ name: String = "Edit Character", undoManager: UndoManager?, _ body: @escaping (inout BookCharacter) -> Void) {

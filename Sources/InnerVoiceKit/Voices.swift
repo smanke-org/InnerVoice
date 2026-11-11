@@ -378,6 +378,14 @@ public enum VoiceCasting {
         return l > h ? -1 : h > l ? 1 : 0
     }
 
+    /// "Mrs. Penrose" is a woman and "Sir Alec" a man, before the book says anything else.
+    public static func titleGender(_ name: String) -> VoiceGender? {
+        guard let first = name.split(separator: " ").first.map(String.init) else { return nil }
+        if femaleTitles.contains(first) { return .female }
+        if maleTitles.contains(first) { return .male }
+        return nil
+    }
+
     static func gender(in text: String) -> VoiceGender? {
         let w = words(text)
         guard !w.isEmpty else { return nil }

@@ -159,6 +159,8 @@ final class TaggingController {
                 newCharacters = document.project.characters.map(\.id).filter { !charactersBefore.contains($0) }
                 document.applyQuietly { $0.lastTagged = .now }
                 let needs = document.project.linesNeedingYou
+                // "she said" after a new character's lines picks their color family.
+                document.recolorAutomatic()
                 VoiceCastingRun.castIfNeeded(document: document)
                 self.finished = "Tagged \(changed.count.formatted()) lines" + (newCharacters.isEmpty ? "" : " and found \(newCharacters.count) new characters")
                     + (needs > 0 ? ". \(needs.formatted()) need you." : ".")
@@ -363,7 +365,8 @@ final class TaggingController {
                 // Only a run over the whole cast counts as "analyzed the cast".
                 if only == nil { document.applyQuietly { $0.summariesBuilt = .now } }
                 ActivityStore.shared.record(ActivityKey.facts, count: added)
-                // Summaries say who sounds like what: cast the voices that were unsure.
+                // Summaries say who sounds like what: recolor and cast the ones that were unsure.
+                document.recolorAutomatic()
                 VoiceCastingRun.castIfNeeded(document: document)
                 let touched = max(notesWritten, briefsWritten)
                 let notes = touched == 0 ? "" : (cast.count == 1 ? " Voice notes updated" + (briefsWritten > 0 ? ", with a voice brief." : ".") : " Voice notes updated for \(touched) characters" + (briefsWritten > 0 ? ", with voice briefs." : "."))
