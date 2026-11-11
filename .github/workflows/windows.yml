@@ -4,6 +4,9 @@ name: Windows
 
 on:
   push:
+    # Branches when the Windows app or the Kit changes; win-v* tags build the Store bundle.
+    # (A tags filter without a branches filter would stop branch pushes from running.)
+    branches: ["**"]
     paths: ["windows/**", "Sources/InnerVoiceKit/**", ".github/workflows/windows.yml"]
     tags: ["win-v*"]
   pull_request:
