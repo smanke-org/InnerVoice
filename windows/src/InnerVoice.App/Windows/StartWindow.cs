@@ -33,6 +33,7 @@ public sealed class StartWindow : Window
         var left = new StackPanel { Spacing = Look.Md, Margin = new Thickness(Look.Section), VerticalAlignment = VerticalAlignment.Center };
         left.Children.Add(Ui.Text("InnerVoice", 30, FontWeight.Bold));
         left.Children.Add(Ui.Text("Who's speaking, for audiobook narrators.", 14, brush: Look.Brush(Look.SecondaryInk)));
+        left.Children.Add(Ui.Caption($"Version {App.Version}"));
         var drop = new Border
         {
             Margin = new Thickness(0, Look.Lg),

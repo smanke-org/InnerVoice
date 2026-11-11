@@ -61,7 +61,7 @@ public sealed partial class ProjectWindow : Window
             Background = Look.Brush(Look.Chrome),
             BorderBrush = Look.Brush(Look.Separator),
             BorderThickness = new Thickness(0, 0, 1, 0),
-            Child = Ui.Scroll(sidebar),
+            Child = SidebarWithVersion(),
         };
         var body = new DockPanel();
         DockPanel.SetDock(side, Dock.Left);
@@ -155,6 +155,26 @@ public sealed partial class ProjectWindow : Window
     }
 
     // MARK: Sidebar
+
+    /// The sidebar, with the app's version at the bottom (click it for About).
+    Control SidebarWithVersion()
+    {
+        var version = new Button
+        {
+            Content = Ui.Caption($"InnerVoice {App.Version}"),
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(Look.Lg, Look.Sm),
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        ToolTip.SetTip(version, "About InnerVoice and what's new");
+        version.Click += (_, _) => AboutWindow.Show(this);
+        var dock = new DockPanel();
+        DockPanel.SetDock(version, Dock.Bottom);
+        dock.Children.Add(version);
+        dock.Children.Add(Ui.Scroll(sidebar));
+        return dock;
+    }
 
     void BuildSidebar()
     {
