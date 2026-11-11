@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The book, its lines and cast, importers, dialogue finding, attribution rules,
+       prompts, revisions. No UI, so tests run without the app (like InnerVoiceKit). -->
+  <PropertyGroup>
+    <RootNamespace>InnerVoice.Core</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+</Project>

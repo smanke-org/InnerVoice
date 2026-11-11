@@ -342,6 +342,28 @@ zero: `0.1.0` ships as `0.1.0.0`.
 
 ---
 
+## W0 decisions (2026-11-10)
+
+- **llama.cpp binding:** our own P/Invoke binding (`windows/src/InnerVoice.Core/AI/LlamaNative.cs`)
+  over the official b11205 DLLs, not LLamaSharp. Struct sizes and offsets are tested against
+  clang's numbers for b11205's `llama.h`. On this Mac it ran Gemma 4 26B A4B through the Mac
+  app's llama.framework with a JSON grammar. `windows/tools/fetch-llama.sh` fetches the
+  Windows DLLs (Vulkan x64, CPU ARM64) with SHA-256 checks. They need the Visual C++ runtime:
+  CI copies it next to the app for zip builds; the Store package declares the VCLibs
+  dependency.
+- **Manuscript view:** a custom control drawing each paragraph with Avalonia's `TextLayout`
+  (virtualized: only visible paragraphs are drawn), not AvaloniaEdit. AvaloniaEdit can't do
+  paragraph spacing, centered scene breaks, indented block quotes or a line-height multiple
+  per paragraph, which the Mac's reading surface has. `TextLayout.HitTestTextRange` gives
+  the rectangles for highlights, outlines, underlines and margin labels.
+- **Undo:** the model is mutable classes with a deep `Copy()` (strings are shared), and undo
+  keeps a copy per change, like the Mac's value snapshots. Simpler to port than immutable
+  collections, and cheap enough for a novel.
+- **Fixtures:** in `windows/Fixtures/`, written by `Tests/InnerVoiceKitTests/WindowsFixtures.swift`
+  only when `INNERVOICE_WRITE_FIXTURES` is set (normal Mac test runs leave the tree clean).
+  The C# tests check the Mac project round-trips with identical JSON, and the rules give the
+  same lines, speakers, sources and confidences; the Swift test reads the Windows-saved copy.
+
 ## 5. Distribution at no cost
 
 ### Microsoft Store (recommended, free)

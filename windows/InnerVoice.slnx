@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/InnerVoice.App/InnerVoice.App.csproj" />
+    <Project Path="src/InnerVoice.Core/InnerVoice.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/InnerVoice.Core.Tests/InnerVoice.Core.Tests.csproj" />
+  </Folder>
+</Solution>

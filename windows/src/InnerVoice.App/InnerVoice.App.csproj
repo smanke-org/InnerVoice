@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>InnerVoice</AssemblyName>
+    <RootNamespace>InnerVoice.App</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon Condition="Exists('Assets\InnerVoice.ico')">Assets\InnerVoice.ico</ApplicationIcon>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.6" />
+    <PackageReference Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.3">
+      <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
+      <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\InnerVoice.Core\InnerVoice.Core.csproj" />
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <!-- llama.cpp b11205 for Windows (tools/fetch-llama.sh), copied next to the app. -->
+  <ItemGroup Condition="'$(RuntimeIdentifier)' != '' And Exists('..\..\native\$(RuntimeIdentifier)')">
+    <None Include="..\..\native\$(RuntimeIdentifier)\*.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Link="%(Filename)%(Extension)" Visible="false" />
+  </ItemGroup>
+</Project>
