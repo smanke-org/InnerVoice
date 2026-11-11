@@ -76,12 +76,17 @@ final class TaggingController {
             do {
                 let model = try await ModelManager.shared.model()
                 self.model = model
-                let targets = chapters ?? Array(document.project.chapters.indices)
+                // Chapters by ID, not position: the narrator keeps working during a run, and
+                // Delete Text or a revised manuscript can remove or merge chapters, so a saved
+                // position can point past the end (crashed 0.2.5). Gone chapters are skipped.
+                let all = document.project.chapters
+                let targets = (chapters ?? Array(all.indices)).filter { all.indices.contains($0) }.map { all[$0].id }
                 // Lines the AI gave up on ("?") get another try: the rules first (they now
                 // guess from the sentence before "he said"), then the AI, which is asked
                 // for its best guess. Part of this run's one undo step.
                 document.applyQuietly { p in
-                    let ids = Set(targets.flatMap { p.chapters[$0].paragraphs.map(\.id) })
+                    let wanted = Set(targets)
+                    let ids = Set(p.chapters.filter { wanted.contains($0.id) }.flatMap { $0.paragraphs.map(\.id) })
                     let before = Dictionary(p.lines.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
                     for i in p.lines.indices where ids.contains(p.lines[i].paragraphID) && p.lines[i].source == .ai && p.lines[i].speakerID == nil {
                         p.lines[i].source = .none
@@ -93,8 +98,9 @@ final class TaggingController {
                 }
                 let hints = self.hintsFromRules(document)
                 let total = max(1, targets.count)
-                for (n, c) in targets.enumerated() {
+                for (n, chapterID) in targets.enumerated() {
                     try Task.checkCancellation()
+                    guard let c = document.project.chapters.firstIndex(where: { $0.id == chapterID }) else { continue }
                     let title = document.project.chapters[c].title
                     self.status = Status(job: .tagging, progress: Double(n) / Double(total),
                                          message: "Tagging \(title) (\(n + 1) of \(total))…")
@@ -125,6 +131,8 @@ final class TaggingController {
                         self.status?.progress = (Double(n) + Double(k + 1) / Double(max(1, chunks.count)) * 0.7) / Double(total)
                     }
                     // Then how each line is said, now that the speakers are known.
+                    // The AI calls above wait, so look the chapter up again.
+                    guard let c = document.project.chapters.firstIndex(where: { $0.id == chapterID }) else { continue }
                     let toneChunks = TonePrompt.chunks(project: document.project, index: document.index, chapterIndex: c,
                                                        maxWords: model.passageWords)
                     for (k, chunk) in toneChunks.enumerated() {
@@ -231,7 +239,7 @@ final class TaggingController {
     func retag(chapters: [Int], undoManager: UndoManager?) {
         guard let document else { return }
         document.change("Reset AI Tags", undoManager: undoManager) { p in
-            let ids = Set(chapters.flatMap { p.chapters[$0].paragraphs.map(\.id) })
+            let ids = Set(chapters.filter { p.chapters.indices.contains($0) }.flatMap { p.chapters[$0].paragraphs.map(\.id) })
             for i in p.lines.indices where ids.contains(p.lines[i].paragraphID) && p.lines[i].source == .ai {
                 p.lines[i].source = .none
                 p.lines[i].speakerID = nil
