@@ -66,7 +66,7 @@ public sealed partial class ProjectWindow
 
     void AddMoreBookItems(MenuItem book) { }
 
-    void AddHelpWindowItem(MenuItem help) { }
+    void AddHelpWindowItem(MenuItem help) => help.Items.Add(Item("InnerVoice _Help", "F1", () => InnerVoice.App.Help.HelpWindow.Show()));
 
     /// Brings in the author's new draft, keeping every tag, note and mark on the paragraphs
     /// that didn't change.
