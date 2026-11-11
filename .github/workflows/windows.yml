@@ -26,6 +26,8 @@ jobs:
           dotnet-version: "10.0.x"
       - name: Test
         run: dotnet test tests/InnerVoice.Core.Tests -c Release
+      - name: Test the app (headless)
+        run: dotnet run --project tests/InnerVoice.App.Tests -c Release
 
   build:
     needs: test
