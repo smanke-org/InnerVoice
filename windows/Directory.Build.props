@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-    <Version>0.1.0</Version>
+    <Version>0.2.8</Version>
     <Company>Steve Manke</Company>
     <Product>InnerVoice</Product>
     <Copyright>© 2026 Steve Manke. All rights reserved.</Copyright>
