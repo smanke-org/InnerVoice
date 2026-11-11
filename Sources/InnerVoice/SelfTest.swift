@@ -902,6 +902,27 @@ enum SelfTest {
         check("live model reads tones", byAI.count >= 5, "\(byAI.count)")
         check("tones are tagged with a date", p.tonesTagged != nil)
 
+        // Deleting a chapter while Tag Speakers runs: the run used to keep chapter positions
+        // and crashed past the end of the list (0.2.5). Now it skips the chapter that's gone.
+        var shorter = SeedData.project()
+        for i in shorter.lines.indices where shorter.lines[i].source == .ai {
+            shorter.lines[i].source = .none
+            shorter.lines[i].speakerID = nil
+        }
+        let cutDoc = InnerVoiceDocument(project: shorter)
+        let chapterCount = cutDoc.project.chapters.count
+        cutDoc.tagging.tagSpeakers(undoManager: nil)
+        while cutDoc.tagging.isRunning, cutDoc.tagging.status?.message.hasPrefix("Tagging") != true {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        if let last = cutDoc.project.chapters.last?.id, chapterCount > 1 {
+            cutDoc.change("Delete Chapter", undoManager: nil) { $0.deleteText(cuts: [:], chapters: [last]) }
+        }
+        while cutDoc.tagging.isRunning { try? await Task.sleep(for: .milliseconds(200)) }
+        check("Tag Speakers survives a chapter deleted mid-run",
+              cutDoc.tagging.failure == nil && cutDoc.project.chapters.count == chapterCount - 1,
+              "\(chapterCount) → \(cutDoc.project.chapters.count) chapters; \(cutDoc.tagging.finished ?? cutDoc.tagging.failure ?? "")")
+
         // Build Summaries for the whole cast: both bars move, voice notes are written, one Undo.
         let undo = UndoManager()
         let notesBefore = doc.project.characters.map(\.voiceNotes)
