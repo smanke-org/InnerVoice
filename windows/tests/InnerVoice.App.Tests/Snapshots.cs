@@ -54,10 +54,12 @@ public class Snapshots
         {
             Application.Current!.RequestedThemeVariant = variant;
             var doc = ProjectDocument.Unsaved(TestApp.Sample());
+            PronunciationFinder.Refresh(doc.Project, w => w.Length < 6);
+            doc.Project.Pronunciations[0].SayItAs = "keh-REN-sah";
             var w = new ProjectWindow(doc) { Width = 1280, Height = 820 };
             w.Show();
             Pump();
-            foreach (var page in new[] { PageKind.Manuscript, PageKind.Review, PageKind.Cast, PageKind.Record, PageKind.Retakes })
+            foreach (var page in new[] { PageKind.Manuscript, PageKind.Review, PageKind.Cast, PageKind.Index, PageKind.Pronunciations, PageKind.Record, PageKind.Retakes })
             {
                 w.Workspace.Go(page);
                 Pump();
@@ -81,6 +83,21 @@ public class Snapshots
         Pump();
         settings.CaptureRenderedFrame()?.Save(Path.Combine(dir, "Settings-AI.png"), (int?)null);
         settings.Close();
+        // A revised draft: one paragraph edited, one added.
+        {
+            var doc = ProjectDocument.Unsaved(TestApp.Sample());
+            var md = SampleStory.Markdown.Replace("“Then you'll be wanting tea.”", "“Then you'll be wanting tea, I suppose.”")
+                .Replace("“Towels are in the chest. Same as always.”", "“Towels are in the chest. Same as always.”\n\n“And the lamp?” Mara asked.");
+            var book = new ImportedBook("Sample Story", "", ChapterDetector.Chapters(PlainTextReader.Blocks(md, markdown: true), "Sample Story"));
+            var merged = RevisionMerger.Merge(doc.Project, book, "Sample Story v2.md");
+            doc.Change("Import Revised Manuscript", p => { p.Chapters = merged.Project.Chapters; p.Lines = merged.Project.Lines; p.Revisions = merged.Project.Revisions; }, textChanged: true);
+            var w = new ProjectWindow(doc) { Width = 1280, Height = 820 };
+            w.Show();
+            w.Workspace.Go(PageKind.Revisions);
+            Pump();
+            w.CaptureRenderedFrame()?.Save(Path.Combine(dir, "Revisions-dark.png"), (int?)null);
+            w.Close();
+        }
         var start = new StartWindow();
         start.Show();
         Pump();

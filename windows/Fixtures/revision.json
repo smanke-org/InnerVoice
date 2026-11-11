@@ -1,0 +1,2338 @@
+{
+  "chapters" : [
+    {
+      "oldChapter" : 0,
+      "title" : "Chapter 1: The Storm"
+    },
+    {
+      "oldChapter" : 1,
+      "title" : "Chapter 2: The Letter"
+    },
+    {
+      "oldChapter" : 2,
+      "title" : "Chapter 3: The Keeper"
+    }
+  ],
+  "characters" : [
+    "Tom Hale",
+    "Mara",
+    "Doctor Voss"
+  ],
+  "diffCases" : [
+    {
+      "inserted" : [
+
+      ],
+      "new" : [
+
+      ],
+      "old" : [
+
+      ],
+      "removed" : [
+
+      ]
+    },
+    {
+      "inserted" : [
+        0
+      ],
+      "new" : [
+        "a"
+      ],
+      "old" : [
+
+      ],
+      "removed" : [
+
+      ]
+    },
+    {
+      "inserted" : [
+
+      ],
+      "new" : [
+
+      ],
+      "old" : [
+        "a"
+      ],
+      "removed" : [
+        0
+      ]
+    },
+    {
+      "inserted" : [
+        1
+      ],
+      "new" : [
+        "b",
+        "a"
+      ],
+      "old" : [
+        "a",
+        "b"
+      ],
+      "removed" : [
+        0
+      ]
+    },
+    {
+      "inserted" : [
+        2,
+        5
+      ],
+      "new" : [
+        "c",
+        "b",
+        "a",
+        "b",
+        "a",
+        "c"
+      ],
+      "old" : [
+        "a",
+        "b",
+        "c",
+        "a",
+        "b",
+        "b",
+        "a"
+      ],
+      "removed" : [
+        0,
+        1,
+        3
+      ]
+    },
+    {
+      "inserted" : [
+        0,
+        3
+      ],
+      "new" : [
+        "d",
+        "a",
+        "c",
+        "d",
+        "a",
+        "d",
+        "b"
+      ],
+      "old" : [
+        "a",
+        "c",
+        "a",
+        "d",
+        "b"
+      ],
+      "removed" : [
+
+      ]
+    },
+    {
+      "inserted" : [
+        1,
+        3
+      ],
+      "new" : [
+        "b",
+        "b",
+        "a",
+        "b",
+        "a"
+      ],
+      "old" : [
+        "b",
+        "a",
+        "a"
+      ],
+      "removed" : [
+
+      ]
+    },
+    {
+      "inserted" : [
+
+      ],
+      "new" : [
+        "b"
+      ],
+      "old" : [
+        "a",
+        "b",
+        "b"
+      ],
+      "removed" : [
+        0,
+        1
+      ]
+    },
+    {
+      "inserted" : [
+
+      ],
+      "new" : [
+
+      ],
+      "old" : [
+        "b"
+      ],
+      "removed" : [
+        0
+      ]
+    },
+    {
+      "inserted" : [
+        3
+      ],
+      "new" : [
+        "a",
+        "c",
+        "c",
+        "a",
+        "b",
+        "a",
+        "c",
+        "c",
+        "c",
+        "c",
+        "c"
+      ],
+      "old" : [
+        "a",
+        "c",
+        "c",
+        "b",
+        "a",
+        "c",
+        "c",
+        "c",
+        "c",
+        "c"
+      ],
+      "removed" : [
+
+      ]
+    },
+    {
+      "inserted" : [
+
+      ],
+      "new" : [
+        "a",
+        "c",
+        "a",
+        "b",
+        "a",
+        "b",
+        "c",
+        "a"
+      ],
+      "old" : [
+        "b",
+        "a",
+        "c",
+        "b",
+        "a",
+        "b",
+        "a",
+        "a",
+        "c",
+        "b",
+        "c",
+        "a"
+      ],
+      "removed" : [
+        0,
+        3,
+        6,
+        8
+      ]
+    },
+    {
+      "inserted" : [
+        2,
+        3,
+        4
+      ],
+      "new" : [
+        "a",
+        "b",
+        "b",
+        "c",
+        "c",
+        "c",
+        "c",
+        "c",
+        "c",
+        "a",
+        "b",
+        "b",
+        "c",
+        "b"
+      ],
+      "old" : [
+        "a",
+        "b",
+        "c",
+        "c",
+        "c",
+        "c",
+        "a",
+        "b",
+        "b",
+        "c",
+        "b"
+      ],
+      "removed" : [
+
+      ]
+    },
+    {
+      "inserted" : [
+        3
+      ],
+      "new" : [
+        "b",
+        "a",
+        "a",
+        "b"
+      ],
+      "old" : [
+        "b",
+        "b",
+        "a",
+        "a"
+      ],
+      "removed" : [
+        1
+      ]
+    },
+    {
+      "inserted" : [
+
+      ],
+      "new" : [
+        "a",
+        "b",
+        "b",
+        "b",
+        "b"
+      ],
+      "old" : [
+        "a",
+        "b",
+        "a",
+        "b",
+        "b",
+        "b"
+      ],
+      "removed" : [
+        2
+      ]
+    },
+    {
+      "inserted" : [
+        2,
+        6,
+        8
+      ],
+      "new" : [
+        "a",
+        "a",
+        "a",
+        "b",
+        "b",
+        "a",
+        "c",
+        "a",
+        "b",
+        "c",
+        "c",
+        "b",
+        "c",
+        "c"
+      ],
+      "old" : [
+        "a",
+        "a",
+        "b",
+        "c",
+        "b",
+        "b",
+        "a",
+        "a",
+        "c",
+        "c",
+        "b",
+        "c",
+        "c"
+      ],
+      "removed" : [
+        3,
+        5
+      ]
+    },
+    {
+      "inserted" : [
+        5,
+        12
+      ],
+      "new" : [
+        "a",
+        "b",
+        "d",
+        "d",
+        "b",
+        "d",
+        "c",
+        "d",
+        "b",
+        "b",
+        "b",
+        "a",
+        "c"
+      ],
+      "old" : [
+        "a",
+        "b",
+        "d",
+        "d",
+        "b",
+        "c",
+        "d",
+        "b",
+        "b",
+        "d",
+        "b",
+        "a"
+      ],
+      "removed" : [
+        9
+      ]
+    },
+    {
+      "inserted" : [
+        3
+      ],
+      "new" : [
+        "b",
+        "b",
+        "a",
+        "b"
+      ],
+      "old" : [
+        "b",
+        "b",
+        "a",
+        "a"
+      ],
+      "removed" : [
+        3
+      ]
+    },
+    {
+      "inserted" : [
+        1,
+        2
+      ],
+      "new" : [
+        "a",
+        "b",
+        "b",
+        "b"
+      ],
+      "old" : [
+        "a",
+        "a",
+        "b"
+      ],
+      "removed" : [
+        1
+      ]
+    },
+    {
+      "inserted" : [
+        4,
+        6,
+        10
+      ],
+      "new" : [
+        "a",
+        "a",
+        "b",
+        "b",
+        "b",
+        "a",
+        "c",
+        "c",
+        "a",
+        "a",
+        "b",
+        "b",
+        "b"
+      ],
+      "old" : [
+        "a",
+        "a",
+        "b",
+        "b",
+        "a",
+        "c",
+        "a",
+        "a",
+        "b",
+        "a",
+        "b"
+      ],
+      "removed" : [
+        9
+      ]
+    },
+    {
+      "inserted" : [
+        1,
+        3,
+        4
+      ],
+      "new" : [
+        "c",
+        "c",
+        "a",
+        "c",
+        "d",
+        "c"
+      ],
+      "old" : [
+        "a",
+        "c",
+        "b",
+        "a",
+        "c"
+      ],
+      "removed" : [
+        0,
+        2
+      ]
+    },
+    {
+      "inserted" : [
+        4,
+        5,
+        12,
+        13
+      ],
+      "new" : [
+        "c",
+        "b",
+        "b",
+        "b",
+        "d",
+        "a",
+        "a",
+        "a",
+        "c",
+        "b",
+        "b",
+        "d",
+        "a",
+        "a",
+        "c"
+      ],
+      "old" : [
+        "c",
+        "b",
+        "b",
+        "b",
+        "a",
+        "a",
+        "c",
+        "b",
+        "b",
+        "b",
+        "d",
+        "c"
+      ],
+      "removed" : [
+        9
+      ]
+    },
+    {
+      "inserted" : [
+        1
+      ],
+      "new" : [
+        "a",
+        "a",
+        "b",
+        "a",
+        "a",
+        "a"
+      ],
+      "old" : [
+        "a",
+        "b",
+        "a",
+        "a",
+        "a",
+        "b"
+      ],
+      "removed" : [
+        5
+      ]
+    },
+    {
+      "inserted" : [
+        2,
+        9
+      ],
+      "new" : [
+        "b",
+        "a",
+        "a",
+        "b",
+        "a",
+        "a",
+        "a",
+        "a",
+        "b",
+        "a",
+        "a",
+        "a",
+        "b"
+      ],
+      "old" : [
+        "b",
+        "a",
+        "b",
+        "a",
+        "a",
+        "a",
+        "a",
+        "b",
+        "b",
+        "a",
+        "a",
+        "b"
+      ],
+      "removed" : [
+        8
+      ]
+    },
+    {
+      "inserted" : [
+        5,
+        6,
+        9,
+        11
+      ],
+      "new" : [
+        "a",
+        "c",
+        "d",
+        "b",
+        "a",
+        "a",
+        "b",
+        "d",
+        "b",
+        "c",
+        "a",
+        "d",
+        "a",
+        "d"
+      ],
+      "old" : [
+        "a",
+        "c",
+        "d",
+        "d",
+        "b",
+        "a",
+        "d",
+        "b",
+        "a",
+        "a",
+        "a",
+        "d"
+      ],
+      "removed" : [
+        3,
+        8
+      ]
+    },
+    {
+      "inserted" : [
+        4
+      ],
+      "new" : [
+        "a",
+        "b",
+        "d",
+        "d",
+        "a",
+        "c",
+        "d"
+      ],
+      "old" : [
+        "a",
+        "b",
+        "b",
+        "d",
+        "d",
+        "c",
+        "d"
+      ],
+      "removed" : [
+        2
+      ]
+    },
+    {
+      "inserted" : [
+
+      ],
+      "new" : [
+        "b",
+        "a",
+        "b",
+        "a",
+        "b",
+        "a",
+        "b"
+      ],
+      "old" : [
+        "b",
+        "a",
+        "b",
+        "a",
+        "b",
+        "a",
+        "b"
+      ],
+      "removed" : [
+
+      ]
+    },
+    {
+      "inserted" : [
+        0
+      ],
+      "new" : [
+        "a",
+        "c",
+        "b"
+      ],
+      "old" : [
+        "b",
+        "c",
+        "b"
+      ],
+      "removed" : [
+        0
+      ]
+    },
+    {
+      "inserted" : [
+        0
+      ],
+      "new" : [
+        "a",
+        "b",
+        "b"
+      ],
+      "old" : [
+        "b",
+        "b",
+        "a"
+      ],
+      "removed" : [
+        2
+      ]
+    },
+    {
+      "inserted" : [
+
+      ],
+      "new" : [
+        "a",
+        "b",
+        "a",
+        "b"
+      ],
+      "old" : [
+        "a",
+        "b",
+        "a",
+        "b",
+        "a"
+      ],
+      "removed" : [
+        4
+      ]
+    },
+    {
+      "inserted" : [
+
+      ],
+      "new" : [
+        "b",
+        "a",
+        "a",
+        "b",
+        "a",
+        "a",
+        "a",
+        "a"
+      ],
+      "old" : [
+        "b",
+        "a",
+        "b",
+        "a",
+        "a",
+        "b",
+        "a",
+        "a",
+        "a",
+        "a",
+        "a"
+      ],
+      "removed" : [
+        2,
+        4,
+        6
+      ]
+    },
+    {
+      "inserted" : [
+        0,
+        4
+      ],
+      "new" : [
+        "b",
+        "a",
+        "a",
+        "b",
+        "a",
+        "a",
+        "b",
+        "a"
+      ],
+      "old" : [
+        "a",
+        "a",
+        "a",
+        "b",
+        "a",
+        "b",
+        "a"
+      ],
+      "removed" : [
+        2
+      ]
+    },
+    {
+      "inserted" : [
+        1
+      ],
+      "new" : [
+        "d",
+        "d",
+        "c",
+        "d"
+      ],
+      "old" : [
+        "d",
+        "c",
+        "a",
+        "d"
+      ],
+      "removed" : [
+        2
+      ]
+    },
+    {
+      "inserted" : [
+        9
+      ],
+      "new" : [
+        "b",
+        "a",
+        "a",
+        "a",
+        "b",
+        "b",
+        "b",
+        "a",
+        "b",
+        "b",
+        "b"
+      ],
+      "old" : [
+        "a",
+        "b",
+        "a",
+        "a",
+        "a",
+        "b",
+        "b",
+        "b",
+        "a",
+        "b",
+        "a",
+        "b"
+      ],
+      "removed" : [
+        0,
+        10
+      ]
+    },
+    {
+      "inserted" : [
+        2,
+        5
+      ],
+      "new" : [
+        "c",
+        "c",
+        "a",
+        "c",
+        "b",
+        "d",
+        "c",
+        "b",
+        "b",
+        "a"
+      ],
+      "old" : [
+        "c",
+        "c",
+        "c",
+        "c",
+        "b",
+        "c",
+        "b",
+        "b",
+        "a"
+      ],
+      "removed" : [
+        3
+      ]
+    },
+    {
+      "inserted" : [
+        3,
+        8
+      ],
+      "new" : [
+        "b",
+        "b",
+        "a",
+        "d",
+        "b",
+        "c",
+        "c",
+        "c",
+        "b",
+        "b",
+        "c",
+        "d",
+        "a",
+        "a",
+        "b"
+      ],
+      "old" : [
+        "b",
+        "b",
+        "a",
+        "b",
+        "c",
+        "c",
+        "c",
+        "b",
+        "c",
+        "d",
+        "a",
+        "a",
+        "b"
+      ],
+      "removed" : [
+
+      ]
+    },
+    {
+      "inserted" : [
+        1
+      ],
+      "new" : [
+        "a",
+        "a",
+        "b",
+        "a"
+      ],
+      "old" : [
+        "a",
+        "b",
+        "b",
+        "a"
+      ],
+      "removed" : [
+        1
+      ]
+    },
+    {
+      "inserted" : [
+
+      ],
+      "new" : [
+        "a",
+        "b",
+        "b",
+        "b",
+        "c",
+        "a"
+      ],
+      "old" : [
+        "a",
+        "b",
+        "b",
+        "b",
+        "c",
+        "a"
+      ],
+      "removed" : [
+
+      ]
+    },
+    {
+      "inserted" : [
+        2,
+        3,
+        4
+      ],
+      "new" : [
+        "a",
+        "b",
+        "b",
+        "b",
+        "a",
+        "a",
+        "a",
+        "a"
+      ],
+      "old" : [
+        "a",
+        "b",
+        "a",
+        "c",
+        "a",
+        "a"
+      ],
+      "removed" : [
+        3
+      ]
+    },
+    {
+      "inserted" : [
+        8
+      ],
+      "new" : [
+        "c",
+        "a",
+        "b",
+        "d",
+        "b",
+        "b",
+        "c",
+        "a",
+        "d",
+        "a",
+        "c"
+      ],
+      "old" : [
+        "c",
+        "d",
+        "a",
+        "b",
+        "d",
+        "b",
+        "b",
+        "c",
+        "a",
+        "a",
+        "c"
+      ],
+      "removed" : [
+        1
+      ]
+    },
+    {
+      "inserted" : [
+
+      ],
+      "new" : [
+        "a",
+        "c",
+        "a",
+        "b",
+        "d"
+      ],
+      "old" : [
+        "a",
+        "c",
+        "a",
+        "b",
+        "d"
+      ],
+      "removed" : [
+
+      ]
+    },
+    {
+      "inserted" : [
+        2
+      ],
+      "new" : [
+        "a",
+        "a",
+        "b",
+        "b",
+        "b",
+        "a",
+        "b",
+        "b"
+      ],
+      "old" : [
+        "a",
+        "a",
+        "a",
+        "b",
+        "b",
+        "a",
+        "b",
+        "b"
+      ],
+      "removed" : [
+        2
+      ]
+    },
+    {
+      "inserted" : [
+        2,
+        6,
+        7
+      ],
+      "new" : [
+        "b",
+        "a",
+        "b",
+        "a",
+        "a",
+        "a",
+        "a",
+        "b",
+        "b",
+        "b"
+      ],
+      "old" : [
+        "b",
+        "a",
+        "a",
+        "a",
+        "a",
+        "b",
+        "b"
+      ],
+      "removed" : [
+
+      ]
+    },
+    {
+      "inserted" : [
+
+      ],
+      "new" : [
+        "b",
+        "b"
+      ],
+      "old" : [
+        "b",
+        "b",
+        "b"
+      ],
+      "removed" : [
+        2
+      ]
+    },
+    {
+      "inserted" : [
+        1
+      ],
+      "new" : [
+        "d",
+        "c"
+      ],
+      "old" : [
+        "c",
+        "d",
+        "d"
+      ],
+      "removed" : [
+        0,
+        2
+      ]
+    },
+    {
+      "inserted" : [
+
+      ],
+      "new" : [
+        "b",
+        "a",
+        "b",
+        "c",
+        "c"
+      ],
+      "old" : [
+        "b",
+        "a",
+        "b",
+        "b",
+        "c",
+        "c"
+      ],
+      "removed" : [
+        3
+      ]
+    },
+    {
+      "inserted" : [
+        0,
+        1
+      ],
+      "new" : [
+        "a",
+        "a"
+      ],
+      "old" : [
+        "b"
+      ],
+      "removed" : [
+        0
+      ]
+    },
+    {
+      "inserted" : [
+        0,
+        1
+      ],
+      "new" : [
+        "a",
+        "b",
+        "c",
+        "c",
+        "c",
+        "b",
+        "c"
+      ],
+      "old" : [
+        "c",
+        "c",
+        "c",
+        "b",
+        "c"
+      ],
+      "removed" : [
+
+      ]
+    },
+    {
+      "inserted" : [
+        6,
+        7
+      ],
+      "new" : [
+        "b",
+        "b",
+        "b",
+        "a",
+        "a",
+        "a",
+        "b",
+        "b",
+        "b",
+        "a",
+        "b",
+        "a",
+        "a"
+      ],
+      "old" : [
+        "b",
+        "b",
+        "b",
+        "b",
+        "a",
+        "a",
+        "a",
+        "a",
+        "b",
+        "a",
+        "b",
+        "a",
+        "a"
+      ],
+      "removed" : [
+        3,
+        4
+      ]
+    },
+    {
+      "inserted" : [
+        3,
+        4
+      ],
+      "new" : [
+        "c",
+        "d",
+        "a",
+        "c",
+        "a",
+        "a",
+        "a",
+        "d",
+        "c"
+      ],
+      "old" : [
+        "c",
+        "d",
+        "a",
+        "d",
+        "a",
+        "a",
+        "d",
+        "c"
+      ],
+      "removed" : [
+        3
+      ]
+    },
+    {
+      "inserted" : [
+        0
+      ],
+      "new" : [
+        "b"
+      ],
+      "old" : [
+
+      ],
+      "removed" : [
+
+      ]
+    },
+    {
+      "inserted" : [
+        2,
+        3
+      ],
+      "new" : [
+        "c",
+        "a",
+        "a",
+        "a",
+        "b",
+        "a",
+        "c"
+      ],
+      "old" : [
+        "c",
+        "a",
+        "b",
+        "b",
+        "a",
+        "c"
+      ],
+      "removed" : [
+        2
+      ]
+    },
+    {
+      "inserted" : [
+        1,
+        2,
+        5,
+        8
+      ],
+      "new" : [
+        "b",
+        "a",
+        "a",
+        "b",
+        "b",
+        "a",
+        "a",
+        "c",
+        "a",
+        "c",
+        "b",
+        "a",
+        "b",
+        "b"
+      ],
+      "old" : [
+        "a",
+        "b",
+        "b",
+        "b",
+        "a",
+        "c",
+        "c",
+        "b",
+        "a",
+        "b",
+        "b",
+        "b"
+      ],
+      "removed" : [
+        0,
+        9
+      ]
+    },
+    {
+      "inserted" : [
+        4
+      ],
+      "new" : [
+        "b",
+        "b",
+        "a",
+        "b",
+        "b",
+        "a"
+      ],
+      "old" : [
+        "b",
+        "b",
+        "a",
+        "b",
+        "a"
+      ],
+      "removed" : [
+
+      ]
+    },
+    {
+      "inserted" : [
+        4
+      ],
+      "new" : [
+        "c",
+        "b",
+        "b",
+        "a",
+        "b",
+        "a",
+        "a",
+        "b",
+        "c",
+        "b",
+        "a"
+      ],
+      "old" : [
+        "c",
+        "b",
+        "b",
+        "a",
+        "c",
+        "a",
+        "a",
+        "b",
+        "c",
+        "b",
+        "a"
+      ],
+      "removed" : [
+        4
+      ]
+    },
+    {
+      "inserted" : [
+        0,
+        1
+      ],
+      "new" : [
+        "c",
+        "c",
+        "a",
+        "b",
+        "c"
+      ],
+      "old" : [
+        "b",
+        "b",
+        "a",
+        "a",
+        "b",
+        "c"
+      ],
+      "removed" : [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "inserted" : [
+        4
+      ],
+      "new" : [
+        "d",
+        "c",
+        "d",
+        "b",
+        "a",
+        "a"
+      ],
+      "old" : [
+        "d",
+        "c",
+        "c",
+        "d",
+        "b",
+        "a"
+      ],
+      "removed" : [
+        2
+      ]
+    },
+    {
+      "inserted" : [
+        0
+      ],
+      "new" : [
+        "a"
+      ],
+      "old" : [
+        "b"
+      ],
+      "removed" : [
+        0
+      ]
+    },
+    {
+      "inserted" : [
+        0,
+        2
+      ],
+      "new" : [
+        "c",
+        "b",
+        "c",
+        "b",
+        "c",
+        "a"
+      ],
+      "old" : [
+        "d",
+        "b",
+        "b",
+        "c",
+        "a"
+      ],
+      "removed" : [
+        0
+      ]
+    },
+    {
+      "inserted" : [
+        2,
+        3
+      ],
+      "new" : [
+        "c",
+        "c",
+        "c",
+        "c",
+        "a"
+      ],
+      "old" : [
+        "a",
+        "c",
+        "c",
+        "b",
+        "a",
+        "a"
+      ],
+      "removed" : [
+        0,
+        3,
+        4
+      ]
+    },
+    {
+      "inserted" : [
+        1
+      ],
+      "new" : [
+        "c",
+        "c",
+        "a",
+        "d",
+        "b",
+        "a",
+        "a",
+        "a",
+        "c",
+        "b"
+      ],
+      "old" : [
+        "c",
+        "a",
+        "b",
+        "d",
+        "b",
+        "d",
+        "a",
+        "a",
+        "a",
+        "c",
+        "b"
+      ],
+      "removed" : [
+        2,
+        5
+      ]
+    },
+    {
+      "inserted" : [
+        10,
+        11
+      ],
+      "new" : [
+        "a",
+        "b",
+        "c",
+        "b",
+        "a",
+        "c",
+        "c",
+        "c",
+        "a",
+        "b",
+        "b",
+        "b"
+      ],
+      "old" : [
+        "a",
+        "b",
+        "c",
+        "c",
+        "b",
+        "a",
+        "c",
+        "c",
+        "c",
+        "a",
+        "b",
+        "a"
+      ],
+      "removed" : [
+        3,
+        11
+      ]
+    },
+    {
+      "inserted" : [
+        4,
+        5
+      ],
+      "new" : [
+        "a",
+        "a",
+        "b",
+        "b",
+        "a",
+        "a"
+      ],
+      "old" : [
+        "a",
+        "a",
+        "b",
+        "b"
+      ],
+      "removed" : [
+
+      ]
+    },
+    {
+      "inserted" : [
+        0
+      ],
+      "new" : [
+        "a"
+      ],
+      "old" : [
+
+      ],
+      "removed" : [
+
+      ]
+    },
+    {
+      "inserted" : [
+        0
+      ],
+      "new" : [
+        "a",
+        "a"
+      ],
+      "old" : [
+        "b",
+        "c",
+        "b",
+        "b",
+        "a"
+      ],
+      "removed" : [
+        0,
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "inserted" : [
+        0
+      ],
+      "new" : [
+        "b",
+        "a",
+        "a",
+        "b",
+        "a"
+      ],
+      "old" : [
+        "a",
+        "a",
+        "b",
+        "a"
+      ],
+      "removed" : [
+
+      ]
+    }
+  ],
+  "facts" : [
+    {
+      "character" : "Tom Hale",
+      "sourceParagraph" : 7,
+      "text" : "About sixty"
+    },
+    {
+      "character" : "Tom Hale",
+      "text" : "Makes tea"
+    }
+  ],
+  "lines" : [
+    {
+      "confidence" : 1,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 0,
+      "paragraph" : 1,
+      "range" : {
+        "length" : 12,
+        "location" : 1
+      },
+      "source" : "user",
+      "speaker" : "Tom Hale"
+    },
+    {
+      "confidence" : 0.95,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 1,
+      "paragraph" : 2,
+      "range" : {
+        "length" : 24,
+        "location" : 1
+      },
+      "source" : "rule",
+      "speaker" : "Mara"
+    },
+    {
+      "confidence" : 0.85,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 2,
+      "paragraph" : 2,
+      "range" : {
+        "length" : 32,
+        "location" : 39
+      },
+      "source" : "rule",
+      "speaker" : "Mara"
+    },
+    {
+      "confidence" : 0.65,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 4,
+      "paragraph" : 3,
+      "range" : {
+        "length" : 30,
+        "location" : 1
+      },
+      "source" : "exchange",
+      "speaker" : "Mara"
+    },
+    {
+      "confidence" : 0.65,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 5,
+      "paragraph" : 4,
+      "range" : {
+        "length" : 40,
+        "location" : 1
+      },
+      "source" : "exchange",
+      "speaker" : "Tom Hale"
+    },
+    {
+      "confidence" : 0,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 6,
+      "paragraph" : 5,
+      "range" : {
+        "length" : 15,
+        "location" : 1
+      },
+      "source" : "none"
+    },
+    {
+      "confidence" : 0.95,
+      "continuesPrevious" : false,
+      "kind" : "thought",
+      "oldLine" : 7,
+      "paragraph" : 6,
+      "range" : {
+        "length" : 33,
+        "location" : 0
+      },
+      "source" : "rule",
+      "speaker" : "Mara"
+    },
+    {
+      "confidence" : 0,
+      "continuesPrevious" : false,
+      "kind" : "thought",
+      "oldLine" : 8,
+      "paragraph" : 6,
+      "range" : {
+        "length" : 22,
+        "location" : 48
+      },
+      "source" : "none"
+    },
+    {
+      "confidence" : 1,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 9,
+      "paragraph" : 7,
+      "range" : {
+        "length" : 39,
+        "location" : 198
+      },
+      "source" : "user",
+      "speaker" : "Mara"
+    },
+    {
+      "confidence" : 0,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 10,
+      "paragraph" : 8,
+      "range" : {
+        "length" : 22,
+        "location" : 1
+      },
+      "source" : "none"
+    },
+    {
+      "confidence" : 0,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 11,
+      "paragraph" : 9,
+      "range" : {
+        "length" : 40,
+        "location" : 1
+      },
+      "source" : "none"
+    },
+    {
+      "confidence" : 0,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 12,
+      "paragraph" : 12,
+      "range" : {
+        "length" : 73,
+        "location" : 1
+      },
+      "source" : "none"
+    },
+    {
+      "confidence" : 0,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 13,
+      "paragraph" : 13,
+      "range" : {
+        "length" : 15,
+        "location" : 1
+      },
+      "source" : "none"
+    },
+    {
+      "confidence" : 0,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 14,
+      "paragraph" : 14,
+      "range" : {
+        "length" : 66,
+        "location" : 1
+      },
+      "source" : "none"
+    },
+    {
+      "confidence" : 0,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 15,
+      "paragraph" : 16,
+      "range" : {
+        "length" : 32,
+        "location" : 1
+      },
+      "source" : "none"
+    },
+    {
+      "confidence" : 0,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 16,
+      "paragraph" : 17,
+      "range" : {
+        "length" : 15,
+        "location" : 1
+      },
+      "source" : "none"
+    },
+    {
+      "confidence" : 0.95,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "paragraph" : 18,
+      "range" : {
+        "length" : 27,
+        "location" : 1
+      },
+      "source" : "rule",
+      "speaker" : "Doctor Voss"
+    },
+    {
+      "confidence" : 0,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 17,
+      "paragraph" : 19,
+      "range" : {
+        "length" : 5,
+        "location" : 1
+      },
+      "source" : "none"
+    },
+    {
+      "confidence" : 0,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 18,
+      "paragraph" : 19,
+      "range" : {
+        "length" : 78,
+        "location" : 39
+      },
+      "source" : "none"
+    },
+    {
+      "confidence" : 0,
+      "continuesPrevious" : false,
+      "kind" : "written",
+      "oldLine" : 19,
+      "paragraph" : 21,
+      "range" : {
+        "length" : 154,
+        "location" : 0
+      },
+      "source" : "none"
+    },
+    {
+      "confidence" : 0.95,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 20,
+      "paragraph" : 22,
+      "range" : {
+        "length" : 15,
+        "location" : 1
+      },
+      "source" : "rule",
+      "speaker" : "Mara"
+    },
+    {
+      "confidence" : 0,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 22,
+      "paragraph" : 23,
+      "range" : {
+        "length" : 8,
+        "location" : 1
+      },
+      "source" : "none"
+    },
+    {
+      "confidence" : 0,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "paragraph" : 24,
+      "range" : {
+        "length" : 14,
+        "location" : 1
+      },
+      "source" : "none"
+    },
+    {
+      "confidence" : 0,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 23,
+      "paragraph" : 25,
+      "range" : {
+        "length" : 40,
+        "location" : 1
+      },
+      "source" : "none"
+    },
+    {
+      "confidence" : 0,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 24,
+      "paragraph" : 26,
+      "range" : {
+        "length" : 25,
+        "location" : 1
+      },
+      "source" : "none"
+    },
+    {
+      "confidence" : 0,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 25,
+      "paragraph" : 27,
+      "range" : {
+        "length" : 47,
+        "location" : 59
+      },
+      "source" : "none"
+    },
+    {
+      "confidence" : 0,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 26,
+      "paragraph" : 28,
+      "range" : {
+        "length" : 4,
+        "location" : 1
+      },
+      "source" : "none"
+    },
+    {
+      "confidence" : 0,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 27,
+      "paragraph" : 30,
+      "range" : {
+        "length" : 60,
+        "location" : 1
+      },
+      "source" : "none"
+    },
+    {
+      "confidence" : 0,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 28,
+      "paragraph" : 30,
+      "range" : {
+        "length" : 68,
+        "location" : 73
+      },
+      "source" : "none"
+    },
+    {
+      "confidence" : 0,
+      "continuesPrevious" : true,
+      "kind" : "spoken",
+      "oldLine" : 29,
+      "paragraph" : 31,
+      "range" : {
+        "length" : 120,
+        "location" : 1
+      },
+      "source" : "none"
+    },
+    {
+      "confidence" : 0,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 30,
+      "paragraph" : 32,
+      "range" : {
+        "length" : 13,
+        "location" : 1
+      },
+      "source" : "none"
+    },
+    {
+      "confidence" : 0,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 31,
+      "paragraph" : 33,
+      "range" : {
+        "length" : 46,
+        "location" : 1
+      },
+      "source" : "none"
+    },
+    {
+      "confidence" : 0,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 32,
+      "paragraph" : 34,
+      "range" : {
+        "length" : 23,
+        "location" : 1
+      },
+      "source" : "none"
+    },
+    {
+      "confidence" : 0,
+      "continuesPrevious" : false,
+      "kind" : "spoken",
+      "oldLine" : 33,
+      "paragraph" : 35,
+      "range" : {
+        "length" : 26,
+        "location" : 1
+      },
+      "source" : "none"
+    }
+  ],
+  "oldProject" : "{\"author\":\"A. N. Example\",\"chapters\":[{\"id\":\"D66F91E3-6D7B-4BD6-BE6A-C5A2617C26A8\",\"paragraphs\":[{\"id\":\"7D415F6D-FD18-4FBF-9E49-55ED0B6842DD\",\"italic\":[],\"style\":\"body\",\"text\":\"The wind came off the sea like a held breath finally let go. Mara Quinn pulled the door shut behind her and leaned on it until the latch caught.\"},{\"id\":\"91FDC9B8-293F-433F-B4CF-2BE7323D7938\",\"italic\":[],\"style\":\"body\",\"text\":\"“You're late,” said Tom Hale, without looking up from the lamp.\"},{\"id\":\"1E336214-749F-4AF9-A0DE-5438E7F07628\",\"italic\":[],\"style\":\"body\",\"text\":\"“The path was underwater,” Mara said. “I had to go round by the chapel.”\"},{\"id\":\"8B4B4A36-B789-49CD-9224-643C8C4DA2E8\",\"italic\":[],\"style\":\"body\",\"text\":\"“Then you'll be wanting tea.”\"},{\"id\":\"7B4A5C4C-B050-48C0-BCC5-AD58D75E0DF3\",\"italic\":[],\"style\":\"body\",\"text\":\"“I'll be wanting a towel first.”\"},{\"id\":\"B3CAD354-1C12-4BD6-A88E-2C4102307AE1\",\"italic\":[],\"style\":\"body\",\"text\":\"“Towels are in the chest. Same as always.”\"},{\"id\":\"268467CE-1663-4257-ACB7-43C96422F6BD\",\"italic\":[],\"style\":\"body\",\"text\":\"“Same as always,” she repeated, and almost smiled.\"},{\"id\":\"2519C1BA-DEEE-4E27-A8B2-EC184F5DF0FC\",\"italic\":[{\"length\":33,\"location\":0},{\"length\":22,\"location\":48}],\"style\":\"body\",\"text\":\"He hasn't asked about the letter, Mara thought. Maybe he doesn't know.\"},{\"id\":\"116F25FC-37D9-4C80-9477-AD2624628AF1\",\"italic\":[],\"style\":\"body\",\"text\":\"Tom set down the wick trimmer. He was a broad man gone narrow with age, sixty if he was a day, and when he spoke again his voice had the gravel of a man who had shouted over gales for forty years. “Doctor Voss came by. Asked after you.”\"},{\"id\":\"FC6772B5-E78A-4CB2-95D5-F11161D04A0C\",\"italic\":[],\"style\":\"body\",\"text\":\"“What did you tell her?”\"},{\"id\":\"EC5D01DA-08E4-4C32-A1E0-ACED84C49867\",\"italic\":[],\"style\":\"body\",\"text\":\"“That you'd be back when the sea let you.”\"},{\"id\":\"B7168D7F-05EF-4047-8E5D-D290059381A1\",\"italic\":[],\"style\":\"sceneBreak\",\"text\":\"⁂\"},{\"id\":\"B6FB1379-A7AD-42B7-975B-613CC81B564A\",\"italic\":[],\"style\":\"body\",\"text\":\"A knock shook the door. Pip Aelwyn stood on the step, soaked to the skin, a lantern swinging from one small fist.\"},{\"id\":\"E60A1C76-F951-45A6-B7EA-CB48BAFB9C7C\",\"italic\":[],\"style\":\"body\",\"text\":\"“Miss Quinn! Miss Quinn, the boat's come loose from the jetty and Da says—”\"},{\"id\":\"0DDC1E72-17D9-4128-8F3D-A30871B3F0B5\",\"italic\":[],\"style\":\"body\",\"text\":\"“Slow down, Pip.”\"},{\"id\":\"B9F7D6B9-71F6-4E15-906A-6E3BAF4BFD28\",\"italic\":[],\"style\":\"body\",\"text\":\"“—Da says if it goes on the rocks we'll none of us eat till spring!”\"}],\"title\":\"Chapter 1: The Storm\"},{\"id\":\"A57E50BF-BD52-4D71-A357-EABF70602F88\",\"paragraphs\":[{\"id\":\"F34B4550-1A11-47CE-8D70-6A2BE4EA11ED\",\"italic\":[],\"style\":\"body\",\"text\":\"Doctor Edda Voss arrived the next morning with her bag and her clipped, careful vowels, every word set down as if it might break. She had come from Hamburg twenty years ago and never quite let the north of Germany go.\"},{\"id\":\"C1A880F5-03EB-40D3-8FCC-7BE8212441DC\",\"italic\":[],\"style\":\"body\",\"text\":\"“You have been avoiding me, Mara.”\"},{\"id\":\"13BE2D66-ABA1-4F0A-B70D-0A75E667C036\",\"italic\":[],\"style\":\"body\",\"text\":\"“I've been busy.”\"},{\"id\":\"1A19CA0A-E862-476F-81AB-B30305D0AE93\",\"italic\":[],\"style\":\"body\",\"text\":\"“Busy.” The doctor folded her gloves. “Your father wrote to me before he died. I think you should read what he wrote.”\"},{\"id\":\"3AD0286C-54C7-4DF1-A045-9DBA6267F0C8\",\"italic\":[],\"style\":\"body\",\"text\":\"She laid an envelope on the table. The handwriting on it was small and slanted.\"},{\"id\":\"62195E60-026A-43AC-991F-8B36D57C8195\",\"italic\":[],\"style\":\"blockQuote\",\"text\":\"My dear girl — if Edda has given you this, then I was too much of a coward to say it myself. The light was never mine to leave you. It belongs to Kerensa.\"},{\"id\":\"39DAA52D-C096-473D-BA4A-C534AEED2001\",\"italic\":[],\"style\":\"body\",\"text\":\"“Who is Kerensa?” Mara whispered.\"},{\"id\":\"ED8964FE-563F-4C0F-A3BD-29EB2688A75E\",\"italic\":[],\"style\":\"body\",\"text\":\"“Read the rest.”\"},{\"id\":\"AF3277E9-8AB4-4B14-B5C8-C5401315D556\",\"italic\":[],\"style\":\"body\",\"text\":\"“I can't.”\"},{\"id\":\"6DBADA2B-27E1-404C-9732-5A3E9A61D39A\",\"italic\":[],\"style\":\"body\",\"text\":\"“You can. You are your father's daughter.”\"},{\"id\":\"28B68854-28B3-4D1D-86EA-A7323762B6F6\",\"italic\":[],\"style\":\"body\",\"text\":\"“That's what frightens me.”\"},{\"id\":\"3B11AC32-E6AA-4361-8415-6B990F7B2739\",\"italic\":[],\"style\":\"body\",\"text\":\"Pip had crept in behind them, dripping on the flagstones. “Is it treasure? Da says old Quinn had treasure.”\"},{\"id\":\"D0C8F01E-BF0B-479E-9BEB-2EBC645F76A4\",\"italic\":[],\"style\":\"body\",\"text\":\"“Out,” said the doctor, not unkindly.\"}],\"title\":\"Chapter 2: The Letter\"},{\"id\":\"B2FFE4CF-7204-4A87-8082-EAA0C84D3C64\",\"paragraphs\":[{\"id\":\"ECA1CE57-7577-44F2-9EC9-29DEC596ECA6\",\"italic\":[],\"style\":\"body\",\"text\":\"That night Tom told her the story. He told it the way he told everything, in the soft burr of the Highlands he had never lost, though he'd left Inverness as a boy of twelve.\"},{\"id\":\"3BA6D87C-E2CE-4035-8318-783BE9ABBFA0\",\"italic\":[],\"style\":\"body\",\"text\":\"“Your father and I kept this light together for thirty years,” he said. “And in all that time he never once lied to me. Except about Kerensa.\"},{\"id\":\"D26A2C3F-C586-4BD4-AF93-75461D49526C\",\"italic\":[],\"style\":\"body\",\"text\":\"“She was his sister. Not dead, as he told the village. Gone to sea, and never written, and him too proud to look for her.”\"},{\"id\":\"8B4D99F1-07A3-4557-8073-322DE18E1517\",\"italic\":[],\"style\":\"body\",\"text\":\"“Is she alive?”\"},{\"id\":\"64674056-EA72-4B75-A15B-9DC9283E5AF1\",\"italic\":[],\"style\":\"body\",\"text\":\"“Aye. In Penzance. She wrote to me last spring.”\"},{\"id\":\"ED447197-4175-4274-8DAE-6A2844C471D3\",\"italic\":[],\"style\":\"body\",\"text\":\"“And you didn't tell me.”\"},{\"id\":\"5E744C97-09A8-4219-B1DE-AD73F6050DBA\",\"italic\":[],\"style\":\"body\",\"text\":\"“I'm telling you now, lass.”\"}],\"title\":\"Chapter 3: The Keeper\"}],\"characters\":[{\"aliases\":[],\"colorHex\":\"#F59E0B\",\"facts\":[{\"edited\":false,\"fromAI\":false,\"id\":\"70A05BEA-16E7-4368-AE1B-36B8A3771D36\",\"kind\":\"age\",\"quote\":\"sixty if he was a day\",\"sourceParagraphID\":\"116F25FC-37D9-4C80-9477-AD2624628AF1\",\"text\":\"About sixty\"},{\"edited\":false,\"fromAI\":false,\"id\":\"244066B1-66B6-4123-816A-4377B0F79530\",\"kind\":\"other\",\"quote\":\"wanting tea\",\"sourceParagraphID\":\"8B4B4A36-B789-49CD-9224-643C8C4DA2E8\",\"text\":\"Makes tea\"}],\"id\":\"C824E8AA-B558-43B9-BE40-EB230DA0244B\",\"name\":\"Tom Hale\",\"notes\":\"\",\"voiceNotes\":\"\"},{\"aliases\":[],\"colorHex\":\"#84CC16\",\"facts\":[],\"id\":\"040A92AF-5B88-4A61-BADB-C9915C6FFE05\",\"name\":\"Mara\",\"notes\":\"\",\"voiceNotes\":\"\"}],\"format\":1,\"importedAt\":816053869.863889,\"lines\":[{\"confidence\":1,\"continuesPrevious\":false,\"id\":\"2C266F9A-218D-446A-9EEC-578DDC999BA4\",\"kind\":\"spoken\",\"paragraphID\":\"91FDC9B8-293F-433F-B4CF-2BE7323D7938\",\"range\":{\"length\":12,\"location\":1},\"source\":\"user\",\"speakerID\":\"C824E8AA-B558-43B9-BE40-EB230DA0244B\",\"tone\":\"neutral\",\"toneConfidence\":0.65,\"toneSource\":\"rule\"},{\"confidence\":0.95,\"continuesPrevious\":false,\"id\":\"E164A73E-501F-4BE4-94B1-E6674AA6A12F\",\"kind\":\"spoken\",\"paragraphID\":\"1E336214-749F-4AF9-A0DE-5438E7F07628\",\"range\":{\"length\":24,\"location\":1},\"source\":\"rule\",\"speakerID\":\"040A92AF-5B88-4A61-BADB-C9915C6FFE05\",\"tone\":\"neutral\",\"toneConfidence\":0.65,\"toneSource\":\"rule\"},{\"confidence\":0.85,\"continuesPrevious\":false,\"id\":\"BD84C21C-5AD8-4C07-8CB6-9DD605E86A17\",\"kind\":\"spoken\",\"paragraphID\":\"1E336214-749F-4AF9-A0DE-5438E7F07628\",\"range\":{\"length\":32,\"location\":39},\"source\":\"rule\",\"speakerID\":\"040A92AF-5B88-4A61-BADB-C9915C6FFE05\",\"tone\":\"neutral\",\"toneConfidence\":0.65,\"toneSource\":\"rule\"},{\"confidence\":1,\"continuesPrevious\":false,\"id\":\"03263733-26DB-4A2C-A8B6-32094252A34C\",\"kind\":\"spoken\",\"paragraphID\":\"8B4B4A36-B789-49CD-9224-643C8C4DA2E8\",\"range\":{\"length\":27,\"location\":1},\"source\":\"user\",\"speakerID\":\"C824E8AA-B558-43B9-BE40-EB230DA0244B\",\"tone\":\"neutral\",\"toneConfidence\":0.65,\"toneSource\":\"rule\"},{\"confidence\":0.65,\"continuesPrevious\":false,\"id\":\"52E1E4F3-8CEE-4AD3-B7EC-5CA7D601ACC9\",\"kind\":\"spoken\",\"paragraphID\":\"7B4A5C4C-B050-48C0-BCC5-AD58D75E0DF3\",\"range\":{\"length\":30,\"location\":1},\"source\":\"exchange\",\"speakerID\":\"040A92AF-5B88-4A61-BADB-C9915C6FFE05\",\"tone\":\"neutral\",\"toneConfidence\":0.65,\"toneSource\":\"rule\"},{\"confidence\":0.65,\"continuesPrevious\":false,\"id\":\"D3614DD9-16D6-4701-906B-DC25DC179299\",\"kind\":\"spoken\",\"paragraphID\":\"B3CAD354-1C12-4BD6-A88E-2C4102307AE1\",\"range\":{\"length\":40,\"location\":1},\"source\":\"exchange\",\"speakerID\":\"C824E8AA-B558-43B9-BE40-EB230DA0244B\",\"tone\":\"neutral\",\"toneConfidence\":0.65,\"toneSource\":\"rule\"},{\"confidence\":0,\"continuesPrevious\":false,\"id\":\"C2494D7A-95D9-4F73-AC80-B43505650853\",\"kind\":\"spoken\",\"paragraphID\":\"268467CE-1663-4257-ACB7-43C96422F6BD\",\"range\":{\"length\":15,\"location\":1},\"source\":\"none\",\"tone\":\"tender\",\"toneConfidence\":0.85,\"toneSource\":\"rule\"},{\"confidence\":0.95,\"continuesPrevious\":false,\"id\":\"962F993C-194D-46D0-8413-DA6802E57C2F\",\"kind\":\"thought\",\"paragraphID\":\"2519C1BA-DEEE-4E27-A8B2-EC184F5DF0FC\",\"range\":{\"length\":33,\"location\":0},\"source\":\"rule\",\"speakerID\":\"040A92AF-5B88-4A61-BADB-C9915C6FFE05\",\"tone\":\"neutral\",\"toneConfidence\":0.7,\"toneSource\":\"rule\"},{\"confidence\":0,\"continuesPrevious\":false,\"id\":\"68B82222-1BE9-4849-9B2C-A90A78147CAF\",\"kind\":\"thought\",\"paragraphID\":\"2519C1BA-DEEE-4E27-A8B2-EC184F5DF0FC\",\"range\":{\"length\":22,\"location\":48},\"source\":\"none\",\"tone\":\"neutral\",\"toneConfidence\":0.7,\"toneSource\":\"rule\"},{\"confidence\":1,\"continuesPrevious\":false,\"id\":\"2915B923-45C4-4FE3-AA38-EFE37919A90B\",\"kind\":\"spoken\",\"paragraphID\":\"116F25FC-37D9-4C80-9477-AD2624628AF1\",\"range\":{\"length\":37,\"location\":198},\"source\":\"user\",\"speakerID\":\"040A92AF-5B88-4A61-BADB-C9915C6FFE05\",\"tone\":\"angry\",\"toneConfidence\":0.85,\"toneSource\":\"rule\"},{\"confidence\":0,\"continuesPrevious\":false,\"id\":\"CE59CEA4-D3B0-4BCB-B33B-5E9F7BFC5DD3\",\"kind\":\"spoken\",\"paragraphID\":\"FC6772B5-E78A-4CB2-95D5-F11161D04A0C\",\"range\":{\"length\":22,\"location\":1},\"source\":\"none\",\"tone\":\"neutral\",\"toneConfidence\":0.65,\"toneSource\":\"rule\"},{\"confidence\":0,\"continuesPrevious\":false,\"id\":\"B2CD4FE3-12FB-466B-8025-5510D1F8B4F9\",\"kind\":\"spoken\",\"paragraphID\":\"EC5D01DA-08E4-4C32-A1E0-ACED84C49867\",\"range\":{\"length\":40,\"location\":1},\"source\":\"none\",\"tone\":\"neutral\",\"toneConfidence\":0.65,\"toneSource\":\"rule\"},{\"confidence\":0,\"continuesPrevious\":false,\"id\":\"148F664B-0AA7-4CFB-9AD4-0940D94627BA\",\"kind\":\"spoken\",\"paragraphID\":\"E60A1C76-F951-45A6-B7EA-CB48BAFB9C7C\",\"range\":{\"length\":73,\"location\":1},\"source\":\"none\",\"tone\":\"excited\",\"toneConfidence\":0.45,\"toneSource\":\"rule\"},{\"confidence\":0,\"continuesPrevious\":false,\"id\":\"732CC9AE-BD25-4CB8-89EC-809A65140582\",\"kind\":\"spoken\",\"paragraphID\":\"0DDC1E72-17D9-4128-8F3D-A30871B3F0B5\",\"range\":{\"length\":15,\"location\":1},\"source\":\"none\",\"tone\":\"neutral\",\"toneConfidence\":0.65,\"toneSource\":\"rule\"},{\"confidence\":0,\"continuesPrevious\":false,\"id\":\"93DADF3D-7557-4FDB-B264-3E197557BA33\",\"kind\":\"spoken\",\"paragraphID\":\"B9F7D6B9-71F6-4E15-906A-6E3BAF4BFD28\",\"range\":{\"length\":66,\"location\":1},\"source\":\"none\",\"tone\":\"excited\",\"toneConfidence\":0.45,\"toneSource\":\"rule\"},{\"confidence\":0,\"continuesPrevious\":false,\"id\":\"4B59EF5D-DC9C-4F43-BCBE-984949CE7BA1\",\"kind\":\"spoken\",\"paragraphID\":\"C1A880F5-03EB-40D3-8FCC-7BE8212441DC\",\"range\":{\"length\":32,\"location\":1},\"source\":\"none\",\"tone\":\"neutral\",\"toneConfidence\":0.65,\"toneSource\":\"rule\"},{\"confidence\":0,\"continuesPrevious\":false,\"id\":\"FED5BA18-00B7-4336-860F-66829E5CF213\",\"kind\":\"spoken\",\"paragraphID\":\"13BE2D66-ABA1-4F0A-B70D-0A75E667C036\",\"range\":{\"length\":15,\"location\":1},\"source\":\"none\",\"tone\":\"neutral\",\"toneConfidence\":0.65,\"toneSource\":\"rule\"},{\"confidence\":0,\"continuesPrevious\":false,\"id\":\"2B6F1C0B-810E-4A7E-A199-F2F31C1A85BF\",\"kind\":\"spoken\",\"paragraphID\":\"1A19CA0A-E862-476F-81AB-B30305D0AE93\",\"range\":{\"length\":5,\"location\":1},\"source\":\"none\",\"tone\":\"neutral\",\"toneConfidence\":0.65,\"toneSource\":\"rule\"},{\"confidence\":0,\"continuesPrevious\":false,\"id\":\"889DAA06-3837-4C6D-B780-61051186E769\",\"kind\":\"spoken\",\"paragraphID\":\"1A19CA0A-E862-476F-81AB-B30305D0AE93\",\"range\":{\"length\":78,\"location\":39},\"source\":\"none\",\"tone\":\"neutral\",\"toneConfidence\":0.65,\"toneSource\":\"rule\"},{\"confidence\":0,\"continuesPrevious\":false,\"id\":\"595302DB-EA30-4718-8B39-594EFC4CD631\",\"kind\":\"written\",\"paragraphID\":\"62195E60-026A-43AC-991F-8B36D57C8195\",\"range\":{\"length\":154,\"location\":0},\"source\":\"none\",\"tone\":\"neutral\",\"toneConfidence\":0.8,\"toneSource\":\"rule\"},{\"confidence\":0.95,\"continuesPrevious\":false,\"id\":\"3553EFB1-BF73-4C63-A70A-00BF9AB344AC\",\"kind\":\"spoken\",\"paragraphID\":\"39DAA52D-C096-473D-BA4A-C534AEED2001\",\"range\":{\"length\":15,\"location\":1},\"source\":\"rule\",\"speakerID\":\"040A92AF-5B88-4A61-BADB-C9915C6FFE05\",\"tone\":\"whispered\",\"toneConfidence\":0.85,\"toneSource\":\"rule\"},{\"confidence\":1,\"continuesPrevious\":false,\"id\":\"A9E74D8B-6422-4F58-8CD5-098061B869EB\",\"kind\":\"spoken\",\"paragraphID\":\"ED8964FE-563F-4C0F-A3BD-29EB2688A75E\",\"range\":{\"length\":14,\"location\":1},\"source\":\"user\",\"speakerID\":\"C824E8AA-B558-43B9-BE40-EB230DA0244B\",\"tone\":\"neutral\",\"toneConfidence\":0.65,\"toneSource\":\"rule\"},{\"confidence\":0,\"continuesPrevious\":false,\"id\":\"2E36A7A2-B855-4A4E-B937-F079FCEE2C65\",\"kind\":\"spoken\",\"paragraphID\":\"AF3277E9-8AB4-4B14-B5C8-C5401315D556\",\"range\":{\"length\":8,\"location\":1},\"source\":\"none\",\"tone\":\"neutral\",\"toneConfidence\":0.65,\"toneSource\":\"rule\"},{\"confidence\":0,\"continuesPrevious\":false,\"id\":\"FE9501F7-D06B-46C7-BC69-7BB7D4775BCD\",\"kind\":\"spoken\",\"paragraphID\":\"6DBADA2B-27E1-404C-9732-5A3E9A61D39A\",\"range\":{\"length\":40,\"location\":1},\"source\":\"none\",\"tone\":\"neutral\",\"toneConfidence\":0.65,\"toneSource\":\"rule\"},{\"confidence\":0,\"continuesPrevious\":false,\"id\":\"AA1DCF05-8F36-4C52-BE8D-BF953B71012A\",\"kind\":\"spoken\",\"paragraphID\":\"28B68854-28B3-4D1D-86EA-A7323762B6F6\",\"range\":{\"length\":25,\"location\":1},\"source\":\"none\",\"tone\":\"neutral\",\"toneConfidence\":0.65,\"toneSource\":\"rule\"},{\"confidence\":0,\"continuesPrevious\":false,\"id\":\"B9D7ECDC-B9C3-4F04-A5E4-977E15C2B463\",\"kind\":\"spoken\",\"paragraphID\":\"3B11AC32-E6AA-4361-8415-6B990F7B2739\",\"range\":{\"length\":47,\"location\":59},\"source\":\"none\",\"tone\":\"neutral\",\"toneConfidence\":0.65,\"toneSource\":\"rule\"},{\"confidence\":0,\"continuesPrevious\":false,\"id\":\"758D06E6-2CEF-46B4-B8FB-B119C750A914\",\"kind\":\"spoken\",\"paragraphID\":\"D0C8F01E-BF0B-479E-9BEB-2EBC645F76A4\",\"range\":{\"length\":4,\"location\":1},\"source\":\"none\",\"tone\":\"neutral\",\"toneConfidence\":0.65,\"toneSource\":\"rule\"},{\"confidence\":0,\"continuesPrevious\":false,\"id\":\"8104F688-0428-4796-AB29-EAD8869D3B2A\",\"kind\":\"spoken\",\"paragraphID\":\"3BA6D87C-E2CE-4035-8318-783BE9ABBFA0\",\"range\":{\"length\":60,\"location\":1},\"source\":\"none\",\"tone\":\"neutral\",\"toneConfidence\":0.65,\"toneSource\":\"rule\"},{\"confidence\":0,\"continuesPrevious\":false,\"id\":\"34892E1D-09C9-4CA9-A69D-FCFDF0E75384\",\"kind\":\"spoken\",\"paragraphID\":\"3BA6D87C-E2CE-4035-8318-783BE9ABBFA0\",\"range\":{\"length\":68,\"location\":73},\"source\":\"none\",\"tone\":\"neutral\",\"toneConfidence\":0.65,\"toneSource\":\"rule\"},{\"confidence\":0,\"continuesPrevious\":true,\"id\":\"094F6EB9-8701-4F07-9342-0E6692BB654F\",\"kind\":\"spoken\",\"paragraphID\":\"D26A2C3F-C586-4BD4-AF93-75461D49526C\",\"range\":{\"length\":120,\"location\":1},\"source\":\"none\",\"tone\":\"neutral\",\"toneConfidence\":0.65,\"toneSource\":\"rule\"},{\"confidence\":0,\"continuesPrevious\":false,\"id\":\"9587F455-3F37-4D52-9F53-5A8660A30D4A\",\"kind\":\"spoken\",\"paragraphID\":\"8B4D99F1-07A3-4557-8073-322DE18E1517\",\"range\":{\"length\":13,\"location\":1},\"source\":\"none\",\"tone\":\"neutral\",\"toneConfidence\":0.65,\"toneSource\":\"rule\"},{\"confidence\":0,\"continuesPrevious\":false,\"id\":\"E85C2E31-3994-462A-B239-A990B9809FE1\",\"kind\":\"spoken\",\"paragraphID\":\"64674056-EA72-4B75-A15B-9DC9283E5AF1\",\"range\":{\"length\":46,\"location\":1},\"source\":\"none\",\"tone\":\"neutral\",\"toneConfidence\":0.65,\"toneSource\":\"rule\"},{\"confidence\":0,\"continuesPrevious\":false,\"id\":\"3C6AD960-E5EE-431E-8AE2-8E5DB30A0513\",\"kind\":\"spoken\",\"paragraphID\":\"ED447197-4175-4274-8DAE-6A2844C471D3\",\"range\":{\"length\":23,\"location\":1},\"source\":\"none\",\"tone\":\"neutral\",\"toneConfidence\":0.65,\"toneSource\":\"rule\"},{\"confidence\":0,\"continuesPrevious\":false,\"id\":\"3DBA9983-E746-4B1A-A419-936288B95966\",\"kind\":\"spoken\",\"paragraphID\":\"5E744C97-09A8-4219-B1DE-AD73F6050DBA\",\"range\":{\"length\":26,\"location\":1},\"source\":\"none\",\"tone\":\"neutral\",\"toneConfidence\":0.65,\"toneSource\":\"rule\"}],\"narrators\":[],\"pronunciations\":[{\"addedByUser\":false,\"confirmed\":false,\"dismissed\":false,\"firstParagraphID\":\"ED8964FE-563F-4C0F-A3BD-29EB2688A75E\",\"id\":\"B519B08E-E7AF-4E22-B205-3D5169CDBE72\",\"notes\":\"\",\"occurrences\":0,\"sayItAs\":\"keh-REN-sah\",\"term\":\"Kerensa\"},{\"addedByUser\":false,\"confirmed\":false,\"dismissed\":false,\"firstParagraphID\":\"91FDC9B8-293F-433F-B4CF-2BE7323D7938\",\"id\":\"18F8669F-BE08-477B-AAA7-6EB2BF62754C\",\"notes\":\"\",\"occurrences\":0,\"sayItAs\":\"voss\",\"term\":\"Voss\"}],\"recorded\":[\"116F25FC-37D9-4C80-9477-AD2624628AF1\",\"91FDC9B8-293F-433F-B4CF-2BE7323D7938\",\"8B4B4A36-B789-49CD-9224-643C8C4DA2E8\"],\"retakes\":[{\"created\":800000000,\"done\":false,\"id\":\"B6EBFDD8-5724-441D-AD5D-43EEFB3DE578\",\"note\":\"Gone\",\"paragraphID\":\"8B4B4A36-B789-49CD-9224-643C8C4DA2E8\"},{\"created\":800000001,\"done\":false,\"id\":\"4F6F6828-F6EE-45B7-9B1B-0B2E3C7C83FC\",\"note\":\"Breath\",\"paragraphID\":\"1E336214-749F-4AF9-A0DE-5438E7F07628\"}],\"revisions\":[],\"settings\":{\"colorNarration\":false,\"showInitials\":true,\"style\":\"highlight\",\"unsureBelow\":0.6},\"sourceFileName\":\"Sample Story.md\",\"title\":\"Sample Story\"}",
+  "paragraphs" : [
+    {
+      "oldParagraph" : 0,
+      "text" : "The wind came off the sea like a held breath finally let go. Mara Quinn pulled the door shut behind her and leaned on it until the latch caught."
+    },
+    {
+      "oldParagraph" : 1,
+      "text" : "“You're late,” said Tom Hale, without looking up from the lamp."
+    },
+    {
+      "oldParagraph" : 2,
+      "text" : "“The path was underwater,” Mara said. “I had to go round by the chapel.”"
+    },
+    {
+      "oldParagraph" : 4,
+      "text" : "“I'll be wanting a towel first.”"
+    },
+    {
+      "oldParagraph" : 5,
+      "text" : "“Towels are in the chest. Same as always.”"
+    },
+    {
+      "oldParagraph" : 6,
+      "text" : "“Same as always,” she repeated, and almost smiled."
+    },
+    {
+      "oldParagraph" : 7,
+      "text" : "He hasn't asked about the letter, Mara thought. Maybe he doesn't know."
+    },
+    {
+      "oldParagraph" : 8,
+      "text" : "Tom set down the wick trimmer. He was a broad man gone narrow with age, sixty if he was a day, and when he spoke again his voice had the gravel of a man who had shouted over gales for forty years. “Doctor Voss called by. Asked after you.”"
+    },
+    {
+      "oldParagraph" : 9,
+      "text" : "“What did you tell her?”"
+    },
+    {
+      "oldParagraph" : 10,
+      "text" : "“That you'd be back when the sea let you.”"
+    },
+    {
+      "oldParagraph" : 11,
+      "text" : "⁂"
+    },
+    {
+      "oldParagraph" : 12,
+      "text" : "A knock shook the door. Pip Aelwyn stood on the step, soaked to the skin, a lantern swinging from one small fist."
+    },
+    {
+      "oldParagraph" : 13,
+      "text" : "“Miss Quinn! Miss Quinn, the boat's come loose from the jetty and Da says—”"
+    },
+    {
+      "oldParagraph" : 14,
+      "text" : "“Slow down, Pip.”"
+    },
+    {
+      "oldParagraph" : 15,
+      "text" : "“—Da says if it goes on the rocks we'll none of us eat till spring!”"
+    },
+    {
+      "oldParagraph" : 16,
+      "text" : "Doctor Edda Voss arrived the next morning with her bag and her clipped, careful vowels, every word set down as if it might break. She had come from Hamburg twenty years ago and never quite let the north of Germany go."
+    },
+    {
+      "oldParagraph" : 17,
+      "text" : "“You have been avoiding me, Mara.”"
+    },
+    {
+      "oldParagraph" : 18,
+      "text" : "“I've been busy.”"
+    },
+    {
+      "text" : "“Too busy for an old friend?” Doctor Voss asked."
+    },
+    {
+      "oldParagraph" : 19,
+      "text" : "“Busy.” The doctor folded her gloves. “Your father wrote to me before he died. I think you should read what he wrote.”"
+    },
+    {
+      "oldParagraph" : 20,
+      "text" : "She laid an envelope on the table. The handwriting on it was small and slanted."
+    },
+    {
+      "oldParagraph" : 21,
+      "text" : "My dear girl — if Edda has given you this, then I was too much of a coward to say it myself. The light was never mine to leave you. It belongs to Kerensa."
+    },
+    {
+      "oldParagraph" : 22,
+      "text" : "“Who is Kerensa?” Mara whispered."
+    },
+    {
+      "oldParagraph" : 24,
+      "text" : "“I can't.”"
+    },
+    {
+      "text" : "“Read the rest.”"
+    },
+    {
+      "oldParagraph" : 25,
+      "text" : "“You can. You are your father's daughter.”"
+    },
+    {
+      "oldParagraph" : 26,
+      "text" : "“That's what frightens me.”"
+    },
+    {
+      "oldParagraph" : 27,
+      "text" : "Pip had crept in behind them, dripping on the flagstones. “Is it treasure? Da says old Quinn had treasure.”"
+    },
+    {
+      "oldParagraph" : 28,
+      "text" : "“Out,” said the doctor, not unkindly."
+    },
+    {
+      "oldParagraph" : 29,
+      "text" : "That night Tom told her the story. He told it the way he told everything, in the soft burr of the Highlands he had never lost, though he'd left Inverness as a boy of twelve."
+    },
+    {
+      "oldParagraph" : 30,
+      "text" : "“Your father and I kept this light together for thirty years,” he said. “And in all that time he never once lied to me. Except about Kerensa."
+    },
+    {
+      "oldParagraph" : 31,
+      "text" : "“She was his sister. Not dead, as he told the village. Gone to sea, and never written, and him too proud to look for her.”"
+    },
+    {
+      "oldParagraph" : 32,
+      "text" : "“Is she alive?”"
+    },
+    {
+      "oldParagraph" : 33,
+      "text" : "“Aye. In Penzance. She wrote to me last spring.”"
+    },
+    {
+      "oldParagraph" : 34,
+      "text" : "“And you didn't tell me.”"
+    },
+    {
+      "oldParagraph" : 35,
+      "text" : "“I'm telling you now, lass.”"
+    }
+  ],
+  "pronunciations" : [
+    {
+      "term" : "Kerensa"
+    },
+    {
+      "firstParagraph" : 1,
+      "term" : "Voss"
+    }
+  ],
+  "record" : {
+    "added" : [
+      18,
+      24
+    ],
+    "changed" : [
+      7
+    ],
+    "fileName" : "Sample Story v2.md",
+    "removed" : [
+      {
+        "chapterTitle" : "Chapter 1: The Storm",
+        "text" : "“Then you'll be wanting tea.”"
+      },
+      {
+        "chapterTitle" : "Chapter 2: The Letter",
+        "text" : "“Read the rest.”"
+      }
+    ],
+    "unchanged" : 33
+  },
+  "recorded" : [
+    1
+  ],
+  "retakes" : [
+    2
+  ],
+  "revisedMarkdown" : "# Chapter 1: The Storm\n\nThe wind came off the sea like a held breath finally let go. Mara Quinn pulled the door shut behind her and leaned on it until the latch caught.\n\n“You're late,” said Tom Hale, without looking up from the lamp.\n\n“The path was underwater,” Mara said. “I had to go round by the chapel.”\n\n“I'll be wanting a towel first.”\n\n“Towels are in the chest. Same as always.”\n\n“Same as always,” she repeated, and almost smiled.\n\n*He hasn't asked about the letter,* Mara thought. *Maybe he doesn't know.*\n\nTom set down the wick trimmer. He was a broad man gone narrow with age, sixty if he was a day, and when he spoke again his voice had the gravel of a man who had shouted over gales for forty years. “Doctor Voss called by. Asked after you.”\n\n“What did you tell her?”\n\n“That you'd be back when the sea let you.”\n\n⁂\n\nA knock shook the door. Pip Aelwyn stood on the step, soaked to the skin, a lantern swinging from one small fist.\n\n“Miss Quinn! Miss Quinn, the boat's come loose from the jetty and Da says—”\n\n“Slow down, Pip.”\n\n“—Da says if it goes on the rocks we'll none of us eat till spring!”\n\n# Chapter 2: The Letter\n\nDoctor Edda Voss arrived the next morning with her bag and her clipped, careful vowels, every word set down as if it might break. She had come from Hamburg twenty years ago and never quite let the north of Germany go.\n\n“You have been avoiding me, Mara.”\n\n“I've been busy.”\n\n“Too busy for an old friend?” Doctor Voss asked.\n\n“Busy.” The doctor folded her gloves. “Your father wrote to me before he died. I think you should read what he wrote.”\n\nShe laid an envelope on the table. The handwriting on it was small and slanted.\n\n> My dear girl — if Edda has given you this, then I was too much of a coward to say it myself. The light was never mine to leave you. It belongs to Kerensa.\n\n“Who is Kerensa?” Mara whispered.\n\n“I can't.”\n\n“Read the rest.”\n\n“You can. You are your father's daughter.”\n\n“That's what frightens me.”\n\nPip had crept in behind them, dripping on the flagstones. “Is it treasure? Da says old Quinn had treasure.”\n\n“Out,” said the doctor, not unkindly.\n\n# Chapter 3: The Keeper\n\nThat night Tom told her the story. He told it the way he told everything, in the soft burr of the Highlands he had never lost, though he'd left Inverness as a boy of twelve.\n\n“Your father and I kept this light together for thirty years,” he said. “And in all that time he never once lied to me. Except about Kerensa.\n\n“She was his sister. Not dead, as he told the village. Gone to sea, and never written, and him too proud to look for her.”\n\n“Is she alive?”\n\n“Aye. In Penzance. She wrote to me last spring.”\n\n“And you didn't tell me.”\n\n“I'm telling you now, lass.”",
+  "revisionCount" : 1,
+  "sourceFileName" : "Sample Story v2.md"
+}

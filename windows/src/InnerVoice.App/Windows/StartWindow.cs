@@ -20,6 +20,7 @@ public sealed class StartWindow : Window
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         FontFamily = Look.UIFamily;
+        Icon = Look.WindowIcon;
         DragDrop.SetAllowDrop(this, true);
         AddHandler(DragDrop.DropEvent, OnDrop);
         Build();

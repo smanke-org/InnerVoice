@@ -33,6 +33,7 @@ public sealed partial class SettingsWindow : Window
         MinWidth = 600;
         MinHeight = 420;
         FontFamily = Look.UIFamily;
+        Icon = Look.WindowIcon;
         Background = Look.Brush(Look.Paper);
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         tabs.Margin = new Thickness(Look.Lg, Look.Sm);

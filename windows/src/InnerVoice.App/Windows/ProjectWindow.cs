@@ -34,6 +34,7 @@ public sealed partial class ProjectWindow : Window
         MinWidth = 820;
         MinHeight = 520;
         FontFamily = Look.UIFamily;
+        Icon = Look.WindowIcon;
         UpdateTitle();
 
         var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(Look.Xl, Look.Md) };

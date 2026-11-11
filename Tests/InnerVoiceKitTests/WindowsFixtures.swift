@@ -316,6 +316,153 @@ import Testing
         }
     }
 
+    /// A revised manuscript merged into the sample project, so the C# RevisionMerger can
+    /// prove it keeps the same paragraphs, lines, speakers and marks. Also a set of small
+    /// diffs, so the C# Myers diff is shown to break ties the way CollectionDifference does.
+    @Test func writeRevisionFixture() throws {
+        guard let folder = Self.outputFolder else { return }
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+
+        var old = Self.sampleProject()
+        let all = old.chapters.flatMap(\.paragraphs)
+        func para(_ prefix: String) throws -> Paragraph { try #require(all.first { $0.text.hasPrefix(prefix) }) }
+        func person(_ prefix: String) throws -> UUID { try #require(old.characters.first { $0.name.hasPrefix(prefix) }).id }
+        func setUser(_ p: Paragraph, _ speaker: UUID) throws {
+            let i = try #require(old.lines.firstIndex { $0.paragraphID == p.id })
+            old.lines[i].speakerID = speaker
+            old.lines[i].source = .user
+            old.lines[i].confidence = 1
+        }
+        let late = try para("“You're late,”")           // unchanged
+        let path = try para("“The path was underwater,”") // unchanged
+        let tea = try para("“Then you'll be wanting tea.”") // deleted
+        let wick = try para("Tom set down the wick trimmer.") // a word changed inside its quote
+        let rest = try para("“Read the rest.”")          // moved (swapped with the next one)
+        let tom = try person("Tom"), mara = try person("Mara")
+        try setUser(late, tom)
+        try setUser(tea, tom)
+        try setUser(wick, mara)
+        try setUser(rest, tom)
+        old.recorded = [late.id, wick.id, tea.id]
+        old.retakes = [Retake(paragraphID: tea.id, note: "Gone", created: Date(timeIntervalSinceReferenceDate: 800_000_000)),
+                       Retake(paragraphID: path.id, note: "Breath", created: Date(timeIntervalSinceReferenceDate: 800_000_001))]
+        let ti = try #require(old.characters.firstIndex { $0.id == tom })
+        old.characters[ti].facts = [Fact(kind: .age, text: "About sixty", sourceParagraphID: wick.id, quote: "sixty if he was a day"),
+                                    Fact(kind: .other, text: "Makes tea", sourceParagraphID: tea.id, quote: "wanting tea")]
+        old.pronunciations = [Pronunciation(term: "Kerensa", sayItAs: "keh-REN-sah", firstParagraphID: rest.id),
+                              Pronunciation(term: "Voss", sayItAs: "voss", firstParagraphID: late.id)]
+
+        func replacing(_ text: String, _ a: String, _ b: String) throws -> String {
+            #expect(text.contains(a), "revision edit not found: \(a)")
+            return text.replacingOccurrences(of: a, with: b)
+        }
+        var revised = Self.markdown
+        revised = try replacing(revised, "“Doctor Voss came by. Asked after you.”", "“Doctor Voss called by. Asked after you.”")
+        revised = try replacing(revised, "“Then you'll be wanting tea.”\n\n", "")
+        revised = try replacing(revised, "“I've been busy.”\n\n", "“I've been busy.”\n\n“Too busy for an old friend?” Doctor Voss asked.\n\n")
+        revised = try replacing(revised, "“Read the rest.”\n\n“I can't.”", "“I can't.”\n\n“Read the rest.”")
+
+        let blocks = PlainTextReader.blocks(from: revised, markdown: true)
+        let book = ImportedBook(title: "Sample Story", author: "A. N. Example",
+                                chapters: ChapterDetector.chapters(from: blocks, fallbackTitle: "Sample Story"))
+        let result = RevisionMerger.merge(old, with: book, fileName: "Sample Story v2.md")
+        let p = result.project
+        let index = BookIndex(p)
+        let oldIndex = BookIndex(old)
+        let oldLineIndex = Dictionary(old.lines.enumerated().map { ($0.element.id, $0.offset) }, uniquingKeysWith: { a, _ in a })
+        func pos(_ id: UUID?) -> Int? { id.flatMap { index.positions[$0]?.global } }
+
+        struct Out: Encodable {
+            struct Record: Encodable {
+                var fileName: String; var added: [Int]; var changed: [Int]
+                var removed: [RevisionRecord.Removed]; var unchanged: Int
+            }
+            struct ChapterOut: Encodable { var title: String; var oldChapter: Int? }
+            struct ParagraphOut: Encodable { var text: String; var oldParagraph: Int? }
+            struct LineOut: Encodable {
+                var paragraph: Int; var range: TextSpan; var kind: String; var continuesPrevious: Bool
+                var speaker: String?; var source: String; var confidence: Double; var oldLine: Int?
+            }
+            struct FactOut: Encodable { var character: String; var text: String; var sourceParagraph: Int? }
+            struct PronunciationOut: Encodable { var term: String; var firstParagraph: Int? }
+            struct DiffCase: Encodable { var old: [String]; var new: [String]; var removed: [Int]; var inserted: [Int] }
+            var oldProject: String
+            var revisedMarkdown: String
+            var record: Record
+            var chapters: [ChapterOut]
+            var paragraphs: [ParagraphOut]
+            var lines: [LineOut]
+            var characters: [String]
+            var recorded: [Int]
+            var retakes: [Int]
+            var facts: [FactOut]
+            var pronunciations: [PronunciationOut]
+            var sourceFileName: String
+            var revisionCount: Int
+            var diffCases: [DiffCase]
+        }
+
+        // Small diffs over a tiny alphabet (lots of ties), from a fixed pseudo-random seed.
+        var seed: UInt64 = 0x1234_5678
+        func next(_ n: Int) -> Int {
+            seed = seed &* 6364136223846793005 &+ 1442695040888963407
+            return Int((seed >> 33) % UInt64(n))
+        }
+        var cases: [([String], [String])] = [([], []), ([], ["a"]), (["a"], []), (["a", "b"], ["b", "a"]),
+                                             (["a", "b", "c", "a", "b", "b", "a"], ["c", "b", "a", "b", "a", "c"])]
+        for _ in 0..<60 {
+            let letters = ["a", "b", "c", "d"].prefix(2 + next(3))
+            let o = (0..<next(14)).map { _ in letters[next(letters.count)] }
+            var n = o
+            for _ in 0..<(1 + next(5)) {
+                switch next(3) {
+                case 0 where !n.isEmpty: n.remove(at: next(n.count))
+                case 1: n.insert(letters[next(letters.count)], at: next(n.count + 1))
+                default: if !n.isEmpty { n[next(n.count)] = letters[next(letters.count)] }
+                }
+            }
+            cases.append((o, n))
+        }
+        let diffCases = cases.map { o, n in
+            var removed: [Int] = [], inserted: [Int] = []
+            for change in n.difference(from: o) {
+                switch change {
+                case .remove(let offset, _, _): removed.append(offset)
+                case .insert(let offset, _, _): inserted.append(offset)
+                }
+            }
+            return Out.DiffCase(old: o, new: n, removed: removed.sorted(), inserted: inserted.sorted())
+        }
+
+        let appEncoder = JSONEncoder()
+        appEncoder.outputFormatting = [.sortedKeys]
+        let out = Out(
+            oldProject: String(decoding: try appEncoder.encode(old), as: UTF8.self),
+            revisedMarkdown: revised,
+            record: .init(fileName: result.record.fileName, added: result.record.added.map { pos($0)! },
+                          changed: result.record.changed.map { pos($0)! }, removed: result.record.removed,
+                          unchanged: result.record.unchanged),
+            chapters: p.chapters.map { c in .init(title: c.title, oldChapter: old.chapters.firstIndex { $0.id == c.id }) },
+            paragraphs: p.chapters.flatMap(\.paragraphs).map { .init(text: $0.text, oldParagraph: oldIndex.positions[$0.id]?.global) },
+            lines: p.lines.map { l in
+                .init(paragraph: pos(l.paragraphID)!, range: l.range, kind: l.kind.rawValue, continuesPrevious: l.continuesPrevious,
+                      speaker: p.character(l.speakerID)?.name, source: l.source.rawValue, confidence: l.confidence,
+                      oldLine: oldLineIndex[l.id])
+            },
+            characters: p.characters.map(\.name),
+            recorded: p.recorded.map { pos($0)! }.sorted(),
+            retakes: p.retakes.map { pos($0.paragraphID)! },
+            facts: p.characters.flatMap { c in c.facts.map { .init(character: c.name, text: $0.text, sourceParagraph: pos($0.sourceParagraphID)) } },
+            pronunciations: p.pronunciations.map { .init(term: $0.term, firstParagraph: pos($0.firstParagraphID)) },
+            sourceFileName: p.sourceFileName,
+            revisionCount: p.revisions.count,
+            diffCases: diffCases)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
+        try encoder.encode(out).write(to: folder.appending(path: "revision.json"))
+        print("WindowsFixtures: revision added \(out.record.added) changed \(out.record.changed) removed \(out.record.removed.count) unchanged \(out.record.unchanged)")
+    }
+
     /// Reads back a project the Windows app saved (if one is there) and checks it decodes and
     /// still carries the Mac-only fields.
     @Test func readWindowsSavedProject() throws {

@@ -41,6 +41,16 @@ public static class Look
 
     public static readonly FontFamily UIFamily = new("Segoe UI Variable Text, Segoe UI, Inter, Helvetica Neue, sans-serif");
 
+    /// The app icon for every window's title bar and the taskbar.
+    public static Avalonia.Controls.WindowIcon? WindowIcon => icon ??= LoadIcon();
+    static Avalonia.Controls.WindowIcon? icon;
+
+    static Avalonia.Controls.WindowIcon? LoadIcon()
+    {
+        try { return new Avalonia.Controls.WindowIcon(Avalonia.Platform.AssetLoader.Open(new Uri("avares://InnerVoice/Assets/InnerVoice.ico"))); }
+        catch { return null; }
+    }
+
     // Spacing (the Mac's Space tokens).
     public const double Xs = 4, Sm = 8, Md = 12, Lg = 16, Xl = 20, Xxl = 28, Section = 36;
 }

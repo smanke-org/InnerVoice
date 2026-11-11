@@ -17,13 +17,21 @@ public sealed partial class CastPage : Page
     Sort sort = Sort.Lines;
     readonly ComboBox sortBox = new() { ItemsSource = new[] { "Most Lines", "Name", "First Appearance" }, SelectedIndex = 0, Width = 150 };
     readonly Button back;
+    Button rehearseButton = null!;
     readonly StackPanel toolbar;
 
     public CastPage(ProjectDocument document, Workspace workspace) : base(document, workspace)
     {
         sortBox.SelectionChanged += (_, _) => { sort = (Sort)Math.Max(0, sortBox.SelectedIndex); Refresh(false); };
         back = Ui.Button("‹ Cast", () => { Workspace.SelectedCharacter = null; Refresh(false); }, tip: "Back to the cast");
-        toolbar = Ui.Row(Look.Sm, back, sortBox);
+        var narrators = Ui.Button("Narrators…", () => { if (TopLevel.GetTopLevel(this) is Window w) InnerVoice.App.Windows.NarratorsWindow.Show(w, Document); },
+            tip: "Who reads the book, and which characters each narrator reads");
+        var rehearse = Ui.Button("Rehearse", () =>
+        {
+            if (Workspace.SelectedCharacter is { } id && TopLevel.GetTopLevel(this) is Window w) InnerVoice.App.Windows.RehearseWindow.Show(w, Document, id);
+        }, tip: "Step through this character's lines with cue lines");
+        rehearseButton = rehearse;
+        toolbar = Ui.Row(Look.Sm, back, rehearse, sortBox, narrators);
         Refresh(true);
     }
 
@@ -55,12 +63,14 @@ public sealed partial class CastPage : Page
         if (Workspace.SelectedCharacter is { } id && p.Character(id) is { } c)
         {
             back.IsVisible = true;
+            rehearseButton.IsVisible = true;
             sortBox.IsVisible = false;
             Content = Detail(c);
             return;
         }
         Workspace.SelectedCharacter = null;
         back.IsVisible = false;
+        rehearseButton.IsVisible = false;
         sortBox.IsVisible = true;
         if (p.Characters.Count == 0)
         {
