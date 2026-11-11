@@ -46,6 +46,8 @@ public sealed partial class ProjectWindow : Window
         var main = new DockPanel();
         DockPanel.SetDock(statusHost, Dock.Top);
         main.Children.Add(statusHost);
+        DockPanel.SetDock(aiHost, Dock.Top);
+        main.Children.Add(aiHost);
         DockPanel.SetDock(stepsHost, Dock.Top);
         main.Children.Add(stepsHost);
         DockPanel.SetDock(headerBorder, Dock.Top);
@@ -74,6 +76,7 @@ public sealed partial class ProjectWindow : Window
         Background = Look.Brush(Look.Paper);
 
         Workspace.PageChanged += ShowPage;
+        Workspace.TagRequested += () => _ = TagSpeakers();
         Document.Changed += OnChanged;
         Document.Saved += UpdateTitle;
         AppSettings.Changed += RefreshAll;
@@ -248,6 +251,16 @@ public sealed partial class ProjectWindow : Window
     async void OnClosing(object? sender, WindowClosingEventArgs e)
     {
         if (closingConfirmed) return;
+        if (runner?.IsRunning == true)
+        {
+            e.Cancel = true;
+            if (!await Dialogs.Confirm(this, "Stop the AI and Close?", "InnerVoice is still reading this book. What it has done so far is kept.", "Stop and Close")) return;
+            runner.Stop();
+            closingConfirmed = true;
+            await Task.Delay(300);
+            Close();
+            return;
+        }
         if (Document.IsDirty && Document.FilePath is null && !Document.IsReadOnly && !AppPaths.IsTestRun && Document.Project.Chapters.Count > 0)
         {
             e.Cancel = true;

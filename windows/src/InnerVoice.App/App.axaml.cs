@@ -29,6 +29,7 @@ public partial class App : Application
         {
             desktop = d;
             d.ShutdownMode = ShutdownMode.OnLastWindowClose;
+            d.Exit += (_, _) => InnerVoice.App.AI.ModelManager.Shared.UnloadNow();
             var files = (d.Args ?? []).Where(a => !a.StartsWith("--")).ToList();
             foreach (var f in files) OpenPath(f);
             if (projects.Count == 0) ShowStart();

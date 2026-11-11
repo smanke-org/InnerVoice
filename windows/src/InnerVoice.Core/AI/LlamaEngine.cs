@@ -38,7 +38,29 @@ public sealed unsafe class LlamaEngine : IDisposable
         System.Diagnostics.Debug.WriteLine("llama: " + Marshal.PtrToStringUTF8((nint)text)?.Trim());
     }
 
-    static void EnsureBackend()
+    /// The graphics cards llama.cpp can use (Vulkan on Windows, Metal on a Mac), with their
+    /// own memory in GB. Empty when only the processor is available.
+    public static List<(string Name, double TotalGB)> Gpus()
+    {
+        var list = new List<(string, double)>();
+        try
+        {
+            EnsureBackend();
+            nuint n = LlamaNative.DevCount();
+            for (nuint i = 0; i < n; i++)
+            {
+                var dev = LlamaNative.DevGet(i);
+                if (LlamaNative.DevType(dev) != 1) continue; // dedicated-memory GPUs only
+                LlamaNative.DevMemory(dev, out _, out var total);
+                list.Add((Marshal.PtrToStringUTF8(LlamaNative.DevDescription(dev)) ?? "GPU", total / 1_073_741_824.0));
+            }
+        }
+        catch (DllNotFoundException) { }
+        catch (EntryPointNotFoundException) { }
+        return list;
+    }
+
+    public static void EnsureBackend()
     {
         if (Interlocked.Exchange(ref backendReady, 1) == 1) return;
         LlamaLibrary.InstallResolver();

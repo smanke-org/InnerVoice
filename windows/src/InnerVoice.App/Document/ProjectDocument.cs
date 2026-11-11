@@ -24,8 +24,8 @@ public sealed class ProjectDocument
     public event Action<bool>? Changed;
     public event Action? Saved;
 
-    readonly List<(string Name, Snapshot State)> undo = [];
-    readonly List<(string Name, Snapshot State)> redo = [];
+    readonly List<(string Name, Snapshot? State, Action<Project>? Restore)> undo = [];
+    readonly List<(string Name, Snapshot? State, Action<Project>? Restore)> redo = [];
     const int UndoLimit = 100;
     DateTime? fileTimeAtLoad;
     CancellationTokenSource? autosave;
@@ -67,10 +67,20 @@ public sealed class ProjectDocument
     {
         var before = new Snapshot(Project.Copy(), new Dictionary<string, byte[]>(Audio));
         edit(Project);
-        undo.Add((name, before));
+        undo.Add((name, before, null));
         if (undo.Count > UndoLimit) undo.RemoveAt(0);
         redo.Clear();
         Committed(textChanged);
+    }
+
+    /// One undo step for a long AI run whose results arrived in pieces (Tag Speakers, Build
+    /// Summaries). `restore` puts back only what the run still owns, so the narrator's own
+    /// fixes made during or after the run stay.
+    public void RegisterRunUndo(string name, Action<Project> restore)
+    {
+        undo.Add((name, null, restore));
+        if (undo.Count > UndoLimit) undo.RemoveAt(0);
+        redo.Clear();
     }
 
     /// A change the narrator didn't make (automatic colors): no undo step.
@@ -83,21 +93,29 @@ public sealed class ProjectDocument
     public void Undo()
     {
         if (undo.Count == 0) return;
-        var (name, state) = undo[^1];
+        var (name, state, restore) = undo[^1];
         undo.RemoveAt(undo.Count - 1);
-        redo.Add((name, new Snapshot(Project, Audio)));
-        Project = state.Project;
-        Audio = state.Audio;
+        if (restore is not null)
+        {
+            redo.Add((name, new Snapshot(Project.Copy(), new Dictionary<string, byte[]>(Audio)), null));
+            restore(Project);
+        }
+        else
+        {
+            redo.Add((name, new Snapshot(Project, Audio), null));
+            Project = state!.Project;
+            Audio = state.Audio;
+        }
         Committed(true);
     }
 
     public void Redo()
     {
         if (redo.Count == 0) return;
-        var (name, state) = redo[^1];
+        var (name, state, _) = redo[^1];
         redo.RemoveAt(redo.Count - 1);
-        undo.Add((name, new Snapshot(Project, Audio)));
-        Project = state.Project;
+        undo.Add((name, new Snapshot(Project, Audio), null));
+        Project = state!.Project;
         Audio = state.Audio;
         Committed(true);
     }

@@ -96,8 +96,14 @@ public static unsafe partial class LlamaNative
 {
     public const string Lib = "llama";
     public const string Ggml = "ggml";
+    public const string GgmlBase = "ggml-base";
     public const int LogLevelError = 4;
 
+    [LibraryImport(Ggml, EntryPoint = "ggml_backend_dev_count")] public static partial nuint DevCount();
+    [LibraryImport(Ggml, EntryPoint = "ggml_backend_dev_get")] public static partial nint DevGet(nuint index);
+    [LibraryImport(GgmlBase, EntryPoint = "ggml_backend_dev_type")] public static partial int DevType(nint dev);
+    [LibraryImport(GgmlBase, EntryPoint = "ggml_backend_dev_description")] public static partial nint DevDescription(nint dev);
+    [LibraryImport(GgmlBase, EntryPoint = "ggml_backend_dev_memory")] public static partial void DevMemory(nint dev, out nuint free, out nuint total);
     [LibraryImport(Lib, EntryPoint = "llama_backend_init")] public static partial void BackendInit();
     [LibraryImport(Ggml, EntryPoint = "ggml_backend_load_all")] public static partial void GgmlBackendLoadAll();
     [LibraryImport(Ggml, EntryPoint = "ggml_backend_load_all_from_path", StringMarshalling = StringMarshalling.Utf8)] public static partial void GgmlBackendLoadAllFromPath(string dir);
@@ -154,7 +160,7 @@ public static class LlamaLibrary
 
     static nint Resolve(string name, Assembly assembly, DllImportSearchPath? path)
     {
-        if (name is not (LlamaNative.Lib or LlamaNative.Ggml)) return 0;
+        if (name is not (LlamaNative.Lib or LlamaNative.Ggml or LlamaNative.GgmlBase)) return 0;
         if (Environment.GetEnvironmentVariable("INNERVOICE_LLAMA_LIB") is { Length: > 0 } custom && NativeLibrary.TryLoad(custom, out var h0)) return h0;
         if (OperatingSystem.IsWindows())
         {

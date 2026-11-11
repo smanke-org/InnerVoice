@@ -106,7 +106,8 @@ public sealed partial class ManuscriptPage : Page
             {
                 Padding = new Thickness(Look.Lg, Look.Sm),
                 Background = Look.Brush(Look.Accent.WithAlpha(Look.IsDark ? 0.22 : 0.10)),
-                Child = Ui.Text($"InnerVoice found {p.Lines.Count:N0} lines. Tag Speakers to find who says each one.", 13),
+                Child = Ui.Row(Look.Md, Ui.Text($"InnerVoice found {p.Lines.Count:N0} lines. Tag Speakers to find who says each one.", 13),
+                    Ui.Button("Tag Speakers", Workspace.RequestTag, primary: true)),
             };
             banner.IsVisible = true;
         }

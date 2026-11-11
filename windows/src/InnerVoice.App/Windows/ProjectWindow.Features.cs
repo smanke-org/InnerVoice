@@ -25,7 +25,11 @@ public sealed partial class ProjectWindow
         _ => new ManuscriptPage(Document, Workspace),
     };
 
-    void AddFileItems(MenuItem file) { }
+    void AddFileItems(MenuItem file)
+    {
+        file.Items.Add(new Separator());
+        file.Items.Add(Item("Se_ttings…", "Ctrl+OemComma", () => SettingsWindow.Show(this)));
+    }
 
     void AddStepsMenu(MenuItem view)
     {
@@ -33,7 +37,15 @@ public sealed partial class ProjectWindow
         view.Items.Add(Item("Show/Hide _Steps", null, () => AppSettings.Update(s => s.StepsHidden = !s.StepsHidden)));
     }
 
-    void AddBookMenu(Menu menu) { }
+    void AddBookMenu(Menu menu)
+    {
+        var book = Top("_Book");
+        AddAIMenu(book);
+        AddBookItems(book);
+        menu.Items.Add(book);
+    }
+
+    void AddBookItems(MenuItem book) { }
 
     StepsBar? steps;
 

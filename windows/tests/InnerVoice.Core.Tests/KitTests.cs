@@ -538,3 +538,13 @@ public class KitTests
         Assert.Equal(GuidedStep.Review, new GuidedSteps(p, speaking: 1).Current?.Step);
     }
 }
+
+public class SpeakerNameCleanupTests
+{
+    [Theory]
+    [InlineData("*50% confidence: Mara*", "Mara")]
+    [InlineData("Tom Hale", "Tom Hale")]
+    [InlineData("**Edda**", "Edda")]
+    [InlineData("Pip (the boy)", "Pip")]
+    public void CleansNames(string raw, string expected) => Assert.Equal(expected, InnerVoice.Core.AI.AttributionPrompt.CleanName(raw));
+}

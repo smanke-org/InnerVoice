@@ -32,6 +32,9 @@ public sealed class Workspace
     public event Action? PageChanged;
     public event Action<Guid>? ShowParagraphRequested;
     public event Action<int>? ShowChapterRequested;
+    public event Action? TagRequested;
+
+    public void RequestTag() => TagRequested?.Invoke();
 
     public void Go(PageKind page)
     {

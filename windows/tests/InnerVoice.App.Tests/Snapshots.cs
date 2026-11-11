@@ -77,6 +77,10 @@ public class Snapshots
             w.CaptureRenderedFrame()?.Save(Path.Combine(dir, $"Character-{name}.png"), (int?)null);
             w.Close();
         }
+        var settings = InnerVoice.App.Windows.SettingsWindow.Show(null, "AI");
+        Pump();
+        settings.CaptureRenderedFrame()?.Save(Path.Combine(dir, "Settings-AI.png"), (int?)null);
+        settings.Close();
         var start = new StartWindow();
         start.Show();
         Pump();
@@ -190,4 +194,49 @@ public class Books
         Assert.True(change < 1500, $"a change took {change} ms");
         w.Close();
     }
+}
+
+/// Set INNERVOICE_TEST_MODEL to a GGUF file to tag the sample book and build summaries for real.
+public class RealModel
+{
+    [AvaloniaFact]
+    public async Task TagsAndSummarizesTheSample()
+    {
+        var path = Environment.GetEnvironmentVariable("INNERVOICE_TEST_MODEL");
+        if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
+        Environment.SetEnvironmentVariable("INNERVOICE_MODEL", "file:" + path);
+        var doc = ProjectDocument.Unsaved(TestApp.Sample().Also(p => p.LastTagged = null));
+        int before = doc.Project.LinesNeedingYou;
+        var runner = new InnerVoice.App.AI.AIRunner(doc);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        await runner.TagSpeakers();
+        Assert.Null(runner.Failure);
+        int after = doc.Project.LinesNeedingYou;
+        var tagged = doc.Project.Lines.Count(l => l.Source == AssignmentSource.Ai);
+        Console.WriteLine($"Tag Speakers: {sw.ElapsedMilliseconds} ms; needing you {before} → {after}; AI lines {tagged}; {runner.Finished}");
+        foreach (var l in doc.Project.Lines.Take(12))
+            Console.WriteLine($"  {doc.Project.Character(l.SpeakerID)?.Name ?? "?",-12} {l.Confidence:P0} {l.Source,-8} {doc.Project.TextOf(l, doc.Index)}");
+        Assert.True(after < before, $"{after} still need you");
+        Assert.True(doc.Project.Lines.Where(l => l.Source == AssignmentSource.Ai).All(l => l.AiModel is not null));
+        Assert.Equal("Tag Speakers", doc.UndoName);
+
+        var mara = doc.Project.Characters.First(c => c.Name.StartsWith("Mara"));
+        sw.Restart();
+        await runner.BuildSummaries([mara.Id]);
+        Assert.Null(runner.Failure);
+        var m = doc.Project.Character(mara.Id)!;
+        Console.WriteLine($"Build Summaries ({sw.ElapsedMilliseconds} ms): {string.Join("; ", m.Facts.Select(f => $"{f.Kind}: {f.Text}"))}");
+        Console.WriteLine("Voice notes:\n" + m.VoiceNotes);
+        Assert.NotEmpty(m.Facts);
+        doc.Undo();
+        Assert.Empty(doc.Project.Character(mara.Id)!.Facts);
+        doc.Undo();
+        Assert.Equal(before, doc.Project.LinesNeedingYou);
+        InnerVoice.App.AI.ModelManager.Shared.UnloadNow();
+    }
+}
+
+static class TestExtensions
+{
+    public static T Also<T>(this T value, Action<T> action) { action(value); return value; }
 }
