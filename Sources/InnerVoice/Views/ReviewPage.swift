@@ -4,7 +4,8 @@ import SwiftUI
 /// Every line that needs the narrator, one after another with the text around it: the
 /// AI's unsure guesses first. Return confirms the guess, typing or 1–9 picks someone else,
 /// 0 makes it narration, ↓ and ↑ move between lines. A settled line leaves the list and
-/// the next one comes up.
+/// the next one comes up. The card is the line's whole paragraph, with a row for each line
+/// in it that needs the narrator, and as many paragraphs around it as Context asks for.
 struct ReviewPage: View {
     @ObservedObject var document: InnerVoiceDocument
     @Bindable var workspace: Workspace
@@ -29,6 +30,13 @@ struct ReviewPage: View {
     @State private var query = ""
     @FocusState private var focused: Bool
     @AppStorage("reading.serif", store: ReadingStyle.store) private var serif = true
+    /// Paragraphs shown before and after the one under review, for every book (test runs
+    /// keep it in their own store, like the reading settings).
+    @AppStorage("review.context", store: ReadingStyle.store) private var contextStored = 2
+    @Environment(\.colorScheme) private var colorScheme
+
+    static let maxContext = 5
+    private var contextAround: Int { min(max(contextStored, 0), Self.maxContext) }
 
     private var filter: Filter { Filter(rawValue: filterRaw) ?? .guesses }
 
@@ -94,6 +102,11 @@ struct ReviewPage: View {
         }
         .navigationTitle("Review")
         .pageSubtitle(needing.isEmpty ? "" : "\(needing.count) lines need you")
+        .toolbar {
+            if !nothingToReview, filter != .voices {
+                ToolbarItem { contextControl }
+            }
+        }
         .onAppear {
             if let f = workspace.reviewFilter { filterRaw = f; workspace.reviewFilter = nil }
             selectFirstIfNeeded()
@@ -122,6 +135,30 @@ struct ReviewPage: View {
         .help("What to review")
     }
 
+    // MARK: Context
+
+    /// "Context − +  2 paragraphs around": how much of the chapter each card shows.
+    private var contextControl: some View {
+        let n = contextAround
+        return HStack(spacing: Space.sm) {
+            Text("Context")
+            ControlGroup {
+                Button("Less Context", systemImage: "minus") { contextStored = max(0, n - 1) }
+                    .disabled(n <= 0)
+                    .help("Show fewer paragraphs around each line")
+                Button("More Context", systemImage: "plus") { contextStored = min(Self.maxContext, n + 1) }
+                    .disabled(n >= Self.maxContext)
+                    .help("Show more paragraphs around each line")
+            }
+            .labelStyle(.iconOnly)
+            .fixedSize()
+            Text(n == 0 ? "This paragraph only" : n == 1 ? "1 paragraph around" : "\(n) paragraphs around")
+                .foregroundStyle(.secondary)
+                .frame(minWidth: 130, alignment: .leading)
+        }
+        .padding(.horizontal, Space.sm)
+    }
+
     // MARK: The list
 
     private func list(_ items: [Line]) -> some View {
@@ -146,9 +183,10 @@ struct ReviewPage: View {
                 .padding(.vertical, 1)
                 .background(Color(nsColor: .attention).opacity(0.14), in: Capsule())
             VStack(alignment: .leading, spacing: 2) {
-                Text(document.index.reference(line.paragraphID))
+                Text(document.index.titledReference(line.paragraphID, in: project))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
                 Text(project.text(of: line, index: document.index))
                     .lineLimit(2)
             }
@@ -156,23 +194,29 @@ struct ReviewPage: View {
         .padding(.vertical, 2)
     }
 
-    // MARK: The line
+    // MARK: The paragraph
 
+    /// The lines under review in the same paragraph as `line`, in reading order.
+    private func paragraphLines(_ line: Line, items: [Line]) -> [Line] {
+        items.filter { $0.paragraphID == line.paragraphID }.sorted { $0.range.location < $1.range.location }
+    }
+
+    /// One card per paragraph: the paragraph with the paragraphs around it, a row for each
+    /// line in it that needs you, then the speakers for the selected line.
     private func card(_ line: Line, items: [Line]) -> some View {
         let project = document.project
         let guess = project.character(line.speakerID)
         let position = (items.firstIndex { $0.id == line.id } ?? 0) + 1
+        let group = paragraphLines(line, items: items)
         return ScrollView {
             VStack(alignment: .leading, spacing: Space.lg) {
-                HStack {
-                    Text("\(document.index.reference(line.paragraphID)) · \(position) of \(items.count)")
-                        .font(.callout.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Show in Manuscript") { workspace.show(paragraph: line.paragraphID, line: line.id) }
-                        .help("See this line in the manuscript")
+                Text("\(document.index.titledReference(line.paragraphID, in: project)) · \(position) of \(items.count)")
+                    .font(.callout.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                context(line.paragraphID, reviewing: Set(group.map(\.id)), selected: line.id)
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    ForEach(group) { l in lineRow(l, selected: l.id == line.id, items: items) }
                 }
-                context(line)
                 Divider()
                 decide(line, guess: guess, items: items)
             }
@@ -180,28 +224,71 @@ struct ReviewPage: View {
             .frame(maxWidth: 760, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
-        .id(line.id)
+        // Moving between lines of one paragraph keeps the card (and where it's scrolled).
+        .id(line.paragraphID)
     }
 
-    /// The paragraph before, the line's own paragraph with the line marked, and the one after.
-    private func context(_ line: Line) -> some View {
+    /// One line to review: who it might be, its words, and what to do with it. Clicking the
+    /// row makes it the line the keys and the speakers below act on.
+    private func lineRow(_ line: Line, selected: Bool, items: [Line]) -> some View {
+        let project = document.project
+        let guess = project.character(line.speakerID)
+        let red = Color(nsColor: .attention)
+        return HStack(spacing: Space.sm) {
+            Text(guess.map { "\($0.firstName)?" } ?? "Who's Speaking?")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(red)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 1)
+                .background(red.opacity(0.14), in: Capsule())
+            Text("“\(project.text(of: line, index: document.index))”")
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            if line.kind != .spoken {
+                Text(line.kind.title).font(.caption).foregroundStyle(.tertiary)
+            }
+            Spacer(minLength: Space.sm)
+            if let guess {
+                let confirm = Button("Confirm \(guess.firstName)") {
+                    settle(line, items: items) { document.assign([line.id], to: guess.id, undoManager: undoManager) }
+                }
+                .help("Give the line to \(guess.name), the best guess, \(Int(line.confidence * 100))% sure" + (selected ? " (Return)" : ""))
+                if selected { confirm.buttonStyle(.borderedProminent) } else { confirm }
+            }
+            ReviewAssignButton(document: document, lineID: line.id, undoManager: undoManager) {
+                settle(line, items: items) {}
+            }
+            Button("Show") { workspace.show(paragraph: line.paragraphID, line: line.id) }
+                .help("See this line in the manuscript")
+        }
+        .controlSize(.small)
+        .padding(.horizontal, Space.sm)
+        .padding(.vertical, Space.xs)
+        .background(selected ? Color.accentColor.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+        .contentShape(Rectangle())
+        .onTapGesture {
+            query = ""
+            selection = line.id
+            focused = true
+        }
+    }
+
+    /// The paragraph under review with up to `contextAround` paragraphs before and after it,
+    /// never past its chapter's edges.
+    private func context(_ paragraphID: UUID, reviewing: Set<UUID>, selected: UUID?) -> some View {
         let project = document.project
         let index = document.index
-        let pos = index.positions[line.paragraphID]
+        let pos = index.positions[paragraphID]
+        let range = index.contextRange(paragraphID, around: contextAround, in: project)
         let paragraphs = pos.map { project.chapters[$0.chapter].paragraphs } ?? []
-        let p = pos?.paragraph ?? 0
-        let before = p > 0 ? paragraphs[p - 1] : nil
-        let after = p + 1 < paragraphs.count ? paragraphs[p + 1] : nil
-        let font = Font.system(size: 16, design: serif ? .serif : .default)
         return VStack(alignment: .leading, spacing: Space.md) {
-            if let before { neighbor(before, font: font) }
-            if let own = project.paragraph(line.paragraphID, index: index) {
-                marked(own, line: line)
-                    .font(font)
-                    .lineSpacing(4)
-                    .textSelection(.enabled)
+            if let pos, let range {
+                ForEach(Array(range), id: \.self) { i in
+                    let own = i == pos.paragraph
+                    paragraphText(paragraphs[i], reviewing: own ? reviewing : [], selected: own ? selected : nil, isContext: !own)
+                }
             }
-            if let after { neighbor(after, font: font) }
         }
         .padding(Space.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -209,39 +296,67 @@ struct ReviewPage: View {
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.separator))
     }
 
-    /// A paragraph next to the line, dimmed, with who speaks in it.
-    private func neighbor(_ paragraph: Paragraph, font: Font) -> some View {
+    /// A paragraph with each line in its speaker's color. The lines under review are red,
+    /// the selected one bold and underlined. Context paragraphs are smaller and dimmer, and
+    /// start with who speaks in them, in their colors, so the turn-taking is easy to follow.
+    private func paragraphText(_ paragraph: Paragraph, reviewing: Set<UUID>, selected: UUID?, isContext: Bool) -> some View {
         let project = document.project
-        let speakers = (document.index.linesByParagraph[paragraph.id] ?? []).compactMap { project.character(project.lines[$0].speakerID) }
-        var seen = Set<UUID>()
-        let unique = speakers.filter { seen.insert($0.id).inserted }
-        return VStack(alignment: .leading, spacing: 2) {
-            if !unique.isEmpty {
-                HStack(spacing: Space.sm) {
-                    ForEach(unique) { c in
-                        Label { Text(c.name) } icon: { Circle().fill(Color(hexString: c.colorHex)).frame(width: 7, height: 7) }
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+        let lines = (document.index.linesByParagraph[paragraph.id] ?? []).map { project.lines[$0] }
+            .sorted { $0.range.location < $1.range.location }
+        let font = Font.system(size: isContext ? 14 : 16, design: serif ? .serif : .default)
+        let red = Color(nsColor: .attention)
+        var text = AttributedString()
+        if isContext {
+            var seen = Set<UUID>()
+            for c in lines.compactMap({ project.character($0.speakerID) }) where seen.insert(c.id).inserted {
+                var name = AttributedString(c.name)
+                name.swiftUI.font = .system(size: 12, weight: .semibold).smallCaps()
+                name.swiftUI.foregroundColor = nameColor(c.colorHex)
+                text += name
+                text += AttributedString("  ")
             }
-            Text(paragraph.text)
-                .font(font)
-                .foregroundStyle(.secondary)
-                .lineLimit(8)
-                .lineSpacing(3)
         }
+        let ns = paragraph.text as NSString
+        var cursor = 0
+        for line in lines {
+            let start = min(max(line.range.location, cursor), ns.length)
+            let end = min(max(line.range.location + line.range.length, start), ns.length)
+            if start > cursor { text += AttributedString(ns.substring(with: NSRange(location: cursor, length: start - cursor))) }
+            if end > start {
+                var run = AttributedString(ns.substring(with: NSRange(location: start, length: end - start)))
+                let under = reviewing.contains(line.id)
+                let color = under || project.needsYou(line) ? red
+                    : project.character(line.speakerID).map { Color(hexString: $0.colorHex) } ?? Color.clear
+                run.swiftUI.backgroundColor = color.opacity(under ? 0.24 : isContext ? 0.12 : 0.16)
+                var runFont = font
+                if under { run.swiftUI.foregroundColor = .primary; runFont = runFont.weight(.medium) }
+                if line.id == selected {
+                    runFont = font.weight(.semibold)
+                    run.swiftUI.underlineStyle = Text.LineStyle(pattern: .solid, color: red)
+                }
+                if line.kind == .thought { runFont = runFont.italic() }
+                run.swiftUI.font = runFont
+                text += run
+            }
+            cursor = end
+        }
+        if cursor < ns.length { text += AttributedString(ns.substring(from: cursor)) }
+        let centered = paragraph.style == .sceneBreak
+        return Text(text)
+            .font(font)
+            .foregroundStyle(isContext ? .secondary : .primary)
+            .lineSpacing(isContext ? 3 : 4)
+            .multilineTextAlignment(centered ? .center : .leading)
+            .frame(maxWidth: .infinity, alignment: centered ? .center : .leading)
+            .padding(.leading, paragraph.style == .blockQuote ? Space.xl : 0)
+            .textSelection(.enabled)
     }
 
-    /// The line's paragraph with the line itself bold and underlined in red.
-    private func marked(_ paragraph: Paragraph, line: Line) -> Text {
-        let ns = paragraph.text as NSString
-        let r = NSIntersectionRange(line.range.ns, NSRange(location: 0, length: ns.length))
-        let head = ns.substring(to: r.location)
-        let body = ns.substring(with: r)
-        let tail = ns.substring(from: NSMaxRange(r))
-        let red = Color(nsColor: .attention)
-        return Text(head) + Text(body).bold().underline(color: red) + Text(tail)
+    /// A character's color made readable as text: lighter in dark mode, darker in light.
+    private func nameColor(_ hex: String) -> Color {
+        let base = NSColor(hexString: hex)
+        let dark = colorScheme == .dark
+        return Color(nsColor: base.blended(withFraction: dark ? 0.35 : 0.25, of: dark ? .white : .black) ?? base)
     }
 
     // MARK: Deciding
@@ -263,10 +378,6 @@ struct ReviewPage: View {
                 HStack(spacing: Space.md) {
                     Text("Best guess: \(guess.name)").font(.headline)
                     Text("\(Int(line.confidence * 100))% sure").foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Confirm \(guess.firstName)") { settle(line, items: items) { document.assign([line.id], to: guess.id, undoManager: undoManager) } }
-                        .buttonStyle(.borderedProminent)
-                        .help("Give the line to \(guess.name) (Return)")
                 }
             } else {
                 Text("Who says this?").font(.headline)
@@ -373,9 +484,10 @@ struct ReviewPage: View {
                 .padding(.vertical, 1)
                 .background(Color(nsColor: .attention).opacity(0.14), in: Capsule())
             VStack(alignment: .leading, spacing: 2) {
-                Text(document.index.reference(line.paragraphID) + (project.character(line.speakerID).map { " · " + $0.firstName } ?? ""))
+                Text(document.index.titledReference(line.paragraphID, in: project) + (project.character(line.speakerID).map { " · " + $0.firstName } ?? ""))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
                 Text(project.text(of: line, index: document.index))
                     .lineLimit(2)
             }
@@ -391,14 +503,14 @@ struct ReviewPage: View {
         return ScrollView {
             VStack(alignment: .leading, spacing: Space.lg) {
                 HStack {
-                    Text("\(document.index.reference(line.paragraphID)) · \(position) of \(items.count)")
+                    Text("\(document.index.titledReference(line.paragraphID, in: project)) · \(position) of \(items.count)")
                         .font(.callout.monospacedDigit())
                         .foregroundStyle(.secondary)
                     Spacer()
                     Button("Show in Manuscript") { workspace.show(paragraph: line.paragraphID, line: line.id) }
                         .help("See this line in the manuscript")
                 }
-                context(line)
+                context(line.paragraphID, reviewing: [line.id], selected: line.id)
                 Divider()
                 VStack(alignment: .leading, spacing: Space.md) {
                     HStack(spacing: Space.md) {
@@ -521,5 +633,26 @@ struct ReviewPage: View {
             .frame(maxWidth: .infinity)
         }
         .id(c.id)
+    }
+}
+
+/// Assign… on a Review row: the manuscript's Assign To popover for that one line.
+private struct ReviewAssignButton: View {
+    let document: InnerVoiceDocument
+    let lineID: UUID
+    let undoManager: UndoManager?
+    var assigned: () -> Void
+    @State private var shown = false
+
+    var body: some View {
+        Button("Assign…") { shown = true }
+            .help("Give the line to anyone in the cast, or someone new")
+            .popover(isPresented: $shown, arrowEdge: .bottom) {
+                AssignPopover(document: document, lineID: lineID, undoManager: undoManager, onDone: { to, previous in
+                    shown = false
+                    if let to, to != previous { assigned() }
+                }, onClose: { shown = false })
+                .themed()
+            }
     }
 }

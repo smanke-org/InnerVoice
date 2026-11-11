@@ -175,6 +175,12 @@ enum Snapshot {
                 }
                 await shot("retakes") { workspace.page = .retakes }
                 await shot("review", settle: 1.0) { workspace.reviewFilter = "guesses"; workspace.page = .review }
+                // Context at its least: the paragraph alone, − disabled (test runs keep their own store).
+                await shot("review-context", settle: 1.0) {
+                    ReadingStyle.store.set(0, forKey: "review.context")
+                    workspace.reviewFilter = "all"; workspace.page = .review
+                }
+                ReadingStyle.store.removeObject(forKey: "review.context")
                 await shot("review-tones", settle: 1.0) { workspace.reviewFilter = "tones"; workspace.page = .review }
                 document.castVoicesAgain(undoManager: nil)
                 if let main = document.project.characters.max(by: { (document.index.stats[$0.id]?.lines ?? 0) < (document.index.stats[$1.id]?.lines ?? 0) }) {

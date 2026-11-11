@@ -62,6 +62,23 @@ public struct BookIndex: Sendable {
         return "Ch \(p.chapter + 1) ¶\(p.paragraph + 1)"
     }
 
+    /// "Chapter 6 · ¶26": the chapter's own title, as its heading reads, then the paragraph
+    /// (1-based). `reference` counts chapters from the front matter, so its numbers can be
+    /// off from the headings; Review cards use this one.
+    public func titledReference(_ paragraphID: UUID, in project: Project) -> String {
+        guard let p = positions[paragraphID], project.chapters.indices.contains(p.chapter) else { return "—" }
+        return "\(project.chapters[p.chapter].shownTitle) · ¶\(p.paragraph + 1)"
+    }
+
+    /// The paragraph's own chapter's paragraph indices from `around` before it to `around`
+    /// after it, never past the chapter's first or last paragraph.
+    public func contextRange(_ paragraphID: UUID, around: Int, in project: Project) -> ClosedRange<Int>? {
+        guard let p = positions[paragraphID], project.chapters.indices.contains(p.chapter) else { return nil }
+        let count = project.chapters[p.chapter].paragraphs.count
+        let n = max(0, around)
+        return max(0, p.paragraph - n)...min(count - 1, p.paragraph + n)
+    }
+
     /// Main characters (over 15% of all lines) start hidden in the index.
     public func showsInIndexByDefault(_ characterID: UUID) -> Bool {
         guard totalLines > 0 else { return true }

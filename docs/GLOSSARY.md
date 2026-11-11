@@ -8,7 +8,7 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | Project | One book's `.innervoice` file: manuscript, cast, notes | document, book file |
 | Manuscript | The book's text inside a project | document, file, script (except Narrator Script) |
 | Chapter | A section of the manuscript that starts at a heading | section, part (Part is a heading kind) |
-| Paragraph | One block of text in a chapter; referenced as "Ch 3 ¶12" | block |
+| Paragraph | One block of text in a chapter; referenced as "Ch 3 ¶12", or on Review cards by the chapter's own title, "Chapter 6 · ¶26" | block |
 | Line | One piece of text spoken, thought or written by a character | quote, utterance, dialogue item |
 | Spoken / Thought / Written | The three kinds of line | speech, monologue, text |
 | Narration | Text that is not a line; read in the narrator's own voice | prose, body |
@@ -26,6 +26,7 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | Skip | Mark a step done without doing it; right-click the step to bring it back | dismiss, ignore |
 | To review | Lines in a chapter that still need the narrator ("2 to review" in the sidebar) | needs attention, flagged |
 | Review | The page listing every line, tone and voice that needs the narrator, with context | queue, inbox |
+| Context | On Review, how many paragraphs show before and after each line's paragraph (This paragraph only up to 5 paragraphs around) | surrounding text, excerpt |
 | Tone | How a line is said: neutral, excited, confused, sad, angry, whispered, scared, tender or sarcastic | emotion, mood, style |
 | Voice | The speech voice a character (or the narrator) is read in, on one engine | TTS voice, speaker voice |
 | Engine | Where voices come from: Apple Voices, Qwen3-TTS or Orpheus, all on the Mac | provider, backend |

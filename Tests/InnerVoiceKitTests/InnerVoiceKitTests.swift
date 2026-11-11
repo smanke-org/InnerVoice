@@ -1052,3 +1052,24 @@ private let appleVoices = [
     #expect(n.all.map(\.step) == [.manuscript, .speakers, .review, .characters, .pronunciations, .record])
     #expect(n.all.last?.detail == "0 of 1 recorded")
 }
+
+@Test func reviewReferencesAndContextStayInTheChapter() {
+    var p = Project(title: "t")
+    p.chapters = [
+        Chapter(title: "Copyright", paragraphs: [paragraph("All rights reserved.")]),
+        Chapter(title: "Chapter 1", paragraphs: (1...6).map { paragraph("Paragraph \($0).") }),
+        Chapter(title: "", paragraphs: [paragraph("Opening words.")]),
+    ]
+    let index = BookIndex(p)
+    let third = p.chapters[1].paragraphs[2].id
+    // The chapter's own title, not its place in the book (front matter counts there).
+    #expect(index.reference(third) == "Ch 2 ¶3")
+    #expect(index.titledReference(third, in: p) == "Chapter 1 · ¶3")
+    #expect(index.titledReference(p.chapters[2].paragraphs[0].id, in: p) == "Opening · ¶1")
+    #expect(index.titledReference(UUID(), in: p) == "—")
+    // Context never crosses into the chapter before or after.
+    #expect(index.contextRange(third, around: 0, in: p) == 2...2)
+    #expect(index.contextRange(third, around: 2, in: p) == 0...4)
+    #expect(index.contextRange(third, around: 5, in: p) == 0...5)
+    #expect(index.contextRange(p.chapters[0].paragraphs[0].id, around: 5, in: p) == 0...0)
+}
