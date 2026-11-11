@@ -57,12 +57,20 @@ public class Snapshots
             var w = new ProjectWindow(doc) { Width = 1280, Height = 820 };
             w.Show();
             Pump();
-            foreach (var page in new[] { PageKind.Manuscript, PageKind.Cast, PageKind.Record, PageKind.Retakes })
+            foreach (var page in new[] { PageKind.Manuscript, PageKind.Review, PageKind.Cast, PageKind.Record, PageKind.Retakes })
             {
                 w.Workspace.Go(page);
                 Pump();
                 w.CaptureRenderedFrame()?.Save(Path.Combine(dir, $"{page}-{name}.png"), (int?)null);
             }
+            // The Assign panel on the first line that needs the narrator.
+            w.Workspace.Go(PageKind.Manuscript);
+            Pump();
+            var panelHost = new Avalonia.Controls.Window { Width = 340, Height = 520, Content = new InnerVoice.App.Controls.AssignPanel(doc, [doc.Project.Lines.First(doc.Project.NeedsYou).Id], (_, _) => { }, () => { }) };
+            panelHost.Show();
+            Pump();
+            panelHost.CaptureRenderedFrame()?.Save(Path.Combine(dir, $"Assign-{name}.png"), (int?)null);
+            panelHost.Close();
             w.Workspace.Go(PageKind.Cast);
             (w.FindPage(PageKind.Cast) as CastPage)?.ShowCharacter(doc.Project.Characters[0].Id);
             Pump();
@@ -119,6 +127,41 @@ public class Books
             w.Close();
         }
         finally { File.Delete(tmp); }
+    }
+
+    /// Every manuscript format opens as a project; the narrator's edits undo cleanly.
+    [AvaloniaFact]
+    public void ImportsAndEdits()
+    {
+        foreach (var f in new[] { "docx", "odt", "epub", "html", "rtf", "pdf" })
+        {
+            var book = ManuscriptImporter.Read(Fixture($"import/sample.{f}"));
+            var p = ProjectBuilder.Make(book, $"sample.{f}");
+            Assert.True(p.Lines.Count > 20, $"{f}: {p.Lines.Count} lines");
+            Assert.Equal(ProjectPurpose.Narration, p.Settings.Purpose);
+        }
+        var doc = ProjectDocument.Unsaved(TestApp.Sample());
+        var project = doc.Project;
+        var tom = project.Characters.First(c => c.Name.StartsWith("Tom")).Id;
+        var mara = project.Characters.First(c => c.Name.StartsWith("Mara")).Id;
+        // Fix one line of the back-and-forth; the exchange proposes the rest.
+        var towel = doc.Project.Lines.First(l => doc.Project.TextOf(l, doc.Index).StartsWith("I'll be wanting a towel"));
+        var before = towel.SpeakerID;
+        doc.Assign([towel.Id], tom);
+        Assert.Equal(AssignmentSource.User, doc.Project.Lines.First(l => l.Id == towel.Id).Source);
+        var proposals = Exchange.Proposals(doc.Project, towel.Id, before);
+        if (proposals.Count > 0) doc.ApplyExchange(proposals);
+        // Make a line, mark one as narration, delete a paragraph.
+        var para = doc.Project.Chapters[0].Paragraphs[0];
+        var made = doc.MakeLine(para.Id, new TextSpan(4, 4), mara);
+        Assert.Contains(doc.Project.Lines, l => l.Id == made);
+        doc.RemoveLines([made]);
+        int paragraphs = doc.Project.Chapters[0].Paragraphs.Count;
+        doc.DeleteText(new() { [para.Id] = [new TextSpan(0, para.Text.Length)] });
+        Assert.Equal(paragraphs - 1, doc.Project.Chapters[0].Paragraphs.Count);
+        doc.Undo();
+        Assert.Equal(paragraphs, doc.Project.Chapters[0].Paragraphs.Count);
+        Assert.Equal("Mark as Narration", doc.UndoName);
     }
 
     /// A novel-length book (about 150,000 words) lays out quickly enough to open.

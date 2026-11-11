@@ -23,6 +23,7 @@ public sealed partial class ProjectWindow : Window
     readonly TextBlock subtitle = Ui.Caption("");
     readonly ContentControl toolbarHost = new();
     readonly Border stepsHost = new();
+    readonly Border statusHost = new();
     Page? current;
 
     public ProjectWindow(ProjectDocument document)
@@ -43,6 +44,8 @@ public sealed partial class ProjectWindow : Window
         var headerBorder = new Border { Child = header, BorderBrush = Look.Brush(Look.Separator), BorderThickness = new Thickness(0, 0, 0, 1) };
 
         var main = new DockPanel();
+        DockPanel.SetDock(statusHost, Dock.Top);
+        main.Children.Add(statusHost);
         DockPanel.SetDock(stepsHost, Dock.Top);
         main.Children.Add(stepsHost);
         DockPanel.SetDock(headerBorder, Dock.Top);
@@ -230,11 +233,11 @@ public sealed partial class ProjectWindow : Window
 
     void SetStatus(string message)
     {
-        stepsHost.Child = new Border
+        statusHost.Child = new Border
         {
             Padding = new Thickness(Look.Lg, Look.Sm),
             Background = Look.Brush(Look.Accent.WithAlpha(Look.IsDark ? 0.22 : 0.10)),
-            Child = Ui.Row(Look.Md, Ui.Text(message, 13, wrap: TextWrapping.Wrap), Ui.Button("OK", () => { stepsHost.Child = null; RefreshSteps(); })),
+            Child = Ui.Row(Look.Md, Ui.Text(message, 13, wrap: TextWrapping.Wrap), Ui.Button("OK", () => statusHost.Child = null)),
         };
     }
 

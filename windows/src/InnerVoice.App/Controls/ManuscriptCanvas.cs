@@ -235,8 +235,10 @@ public sealed class ManuscriptCanvas : Control
                     context.FillRectangle(Look.Brush(Look.Accent.WithAlpha(dark ? 0.18 : 0.10)),
                         new Rect(b.X - 10, b.Y - 4, b.Width + 20, b.Height + 8), 6);
                 DrawSearchHits(context, b, origin);
+                DrawSelection(context, i, b, origin);
                 foreach (var line in b.Lines) DrawLine(context, project, b, line, origin, dark);
             }
+            if (b.IsHeading) DrawSelection(context, i, b, origin);
             b.Layout.Draw(context, origin);
             if (b.Paragraph is not null && (project.Settings.ShowInitials || b.Lines.Any(project.NeedsYou)))
                 DrawMarkers(context, project, b, origin, dark, drawnMarkers);
@@ -397,6 +399,9 @@ public sealed class ManuscriptCanvas : Control
         return b.Lines.FirstOrDefault(l => pos >= l.Range.Location && pos < l.Range.End);
     }
 
+    /// The paragraph a line belongs to, for keyboard navigation.
+    public void ScrollToLine(Line line) => ScrollToParagraph(line.ParagraphID);
+
     /// The rectangle of a line's first visual line, in this control.
     public Rect? RectOf(Line line)
     {
@@ -404,6 +409,61 @@ public sealed class ManuscriptCanvas : Control
         var rects = RangeRects(b, line.Range, new Point(b.X, b.Y)).ToList();
         if (rects.Count == 0) return null;
         return rects.Aggregate((a, c) => a.Union(c));
+    }
+
+    // MARK: Pointer and selection
+
+    (int Block, int Pos)? anchor, focus;
+    Point pressPoint;
+    Line? pressedLine;
+    bool dragging;
+
+    /// The selected text, as ranges inside paragraphs and chapter headings, in book order.
+    public List<(Paragraph? Paragraph, int Chapter, TextSpan Range)> SelectedText()
+    {
+        var output = new List<(Paragraph?, int, TextSpan)>();
+        if (anchor is not { } a || focus is not { } f) return output;
+        var (s, e) = a.Block < f.Block || (a.Block == f.Block && a.Pos <= f.Pos) ? (a, f) : (f, a);
+        for (int i = s.Block; i <= e.Block && i < blocks.Count; i++)
+        {
+            var b = blocks[i];
+            int from = i == s.Block ? s.Pos : 0;
+            int to = i == e.Block ? e.Pos : b.Text.Length;
+            if (to > from) output.Add((b.Paragraph, b.Chapter, new TextSpan(from, to - from)));
+        }
+        return output;
+    }
+
+    public bool HasSelection => SelectedText().Count > 0;
+
+    public void ClearSelection()
+    {
+        anchor = focus = null;
+        InvalidateVisual();
+    }
+
+    (int Block, int Pos)? Caret(Point p)
+    {
+        if (blocks.Count == 0) return null;
+        int i = Math.Min(FirstBlockAt(p.Y), blocks.Count - 1);
+        var b = blocks[i];
+        if (b.Layout is null) return null;
+        if (p.Y < b.Y) return (i, 0);
+        var hit = b.Layout.HitTestPoint(new Point(p.X - b.X, p.Y - b.Y));
+        int pos = Math.Clamp(hit.TextPosition + (hit.IsTrailing ? 1 : 0), 0, b.Text.Length);
+        if (p.Y > b.Y + b.Height) pos = b.Text.Length;
+        return (i, pos);
+    }
+
+    void DrawSelection(DrawingContext context, int blockIndex, Block b, Point origin)
+    {
+        foreach (var (para, chapter, range) in SelectedText())
+        {
+            bool match = b.Paragraph is not null ? para?.Id == b.Paragraph.Id : (para is null && chapter == b.Chapter && b.IsHeading);
+            if (!match) continue;
+            foreach (var r in RangeRects(b, range, origin))
+                context.FillRectangle(Look.Brush(Look.Accent.WithAlpha(Look.IsDark ? 0.45 : 0.25)), r);
+        }
     }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
@@ -420,12 +480,58 @@ public sealed class ManuscriptCanvas : Control
             e.Handled = true;
             return;
         }
-        if (line is not null && RectOf(line) is { } rect)
+        if (!props.IsLeftButtonPressed) return;
+        pressPoint = point;
+        pressedLine = line;
+        dragging = false;
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) && anchor is not null && line is null)
         {
-            LineClicked?.Invoke(line, rect, e.KeyModifiers);
-            e.Handled = true;
+            focus = Caret(point);
+            dragging = true;
         }
-        else NarrationClicked?.Invoke(b?.Paragraph, e.KeyModifiers);
+        else
+        {
+            anchor = Caret(point);
+            focus = anchor;
+        }
+        e.Pointer.Capture(this);
+        e.Handled = true;
+    }
+
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        if (anchor is null || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+        var point = e.GetPosition(this);
+        if (!dragging && Math.Abs(point.X - pressPoint.X) + Math.Abs(point.Y - pressPoint.Y) < 5) return;
+        dragging = true;
+        focus = Caret(point);
+        InvalidateVisual();
+        // Keep the drag in view near the edges.
+        if (Scroller is { } sv)
+        {
+            var inView = e.GetPosition(sv);
+            if (inView.Y < 20) sv.Offset = new Vector(sv.Offset.X, Math.Max(0, sv.Offset.Y - 20));
+            else if (inView.Y > sv.Viewport.Height - 20) sv.Offset = new Vector(sv.Offset.X, sv.Offset.Y + 20);
+        }
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        e.Pointer.Capture(null);
+        if (e.InitialPressMouseButton != MouseButton.Left) return;
+        if (dragging) { dragging = false; return; }
+        anchor = focus = null;
+        var point = e.GetPosition(this);
+        if (pressedLine is not null && RectOf(pressedLine) is { } rect) LineClicked?.Invoke(pressedLine, rect, e.KeyModifiers);
+        else
+        {
+            var (b, _, _) = HitTest(point);
+            NarrationClicked?.Invoke(b?.Paragraph, e.KeyModifiers);
+        }
+        pressedLine = null;
+        InvalidateVisual();
     }
 
     // MARK: Scrolling

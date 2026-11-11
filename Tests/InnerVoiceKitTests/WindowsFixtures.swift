@@ -1,3 +1,5 @@
+import AppKit
+import CoreText
 import Foundation
 import Testing
 @testable import InnerVoiceKit
@@ -180,6 +182,138 @@ import Testing
             original: .init(name: "Sample Story.md", data: Data(Self.markdown.utf8)),
             audio: ["Kerensa.m4a": Data([0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70])]))
         try archive.write(to: folder.appending(path: "sample-mac.innervoice"))
+    }
+
+
+    /// The sample story in each manuscript format, with what the Kit imports from it, so the
+    /// C# readers can be checked against the Swift ones.
+    @Test func writeImportFixtures() throws {
+        guard let root = Self.outputFolder else { return }
+        let folder = root.appending(path: "import")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let blocks = PlainTextReader.blocks(from: Self.markdown, markdown: true)
+
+        // HTML from the sample's blocks: headings, paragraphs, block quotes, italics.
+        func escape(_ s: String) -> String { s.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;") }
+        func inline(_ b: RawBlock) -> String {
+            let ns = b.text as NSString
+            var out = ""
+            var cursor = 0
+            for r in b.italic.sorted(by: { $0.location < $1.location }) where r.location >= cursor {
+                out += escape(ns.substring(with: NSRange(location: cursor, length: r.location - cursor)))
+                out += "<i>" + escape(ns.substring(with: r.ns)) + "</i>"
+                cursor = r.end
+            }
+            return out + escape(ns.substring(from: cursor))
+        }
+        func body(_ bs: [RawBlock]) -> String {
+            bs.map { b in
+                if b.headingLevel != nil { return "<h1>\(inline(b))</h1>" }
+                if b.isBlockQuote { return "<blockquote><p>\(inline(b))</p></blockquote>" }
+                return "<p>\(inline(b))</p>"
+            }.joined(separator: "\n")
+        }
+        let html = "<html><head><meta charset=\"utf-8\"><title>Sample Story</title></head><body>\n\(body(blocks))\n</body></html>"
+        let src = folder.appending(path: "sample.html")
+        try html.write(to: src, atomically: true, encoding: .utf8)
+        for format in ["docx", "odt", "rtf"] {
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: "/usr/bin/textutil")
+            p.arguments = ["-convert", format, src.path, "-output", folder.appending(path: "sample.\(format)").path]
+            try p.run()
+            p.waitUntilExit()
+        }
+
+        // EPUB: one spine file per chapter.
+        let tmp = FileManager.default.temporaryDirectory.appending(path: "iv-epub-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tmp.appending(path: "META-INF"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: tmp.appending(path: "OEBPS"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        try "application/epub+zip".write(to: tmp.appending(path: "mimetype"), atomically: true, encoding: .utf8)
+        try #"<?xml version="1.0"?><container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"#
+            .write(to: tmp.appending(path: "META-INF/container.xml"), atomically: true, encoding: .utf8)
+        var chapters: [[RawBlock]] = []
+        for b in blocks { if b.headingLevel != nil || chapters.isEmpty { chapters.append([b]) } else { chapters[chapters.count - 1].append(b) } }
+        var items = "", spine = ""
+        for (i, ch) in chapters.enumerated() {
+            let xhtml = "<?xml version=\"1.0\" encoding=\"utf-8\"?><!DOCTYPE html><html xmlns=\"http://www.w3.org/1999/xhtml\"><head><title>c</title></head><body>\(body(ch).replacingOccurrences(of: "<h1>", with: "<h2>").replacingOccurrences(of: "</h1>", with: "</h2>").replacingOccurrences(of: "<i>", with: "<em>").replacingOccurrences(of: "</i>", with: "</em>"))</body></html>"
+            try xhtml.write(to: tmp.appending(path: "OEBPS/c\(i + 1).xhtml"), atomically: true, encoding: .utf8)
+            items += "<item id=\"c\(i + 1)\" href=\"c\(i + 1).xhtml\" media-type=\"application/xhtml+xml\"/>"
+            spine += "<itemref idref=\"c\(i + 1)\"/>"
+        }
+        try "<?xml version=\"1.0\"?><package xmlns=\"http://www.idpf.org/2007/opf\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" version=\"3.0\"><metadata><dc:title>Sample Story</dc:title><dc:creator>A. N. Example</dc:creator></metadata><manifest>\(items)</manifest><spine>\(spine)</spine></package>"
+            .write(to: tmp.appending(path: "OEBPS/content.opf"), atomically: true, encoding: .utf8)
+        let epub = folder.appending(path: "sample.epub")
+        try? FileManager.default.removeItem(at: epub)
+        let d = Process()
+        d.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+        d.arguments = ["-c", "-k", "--sequesterRsrc", tmp.path, epub.path]
+        try d.run()
+        d.waitUntilExit()
+
+        // PDF: a printed-book layout with mirrored margins, indents, headings and page numbers.
+        let pdf = folder.appending(path: "sample.pdf")
+        var box = CGRect(x: 0, y: 0, width: 432, height: 648)
+        let ctx = CGContext(pdf as CFURL, mediaBox: &box, nil)!
+        let font = NSFont(name: "Times-Roman", size: 11)!
+        let italicFont = NSFont(name: "Times-Italic", size: 11)!
+        let headFont = NSFont(name: "Times-Bold", size: 18)!
+        var page = 0
+        var y: CGFloat = 0
+        func newPage() {
+            if page > 0 {
+                let num = CTLineCreateWithAttributedString(NSAttributedString(string: "\(page)", attributes: [.font: font]))
+                ctx.textPosition = CGPoint(x: 210, y: 30)
+                CTLineDraw(num, ctx)
+                ctx.endPDFPage()
+            }
+            ctx.beginPDFPage(nil)
+            page += 1
+            y = 590
+        }
+        newPage()
+        for (n, b) in blocks.enumerated() {
+            let left: CGFloat = page % 2 == 1 ? 63 : 54
+            let width: CGFloat = 315
+            let s = NSMutableAttributedString(string: b.text, attributes: [.font: b.headingLevel != nil ? headFont : font])
+            for r in b.italic where r.end <= s.length { s.addAttribute(.font, value: italicFont, range: r.ns) }
+            let style = NSMutableParagraphStyle()
+            style.firstLineHeadIndent = b.headingLevel != nil || n == 0 ? 0 : 14
+            if b.isBlockQuote { style.headIndent = 20; style.firstLineHeadIndent = 20 }
+            s.addAttribute(.paragraphStyle, value: style, range: NSRange(location: 0, length: s.length))
+            let framesetter = CTFramesetterCreateWithAttributedString(s)
+            let size = CTFramesetterSuggestFrameSizeWithConstraints(framesetter, CFRange(location: 0, length: 0), nil, CGSize(width: width, height: 2000), nil)
+            if b.headingLevel != nil && page > 0 && y < 590 { newPage() }
+            if y - size.height < 60 { newPage() }
+            let x: CGFloat = page % 2 == 1 ? 63 : 54
+            _ = left
+            let path = CGPath(rect: CGRect(x: x, y: y - size.height, width: width, height: size.height + 1), transform: nil)
+            CTFrameDraw(CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: 0), path, nil), ctx)
+            y -= size.height + (b.headingLevel != nil ? 18 : 2)
+        }
+        let num = CTLineCreateWithAttributedString(NSAttributedString(string: "\(page)", attributes: [.font: font]))
+        ctx.textPosition = CGPoint(x: 210, y: 30)
+        CTLineDraw(num, ctx)
+        ctx.endPDFPage()
+        ctx.closePDF()
+
+        // What the Kit makes of each.
+        struct Expected: Encodable {
+            struct ChapterOut: Encodable { var title: String; var paragraphs: [ParagraphOut] }
+            struct ParagraphOut: Encodable { var text: String; var style: String; var italic: [TextSpan] }
+            var title: String
+            var author: String
+            var chapters: [ChapterOut]
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
+        for name in ["sample.docx", "sample.odt", "sample.rtf", "sample.html", "sample.epub", "sample.pdf"] {
+            let book = try ManuscriptImporter.read(folder.appending(path: name))
+            let e = Expected(title: book.title, author: book.author, chapters: book.chapters.map { c in
+                .init(title: c.title, paragraphs: c.paragraphs.map { .init(text: $0.text, style: $0.style.rawValue, italic: $0.italic) })
+            })
+            try encoder.encode(e).write(to: folder.appending(path: name + ".expected.json"))
+        }
     }
 
     /// Reads back a project the Windows app saved (if one is there) and checks it decodes and

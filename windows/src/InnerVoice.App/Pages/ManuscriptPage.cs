@@ -32,6 +32,8 @@ public sealed partial class ManuscriptPage : Page
         var grid = new DockPanel();
         DockPanel.SetDock(banner, Dock.Top);
         grid.Children.Add(banner);
+        DockPanel.SetDock(notice, Dock.Top);
+        grid.Children.Add(notice);
         grid.Children.Add(scroller);
         var layers = new Grid();
         layers.Children.Add(grid);
@@ -63,6 +65,7 @@ public sealed partial class ManuscriptPage : Page
         toolbar = Ui.Row(Look.Sm, styleBox, initials, smaller, larger, findBox, findCount);
 
         Canvas.LineClicked += OnLineClicked;
+        Canvas.ContextRequestedAt += OnContext;
         Canvas.NarrationClicked += (_, mods) =>
         {
             if (!mods.HasFlag(KeyModifiers.Shift) && Canvas.SelectedLines.Count > 0) { Canvas.SelectedLines.Clear(); Canvas.InvalidateVisual(); }

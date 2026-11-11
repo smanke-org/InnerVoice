@@ -5,4 +5,9 @@
     <RootNamespace>InnerVoice.Core</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="AngleSharp" Version="1.10.1" />
+    <PackageReference Include="PdfPig" Version="0.1.16" />
+    <PackageReference Include="RtfPipe" Version="2.0.7677.4303" />
+  </ItemGroup>
 </Project>

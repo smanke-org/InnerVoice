@@ -1,0 +1,280 @@
+{
+  "author" : "A. N. Example",
+  "chapters" : [
+    {
+      "paragraphs" : [
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "The wind came off the sea like a held breath finally let go. Mara Quinn pulled the door shut behind her and leaned on it until the latch caught."
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "“You're late,” said Tom Hale, without looking up from the lamp."
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "“The path was underwater,” Mara said. “I had to go round by the chapel.”"
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "“Then you'll be wanting tea.”"
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "“I'll be wanting a towel first.”"
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "“Towels are in the chest. Same as always.”"
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "“Same as always,” she repeated, and almost smiled."
+        },
+        {
+          "italic" : [
+            {
+              "length" : 33,
+              "location" : 0
+            },
+            {
+              "length" : 22,
+              "location" : 48
+            }
+          ],
+          "style" : "body",
+          "text" : "He hasn't asked about the letter, Mara thought. Maybe he doesn't know."
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "Tom set down the wick trimmer. He was a broad man gone narrow with age, sixty if he was a day, and when he spoke again his voice had the gravel of a man who had shouted over gales for forty years. “Doctor Voss came by. Asked after you.”"
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "“What did you tell her?”"
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "“That you'd be back when the sea let you.”"
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "sceneBreak",
+          "text" : "⁂"
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "A knock shook the door. Pip Aelwyn stood on the step, soaked to the skin, a lantern swinging from one small fist."
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "“Miss Quinn! Miss Quinn, the boat's come loose from the jetty and Da says—”"
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "“Slow down, Pip.”"
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "“—Da says if it goes on the rocks we'll none of us eat till spring!”"
+        }
+      ],
+      "title" : "Chapter 1: The Storm"
+    },
+    {
+      "paragraphs" : [
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "Doctor Edda Voss arrived the next morning with her bag and her clipped, careful vowels, every word set down as if it might break. She had come from Hamburg twenty years ago and never quite let the north of Germany go."
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "“You have been avoiding me, Mara.”"
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "“I've been busy.”"
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "“Busy.” The doctor folded her gloves. “Your father wrote to me before he died. I think you should read what he wrote.”"
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "She laid an envelope on the table. The handwriting on it was small and slanted."
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "blockQuote",
+          "text" : "My dear girl — if Edda has given you this, then I was too much of a coward to say it myself. The light was never mine to leave you. It belongs to Kerensa."
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "“Who is Kerensa?” Mara whispered."
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "“Read the rest.”"
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "“I can't.”"
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "“You can. You are your father's daughter.”"
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "“That's what frightens me.”"
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "Pip had crept in behind them, dripping on the flagstones. “Is it treasure? Da says old Quinn had treasure.”"
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "“Out,” said the doctor, not unkindly."
+        }
+      ],
+      "title" : "Chapter 2: The Letter"
+    },
+    {
+      "paragraphs" : [
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "That night Tom told her the story. He told it the way he told everything, in the soft burr of the Highlands he had never lost, though he'd left Inverness as a boy of twelve."
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "“Your father and I kept this light together for thirty years,” he said. “And in all that time he never once lied to me. Except about Kerensa."
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "“She was his sister. Not dead, as he told the village. Gone to sea, and never written, and him too proud to look for her.”"
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "“Is she alive?”"
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "“Aye. In Penzance. She wrote to me last spring.”"
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "“And you didn't tell me.”"
+        },
+        {
+          "italic" : [
+
+          ],
+          "style" : "body",
+          "text" : "“I'm telling you now, lass.”"
+        }
+      ],
+      "title" : "Chapter 3: The Keeper"
+    }
+  ],
+  "title" : "Sample Story"
+}

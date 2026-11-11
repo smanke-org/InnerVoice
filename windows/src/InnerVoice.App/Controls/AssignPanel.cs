@@ -1,0 +1,164 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Layout;
+using Avalonia.Media;
+using InnerVoice.App.Document;
+using InnerVoice.App.UI;
+using InnerVoice.Core;
+
+namespace InnerVoice.App.Controls;
+
+/// Pick who says a line: type to filter, arrows and Enter, or 1–9; 0 marks it narration.
+/// Pinned speakers first, then the most used in this chapter, then the rest by lines.
+public sealed class AssignPanel : UserControl
+{
+    readonly ProjectDocument document;
+    readonly IReadOnlyList<Guid> lineIDs;
+    readonly Action<Guid?, Guid?> onAssigned;
+    readonly Action onClose;
+    readonly TextBox query = new() { PlaceholderText = "Find or add a character", BorderThickness = new Thickness(0) };
+    readonly StackPanel rows = new() { Spacing = 2, Margin = new Thickness(Look.Xs) };
+    int highlighted;
+    List<BookCharacter> filtered = [];
+    bool canCreate, showsNarration;
+
+    Line? Line => document.Index.LineIndexByID.TryGetValue(lineIDs[0], out var i) ? document.Project.Lines[i] : null;
+
+    BookCharacter? Guess => Line is { } l && document.Project.NeedsYou(l) ? document.Project.Character(l.SpeakerID) : null;
+
+    public AssignPanel(ProjectDocument document, IReadOnlyList<Guid> lineIDs, Action<Guid?, Guid?> onAssigned, Action onClose)
+    {
+        this.document = document;
+        this.lineIDs = lineIDs;
+        this.onAssigned = onAssigned;
+        this.onClose = onClose;
+        Width = 320;
+        var header = new StackPanel { Spacing = Look.Xs, Margin = new Thickness(Look.Md) };
+        header.Children.Add(Ui.Headline(lineIDs.Count == 1 ? "Assign To" : $"Assign {lineIDs.Count} Lines To"));
+        if (Line is { } line)
+        {
+            header.Children.Add(Ui.Text("“" + document.Project.TextOf(line, document.Index) + "”", 12, brush: Look.Brush(Look.SecondaryInk), wrap: TextWrapping.Wrap, maxLines: 2));
+            header.Children.Add(Guess is { } g
+                ? Ui.Caption($"Best guess: {g.Name} ({line.Confidence:P0} sure). Enter confirms it.", TextWrapping.Wrap)
+                : Ui.Caption(line.Source == AssignmentSource.None ? "Not assigned yet" : line.Source.Title() + (line.Source == AssignmentSource.Ai ? $" ({line.Confidence:P0} sure)" : "")));
+        }
+        query.TextChanged += (_, _) => { highlighted = 0; Rebuild(); };
+        query.KeyDown += OnKey;
+        var clear = new Button { Content = "Who's Speaking?", Classes = { "link" } };
+        ToolTip.SetTip(clear, "Clear the speaker; the line shows in red");
+        clear.Click += (_, _) => Assign(null);
+        var panel = new StackPanel();
+        panel.Children.Add(header);
+        panel.Children.Add(Ui.Divider());
+        panel.Children.Add(new Border { Padding = new Thickness(Look.Sm, Look.Xs), Child = query });
+        panel.Children.Add(Ui.Divider());
+        panel.Children.Add(new ScrollViewer { Content = rows, MaxHeight = 300 });
+        panel.Children.Add(Ui.Divider());
+        panel.Children.Add(new Border { Padding = new Thickness(Look.Md, Look.Xs), Child = clear });
+        Content = panel;
+        Rebuild();
+        if (Guess is { } guess && filtered.FindIndex(c => c.Id == guess.Id) is var gi && gi >= 0) { highlighted = gi; Rebuild(); }
+        AttachedToVisualTree += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(() => query.Focus());
+    }
+
+    List<BookCharacter> Ordered()
+    {
+        var p = document.Project;
+        var index = document.Index;
+        var pinned = p.SpeakerOrder().Pinned;
+        var inChapter = new Dictionary<Guid, int>();
+        if (Line is { } line && index.Positions.TryGetValue(line.ParagraphID, out var pos))
+        {
+            var ids = p.Chapters[pos.Chapter].Paragraphs.Select(x => x.Id).ToHashSet();
+            foreach (var l in p.Lines)
+                if (ids.Contains(l.ParagraphID) && l.SpeakerID is { } s) inChapter[s] = inChapter.GetValueOrDefault(s) + 1;
+        }
+        var byUse = p.Characters.OrderByDescending(c => inChapter.GetValueOrDefault(c.Id)).ThenByDescending(c => index.StatsFor(c.Id)?.Lines ?? 0);
+        return [.. pinned, .. byUse.Where(c => !c.IsPinned)];
+    }
+
+    void Rebuild()
+    {
+        var q = (query.Text ?? "").Trim();
+        filtered = Ordered().Where(c => c.Matches(q)).Take(60).ToList();
+        showsNarration = q.Length == 0 || "narration".StartsWith(q, StringComparison.OrdinalIgnoreCase) || "not spoken".StartsWith(q, StringComparison.OrdinalIgnoreCase);
+        canCreate = q.Length > 0 && !document.Project.Characters.Any(c => string.Equals(c.Name, q, StringComparison.CurrentCultureIgnoreCase));
+        rows.Children.Clear();
+        if (showsNarration)
+            rows.Children.Add(Row(Ui.Row(Look.Sm, Ui.Text("0", 11, brush: Look.Brush(Look.TertiaryInk)), Ui.Text("Narration (not a line)", 13, brush: Look.Brush(Look.SecondaryInk))), highlighted == -1, MarkNarration));
+        for (int i = 0; i < filtered.Count; i++)
+        {
+            var c = filtered[i];
+            var number = i < 9 && q.Length == 0 ? $"{i + 1}" : " ";
+            var label = Ui.Row(Look.Sm, Ui.Text(number, 11, brush: Look.Brush(Look.TertiaryInk)), Ui.Dot(c.ColorHex), Ui.Text(c.Name + (c.IsPinned ? "  📌" : ""), 13));
+            var id = c.Id;
+            rows.Children.Add(Row(label, i == highlighted, () => Assign(id)));
+        }
+        if (canCreate)
+            rows.Children.Add(Row(Ui.Text($"＋ New Character “{q}”", 13), highlighted == filtered.Count, AssignNew));
+    }
+
+    Control Row(Control content, bool selected, Action click)
+    {
+        var b = new Button
+        {
+            Content = content,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Left,
+            Padding = new Thickness(Look.Sm, 4),
+            Background = selected ? Look.Brush(Look.Accent.WithAlpha(0.18)) : Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(6),
+        };
+        b.Click += (_, _) => click();
+        return b;
+    }
+
+    void OnKey(object? sender, KeyEventArgs e)
+    {
+        int max = filtered.Count - (canCreate ? 0 : 1);
+        switch (e.Key)
+        {
+            case Key.Down: highlighted = Math.Min(highlighted + 1, max); Rebuild(); e.Handled = true; break;
+            case Key.Up: highlighted = Math.Max(showsNarration ? -1 : 0, highlighted - 1); Rebuild(); e.Handled = true; break;
+            case Key.Escape: onClose(); e.Handled = true; break;
+            case Key.Enter: Commit(); e.Handled = true; break;
+            default:
+                if ((query.Text ?? "").Length == 0 && e.KeyModifiers == KeyModifiers.None && e.Key is >= Key.D0 and <= Key.D9 or >= Key.NumPad0 and <= Key.NumPad9)
+                {
+                    int n = e.Key >= Key.NumPad0 ? e.Key - Key.NumPad0 : e.Key - Key.D0;
+                    if (n == 0) MarkNarration();
+                    else if (n <= Math.Min(9, filtered.Count)) Assign(filtered[n - 1].Id);
+                    e.Handled = true;
+                }
+                break;
+        }
+    }
+
+    void Commit()
+    {
+        if (highlighted == -1) MarkNarration();
+        else if (highlighted < filtered.Count) Assign(filtered[highlighted].Id);
+        else if (canCreate) AssignNew();
+    }
+
+    void Assign(Guid? speaker)
+    {
+        var previous = Line?.SpeakerID;
+        document.Assign(lineIDs, speaker);
+        onAssigned(speaker, previous);
+    }
+
+    void AssignNew()
+    {
+        var id = document.AddCharacter((query.Text ?? "").Trim());
+        Assign(id);
+    }
+
+    void MarkNarration()
+    {
+        document.RemoveLines(lineIDs);
+        onClose();
+    }
+}
