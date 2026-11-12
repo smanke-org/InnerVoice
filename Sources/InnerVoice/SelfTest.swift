@@ -584,6 +584,47 @@ enum SelfTest {
         }
     }
 
+    /// A click on a name in the margin opens Assign To for every line in that paragraph, and
+    /// one pick confirms or changes them all; a click on a line itself still means that line.
+    private static func marginClickInTheView() async {
+        let doc = InnerVoiceDocument(project: SeedData.project())
+        let undo = UndoManager()
+        let workspace = Workspace()
+        let look = ReadingLook(fontSize: 16, serif: true, spacing: .single, margin: .initials)
+        var asked: [UUID] = []
+        let host = NSHostingView(rootView: ManuscriptTextView(document: doc, workspace: workspace, undoManager: undo,
+                                                              onAssignRequest: { ids, _, _ in asked = ids }, onVisibleChapter: { _ in }, look: look))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        host.layoutSubtreeIfNeeded()
+        try? await Task.sleep(for: .milliseconds(300))
+        defer { window.close() }
+        func find(_ v: NSView) -> ReadingTextView? { (v as? ReadingTextView) ?? v.subviews.lazy.compactMap(find).first }
+        guard let tv = find(host), let c = tv.coordinator else { check("the manuscript view is there to click", false); return }
+        let project = doc.project
+        let byParagraph = Dictionary(grouping: project.lines, by: \.paragraphID)
+        guard let para = project.chapters.flatMap(\.paragraphs).first(where: { (byParagraph[$0.id]?.count ?? 0) >= 2 }),
+              let paraLines = byParagraph[para.id], let first = paraLines.first,
+              let point = c.marginPoint(of: first.id) else { check("the sample has a paragraph with two lines", false); return }
+        let expected = project.lines.filter { $0.paragraphID == para.id }.map(\.id)
+        check("a click on a name in the margin opens Assign To for the whole paragraph",
+              c.marginClick(at: point) && asked == expected && workspace.selectedLines == expected, "\(asked.count) of \(expected.count) lines")
+        asked = []
+        c.click(at: c.layout.entries.first { $0.lineID == paraLines[1].id }!.range.location + 1)
+        check("a click on a line in the text still opens Assign To for that line alone", asked == [paraLines[1].id])
+        check("a click in the text beside the margin is not a margin click", !c.marginClick(at: NSPoint(x: tv.textContainerOrigin.x + 20, y: point.y)))
+        check("a right-click on a name in the margin offers the whole paragraph",
+              c.marginMenu(at: point)?.items.first?.title.contains("\(expected.count) lines in this paragraph") == true || expected.count == 1,
+              c.marginMenu(at: point)?.items.first?.title ?? "no menu")
+        // One pick: the whole paragraph is the narrator's, with one speaker.
+        guard let other = project.characters.first(where: { $0.id != first.speakerID }) else { return }
+        doc.assign(expected, to: other.id, undoManager: undo)
+        let after = doc.project.lines.filter { $0.paragraphID == para.id }
+        check("one pick changes every line in the paragraph", after.count == expected.count && after.allSatisfy { $0.speakerID == other.id && $0.source == .user })
+        undo.undo()
+    }
+
     /// Delete Text the way the narrator does it: select text in the real manuscript view of
     /// a window, then press Delete or choose Delete Text from the right-click menu. The text
     /// must leave the project AND the screen.
@@ -1022,6 +1063,7 @@ enum SelfTest {
                 }
             }
             await deleteTextInTheView()
+            await marginClickInTheView()
             // Steps: the sample is tagged and summarized with lines to review, so Review is next;
             // skipping it moves on, and Undo brings it back.
             let steps = GuidedStepsBar.steps(doc)

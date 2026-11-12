@@ -17,18 +17,19 @@ public sealed partial class ManuscriptPage
 {
     Flyout? open;
 
-    /// Assign To, at the clicked line.
-    void ShowLinePopover(Line line, Rect rect)
+    /// Assign To, at the clicked line; a `paragraph` group (from a name in the margin) gives
+    /// one pick to every line in it.
+    void ShowLinePopover(Line line, Rect rect, List<Guid>? paragraph = null)
     {
-        var ids = Canvas.SelectedLines.Count > 1 && Canvas.SelectedLines.Contains(line.Id) ? Canvas.SelectedLines.ToList() : [line.Id];
+        var ids = paragraph ?? (Canvas.SelectedLines.Count > 1 && Canvas.SelectedLines.Contains(line.Id) ? Canvas.SelectedLines.ToList() : [line.Id]);
         open?.Hide();
         var flyout = new Flyout { Placement = PlacementMode.Bottom, ShowMode = FlyoutShowMode.Standard };
         var panel = new AssignPanel(Document, ids, (speaker, previous) =>
         {
             flyout.Hide();
-            if (ids.Count == 1 && speaker is not null) OfferExchange(line.Id, previous);
+            if ((ids.Count == 1 || paragraph is not null) && speaker is not null) OfferExchange(ids[^1], previous);
             Canvas.Focus();
-        }, () => { flyout.Hide(); Canvas.Focus(); });
+        }, () => { flyout.Hide(); Canvas.Focus(); }, isParagraph: paragraph is not null);
         flyout.Content = panel;
         var anchor = AnchorAt(rect);
         flyout.Closed += (_, _) => RemoveAnchor(anchor);

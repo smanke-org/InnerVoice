@@ -139,7 +139,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
             .heading("Pin the speakers you use most"),
             .text("Pinned characters sit at the top of every speaker list, A to Z by first name, with everyone else A to Z below them. Hold Option in the right-click list and choose Pin, click the pin beside a name in Assign To, or right-click a character in Cast and choose Pin to Top of Speaker Lists."),
             .heading("Fix lines from the margin"),
-            .text("Right-click a name (or a red ?) in the left margin to give that speaker's lines in the paragraph to someone else in one go, or to assign the red lines there. The same search field is ready for typing."),
+            .text("Click a name (or a red ?) in the left margin to assign every line in that paragraph at once: Return confirms the best guess for all of them, or pick someone else and the whole paragraph changes. Right-click the name for the same choice as a menu."),
             .heading("Fix a whole exchange"),
             .text("When you fix one line in a back-and-forth that had no tags, the lines after it are probably off by one too. A banner offers to swap the rest of the exchange, up to the next tagged line or break in the narration. Click Swap or Keep."),
             .heading("Several lines at once"),

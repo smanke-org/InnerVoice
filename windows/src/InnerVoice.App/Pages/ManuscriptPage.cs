@@ -66,6 +66,7 @@ public sealed partial class ManuscriptPage : Page
 
         Canvas.LineClicked += OnLineClicked;
         Canvas.ContextRequestedAt += OnContext;
+        Canvas.MarginNameClicked += OnMarginNameClicked;
         Canvas.NarrationClicked += (_, mods) =>
         {
             if (!mods.HasFlag(KeyModifiers.Shift) && Canvas.SelectedLines.Count > 0) { Canvas.SelectedLines.Clear(); Canvas.InvalidateVisual(); }
@@ -126,6 +127,18 @@ public sealed partial class ManuscriptPage : Page
         Canvas.SelectedLines.Add(line.Id);
         Canvas.InvalidateVisual();
         ShowLinePopover(line, rect);
+    }
+
+    /// A name in the margin stands for its whole paragraph: one pick confirms or changes
+    /// every line in it.
+    void OnMarginNameClicked(Line line, Rect rect)
+    {
+        var ids = Document.Project.Lines.Where(l => l.ParagraphID == line.ParagraphID).Select(l => l.Id).ToList();
+        if (ids.Count == 0) ids = [line.Id];
+        Canvas.SelectedLines.Clear();
+        Canvas.SelectedLines.UnionWith(ids);
+        Canvas.InvalidateVisual();
+        ShowLinePopover(line, rect, ids);
     }
 
     // MARK: Find

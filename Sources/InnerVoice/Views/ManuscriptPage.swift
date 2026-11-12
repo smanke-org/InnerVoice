@@ -45,13 +45,14 @@ struct ManuscriptPage: View {
         return chapter
     }
 
-    private func showAssign(_ lineID: UUID, _ rect: NSRect, _ view: NSView) {
-        let popover = AssignPopover(document: document, lineID: lineID, undoManager: undoManager, onDone: { assigned, previous in
+    private func showAssign(_ ids: [UUID], _ rect: NSRect, _ view: NSView) {
+        guard let lineID = ids.last else { return }
+        let popover = AssignPopover(document: document, lineID: ids[0], undoManager: undoManager, onDone: { assigned, previous in
             PopoverPresenter.shared.close()
             guard let assigned, assigned != previous else { workspace.exchange = []; return }
             let proposals = Exchange.proposals(in: document.project, after: lineID, previousSpeaker: previous)
             withAnimation(.easeOut(duration: 0.2)) { workspace.exchange = proposals }
-        }, onClose: { PopoverPresenter.shared.close() })
+        }, onClose: { PopoverPresenter.shared.close() }, group: ids)
         PopoverPresenter.shared.show(popover, at: rect, in: view)
     }
 }

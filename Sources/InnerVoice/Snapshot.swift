@@ -120,6 +120,41 @@ enum Snapshot {
                     }
                     PopoverPresenter.shared.close()
                 }
+                // A real click on a name in the margin: Assign To for the whole paragraph.
+                if wants("assign-paragraph") {
+                    workspace.page = .manuscript
+                    try? await Task.sleep(for: .seconds(1))
+                    func find(_ v: NSView) -> ReadingTextView? { (v as? ReadingTextView) ?? v.subviews.lazy.compactMap(find).first }
+                    let byParagraph = Dictionary(grouping: document.project.lines, by: \.paragraphID)
+                    if let win = NSApp.windows.first(where: { $0.isVisible && $0.contentView.flatMap(find) != nil }),
+                       let tv = win.contentView.flatMap(find), let c = tv.coordinator,
+                       let para = document.project.chapters.flatMap(\.paragraphs).first(where: { (byParagraph[$0.id] ?? []).count >= 2 && (byParagraph[$0.id] ?? []).contains(where: document.project.needsYou) })
+                                  ?? document.project.chapters.flatMap(\.paragraphs).first(where: { (byParagraph[$0.id] ?? []).count >= 2 }),
+                       let first = byParagraph[para.id]?.first, let range = c.layout.paragraphRanges[para.id] {
+                        tv.scrollRangeToVisible(range)
+                        try? await Task.sleep(for: .seconds(0.5))
+                        if let p = c.marginPoint(of: first.id) {
+                            let at = tv.convert(p, to: nil)
+                            // The text view's mouse loop reads the mouse-up from the queue.
+                            if let up = NSEvent.mouseEvent(with: .leftMouseUp, location: at, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                                           windowNumber: win.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 0),
+                               let down = NSEvent.mouseEvent(with: .leftMouseDown, location: at, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                                             windowNumber: win.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) {
+                                NSApp.postEvent(up, atStart: false)
+                                win.sendEvent(down)
+                            }
+                            try? await Task.sleep(for: .seconds(1))
+                            print("assign-paragraph: \(workspace.selectedLines.count) of \(byParagraph[para.id]?.count ?? 0) lines selected")
+                            if let pop = NSApp.windows.first(where: { $0.isVisible && String(describing: type(of: $0)).contains("Popover") }) {
+                                capture(pop, "\(dir)/assign-paragraph-\(mode).png")
+                            } else {
+                                print("assign-paragraph: no popover")
+                            }
+                            PopoverPresenter.shared.close()
+                            workspace.selectedLines = []
+                        }
+                    }
+                }
                 await shot("exchange-banner") {
                     workspace.exchange = lines.prefix(4).compactMap { l in l.speakerID.map { Exchange.Proposal(lineID: l.id, speakerID: $0) } }
                 }

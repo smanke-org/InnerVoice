@@ -50,6 +50,9 @@ public sealed class ManuscriptCanvas : Control
     public event Action<Line?, Paragraph?, Point>? ContextRequestedAt;
     /// A click on narration (no line).
     public event Action<Paragraph?, KeyModifiers>? NarrationClicked;
+    /// A click (or right-click) on a name in the margin: the line it names and its rectangle.
+    /// The name stands for its whole paragraph.
+    public event Action<Line, Rect>? MarginNameClicked;
 
     public ManuscriptCanvas()
     {
@@ -404,6 +407,30 @@ public sealed class ManuscriptCanvas : Control
         return b.Lines.FirstOrDefault(l => pos >= l.Range.Location && pos < l.Range.End);
     }
 
+    /// The line whose name is drawn in the margin at `p`, if any.
+    public Line? MarginLineAt(Point p)
+    {
+        if (blocks.Count == 0 || document is null) return null;
+        var b = blocks[Math.Min(FirstBlockAt(p.Y), blocks.Count - 1)];
+        if (b.Layout is null || b.Paragraph is null || p.X >= b.X - 4) return null;
+        var project = document.Project;
+        foreach (var line in b.Lines)
+        {
+            if (!project.Settings.ShowInitials && !project.NeedsYou(line)) continue;
+            var first = b.Layout.HitTestTextPosition(Math.Clamp(line.Range.Location, 0, b.Text.Length)).Translate(new Vector(b.X, b.Y));
+            if (p.Y >= first.Top && p.Y <= first.Bottom) return line;
+        }
+        return null;
+    }
+
+    /// Where a line's name sits in the margin, in this control (for tests).
+    public Point? MarginPointOf(Line line)
+    {
+        if (!byParagraph.TryGetValue(line.ParagraphID, out var b) || b.Layout is null) return null;
+        var first = b.Layout.HitTestTextPosition(Math.Clamp(line.Range.Location, 0, b.Text.Length)).Translate(new Vector(b.X, b.Y));
+        return new Point(b.X - 24, first.Center.Y);
+    }
+
     /// The paragraph a line belongs to, for keyboard navigation.
     public void ScrollToLine(Line line) => ScrollToParagraph(line.ParagraphID);
 
@@ -420,7 +447,7 @@ public sealed class ManuscriptCanvas : Control
 
     (int Block, int Pos)? anchor, focus;
     Point pressPoint;
-    Line? pressedLine;
+    Line? pressedLine, pressedMargin;
     bool dragging;
 
     /// The selected text, as ranges inside paragraphs and chapter headings, in book order.
@@ -479,15 +506,18 @@ public sealed class ManuscriptCanvas : Control
         var props = e.GetCurrentPoint(this).Properties;
         var line = LineAt(point);
         var (b, _, _) = HitTest(point);
+        var margin = line is null ? MarginLineAt(point) : null;
         if (props.IsRightButtonPressed)
         {
-            ContextRequestedAt?.Invoke(line, b?.Paragraph, point);
+            if (margin is not null && RectOf(margin) is { } mr) MarginNameClicked?.Invoke(margin, mr);
+            else ContextRequestedAt?.Invoke(line, b?.Paragraph, point);
             e.Handled = true;
             return;
         }
         if (!props.IsLeftButtonPressed) return;
         pressPoint = point;
         pressedLine = line;
+        pressedMargin = margin;
         dragging = false;
         if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) && anchor is not null && line is null)
         {
@@ -530,12 +560,13 @@ public sealed class ManuscriptCanvas : Control
         anchor = focus = null;
         var point = e.GetPosition(this);
         if (pressedLine is not null && RectOf(pressedLine) is { } rect) LineClicked?.Invoke(pressedLine, rect, e.KeyModifiers);
+        else if (pressedMargin is not null && RectOf(pressedMargin) is { } mr) MarginNameClicked?.Invoke(pressedMargin, mr);
         else
         {
             var (b, _, _) = HitTest(point);
             NarrationClicked?.Invoke(b?.Paragraph, e.KeyModifiers);
         }
-        pressedLine = null;
+        pressedLine = pressedMargin = null;
         InvalidateVisual();
     }
 

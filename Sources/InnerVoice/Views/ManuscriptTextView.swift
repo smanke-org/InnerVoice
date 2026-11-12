@@ -137,7 +137,8 @@ struct ManuscriptTextView: NSViewRepresentable {
     @ObservedObject var document: InnerVoiceDocument
     @Bindable var workspace: Workspace
     var undoManager: UndoManager?
-    var onAssignRequest: (UUID, NSRect, NSView) -> Void
+    /// Assign To for these lines (one line, or a whole paragraph from its margin name).
+    var onAssignRequest: ([UUID], NSRect, NSView) -> Void
     var onVisibleChapter: (Int) -> Void
     /// The reading settings. The page reads them (so SwiftUI updates it when they change)
     /// and passes them down: settings the view only held in @AppStorage, without reading
@@ -437,11 +438,11 @@ struct ManuscriptTextView: NSViewRepresentable {
             requestAssign(line.id)
         }
 
-        func requestAssign(_ lineID: UUID) {
+        func requestAssign(_ lineID: UUID, group: [UUID]? = nil) {
             guard let textView, let e = layout.entries.first(where: { $0.lineID == lineID }) else { return }
             let rects = rects(for: e.range)
             guard let rect = rects.first else { return }
-            parent.onAssignRequest(lineID, rect, textView)
+            parent.onAssignRequest(group ?? [lineID], rect, textView)
         }
 
         func lines(in range: NSRange) -> [UUID] {
@@ -542,22 +543,46 @@ struct ManuscriptTextView: NSViewRepresentable {
             return nil
         }
 
-        /// A right-click on a name in the margin: reassign that speaker's lines in the
-        /// paragraph (or its red lines, for a red ?), with the search field ready for typing.
+        /// Every line in the clicked line's paragraph, in reading order: a name in the margin
+        /// stands for its whole paragraph.
+        func paragraphLines(of clicked: Line) -> [UUID] {
+            let ids = project.lines.filter { $0.paragraphID == clicked.paragraphID }.map(\.id)
+            return ids.isEmpty ? [clicked.id] : ids
+        }
+
+        /// Where a line's name sits in the margin (text view coordinates), for tests.
+        func marginPoint(of lineID: UUID) -> NSPoint? {
+            guard let tv = textView, let lm = tv.layoutManager, let tc = tv.textContainer,
+                  let e = layout.entries.first(where: { $0.lineID == lineID }) else { return nil }
+            let glyphs = lm.glyphRange(forCharacterRange: NSRange(location: e.range.location, length: min(1, e.range.length)), actualCharacterRange: nil)
+            let first = lm.boundingRect(forGlyphRange: glyphs, in: tc)
+            let origin = tv.textContainerOrigin
+            return NSPoint(x: origin.x - 24, y: origin.y + first.midY)
+        }
+
+        /// A click on a name in the margin: Assign To for the whole paragraph, so one pick
+        /// confirms or changes every line in it. False when no name is there.
+        @discardableResult
+        func marginClick(at point: NSPoint) -> Bool {
+            guard let e = marginEntry(at: point), let clicked = line(e) else { return false }
+            let ids = paragraphLines(of: clicked)
+            parent.workspace.selectedLines = ids
+            requestAssign(clicked.id, group: ids)
+            return true
+        }
+
+        /// A right-click on a name in the margin: the same choice as a menu, for every line in
+        /// the paragraph.
         func marginMenu(at point: NSPoint) -> NSMenu? {
             guard let e = marginEntry(at: point), let clicked = line(e) else { return nil }
-            let needs = project.needsYou(clicked)
-            let siblings = project.lines.filter { l in
-                l.paragraphID == clicked.paragraphID && (needs ? project.needsYou(l) : (!project.needsYou(l) && l.speakerID == clicked.speakerID))
-            }
-            let ids = siblings.isEmpty ? [clicked.id] : siblings.map(\.id)
+            let ids = paragraphLines(of: clicked)
             parent.workspace.selectedLines = ids
-            let count = ids.count == 1 ? "1 line" : "\(ids.count) lines"
+            let needs = ids.contains { id in document.index.lineIndexByID[id].map { project.needsYou(project.lines[$0]) } ?? false }
             let heading: String
-            if needs {
-                heading = ids.count == 1 ? "Who says this line?" : "Who says these \(ids.count) lines?"
+            if ids.count == 1 {
+                heading = needs ? "Who says this line?" : "This line"
             } else {
-                heading = "\(project.character(clicked.speakerID)?.name ?? "Speaker")’s \(count) in this paragraph"
+                heading = needs ? "Who says the \(ids.count) lines in this paragraph?" : "The \(ids.count) lines in this paragraph"
             }
             return speakerMenu(for: ids, heading: heading)
         }
@@ -658,6 +683,8 @@ final class ReadingTextView: NSTextView {
             }
             return
         }
+        // A name in the margin stands for its whole paragraph.
+        if coordinator?.marginClick(at: point) == true { return }
         coordinator?.click(at: characterIndexForInsertion(at: point))
     }
 

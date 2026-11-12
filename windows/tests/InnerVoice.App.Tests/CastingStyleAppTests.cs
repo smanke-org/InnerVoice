@@ -1,5 +1,8 @@
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia;
+using Avalonia.LogicalTree;
+using Avalonia.VisualTree;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using InnerVoice.App.Document;
@@ -66,6 +69,39 @@ public class CastingStyleAppTests
         Assert.NotNull(shades[tom.Id].Arrow);
         doc.SetShade(tom.Id, Shade.Make(-1, 1, "gruff"));
         Assert.Equal("lower, quicker, gruff", doc.Shades()[tom.Id].Cue);
+    }
+
+    /// A click on a name in the margin picks every line in its paragraph, and Enter in Assign
+    /// To confirms the guess for all of them.
+    [AvaloniaFact]
+    public void MarginNameAssignsTheWholeParagraph()
+    {
+        var doc = ProjectDocument.Unsaved(TestApp.Sample());
+        var w = new ProjectWindow(doc) { Width = 1280, Height = 820 };
+        w.Show();
+        w.Workspace.Go(PageKind.Manuscript);
+        Pump();
+        var canvas = ((ManuscriptPage)w.FindPage(PageKind.Manuscript)!).Canvas;
+        var para = doc.Project.Chapters.SelectMany(c => c.Paragraphs).First(p => doc.Project.Lines.Count(l => l.ParagraphID == p.Id) >= 2);
+        var lines = doc.Project.Lines.Where(l => l.ParagraphID == para.Id).ToList();
+        canvas.ScrollToParagraph(para.Id);
+        Pump();
+        var at = canvas.TranslatePoint(canvas.MarginPointOf(lines[0])!.Value, w)!.Value;
+        Assert.Equal(lines[0].Id, canvas.MarginLineAt(canvas.MarginPointOf(lines[0])!.Value)?.Id);
+        w.MouseDown(at, Avalonia.Input.MouseButton.Left);
+        w.MouseUp(at, Avalonia.Input.MouseButton.Left);
+        Pump();
+        Assert.Equal(lines.Select(l => l.Id).ToHashSet(), canvas.SelectedLines);
+        // Assign To for the paragraph: Enter gives its best guess to every line.
+        var ids = lines.Select(l => l.Id).ToList();
+        Guid? assigned = null;
+        var panel = new InnerVoice.App.Controls.AssignPanel(doc, ids, (s, _) => assigned = s, () => { }, isParagraph: true);
+        var box = panel.GetLogicalDescendants().OfType<Avalonia.Controls.TextBox>().First();
+        box.RaiseEvent(new Avalonia.Input.KeyEventArgs { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = Avalonia.Input.Key.Enter });
+        var after = doc.Project.Lines.Where(l => l.ParagraphID == para.Id).ToList();
+        Assert.NotNull(assigned);
+        Assert.All(after, l => { Assert.Equal(assigned, l.SpeakerID); Assert.Equal(AssignmentSource.User, l.Source); });
+        w.Close();
     }
 
     [AvaloniaFact]

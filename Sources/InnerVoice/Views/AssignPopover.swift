@@ -2,13 +2,15 @@ import AppKit
 import InnerVoiceKit
 import SwiftUI
 
-/// Pick who says a line: type to filter, arrows and Return, or 1–9.
+/// Pick who says a line: type to filter, arrows and Return, or 1–9. With a `group` (a whole
+/// paragraph, from its name in the margin) one pick confirms or changes every line in it.
 struct AssignPopover: View {
     let document: InnerVoiceDocument
     let lineID: UUID
     let undoManager: UndoManager?
     var onDone: (_ assigned: UUID?, _ previous: UUID?) -> Void
     var onClose: () -> Void
+    var group: [UUID] = []
 
     @State private var query = ""
     @State private var highlighted = 0
@@ -16,10 +18,41 @@ struct AssignPopover: View {
 
     private var line: Line? { document.index.lineIndexByID[lineID].map { document.project.lines[$0] } }
 
-    /// The AI's or the rules' unsure guess for this line, for the narrator to confirm.
+    /// The lines this pick goes to.
+    private var ids: [UUID] { group.isEmpty ? [lineID] : group }
+    private var lines: [Line] { ids.compactMap { document.index.lineIndexByID[$0].map { document.project.lines[$0] } } }
+
+    /// The one speaker every line has now, if they agree.
+    private var sharedSpeaker: UUID? {
+        let speakers = Set(lines.map(\.speakerID))
+        return speakers.count == 1 ? speakers.first! : nil
+    }
+
+    /// The AI's or the rules' unsure guess, for the narrator to confirm: for a paragraph, the
+    /// speaker most of its lines have, when any of them is unsure.
     private var guess: BookCharacter? {
-        guard let line, document.project.needsYou(line) else { return nil }
-        return document.project.character(line.speakerID)
+        let project = document.project
+        guard lines.contains(where: project.needsYou) else { return nil }
+        // Most lines wins; a tie goes to the one that speaks first.
+        var counts: [UUID: Int] = [:]
+        var top: UUID?
+        for id in lines.compactMap(\.speakerID) {
+            counts[id, default: 0] += 1
+            if top == nil || counts[id]! > counts[top!]! { top = id }
+        }
+        return top.flatMap { project.character($0) }
+    }
+
+    /// "Cyrus 2, Mara 1, nobody yet 1" for a paragraph whose lines disagree.
+    private var breakdown: String {
+        var order: [UUID?] = []
+        var counts: [UUID?: Int] = [:]
+        for l in lines {
+            if counts[l.speakerID] == nil { order.append(l.speakerID) }
+            counts[l.speakerID, default: 0] += 1
+        }
+        return order.map { id in "\(id.flatMap { document.project.character($0)?.name } ?? "nobody yet") \(counts[id] ?? 0)" }
+            .joined(separator: ", ")
     }
 
     /// Pinned speakers first (A to Z by first name), then the most used in this chapter,
@@ -138,9 +171,26 @@ struct AssignPopover: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: Space.xs) {
-            Text("Assign To")
+            Text(ids.count == 1 ? "Assign To" : "Assign \(ids.count) Lines To")
                 .font(.headline)
-            if let line {
+            if ids.count > 1, let line {
+                Text("“" + document.project.text(of: line, index: document.index) + "”")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                Group {
+                    if let guess {
+                        Text("Best guess: \(guess.name). Return confirms it for all \(ids.count) lines in this paragraph.")
+                    } else if let shared = sharedSpeaker, let name = document.project.character(shared)?.name {
+                        Text("All \(ids.count) lines in this paragraph are \(name)’s.")
+                    } else {
+                        Text("\(ids.count) lines in this paragraph: \(breakdown). Your pick goes to all of them.")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            } else if let line {
                 Text("“" + document.project.text(of: line, index: document.index) + "”")
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -160,7 +210,7 @@ struct AssignPopover: View {
     }
 
     private func row(_ c: BookCharacter, number: Int?, highlighted: Bool) -> some View {
-        let current = line?.speakerID == c.id
+        let current = sharedSpeaker == c.id
         return HStack(spacing: Space.sm) {
             Circle().fill(Color(hexString: c.colorHex)).frame(width: 10, height: 10)
             Text(c.name).lineLimit(1)
@@ -220,7 +270,7 @@ struct AssignPopover: View {
     }
 
     private func markNarration() {
-        document.removeLines([lineID], undoManager: undoManager)
+        document.removeLines(ids, undoManager: undoManager)
         onClose()
     }
 
@@ -240,8 +290,8 @@ struct AssignPopover: View {
     }
 
     private func assign(_ id: UUID?) {
-        let previous = line?.speakerID
-        document.assign([lineID], to: id, undoManager: undoManager)
+        let previous = sharedSpeaker
+        document.assign(ids, to: id, undoManager: undoManager)
         onDone(id, previous)
     }
 }

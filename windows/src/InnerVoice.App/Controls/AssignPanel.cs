@@ -11,6 +11,7 @@ namespace InnerVoice.App.Controls;
 
 /// Pick who says a line: type to filter, arrows and Enter, or 1–9; 0 marks it narration.
 /// Pinned speakers first, then the most used in this chapter, then the rest by lines.
+/// For a whole paragraph (from a name in the margin) one pick goes to every line in it.
 public sealed class AssignPanel : UserControl
 {
     readonly ProjectDocument document;
@@ -25,9 +26,35 @@ public sealed class AssignPanel : UserControl
 
     Line? Line => document.Index.LineIndexByID.TryGetValue(lineIDs[0], out var i) ? document.Project.Lines[i] : null;
 
-    BookCharacter? Guess => Line is { } l && document.Project.NeedsYou(l) ? document.Project.Character(l.SpeakerID) : null;
+    List<Line> Lines => lineIDs.Where(document.Index.LineIndexByID.ContainsKey).Select(id => document.Project.Lines[document.Index.LineIndexByID[id]]).ToList();
 
-    public AssignPanel(ProjectDocument document, IReadOnlyList<Guid> lineIDs, Action<Guid?, Guid?> onAssigned, Action onClose)
+    /// The one speaker every line has now, if they agree.
+    Guid? SharedSpeaker => Lines.Select(l => l.SpeakerID).Distinct().Count() == 1 ? Lines[0].SpeakerID : null;
+
+    /// The unsure guess to confirm: the speaker most of the lines have (a tie goes to the one
+    /// that speaks first), when any of them is unsure.
+    BookCharacter? Guess
+    {
+        get
+        {
+            var lines = Lines;
+            if (!lines.Any(document.Project.NeedsYou)) return null;
+            var counts = new Dictionary<Guid, int>();
+            Guid? top = null;
+            foreach (var id in lines.Select(l => l.SpeakerID).OfType<Guid>())
+            {
+                counts[id] = counts.GetValueOrDefault(id) + 1;
+                if (top is null || counts[id] > counts[top.Value]) top = id;
+            }
+            return document.Project.Character(top);
+        }
+    }
+
+    /// "Cyrus 2, Mara 1, nobody yet 1" for a paragraph whose lines disagree.
+    string Breakdown() => string.Join(", ", Lines.GroupBy(l => l.SpeakerID)
+        .Select(g => $"{document.Project.Character(g.Key)?.Name ?? "nobody yet"} {g.Count()}"));
+
+    public AssignPanel(ProjectDocument document, IReadOnlyList<Guid> lineIDs, Action<Guid?, Guid?> onAssigned, Action onClose, bool isParagraph = false)
     {
         this.document = document;
         this.lineIDs = lineIDs;
@@ -36,7 +63,17 @@ public sealed class AssignPanel : UserControl
         Width = 320;
         var header = new StackPanel { Spacing = Look.Xs, Margin = new Thickness(Look.Md) };
         header.Children.Add(Ui.Headline(lineIDs.Count == 1 ? "Assign To" : $"Assign {lineIDs.Count} Lines To"));
-        if (Line is { } line)
+        if (isParagraph && lineIDs.Count > 1 && Line is { } first)
+        {
+            header.Children.Add(Ui.Text("“" + document.Project.TextOf(first, document.Index) + "”", 12, brush: Look.Brush(Look.SecondaryInk), wrap: TextWrapping.Wrap, maxLines: 2));
+            var n = lineIDs.Count;
+            header.Children.Add(Ui.Caption(Guess is { } g
+                ? $"Best guess: {g.Name}. Enter confirms it for all {n} lines in this paragraph."
+                : document.Project.Character(SharedSpeaker) is { } s
+                    ? $"All {n} lines in this paragraph are {s.Name}’s."
+                    : $"{n} lines in this paragraph: {Breakdown()}. Your pick goes to all of them.", TextWrapping.Wrap));
+        }
+        else if (Line is { } line)
         {
             header.Children.Add(Ui.Text("“" + document.Project.TextOf(line, document.Index) + "”", 12, brush: Look.Brush(Look.SecondaryInk), wrap: TextWrapping.Wrap, maxLines: 2));
             header.Children.Add(Guess is { } g
@@ -145,7 +182,7 @@ public sealed class AssignPanel : UserControl
 
     void Assign(Guid? speaker)
     {
-        var previous = Line?.SpeakerID;
+        var previous = lineIDs.Count == 1 ? Line?.SpeakerID : SharedSpeaker;
         document.Assign(lineIDs, speaker);
         onAssigned(speaker, previous);
     }
