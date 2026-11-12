@@ -283,6 +283,8 @@ final class Workspace {
     /// Characters picked at once on the Cast page (⌘-click, ⇧-click).
     var pickedCast: Set<UUID> = []
     var showAudioExport = false
+    /// The chapters Export Audio reads, by index (nil: every chapter). Kept while the window is open.
+    var audioExportChapters: Set<Int>?
     /// Switches Review to this filter (snapshots, links from other pages).
     var reviewFilter: String?
     /// Lines to swap after a fix in a back-and-forth.

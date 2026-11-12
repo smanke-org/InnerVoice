@@ -218,7 +218,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
             .text("Settings › Voices › Pauses sets each gap in seconds: between sentences, between a line and the narration around it, between paragraphs, after a chapter title, at a scene break and between chapters. Tight, Natural and Relaxed are starting points. With \"Set the pause between sentences\" on, each sentence is spoken on its own so that gap is exact; turn it off to let each voice pace its own sentences."),
             .text("Click Try It to hear a passage from the front book over and over; move a slider and the next pause changes, with nothing to remake. Playback speed (0.75× to 2×) speeds up Play, pauses included, without changing the voices' pitch. Export Audio always saves at normal speed, with your pauses."),
             .heading("Exporting audio"),
-            .text("File › Export Audio… saves the whole book, one chapter or one character's lines as M4A or WAV files, one file per chapter or all in one."),
+            .text("File › Export Audio… saves all the voices or one character's lines as M4A or WAV files, one file per chapter or all in one. Under Chapters, check the chapters to include: Select All checks or clears every one, and ⇧-click checks a run of chapters. The window remembers your choice until you close the book."),
             .heading("Engines"),
             .text("Choose the engine for each project from the menu at the top of the Voices page. Each engine keeps its own casting, so switching back and forth loses nothing."),
             .keys([

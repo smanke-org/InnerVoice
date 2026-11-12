@@ -399,6 +399,14 @@ enum Snapshot {
                 await shot("audio-export-sheet") { workspace.page = .manuscript; workspace.showAudioExport = true }
                 workspace.showAudioExport = false
                 try? await Task.sleep(for: .seconds(0.5))
+                // Some chapters left out: Select All shows mixed, the count says how many.
+                await shot("audio-export-picked") {
+                    workspace.audioExportChapters = Set(document.project.chapters.indices.filter { $0 != 1 })
+                    workspace.showAudioExport = true
+                }
+                workspace.showAudioExport = false
+                workspace.audioExportChapters = nil
+                try? await Task.sleep(for: .seconds(0.5))
                 // Project types: the question, the AI voices setup, Project Settings, and the
                 // sidebar for each type.
                 await shot("project-type") { workspace.showProjectType = true }

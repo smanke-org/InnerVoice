@@ -178,6 +178,29 @@ public enum SpeechScript {
         return out
     }
 
+    /// The picked chapters (indexes, any order, gaps allowed), read in book order; each ends
+    /// with the chapter pause, as a run of chapters does.
+    public static func segments(chapters picked: [Int], project: Project, index: BookIndex,
+                                includeNarration: Bool, only speaker: UUID? = nil, pauses: PauseSettings = .current) -> [SpeechSegment] {
+        Set(picked).sorted().filter { project.chapters.indices.contains($0) }.flatMap {
+            segments(chapter: $0, project: project, index: index, includeNarration: includeNarration, only: speaker, pauses: pauses)
+        }
+    }
+
+    /// "Chapter 3", "Chapters 1–3, 5": picked chapter indexes as the narrator counts them (from 1).
+    public static func chapterLabel(_ picked: [Int]) -> String {
+        let n = Set(picked).sorted().map { $0 + 1 }
+        var runs: [String] = []
+        var i = 0
+        while i < n.count {
+            var j = i
+            while j + 1 < n.count, n[j + 1] == n[j] + 1 { j += 1 }
+            runs.append(j == i ? "\(n[i])" : j == i + 1 ? "\(n[i]), \(n[j])" : "\(n[i])–\(n[j])")
+            i = j + 1
+        }
+        return (n.count == 1 ? "Chapter " : "Chapters ") + runs.joined(separator: ", ")
+    }
+
     /// A run of paragraphs, from `start` (a paragraph id) to the end of its chapter, or the
     /// whole chapter. `chapters` > 1 carries on into the following chapters.
     public static func segments(chapter: Int, from start: UUID? = nil, chapters: Int = 1, project: Project, index: BookIndex,

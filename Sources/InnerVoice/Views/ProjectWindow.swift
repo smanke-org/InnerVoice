@@ -40,7 +40,7 @@ struct ProjectWindow: View {
             ExportSheet(document: document, isPresented: $workspace.showExport)
         }
         .sheet(isPresented: $workspace.showAudioExport) {
-            AudioExportSheet(document: document, isPresented: $workspace.showAudioExport)
+            AudioExportSheet(document: document, workspace: workspace, isPresented: $workspace.showAudioExport)
         }
         .sheet(isPresented: $workspace.showProjectType) {
             ProjectTypeSheet(document: document, workspace: workspace, step: document.project.settings.purpose == nil ? 0 : 1)

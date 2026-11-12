@@ -1103,3 +1103,16 @@ private let appleVoices = [
     #expect(CloneClip.span([]) == nil)
     #expect(CloneClip.text("Hello there. More words", upTo: 12) == "Hello there.")
 }
+
+@Test func speechScriptReadsPickedChaptersInBookOrder() {
+    let chapters = (1...4).map { n in Chapter(title: "Chapter \(n)", paragraphs: [paragraph("Part \(n) begins.")]) }
+    let p = ProjectBuilder.make(from: ImportedBook(title: "Test", chapters: chapters), fileName: "t.txt")
+    let index = BookIndex(p)
+    let picked = SpeechScript.segments(chapters: [3, 0, 3, 9], project: p, index: index, includeNarration: true)
+    #expect(picked.map(\.text).filter { $0.hasPrefix("Part") } == ["Part 1 begins.", "Part 4 begins."])
+    #expect(picked.filter { $0.pause == .chapter }.count == 2)
+    let all = SpeechScript.segments(chapters: Array(0..<4), project: p, index: index, includeNarration: true)
+    #expect(all.map(\.id) == SpeechScript.segments(chapter: 0, chapters: 4, project: p, index: index, includeNarration: true).map(\.id))
+    #expect(SpeechScript.chapterLabel([2]) == "Chapter 3")
+    #expect(SpeechScript.chapterLabel([4, 0, 1, 2, 6, 7]) == "Chapters 1–3, 5, 7, 8")
+}

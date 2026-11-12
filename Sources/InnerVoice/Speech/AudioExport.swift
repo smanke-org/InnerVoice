@@ -122,15 +122,15 @@ enum AudioExporter {
 
 struct AudioExportSheet: View {
     @ObservedObject var document: InnerVoiceDocument
+    var workspace: Workspace
     @Binding var isPresented: Bool
 
     enum Scope: String, CaseIterable, Identifiable {
-        case book, chapter, character
+        case book, character
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .book: "The whole book"
-            case .chapter: "One chapter"
+            case .book: "All voices"
             case .character: "One character or the narrator"
             }
         }
@@ -140,7 +140,8 @@ struct AudioExportSheet: View {
     static let narratorTag = UUID(uuidString: "00000000-0000-0000-0000-00000000AAAA")!
 
     @State private var scope = Scope.book
-    @State private var chapter = 0
+    /// The chapter clicked last, for ⇧-click ranges.
+    @State private var anchor: Int?
     @State private var characterID: UUID?
     @AppStorage("voices.readNarration") private var narration = true
     @AppStorage("audioExport.perChapter") private var perChapter = true
@@ -153,6 +154,66 @@ struct AudioExportSheet: View {
     @State private var error: String?
 
     private var format: AudioExporter.Format { AudioExporter.Format(rawValue: formatRaw) ?? .m4a }
+
+    /// The picked chapters, by index, in book order.
+    private var picked: [Int] {
+        let all = document.project.chapters.indices
+        guard let set = workspace.audioExportChapters else { return Array(all) }
+        return all.filter { set.contains($0) }
+    }
+
+    private var everyChapter: Bool { picked.count == document.project.chapters.count }
+
+    private func pick(_ i: Int, _ on: Bool) {
+        var set = Set(picked)
+        // ⇧-click sets every chapter from the last one clicked to this one.
+        let range = NSEvent.modifierFlags.contains(.shift) && anchor != nil ? Array(min(anchor!, i)...max(anchor!, i)) : [i]
+        for c in range { if on { set.insert(c) } else { set.remove(c) } }
+        anchor = i
+        workspace.audioExportChapters = set.count == document.project.chapters.count ? nil : set
+    }
+
+    private var chapterToggles: [Binding<Bool>] {
+        let set = Set(picked)
+        return document.project.chapters.indices.map { i in
+            Binding(get: { set.contains(i) }, set: { pick(i, $0) })
+        }
+    }
+
+    private func chapterTitle(_ i: Int) -> String {
+        let t = document.project.chapters[i].title.trimmingCharacters(in: .whitespaces)
+        return t.isEmpty ? (i == 0 ? "Opening" : "Untitled") : t
+    }
+
+    @ViewBuilder private var chapterList: some View {
+        let toggles = chapterToggles
+        HStack {
+            Toggle(sources: toggles, isOn: \.self) { Text("Select All") }
+                .toggleStyle(.checkbox)
+            Spacer()
+            Text(everyChapter ? "All \(toggles.count.formatted()) chapters" : "\(picked.count.formatted()) of \(toggles.count.formatted()) chapters")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+        }
+        ScrollView {
+            VStack(alignment: .leading, spacing: Space.xs) {
+                ForEach(toggles.indices, id: \.self) { i in
+                    Toggle(isOn: toggles[i]) {
+                        HStack(spacing: Space.sm) {
+                            Text("\(i + 1)").monospacedDigit().foregroundStyle(.secondary).frame(minWidth: 22, alignment: .trailing)
+                            Text(chapterTitle(i)).lineLimit(1).truncationMode(.tail)
+                        }
+                    }
+                    .toggleStyle(.checkbox)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(.vertical, Space.xs)
+        }
+        .frame(height: min(CGFloat(toggles.count) * 22 + 8, 200))
+        .help("Click a chapter to leave it in or out. ⇧-click picks every chapter between it and the last one you clicked.")
+    }
 
     private var cast: [BookCharacter] {
         let index = document.index
@@ -175,11 +236,6 @@ struct AudioExportSheet: View {
                 Picker("Export", selection: $scope) {
                     ForEach(Scope.allCases) { Text($0.title).tag($0) }
                 }
-                if scope == .chapter {
-                    Picker("Chapter", selection: $chapter) {
-                        ForEach(Array(document.project.chapters.enumerated()), id: \.offset) { i, c in Text(c.title).tag(i) }
-                    }
-                }
                 if scope == .character {
                     Picker("Character", selection: $characterID) {
                         Text("Narrator (narration only)").tag(UUID?.some(Self.narratorTag))
@@ -189,7 +245,7 @@ struct AudioExportSheet: View {
                 } else {
                     Toggle("Read narration too", isOn: $narration)
                 }
-                if scope == .book {
+                if scope == .book, picked.count > 1 {
                     Picker("Files", selection: $perChapter) {
                         Text("One file per chapter").tag(true)
                         Text("One file").tag(false)
@@ -206,6 +262,7 @@ struct AudioExportSheet: View {
                     ForEach(AudioExporter.Format.allCases) { Text($0.rawValue).tag($0.rawValue) }
                 }
                 .pickerStyle(.segmented)
+                Section("Chapters") { chapterList }
             }
             .formStyle(.grouped)
             .disabled(running != nil)
@@ -226,7 +283,7 @@ struct AudioExportSheet: View {
                     Button("Export…") { export() }
                         .keyboardShortcut(.defaultAction)
                         .buttonStyle(.borderedProminent)
-                        .disabled(scope == .character && characterID == nil)
+                        .disabled(picked.isEmpty || (scope == .character && characterID == nil))
                 }
             }
         }
@@ -234,6 +291,10 @@ struct AudioExportSheet: View {
         .frame(width: 520)
         .noInitialFocus()
         .onAppear {
+            // Chapters added or deleted since the last export: start again from every chapter.
+            if let set = workspace.audioExportChapters, set.contains(where: { $0 >= document.project.chapters.count }) {
+                workspace.audioExportChapters = nil
+            }
             characterID = characterID ?? cast.first?.id
             VoiceCastingRun.castIfNeeded(document: document)
         }
@@ -243,31 +304,34 @@ struct AudioExportSheet: View {
         let project = document.project
         let index = document.index
         let title = project.title
+        let chapters = picked
+        // "Book - Chapters 1–3, 5" when only some chapters go out.
+        let which = everyChapter ? "" : (scope == .character ? ", " : " - ") + SpeechScript.chapterLabel(chapters)
         switch scope {
         case .book:
+            if chapters.count == 1, let c = chapters.first {
+                return [AudioExporter.Part(name: "\(title) - \(chapterTitle(c))",
+                                           segments: SpeechScript.segments(chapter: c, project: project, index: index, includeNarration: narration))]
+            }
             if perChapter {
-                return project.chapters.indices.map { c in
-                    AudioExporter.Part(name: String(format: "%02d ", c + 1) + project.chapters[c].title,
+                return chapters.map { c in
+                    AudioExporter.Part(name: String(format: "%02d ", c + 1) + chapterTitle(c),
                                        segments: SpeechScript.segments(chapter: c, project: project, index: index, includeNarration: narration))
                 }
             }
-            return [AudioExporter.Part(name: title, segments: SpeechScript.segments(chapter: 0, chapters: project.chapters.count, project: project,
-                                                                                    index: index, includeNarration: narration))]
-        case .chapter:
-            guard project.chapters.indices.contains(chapter) else { return [] }
-            return [AudioExporter.Part(name: "\(title) - \(project.chapters[chapter].title)",
-                                       segments: SpeechScript.segments(chapter: chapter, project: project, index: index, includeNarration: narration))]
+            return [AudioExporter.Part(name: title + which,
+                                       segments: SpeechScript.segments(chapters: chapters, project: project, index: index, includeNarration: narration))]
         case .character:
             guard let id = characterID else { return [] }
             if id == Self.narratorTag {
                 // Everything the narrator's voice reads, in order.
                 let resolver = VoiceResolver(project: project, index: index)
-                let all = SpeechScript.segments(chapter: 0, chapters: project.chapters.count, project: project, index: index, includeNarration: true)
-                return [AudioExporter.Part(name: "\(title) - Narrator", segments: all.filter { resolver.choice(for: $0) == resolver.narrator })]
+                let all = SpeechScript.segments(chapters: chapters, project: project, index: index, includeNarration: true)
+                return [AudioExporter.Part(name: "\(title) - Narrator" + which, segments: all.filter { resolver.choice(for: $0) == resolver.narrator })]
             }
             guard let c = project.character(id) else { return [] }
-            return [AudioExporter.Part(name: "\(title) - \(c.name)",
-                                       segments: SpeechScript.segments(chapter: 0, chapters: project.chapters.count, project: project, index: index,
+            return [AudioExporter.Part(name: "\(title) - \(c.name)" + which,
+                                       segments: SpeechScript.segments(chapters: chapters, project: project, index: index,
                                                                        includeNarration: false, only: id))]
         }
     }
