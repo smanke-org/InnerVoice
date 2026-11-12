@@ -75,7 +75,7 @@ The first time you click Tag Speakers, InnerVoice suggests an AI model for your 
 <td width="50%"><img src="docs/images/stats.jpg" alt="Book Stats: share of lines tagged for you, chapters done, lines that need you, and counts for speakers and narration"><br><sub><b>Book Stats.</b> What's done and what's left.</sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/images/teleprompter.jpg" alt="Teleprompter: the current paragraph in large type with the speaker's name and voice cue"><br><sub><b>Teleprompter.</b> Large type for the booth.</sub></td>
+<td width="50%"><img src="docs/images/teleprompter.jpg" alt="Teleprompter: the current paragraph in large type, the speaker with their shade and voice cues above it, and who speaks next below"><br><sub><b>Teleprompter.</b> Large type, cues and your place, for the booth.</sub></td>
 <td width="50%"><img src="docs/images/models.jpg" alt="Choosing a model: each model with a fit badge and a note about this Mac's memory"><br><sub><b>Models.</b> Recommended for your Mac's memory.</sub></td>
 </tr>
 </table>
