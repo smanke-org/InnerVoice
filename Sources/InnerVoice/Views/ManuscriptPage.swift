@@ -24,6 +24,11 @@ struct ManuscriptPage: View {
                 ManuscriptTextView(document: document, workspace: workspace, undoManager: undoManager,
                                    onAssignRequest: showAssign, onVisibleChapter: { workspace.visibleChapter = $0 }, look: look)
             }
+            if workspace.exchange.isEmpty, pickedCount > 1 {
+                PickedLinesBanner(document: document, workspace: workspace)
+                    .padding(.bottom, Space.xl)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
             if !workspace.exchange.isEmpty {
                 ExchangeBanner(count: workspace.exchange.count) {
                     document.applyExchange(workspace.exchange, undoManager: undoManager)
@@ -39,6 +44,12 @@ struct ManuscriptPage: View {
         .pageSubtitle(subtitle)
     }
 
+    /// Picked lines still in the book (Narration removes lines).
+    private var pickedCount: Int {
+        let picked = Set(workspace.selectedLines)
+        return picked.count > 1 ? picked.filter { document.index.lineIndexByID[$0] != nil }.count : picked.count
+    }
+
     private var subtitle: String {
         let chapter = document.project.chapters.indices.contains(workspace.visibleChapter)
             ? document.project.chapters[workspace.visibleChapter].title : ""
@@ -49,11 +60,44 @@ struct ManuscriptPage: View {
         guard let lineID = ids.last else { return }
         let popover = AssignPopover(document: document, lineID: ids[0], undoManager: undoManager, onDone: { assigned, previous in
             PopoverPresenter.shared.close()
+            // Several lines given at once: done with them.
+            if ids.count > 1 { workspace.selectedLines = [] }
             guard let assigned, assigned != previous else { workspace.exchange = []; return }
             let proposals = Exchange.proposals(in: document.project, after: lineID, previousSpeaker: previous)
             withAnimation(.easeOut(duration: 0.2)) { workspace.exchange = proposals }
-        }, onClose: { PopoverPresenter.shared.close() }, group: ids)
+        }, onClose: {
+            PopoverPresenter.shared.close()
+            workspace.selectedLines = workspace.selectedLines.filter { document.index.lineIndexByID[$0] != nil }
+        }, group: ids)
         PopoverPresenter.shared.show(popover, at: rect, in: view)
+    }
+}
+
+/// Several lines picked (⌘-click names in the margin, or lines): assign them all at once.
+struct PickedLinesBanner: View {
+    @ObservedObject var document: InnerVoiceDocument
+    @Bindable var workspace: Workspace
+
+    var body: some View {
+        let lines = document.project.lines.filter { Set(workspace.selectedLines).contains($0.id) }
+        let picked = Set(lines.map(\.id))
+        let paragraphs = Set(lines.map(\.paragraphID)).count
+        HStack(spacing: Space.md) {
+            Image(systemName: "checklist").foregroundStyle(.secondary)
+            Text("\(picked.count) lines" + (paragraphs > 1 ? " in \(paragraphs) paragraphs" : "") + " picked")
+            Text("⌘-click names to add more").foregroundStyle(.secondary)
+            Button("Clear") { workspace.selectedLines = [] }
+                .keyboardShortcut(.cancelAction)
+            Button("Assign…") {
+                if let first = lines.first { workspace.pendingAssign = first.id }
+            }
+            .buttonStyle(.borderedProminent)
+            .help("Give every picked line to one character (Return)")
+        }
+        .padding(.horizontal, Space.lg)
+        .padding(.vertical, Space.sm)
+        .glassEffect(.regular, in: Capsule())
+        .accessibilityElement(children: .contain)
     }
 }
 

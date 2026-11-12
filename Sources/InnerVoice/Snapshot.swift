@@ -153,6 +153,32 @@ enum Snapshot {
                             PopoverPresenter.shared.close()
                             workspace.selectedLines = []
                         }
+                        // ⌘-click two names: the picked-lines bar, then Assign… for both paragraphs.
+                        if let paraB = document.project.chapters.flatMap(\.paragraphs).first(where: { $0.id != para.id && (byParagraph[$0.id] ?? []).count >= 1 && c.layout.paragraphRanges[$0.id].map { $0.location > range.location } == true }),
+                           let firstB = byParagraph[paraB.id]?.first {
+                            for id in [first.id, firstB.id] {
+                                guard let p = c.marginPoint(of: id) else { continue }
+                                let at = tv.convert(p, to: nil)
+                                if let up = NSEvent.mouseEvent(with: .leftMouseUp, location: at, modifierFlags: .command, timestamp: ProcessInfo.processInfo.systemUptime,
+                                                               windowNumber: win.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 0),
+                                   let down = NSEvent.mouseEvent(with: .leftMouseDown, location: at, modifierFlags: .command, timestamp: ProcessInfo.processInfo.systemUptime,
+                                                                 windowNumber: win.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) {
+                                    NSApp.postEvent(up, atStart: false)
+                                    win.sendEvent(down)
+                                }
+                                try? await Task.sleep(for: .seconds(0.4))
+                            }
+                            print("assign-picked: \(workspace.selectedLines.count) lines picked")
+                            try? await Task.sleep(for: .seconds(0.6))
+                            capture(win, "\(dir)/assign-picked-\(mode).png")
+                            workspace.pendingAssign = first.id
+                            try? await Task.sleep(for: .seconds(1))
+                            if let pop = NSApp.windows.first(where: { $0.isVisible && String(describing: type(of: $0)).contains("Popover") }) {
+                                capture(pop, "\(dir)/assign-picked-popover-\(mode).png")
+                            }
+                            PopoverPresenter.shared.close()
+                            workspace.selectedLines = []
+                        }
                     }
                 }
                 await shot("exchange-banner") {
@@ -225,6 +251,10 @@ enum Snapshot {
                     await shot("voices-shared", settle: 1.2) { workspace.voiceTarget = .role(.women); workspace.page = .voices }
                     await shot("voices-shared-character", settle: 1.0) { workspace.voiceTarget = .character(main.id); workspace.page = .voices }
                     await shot("review-genders", settle: 1.0) { workspace.reviewFilter = "genders"; workspace.page = .review }
+                    // Several characters picked at once: one panel sets all their genders.
+                    let several = Set(document.project.characters.prefix(3).map { VoiceTarget.character($0.id) })
+                    await shot("voices-picked", settle: 1.0) { workspace.pickedVoices = several; workspace.page = .voices }
+                    workspace.pickedVoices = []
                     document.setCastingStyle(.fullCast, undoManager: nil)
                     await shot("voices-fullcast", settle: 1.0) { workspace.voiceTarget = .character(main.id); workspace.page = .voices }
                     document.setCastingStyle(.oneVoice, undoManager: nil)
@@ -240,6 +270,8 @@ enum Snapshot {
                     document.setCastingStyle(.oneVoice, undoManager: nil)
                     document.setNarratorGender(.female, undoManager: nil)
                     await shot("cast-justme", settle: 1.0) { workspace.castPath = []; workspace.page = .cast }
+                    await shot("cast-picked", settle: 1.0) { workspace.pickedCast = Set(document.project.characters.prefix(2).map(\.id)); workspace.castPath = []; workspace.page = .cast }
+                    workspace.pickedCast = []
                     if let tom = document.project.characters.first(where: { document.narrationShades()[$0.id] != nil }) {
                         await shot("character-justme", settle: 1.0) { workspace.castPath = [tom.id]; workspace.page = .cast }
                         await shot("manuscript-justme", settle: 1.2) { workspace.castPath = []; workspace.page = .manuscript }

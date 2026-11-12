@@ -278,6 +278,10 @@ final class Workspace {
     var afterTagging: Page?
     /// The narrator or character chosen on the Voices page.
     var voiceTarget: VoiceTarget = .narrator
+    /// Several rows picked at once on the Voices page (⌘-click, ⇧-click); empty while one is.
+    var pickedVoices: Set<VoiceTarget> = []
+    /// Characters picked at once on the Cast page (⌘-click, ⇧-click).
+    var pickedCast: Set<UUID> = []
     var showAudioExport = false
     /// Switches Review to this filter (snapshots, links from other pages).
     var reviewFilter: String?

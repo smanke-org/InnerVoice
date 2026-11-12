@@ -27,14 +27,36 @@ public sealed partial class ManuscriptPage
         var panel = new AssignPanel(Document, ids, (speaker, previous) =>
         {
             flyout.Hide();
+            // Several lines given at once: done with them.
+            if (ids.Count > 1) { Canvas.SelectedLines.Clear(); Canvas.InvalidateVisual(); HideNotice(); }
             if ((ids.Count == 1 || paragraph is not null) && speaker is not null) OfferExchange(ids[^1], previous);
             Canvas.Focus();
-        }, () => { flyout.Hide(); Canvas.Focus(); }, isParagraph: paragraph is not null);
+        }, () => { flyout.Hide(); Canvas.Focus(); ShowPicked(); }, isParagraph: ids.Count > 1);
         flyout.Content = panel;
         var anchor = AnchorAt(rect);
         flyout.Closed += (_, _) => RemoveAnchor(anchor);
         open = flyout;
         flyout.ShowAt(anchor);
+    }
+
+    /// The picked lines still in the book, in book order.
+    List<Guid> PickedInOrder() => Document.Project.Lines.Where(l => Canvas.SelectedLines.Contains(l.Id)).Select(l => l.Id).ToList();
+
+    /// Several lines picked (Ctrl-click names in the margin, or lines): a bar to assign them all.
+    void ShowPicked()
+    {
+        var ids = PickedInOrder();
+        if (ids.Count < 2) { HideNotice(); return; }
+        int paragraphs = Document.Project.Lines.Where(l => Canvas.SelectedLines.Contains(l.Id)).Select(l => l.ParagraphID).Distinct().Count();
+        var assign = Ui.Button("Assign…", () =>
+        {
+            var picked = PickedInOrder();
+            if (picked.Count == 0 || !Document.Index.LineIndexByID.TryGetValue(picked[0], out var li)) return;
+            var first = Document.Project.Lines[li];
+            if (Canvas.RectOf(first) is { } r) ShowLinePopover(first, r, picked);
+        }, primary: true, tip: "Give every picked line to one character (Enter)");
+        var clear = Ui.Button("Clear", () => { Canvas.SelectedLines.Clear(); Canvas.InvalidateVisual(); HideNotice(); });
+        ShowNotice($"{ids.Count} lines" + (paragraphs > 1 ? $" in {paragraphs} paragraphs" : "") + " picked. Ctrl-click names in the margin to add more.", assign, clear);
     }
 
     /// After a line gets a new speaker, the rest of a back-and-forth is usually off by one.
@@ -208,13 +230,13 @@ public sealed partial class ManuscriptPage
         if (e.Key == Key.Enter && Canvas.SelectedLines.Count > 0)
         {
             var first = Document.Project.Lines.FirstOrDefault(l => Canvas.SelectedLines.Contains(l.Id));
-            if (first is not null && Canvas.RectOf(first) is { } r) ShowLinePopover(first, r);
+            if (first is not null && Canvas.RectOf(first) is { } r) ShowLinePopover(first, r, Canvas.SelectedLines.Count > 1 ? PickedInOrder() : null);
             e.Handled = true;
         }
         else if (ctrl && e.Key is Key.Down or Key.Up) { NextNeedingYou(e.Key == Key.Down ? 1 : -1); e.Handled = true; }
         else if (ctrl && e.Key == Key.C && Canvas.HasSelection) { CopySelection(); e.Handled = true; }
         else if (e.Key is Key.Delete or Key.Back && Canvas.HasSelection) { _ = DeleteSelection(); e.Handled = true; }
-        else if (e.Key == Key.Escape) { Canvas.ClearSelection(); Canvas.SelectedLines.Clear(); Canvas.InvalidateVisual(); e.Handled = true; }
+        else if (e.Key == Key.Escape) { Canvas.ClearSelection(); Canvas.SelectedLines.Clear(); Canvas.InvalidateVisual(); HideNotice(); e.Handled = true; }
         else base.OnKeyDown(e);
     }
 

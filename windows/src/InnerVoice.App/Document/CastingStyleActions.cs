@@ -30,6 +30,13 @@ public static class CastingStyleActions
     public static void SetRole(this ProjectDocument d, Guid id, VoiceRole? role) =>
         d.UpdateCharacter(id, "Change Who Reads", c => c.Role = role);
 
+    /// Who reads several characters at once, in one undo step.
+    public static void SetRole(this ProjectDocument d, IReadOnlyCollection<Guid> ids, VoiceRole? role) =>
+        d.Change(ids.Count == 1 ? "Change Who Reads" : $"Change Who Reads {ids.Count} Characters", p =>
+        {
+            foreach (var c in p.Characters.Where(c => ids.Contains(c.Id))) c.Role = role;
+        });
+
     public static void SetMain(this ProjectDocument d, IReadOnlyCollection<Guid> ids, bool? main) =>
         d.Change(main == true ? "Mark as Main Character" : "Unmark Main Character", p =>
         {

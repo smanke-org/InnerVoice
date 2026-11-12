@@ -29,6 +29,15 @@ import SwiftUI
         if role == .own { VoiceCastingRun.castIfNeeded(document: self) }
     }
 
+    /// Who reads several characters at once, in one undo step.
+    func setRole(_ role: VoiceRole?, for ids: [UUID], undoManager: UndoManager?) {
+        guard ids.count != 1 else { return setRole(role, for: ids[0], undoManager: undoManager) }
+        change("Change Who Reads \(ids.count) Characters", undoManager: undoManager) { p in
+            for id in ids { if let i = p.characterIndex(id) { p.characters[i].role = role } }
+        }
+        if role == .own { VoiceCastingRun.castIfNeeded(document: self) }
+    }
+
     /// Marks a main character (true), not main (false), or neither (nil).
     func setMain(_ main: Bool?, for ids: [UUID], undoManager: UndoManager?) {
         change(main == true ? "Mark as Main Character" : "Unmark Main Character", undoManager: undoManager) { p in

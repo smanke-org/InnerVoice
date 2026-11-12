@@ -140,6 +140,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
             .text("Pinned characters sit at the top of every speaker list, A to Z by first name, with everyone else A to Z below them. Hold Option in the right-click list and choose Pin, click the pin beside a name in Assign To, or right-click a character in Cast and choose Pin to Top of Speaker Lists."),
             .heading("Fix lines from the margin"),
             .text("Click a name (or a red ?) in the left margin to assign every line in that paragraph at once: Return confirms the best guess for all of them, or pick someone else and the whole paragraph changes. Right-click the name for the same choice as a menu."),
+            .text("To give several paragraphs to one character, ⌘-click their names in the margin (⌘-click a line to add just that line). A bar shows how many lines you picked; click Assign…, press Return, or click any picked name, and one choice goes to all of them."),
             .heading("Fix a whole exchange"),
             .text("When you fix one line in a back-and-forth that had no tags, the lines after it are probably off by one too. A banner offers to swap the rest of the exchange, up to the next tagged line or break in the narration. Click Swap or Keep."),
             .heading("Several lines at once"),
@@ -192,7 +193,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
             .text("When you narrate yourself (Just Me), choose Your Voice on the Cast page. Characters of your own gender are read in your voice; others get an arrow in the manuscript margin (↓ lower, ↑ higher, doubled for a bigger change) and a Shade cue on the Teleprompter and in Narrator Scripts."),
             .heading("Who reads whom"),
             .text("Right-click a character to choose who reads them, to mark them as a main character, or to set their gender. Main characters always have a voice of their own in Full Cast; InnerVoice suggests the characters with the most lines, but only you mark them."),
-            .text("Narrator + Two Voices sorts characters by gender. When the book doesn’t settle someone’s gender, they’re listed under Gender to Review: click the filter on the Voices or Cast page, or the Genders to Review list on the Review page, and choose Male, Female or Other."),
+            .text("Narrator + Two Voices sorts characters by gender. When the book doesn’t settle someone’s gender, they’re listed under Gender to Review: click the filter on the Voices or Cast page, or the Genders to Review list on the Review page, and choose Male, Female or Other. To set several at once, ⌘-click them in the Voices list or on the Cast page (⇧-click picks a run), then click Male, Female or Other once for all of them."),
             .text("For a book read by two people, choose the men’s or women’s voice (or narrator) under Narration: they read the narration too."),
             .tip("Export Audio can save the voices Separate, a file per voice, all the same length so they line up in an audio editor."),
         ]

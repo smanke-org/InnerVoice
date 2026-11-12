@@ -121,6 +121,7 @@ public sealed partial class ManuscriptPage : Page
         {
             if (!Canvas.SelectedLines.Add(line.Id)) Canvas.SelectedLines.Remove(line.Id);
             Canvas.InvalidateVisual();
+            ShowPicked();
             return;
         }
         Canvas.SelectedLines.Clear();
@@ -130,11 +131,25 @@ public sealed partial class ManuscriptPage : Page
     }
 
     /// A name in the margin stands for its whole paragraph: one pick confirms or changes
-    /// every line in it.
-    void OnMarginNameClicked(Line line, Rect rect)
+    /// every line in it. Ctrl-click adds the paragraph to the picked lines (or takes it out);
+    /// a click on a picked paragraph's name then asks once for every picked line.
+    void OnMarginNameClicked(Line line, Rect rect, KeyModifiers mods)
     {
         var ids = Document.Project.Lines.Where(l => l.ParagraphID == line.ParagraphID).Select(l => l.Id).ToList();
         if (ids.Count == 0) ids = [line.Id];
+        if (mods.HasFlag(KeyModifiers.Control) || mods.HasFlag(KeyModifiers.Meta))
+        {
+            if (ids.All(Canvas.SelectedLines.Contains)) Canvas.SelectedLines.ExceptWith(ids);
+            else Canvas.SelectedLines.UnionWith(ids);
+            Canvas.InvalidateVisual();
+            ShowPicked();
+            return;
+        }
+        if (Canvas.SelectedLines.Count > ids.Count && ids.All(Canvas.SelectedLines.Contains))
+        {
+            ShowLinePopover(line, rect, PickedInOrder());
+            return;
+        }
         Canvas.SelectedLines.Clear();
         Canvas.SelectedLines.UnionWith(ids);
         Canvas.InvalidateVisual();

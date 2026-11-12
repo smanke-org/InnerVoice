@@ -77,6 +77,7 @@ public sealed partial class CastPage : Page
             _ => p.Characters.OrderByDescending(x => index.StatsFor(x.Id)?.Lines ?? 0),
         };
         var shown = Filtered(ordered).ToList();
+        shownOrder = shown.Select(x => x.Id).ToList();
         var column = new StackPanel();
         column.Children.Add(StyleBar());
         if (Duplicates.Pairs(p) is { Count: > 0 } dups) column.Children.Add(DuplicatesNote(dups));
@@ -90,7 +91,14 @@ public sealed partial class CastPage : Page
             foreach (var ch in shown) wrap.Children.Add(Card(ch));
             column.Children.Add(wrap);
         }
-        Content = Ui.Scroll(column);
+        var pickedNow = shownOrder.Where(picked.Contains).ToList();
+        if (pickedNow.Count == 0) { Content = Ui.Scroll(column); return; }
+        var dock = new DockPanel();
+        var bar = PickedBar(pickedNow);
+        DockPanel.SetDock(bar, Dock.Bottom);
+        dock.Children.Add(bar);
+        dock.Children.Add(Ui.Scroll(column));
+        Content = dock;
     }
 
     Control Card(BookCharacter c)
@@ -115,17 +123,18 @@ public sealed partial class CastPage : Page
             Padding = new Thickness(Look.Lg),
             CornerRadius = new CornerRadius(10),
             Background = Look.Brush(Look.Chrome),
-            BorderBrush = Look.Brush(Look.Hex(c.ColorHex).WithAlpha(0.45)),
-            BorderThickness = new Thickness(1),
+            BorderBrush = Look.Brush(picked.Contains(c.Id) ? Look.Accent : Look.Hex(c.ColorHex).WithAlpha(0.45)),
+            BorderThickness = new Thickness(picked.Contains(c.Id) ? 2.5 : 1),
             Child = body,
             Cursor = new Cursor(StandardCursorType.Hand),
         };
-        ToolTip.SetTip(card, $"Open {c.Name}’s page");
+        ToolTip.SetTip(card, $"Open {c.Name}’s page. Ctrl-click picks several characters to change at once.");
         card.PointerPressed += (_, e) =>
         {
-            if (e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) ShowCharacter(c.Id);
+            if (e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) CardClicked(c.Id, e.KeyModifiers);
         };
-        AttachCardMenu(card, c);
+        if (picked.Contains(c.Id) && picked.Count(shownOrder.Contains) > 1) AttachManyMenu(card);
+        else AttachCardMenu(card, c);
         return card;
     }
 

@@ -65,13 +65,15 @@ public sealed class AssignPanel : UserControl
         header.Children.Add(Ui.Headline(lineIDs.Count == 1 ? "Assign To" : $"Assign {lineIDs.Count} Lines To"));
         if (isParagraph && lineIDs.Count > 1 && Line is { } first)
         {
+            int paragraphs = Lines.Select(l => l.ParagraphID).Distinct().Count();
+            var scope = paragraphs == 1 ? "in this paragraph" : $"in {paragraphs} paragraphs";
             header.Children.Add(Ui.Text("“" + document.Project.TextOf(first, document.Index) + "”", 12, brush: Look.Brush(Look.SecondaryInk), wrap: TextWrapping.Wrap, maxLines: 2));
             var n = lineIDs.Count;
             header.Children.Add(Ui.Caption(Guess is { } g
-                ? $"Best guess: {g.Name}. Enter confirms it for all {n} lines in this paragraph."
+                ? $"Best guess: {g.Name}. Enter confirms it for all {n} lines {scope}."
                 : document.Project.Character(SharedSpeaker) is { } s
-                    ? $"All {n} lines in this paragraph are {s.Name}’s."
-                    : $"{n} lines in this paragraph: {Breakdown()}. Your pick goes to all of them.", TextWrapping.Wrap));
+                    ? $"All {n} lines {scope} are {s.Name}’s."
+                    : $"{n} lines {scope}: {Breakdown()}. Your pick goes to all of them.", TextWrapping.Wrap));
         }
         else if (Line is { } line)
         {

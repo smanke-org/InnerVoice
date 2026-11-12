@@ -219,7 +219,7 @@ struct ManuscriptTextView: NSViewRepresentable {
         if let pending = workspace.pendingAssign {
             DispatchQueue.main.async {
                 workspace.pendingAssign = nil
-                DispatchQueue.main.async { c.requestAssign(pending) }
+                DispatchQueue.main.async { c.requestAssign(pending, group: c.pickedGroup(containing: pending)) }
             }
         }
     }
@@ -452,7 +452,7 @@ struct ManuscriptTextView: NSViewRepresentable {
         func menu(for char: Int, selection: NSRange) -> NSMenu {
             let menu = NSMenu()
             var ids = selection.length > 0 ? lines(in: selection) : []
-            if ids.isEmpty, let e = layout.entry(at: char), let l = line(e) { ids = [l.id] }
+            if ids.isEmpty, let e = layout.entry(at: char), let l = line(e) { ids = pickedGroup(containing: l.id) ?? [l.id] }
             let undo = parent.undoManager
             if !ids.isEmpty {
                 parent.workspace.selectedLines = ids
@@ -560,15 +560,40 @@ struct ManuscriptTextView: NSViewRepresentable {
             return NSPoint(x: origin.x - 24, y: origin.y + first.midY)
         }
 
+        /// The picked lines in book order, when several are picked and `id` is one of them.
+        func pickedGroup(containing id: UUID) -> [UUID]? {
+            let picked = Set(parent.workspace.selectedLines)
+            guard picked.count > 1, picked.contains(id) else { return nil }
+            return project.lines.lazy.map(\.id).filter { picked.contains($0) }
+        }
+
         /// A click on a name in the margin: Assign To for the whole paragraph, so one pick
-        /// confirms or changes every line in it. False when no name is there.
+        /// confirms or changes every line in it, or for every picked line when the paragraph
+        /// is among them. ⌘-click adds the paragraph to the picked lines (or takes it out)
+        /// without asking yet. False when no name is there.
         @discardableResult
-        func marginClick(at point: NSPoint) -> Bool {
+        func marginClick(at point: NSPoint, adding: Bool = false) -> Bool {
             guard let e = marginEntry(at: point), let clicked = line(e) else { return false }
             let ids = paragraphLines(of: clicked)
+            let picked = parent.workspace.selectedLines
+            if adding {
+                parent.workspace.selectedLines = Set(ids).isSubset(of: picked) ? picked.filter { !ids.contains($0) } : picked + ids.filter { !picked.contains($0) }
+                return true
+            }
+            if picked.count > ids.count, Set(ids).isSubset(of: picked), let group = pickedGroup(containing: clicked.id) {
+                requestAssign(clicked.id, group: group)
+                return true
+            }
             parent.workspace.selectedLines = ids
             requestAssign(clicked.id, group: ids)
             return true
+        }
+
+        /// ⌘-click on a line: add it to the picked lines, or take it out.
+        func toggle(at char: Int) {
+            guard let e = layout.entry(at: char), let line = line(e) else { return }
+            let picked = parent.workspace.selectedLines
+            parent.workspace.selectedLines = picked.contains(line.id) ? picked.filter { $0 != line.id } : picked + [line.id]
         }
 
         /// A right-click on a name in the margin: the same choice as a menu, for every line in
@@ -683,8 +708,13 @@ final class ReadingTextView: NSTextView {
             }
             return
         }
-        // A name in the margin stands for its whole paragraph.
-        if coordinator?.marginClick(at: point) == true { return }
+        // A name in the margin stands for its whole paragraph; ⌘-click picks several.
+        let adding = event.modifierFlags.contains(.command)
+        if coordinator?.marginClick(at: point, adding: adding) == true { return }
+        if adding {
+            coordinator?.toggle(at: characterIndexForInsertion(at: point))
+            return
+        }
         coordinator?.click(at: characterIndexForInsertion(at: point))
     }
 
@@ -696,8 +726,8 @@ final class ReadingTextView: NSTextView {
 
     override func keyDown(with event: NSEvent) {
         // Return opens Assign To for the selected line.
-        if event.keyCode == 36 || event.keyCode == 76, let id = coordinator?.parent.workspace.selectedLines.first {
-            coordinator?.requestAssign(id)
+        if event.keyCode == 36 || event.keyCode == 76, let c = coordinator, let id = c.parent.workspace.selectedLines.first {
+            c.requestAssign(id, group: c.pickedGroup(containing: id))
             return
         }
         // ⌥Space plays the selected line, ⌥⇧Space a table read from it, ⌥Esc stops (the

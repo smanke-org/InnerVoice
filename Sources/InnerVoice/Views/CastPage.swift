@@ -10,6 +10,11 @@ struct CastPage: View {
     @State private var showNarrators = false
     /// Show only characters whose gender the book doesn't settle (Casting Style).
     @State private var genderFilter = false
+    /// Where a ⇧-click run starts.
+    @State private var pickAnchor: UUID?
+
+    /// The picked characters still shown, in order.
+    private var picked: [UUID] { shown.map(\.id).filter { workspace.pickedCast.contains($0) } }
 
     /// Narration Tools projects choose their Casting Style here (AI voices: the Voices page).
     private var narration: Bool { document.project.settings.purpose == .narration }
@@ -22,6 +27,7 @@ struct CastPage: View {
         NavigationStack(path: $workspace.castPath) {
             grid
                 .safeAreaInset(edge: .top, spacing: 0) { BackgroundAIBar(document: document, page: .cast) }
+                .safeAreaInset(edge: .bottom, spacing: 0) { pickedBar }
                 .navigationDestination(for: UUID.self) { id in
                     CharacterDetail(document: document, characterID: id, workspace: workspace)
                         .safeAreaInset(edge: .top, spacing: 0) { BackgroundAIBar(document: document, page: .cast) }
@@ -124,12 +130,70 @@ struct CastPage: View {
 
     private func card(_ c: BookCharacter) -> some View {
         // A button, not a NavigationLink: in this grid the link didn't open on a click.
-        Button { workspace.castPath = [c.id] } label: {
+        let isPicked = workspace.pickedCast.contains(c.id)
+        return Button { click(c.id, modifiers: NSEvent.modifierFlags) } label: {
             CastCard(document: document, character: c)
+                .overlay {
+                    if isPicked { RoundedRectangle(cornerRadius: 12).strokeBorder(Color.accentColor, lineWidth: 2.5) }
+                }
         }
         .buttonStyle(.plain)
-        .help("Open \(c.name)’s page")
-        .contextMenu { menu(c) }
+        .help("Open \(c.name)’s page. ⌘-click picks several characters to change at once.")
+        .accessibilityAddTraits(isPicked ? .isSelected : [])
+        .contextMenu {
+            if isPicked, picked.count > 1 {
+                ManyCharactersMenu(document: document, ids: picked, narration: narration)
+            } else {
+                menu(c)
+            }
+        }
+    }
+
+    /// A click opens the character; ⌘-click adds or removes them from the picked
+    /// characters, ⇧-click picks the run from the last one.
+    func click(_ id: UUID, modifiers: NSEvent.ModifierFlags) {
+        if modifiers.contains(.command) {
+            if workspace.pickedCast.contains(id) { workspace.pickedCast.remove(id) } else { workspace.pickedCast.insert(id) }
+            pickAnchor = id
+        } else if modifiers.contains(.shift) {
+            let order = shown.map(\.id)
+            if let a = pickAnchor.flatMap({ order.firstIndex(of: $0) }), let b = order.firstIndex(of: id) {
+                workspace.pickedCast.formUnion(order[min(a, b)...max(a, b)])
+            } else {
+                workspace.pickedCast.insert(id)
+                pickAnchor = id
+            }
+        } else {
+            workspace.pickedCast = []
+            workspace.castPath = [id]
+        }
+    }
+
+    /// While characters are picked: change their gender (and who reads them) at once.
+    @ViewBuilder
+    private var pickedBar: some View {
+        let ids = picked
+        if !ids.isEmpty {
+            HStack(alignment: .top, spacing: Space.xl) {
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    Text(ids.count == 1 ? "1 Character Selected" : "\(ids.count) Characters Selected").font(.headline)
+                    Text(ids.compactMap { document.project.character($0)?.firstName }.joined(separator: ", "))
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                    Button("Clear Selection") { workspace.pickedCast = [] }
+                        .keyboardShortcut(.cancelAction)
+                        .controlSize(.small)
+                        .padding(.top, Space.xs)
+                }
+                .frame(width: 220, alignment: .leading)
+                ManyCharactersControls(document: document, ids: ids, narration: narration) {
+                    if genderFilter { workspace.pickedCast = [] }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(Space.lg)
+            .background(.bar)
+            .overlay(alignment: .top) { Divider() }
+        }
     }
 
     /// Three Narrators: the cast in parts (Narration, Men, Women, Other, their own), each

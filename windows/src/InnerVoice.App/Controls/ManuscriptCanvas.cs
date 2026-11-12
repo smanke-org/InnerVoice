@@ -52,7 +52,7 @@ public sealed class ManuscriptCanvas : Control
     public event Action<Paragraph?, KeyModifiers>? NarrationClicked;
     /// A click (or right-click) on a name in the margin: the line it names and its rectangle.
     /// The name stands for its whole paragraph.
-    public event Action<Line, Rect>? MarginNameClicked;
+    public event Action<Line, Rect, KeyModifiers>? MarginNameClicked;
 
     public ManuscriptCanvas()
     {
@@ -509,7 +509,7 @@ public sealed class ManuscriptCanvas : Control
         var margin = line is null ? MarginLineAt(point) : null;
         if (props.IsRightButtonPressed)
         {
-            if (margin is not null && RectOf(margin) is { } mr) MarginNameClicked?.Invoke(margin, mr);
+            if (margin is not null && RectOf(margin) is { } mr) MarginNameClicked?.Invoke(margin, mr, KeyModifiers.None);
             else ContextRequestedAt?.Invoke(line, b?.Paragraph, point);
             e.Handled = true;
             return;
@@ -560,7 +560,7 @@ public sealed class ManuscriptCanvas : Control
         anchor = focus = null;
         var point = e.GetPosition(this);
         if (pressedLine is not null && RectOf(pressedLine) is { } rect) LineClicked?.Invoke(pressedLine, rect, e.KeyModifiers);
-        else if (pressedMargin is not null && RectOf(pressedMargin) is { } mr) MarginNameClicked?.Invoke(pressedMargin, mr);
+        else if (pressedMargin is not null && RectOf(pressedMargin) is { } mr) MarginNameClicked?.Invoke(pressedMargin, mr, e.KeyModifiers);
         else
         {
             var (b, _, _) = HitTest(point);

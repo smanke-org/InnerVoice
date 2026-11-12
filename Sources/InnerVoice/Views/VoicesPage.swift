@@ -12,6 +12,16 @@ struct VoicesPage: View {
     @State private var query = ""
     /// Show only characters whose gender the book doesn't settle.
     @State private var genderFilter = false
+    /// The characters picked, in list order.
+    private var picked: Set<VoiceTarget> {
+        get { workspace.pickedVoices }
+        nonmutating set { workspace.pickedVoices = newValue }
+    }
+
+    private var pickedCharacters: [UUID] {
+        let shown = groups.flatMap(\.characters).map(\.id)
+        return shown.filter { picked.contains(.character($0)) }
+    }
 
     private var engine: VoiceEngine { document.project.engineInUse }
     private var style: CastingStyle? { document.project.settings.castingStyle }
@@ -31,8 +41,17 @@ struct VoicesPage: View {
             }
             .frame(width: 280)
             Divider()
-            VoiceTargetDetail(document: document, workspace: workspace, target: workspace.voiceTarget)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            SwiftUI.Group {
+                if picked.count > 1, !pickedCharacters.isEmpty {
+                    ManyCharactersPanel(document: document, ids: pickedCharacters, changed: {
+                        // Settled genders leave the Genders to Review list.
+                        if genderFilter { picked = [] }
+                    }, clear: { picked = [] })
+                } else {
+                    VoiceTargetDetail(document: document, workspace: workspace, target: workspace.voiceTarget)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .navigationTitle("Voices")
         .pageSubtitle(subtitle)
@@ -131,7 +150,14 @@ struct VoicesPage: View {
             }
         }
         let narrationReader = CastingStyleRules.reader(of: .narrator, settings: document.project.settings)
-        return List(selection: Binding(get: { workspace.voiceTarget }, set: { workspace.voiceTarget = $0 ?? .narrator })) {
+        return List(selection: Binding(get: { picked.count > 1 ? picked : [workspace.voiceTarget] }, set: { new in
+            if new.count > 1 {
+                picked = new
+            } else {
+                picked = []
+                workspace.voiceTarget = new.first ?? .narrator
+            }
+        })) {
             Section("Narration") {
                 row(name: "Narrator", color: nil, voice: document.project.settings.narratorVoice(for: engine), needs: false,
                     pov: VoiceResolver.povNarrator(project: document.project, engine: engine),
@@ -152,12 +178,20 @@ struct VoicesPage: View {
                             caption: caption(c, reader),
                             isMain: style == .fullCast && c.isMain == true)
                             .tag(VoiceTarget.character(c.id))
-                            .contextMenu { CastingStyleMenu(document: document, character: c) }
                     }
                 }
             }
         }
         .listStyle(.inset)
+        // Right-click: one character's menu, or the same choices for every picked character.
+        .contextMenu(forSelectionType: VoiceTarget.self) { targets in
+            let ids = targets.compactMap(\.characterID)
+            if ids.count > 1 {
+                ManyCharactersMenu(document: document, ids: ids)
+            } else if let id = ids.first, let c = document.project.character(id) {
+                CastingStyleMenu(document: document, character: c)
+            }
+        }
         .searchable(text: $query, placement: .sidebar, prompt: "Find a character")
     }
 

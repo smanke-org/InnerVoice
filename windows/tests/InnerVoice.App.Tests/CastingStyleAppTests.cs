@@ -104,6 +104,66 @@ public class CastingStyleAppTests
         w.Close();
     }
 
+    /// Ctrl-click two names in the margin picks both paragraphs without asking; a click on
+    /// a picked name then keeps them all for one Assign To.
+    [AvaloniaFact]
+    public void CtrlClickPicksSeveralParagraphs()
+    {
+        var doc = ProjectDocument.Unsaved(TestApp.Sample());
+        var w = new ProjectWindow(doc) { Width = 1280, Height = 820 };
+        w.Show();
+        w.Workspace.Go(PageKind.Manuscript);
+        Pump();
+        var canvas = ((ManuscriptPage)w.FindPage(PageKind.Manuscript)!).Canvas;
+        var paras = doc.Project.Chapters.SelectMany(c => c.Paragraphs).Where(p => doc.Project.Lines.Any(l => l.ParagraphID == p.Id)).Take(2).ToList();
+        canvas.ScrollToParagraph(paras[0].Id);
+        Pump();
+        var expected = new HashSet<Guid>();
+        foreach (var para in paras)
+        {
+            var first = doc.Project.Lines.First(l => l.ParagraphID == para.Id);
+            expected.UnionWith(doc.Project.Lines.Where(l => l.ParagraphID == para.Id).Select(l => l.Id));
+            var at = canvas.TranslatePoint(canvas.MarginPointOf(first)!.Value, w)!.Value;
+            w.MouseDown(at, Avalonia.Input.MouseButton.Left, Avalonia.Input.RawInputModifiers.Control);
+            w.MouseUp(at, Avalonia.Input.MouseButton.Left, Avalonia.Input.RawInputModifiers.Control);
+            Pump();
+        }
+        Assert.Equal(expected, canvas.SelectedLines);
+        // A plain click on a picked name asks for them all, so the pick stays.
+        var again = canvas.TranslatePoint(canvas.MarginPointOf(doc.Project.Lines.First(l => l.ParagraphID == paras[0].Id))!.Value, w)!.Value;
+        w.MouseDown(again, Avalonia.Input.MouseButton.Left);
+        w.MouseUp(again, Avalonia.Input.MouseButton.Left);
+        Pump();
+        Assert.Equal(expected, canvas.SelectedLines);
+        w.Close();
+    }
+
+    /// Ctrl-click picks several cast cards; the bar's Male sets every one in one undo step.
+    [AvaloniaFact]
+    public void CastPicksSetGenderForAll()
+    {
+        var doc = ProjectDocument.Unsaved(TestApp.Sample());
+        var w = new ProjectWindow(doc) { Width = 1280, Height = 820 };
+        w.Show();
+        w.Workspace.Go(PageKind.Cast);
+        Pump();
+        var cast = (CastPage)w.FindPage(PageKind.Cast)!;
+        var ids = doc.Project.Characters.Take(2).Select(c => c.Id).ToList();
+        Assert.Equal(2, ids.Count);
+        foreach (var id in ids) cast.CardClicked(id, Avalonia.Input.KeyModifiers.Control);
+        cast.CardClicked(ids[1], Avalonia.Input.KeyModifiers.Control);
+        Assert.Equal([ids[0]], cast.Picked);
+        cast.CardClicked(ids[1], Avalonia.Input.KeyModifiers.Control);
+        Pump();
+        Assert.Equal(ids.ToHashSet(), cast.Picked.ToHashSet());
+        var male = cast.GetLogicalDescendants().OfType<Avalonia.Controls.Button>().First(b => b.Content as string == "Male");
+        male.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
+        Assert.All(ids, id => Assert.Equal(CharacterGender.Male, doc.Project.Character(id)!.Gender));
+        doc.Undo();
+        Assert.All(ids, id => Assert.Null(doc.Project.Character(id)!.Gender));
+        w.Close();
+    }
+
     [AvaloniaFact]
     public void Pages()
     {

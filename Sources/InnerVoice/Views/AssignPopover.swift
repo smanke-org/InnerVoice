@@ -43,6 +43,12 @@ struct AssignPopover: View {
         return top.flatMap { project.character($0) }
     }
 
+    /// "in this paragraph" or "in 4 paragraphs".
+    private var scope: String {
+        let paragraphs = Set(lines.map(\.paragraphID)).count
+        return paragraphs == 1 ? "in this paragraph" : "in \(paragraphs) paragraphs"
+    }
+
     /// "Cyrus 2, Mara 1, nobody yet 1" for a paragraph whose lines disagree.
     private var breakdown: String {
         var order: [UUID?] = []
@@ -180,11 +186,11 @@ struct AssignPopover: View {
                     .lineLimit(2)
                 Group {
                     if let guess {
-                        Text("Best guess: \(guess.name). Return confirms it for all \(ids.count) lines in this paragraph.")
+                        Text("Best guess: \(guess.name). Return confirms it for all \(ids.count) lines \(scope).")
                     } else if let shared = sharedSpeaker, let name = document.project.character(shared)?.name {
-                        Text("All \(ids.count) lines in this paragraph are \(name)’s.")
+                        Text("All \(ids.count) lines \(scope) are \(name)’s.")
                     } else {
-                        Text("\(ids.count) lines in this paragraph: \(breakdown). Your pick goes to all of them.")
+                        Text("\(ids.count) lines \(scope): \(breakdown). Your pick goes to all of them.")
                     }
                 }
                 .font(.caption)

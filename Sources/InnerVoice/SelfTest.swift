@@ -617,6 +617,27 @@ enum SelfTest {
         check("a right-click on a name in the margin offers the whole paragraph",
               c.marginMenu(at: point)?.items.first?.title.contains("\(expected.count) lines in this paragraph") == true || expected.count == 1,
               c.marginMenu(at: point)?.items.first?.title ?? "no menu")
+        // ⌘-click picks several paragraphs without asking; a click on one of them then
+        // asks once for them all, in book order.
+        if let paraB = project.chapters.flatMap(\.paragraphs).first(where: { $0.id != para.id && (byParagraph[$0.id]?.isEmpty == false) }),
+           let firstB = byParagraph[paraB.id]?.first, let pointB = c.marginPoint(of: firstB.id) {
+            let linesB = project.lines.filter { $0.paragraphID == paraB.id }.map(\.id)
+            workspace.selectedLines = []
+            asked = []
+            c.marginClick(at: point, adding: true)
+            c.marginClick(at: pointB, adding: true)
+            let both = Set(expected + linesB)
+            check("⌘-click on two margin names picks both paragraphs and asks nothing yet", Set(workspace.selectedLines) == both && asked.isEmpty)
+            c.marginClick(at: pointB)
+            check("a click on a picked paragraph's name opens Assign To for every picked line, in book order",
+                  asked == project.lines.map(\.id).filter { both.contains($0) }, "\(asked.count) of \(both.count)")
+            c.marginClick(at: point, adding: true)
+            check("⌘-click on a picked paragraph's name takes it out", Set(workspace.selectedLines) == Set(linesB))
+            c.toggle(at: c.layout.entries.first { $0.lineID == paraLines[1].id }!.range.location + 1)
+            check("⌘-click on a line adds just that line", Set(workspace.selectedLines) == Set(linesB + [paraLines[1].id]))
+        } else {
+            check("the sample has a second paragraph with lines", false)
+        }
         // One pick: the whole paragraph is the narrator's, with one speaker.
         guard let other = project.characters.first(where: { $0.id != first.speakerID }) else { return }
         doc.assign(expected, to: other.id, undoManager: undo)
