@@ -89,6 +89,113 @@ enum SelfTest {
             }
         }
 
+        // Casting Style (docs/CASTING-STYLE.md): who reads each character, and nothing lost.
+        do {
+            let engine = doc.project.engineInUse
+            let segs = SpeechScript.segments(chapter: 0, chapters: doc.project.chapters.count, project: doc.project, index: doc.index, includeNarration: true)
+            if let mara = doc.project.characters.first(where: { $0.name.hasPrefix("Mara") }),
+               let tom = doc.project.characters.first(where: { $0.name.hasPrefix("Tom") }),
+               let maraLine = segs.first(where: { $0.speakerID == mara.id && $0.kind == .spoken }),
+               let tomLine = segs.first(where: { $0.speakerID == tom.id && $0.kind == .spoken }) {
+                let voicesBefore = doc.project.characters.map(\.voices)
+                doc.setGender(.female, for: [mara.id], undoManager: undo)
+                doc.setGender(.male, for: [tom.id], undoManager: undo)
+                doc.setCastingStyle(.shared, undoManager: undo)
+                let men = doc.project.settings.roleVoice(.men, for: engine)?.choice
+                let women = doc.project.settings.roleVoice(.women, for: engine)?.choice
+                let r = VoiceResolver(project: doc.project, index: doc.index)
+                check("Narrator + Two Voices casts different men's and women's voices", men != nil && women != nil && men != women && men != r.narrator)
+                check("men are read in the men's voice and women in the women's", r.choice(for: tomLine) == men && r.choice(for: maraLine) == women)
+                doc.setRole(.own, for: tom.id, undoManager: undo)
+                let own = doc.project.character(tom.id)?.voice(for: engine)?.choice
+                check("Own Voice keeps a character's own voice in a shared style",
+                      own != nil && VoiceResolver(project: doc.project, index: doc.index).choice(for: tomLine) == own.map { VoiceResolver.withNotes($0, doc.project.character(tom.id)) })
+                doc.setNarrationRole(.women, undoManager: undo)
+                check("a two-person book reads the narration in the women's voice", VoiceResolver(project: doc.project, index: doc.index).narrator == women)
+                doc.setCastingStyle(.oneVoice, undoManager: undo)
+                let one = VoiceResolver(project: doc.project, index: doc.index)
+                check("One Voice reads every character in the narrator's voice", one.choice(for: maraLine) == one.narrator)
+                let tomShade = one.request(for: tomLine)?.shade?.pitch ?? 0
+                let maraShade = one.request(for: maraLine)?.shade?.pitch ?? 0
+                check("One Voice shades a man's lines lower than a woman's", tomShade < maraShade)
+                if let narration = segs.first(where: { $0.lineID == nil }) {
+                    check("the narration itself is never shaded", one.request(for: narration)?.shade == nil)
+                }
+                if let shaded = one.request(for: maraLine), shaded.shade != nil {
+                    var plain = shaded
+                    plain.shade = nil
+                    check("a shaded line is cached apart from the unshaded one", shaded.cacheKey != plain.cacheKey)
+                }
+                // (Tom has a voice of his own from above, so Mara.)
+                doc.setShade(Shade(pitch: 3, pace: -1), for: mara.id, undoManager: undo)
+                check("a shade you set wins", VoiceResolver(project: doc.project, index: doc.index).request(for: maraLine)?.shade == Shade(pitch: 3, pace: -1))
+                for _ in 0..<7 { undo.undo() }
+                check("undoing the Casting Style edits leaves every voice and gender as it was",
+                      doc.project.settings.castingStyle == nil && doc.project.characters.map(\.voices) == voicesBefore
+                      && doc.project.characters.allSatisfy { $0.gender == nil && $0.role == nil })
+            } else {
+                check("the sample book has Mara and Tom lines for the Casting Style checks", false)
+            }
+        }
+
+        // Casting Style in Narration Tools: Three Narrators and their scripts, Just Me cues.
+        do {
+            if let mara = doc.project.characters.first(where: { $0.name.hasPrefix("Mara") }),
+               let tom = doc.project.characters.first(where: { $0.name.hasPrefix("Tom") }),
+               let tomLine = doc.project.lines.first(where: { $0.speakerID == tom.id && $0.kind == .spoken }),
+               let maraLine = doc.project.lines.first(where: { $0.speakerID == mara.id && $0.kind == .spoken }) {
+                let narratorsBefore = doc.project.narrators
+                // The sample casts Tom and Mara to narrators by hand, and a hand-made choice
+                // wins; clear them so their parts decide.
+                check("a narrator you cast by hand wins over the part", doc.project.character(tom.id)?.narratorID == nil
+                      || doc.effectiveNarrator(for: tom)?.id == doc.project.character(tom.id)?.narratorID)
+                doc.change("Clear Narrators", undoManager: undo) { p in
+                    for i in p.characters.indices where [tom.id, mara.id].contains(p.characters[i].id) { p.characters[i].narratorID = nil }
+                }
+                doc.setGender(.female, for: [mara.id], undoManager: undo)
+                doc.setGender(.male, for: [tom.id], undoManager: undo)
+                doc.setCastingStyle(.shared, undoManager: undo)
+                doc.setUpThreeNarrators(undoManager: undo)
+                let men = doc.project.narrators.first { $0.role == .men }
+                check("Set Up Narrators adds a narrator for the narration, the men and the women",
+                      [VoiceRole.narrator, .men, .women].allSatisfy { r in doc.project.narrators.contains { $0.role == r } })
+                check("Three Narrators: Tom is read by the men’s narrator",
+                      men != nil && doc.project.character(tom.id).flatMap { doc.effectiveNarrator(for: $0) }?.id == men?.id)
+                var options = Exporter.Options()
+                options.kind = .narratorScript
+                options.narratorID = men?.id
+                options.includeCues = false  // a cue is the line before, often Mara's
+                let script = Exporter.build(options, document: doc).string
+                let tomText = doc.project.text(of: tomLine, index: doc.index), maraText = doc.project.text(of: maraLine, index: doc.index)
+                check("the men’s Narrator Script has Tom’s lines and not Mara’s", script.contains(tomText) && !script.contains(maraText))
+                doc.setCastingStyle(.oneVoice, undoManager: undo)
+                doc.setNarratorGender(.female, undoManager: undo)
+                let cues = doc.narrationShades()
+                check("Just Me: a woman narrating shades Tom lower and leaves Mara in her own voice",
+                      (cues[tom.id]?.pitch ?? 0) < 0 && cues[mara.id] == nil)
+                check("Just Me: Tom’s cue shows in the margin as an arrow", cues[tom.id].flatMap(MarginOverlay.arrow) != nil)
+                for _ in 0..<7 { undo.undo() }
+                check("undoing leaves the narrators as they were", doc.project.narrators == narratorsBefore && doc.project.settings.castingStyle == nil)
+            }
+        }
+
+        // Shading audio: a 200 Hz tone shifted 12 steps up comes out near 400 Hz, and a pace
+        // step changes its length by 8%.
+        do {
+            let rate = SpeechAudio.format.sampleRate
+            let tone = (0..<Int(rate)).map { Float(sin(2 * Double.pi * 200 * Double($0) / rate)) * 0.5 }
+            func hz(_ x: [Float]) -> Double {
+                let mid = x.dropFirst(x.count / 4).prefix(x.count / 2)
+                let crossings = zip(mid, mid.dropFirst()).filter { $0 < 0 && $1 >= 0 }.count
+                return Double(crossings) / (Double(mid.count) / rate)
+            }
+            let up = (try? ShadeAudio.apply(tone, semitones: 12, pace: 0)) ?? []
+            let slow = (try? ShadeAudio.apply(tone, semitones: 0, pace: -1)) ?? []
+            check("a shade of 12 steps doubles the pitch (\(Int(hz(up))) Hz)", abs(hz(up) - 400) < 20)
+            let stretch = Double(slow.count) / Double(tone.count)
+            check("a slower pace step makes it about 8% longer (\(String(format: "%.3f", stretch))×)", abs(stretch - 1 / 0.92) < 0.03)
+        }
+
         // Pauses: exported audio grows by exactly the extra pause time; voices' own silence is trimmed.
         do {
             let resolver = VoiceResolver(project: doc.project)
@@ -227,6 +334,70 @@ enum SelfTest {
         }
         try? FileManager.default.removeItem(at: dir)
         SpeechRenderer.shared.clearCache()
+    }
+
+    /// The setup sheet's Hear It clips (Resources/Samples/casting-<style>.m4a): the opening
+    /// of the sample book in each Casting Style, with Qwen3-TTS (APP_MAKE_CASTING_SAMPLES=<folder>,
+    /// with APP_SELFTEST_VOICES).
+    private static func castingSamples(_ doc: InnerVoiceDocument, undo: UndoManager, to dir: URL) async {
+        guard ModelSpeech.isInstalled(.qwen), let storyteller = VoiceInfo.qwenPresets.first(where: { $0.name == "Warm Storyteller" }) else { return }
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        doc.setVoiceEngine(.qwen, undoManager: undo)
+        doc.setVoice(storyteller.choice, for: nil, undoManager: undo)
+        var steps = 2
+        for c in doc.project.characters {
+            if let g = VoiceCasting.profile(c, project: doc.project, index: doc.index).gender, g != .neutral {
+                doc.setGender(CharacterGender(g), for: [c.id], undoManager: undo)
+                steps += 1
+            }
+        }
+        let segs = Array(SpeechScript.segments(chapter: 0, project: doc.project, index: doc.index, includeNarration: true).prefix(10))
+        for style in CastingStyle.allCases {
+            doc.setCastingStyle(style, undoManager: undo)
+            steps += 1
+            let resolver = VoiceResolver(project: doc.project, index: doc.index)
+            do {
+                let urls = try await AudioExporter.write([AudioExporter.Part(name: "casting-" + style.rawValue, segments: segs)], to: dir, format: .m4a, resolver: resolver) { _, _, _ in }
+                check("Hear It sample for \(style.title(for: .aiVoices))", !urls.isEmpty, urls.first?.lastPathComponent ?? "")
+            } catch {
+                check("Hear It sample for \(style.title(for: .aiVoices))", false, error.localizedDescription)
+            }
+        }
+        for _ in 0..<steps { undo.undo() }
+    }
+
+    /// One Voice with Qwen3-TTS (APP_SELFTEST_VOICES): the opening of the sample book read by
+    /// the Warm Storyteller, shaded and unshaded, saved in APP_SELFTEST_AUDIO_OUT for listening.
+    private static func oneVoiceTableRead(_ doc: InnerVoiceDocument, undo: UndoManager) async {
+        guard ModelSpeech.isInstalled(.qwen), let storyteller = VoiceInfo.qwenPresets.first(where: { $0.name == "Warm Storyteller" }) else { return }
+        let out = ProcessInfo.processInfo.environment["APP_SELFTEST_AUDIO_OUT"].map { URL(fileURLWithPath: $0) }
+        doc.setVoiceEngine(.qwen, undoManager: undo)
+        doc.setVoice(storyteller.choice, for: nil, undoManager: undo)
+        doc.setCastingStyle(.oneVoice, undoManager: undo)
+        let segs = Array(SpeechScript.segments(chapter: 0, project: doc.project, index: doc.index, includeNarration: true).prefix(16))
+        let shaded = VoiceResolver(project: doc.project, index: doc.index)
+        let lines = segs.filter { $0.lineID != nil && $0.kind != .written }
+        check("Qwen3-TTS One Voice: the Warm Storyteller plays every character", lines.allSatisfy { shaded.choice(for: $0) == shaded.narrator })
+        check("Qwen3-TTS One Voice: men's lines are shaded lower", lines.contains { (shaded.request(for: $0)?.shade?.pitch ?? 0) < 0 })
+        var plain = shaded
+        plain.shades = [:]
+        for (name, resolver) in [("onevoice-qwen-shaded", shaded), ("onevoice-qwen-unshaded", plain)] {
+            do {
+                let dir = out ?? FileManager.default.temporaryDirectory.appending(path: "iv-onevoice")
+                try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                let start = Date()
+                let urls = try await AudioExporter.write([AudioExporter.Part(name: name, segments: segs)], to: dir, format: .wav, resolver: resolver) { _, _, _ in }
+                check("Qwen3-TTS One Voice reads the opening \(name.hasSuffix("unshaded") ? "unshaded" : "shaded")", !urls.isEmpty,
+                      String(format: "%.0f s", Date().timeIntervalSince(start)))
+                for (seg, n) in zip(lines, 0...) where n < 8 {
+                    let s = resolver.request(for: seg)?.shade
+                    if name.hasSuffix("-shaded") { print("SHADE \(doc.project.character(seg.speakerID)?.firstName ?? "?"): \(s?.cue ?? "narrator's own") — \(seg.text.prefix(50))") }
+                }
+            } catch {
+                check("Qwen3-TTS One Voice reads the opening", false, error.localizedDescription)
+            }
+        }
+        for _ in 0..<3 { undo.undo() }
     }
 
     /// Qwen3-TTS and Orpheus speak real lines (APP_SELFTEST_VOICES=1, with the models in
@@ -978,7 +1149,11 @@ enum SelfTest {
         _ = index
 
         await voices(doc, undo: undo)
-        if ProcessInfo.processInfo.environment["APP_SELFTEST_VOICES"] != nil { await modelVoices(doc, undo: undo) }
+        if ProcessInfo.processInfo.environment["APP_SELFTEST_VOICES"] != nil {
+            await modelVoices(doc, undo: undo)
+            await oneVoiceTableRead(doc, undo: undo)
+            if let dir = ProcessInfo.processInfo.environment["APP_MAKE_CASTING_SAMPLES"] { await castingSamples(doc, undo: undo, to: URL(fileURLWithPath: dir)) }
+        }
         if ProcessInfo.processInfo.environment["APP_SELFTEST_DOWNLOAD"] != nil { await voiceDownload() }
         await elevenLabs(doc, undo: undo)
         await localClones(doc, undo: undo)

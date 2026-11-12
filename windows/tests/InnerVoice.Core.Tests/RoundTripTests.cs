@@ -32,10 +32,12 @@ public class RoundTripTests
         // A misspelled property name would put a known field in Extra and drop it from the model.
         var p = ProjectJson.Decode(MacContents().ProjectJson);
         Assert.Equal(["tonesTagged", "voicesCast"], p.Extra!.Keys.Order().ToArray());
-        Assert.Equal(["cloudVoicesAllowed", "narratorVoices", "voiceEngine"], p.Settings.Extra!.Keys.Order().ToArray());
+        // Casting Style's shared AI voices (roleVoices) are the Mac's alone; the rest is modeled.
+        Assert.Equal(["cloudVoicesAllowed", "narratorVoices", "roleVoices", "voiceEngine"], p.Settings.Extra!.Keys.Order().ToArray());
         foreach (var l in p.Lines)
             Assert.All(l.Extra?.Keys.ToList() ?? [], k => Assert.Contains(k, new[] { "tone", "toneConfidence", "toneSource" }));
-        foreach (var c in p.Characters) Assert.All(c.Extra?.Keys.ToList() ?? [], k => Assert.Equal("voices", k));
+        foreach (var c in p.Characters)
+            Assert.All(c.Extra?.Keys.ToList() ?? [], k => Assert.Equal("voices", k));
         foreach (var ch in p.Chapters)
         {
             Assert.Null(ch.Extra);

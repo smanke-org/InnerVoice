@@ -51,7 +51,7 @@ public sealed class IndexPage : Page
     {
         var q = filter.Text ?? "";
         return Document.Project.Characters
-            .Where(c => narrator is null || c.NarratorID == narrator)
+            .Where(c => narrator is null || Document.EffectiveNarrator(c)?.Id == narrator)
             .Where(c => q.Length == 0 || c.Name.Contains(q, StringComparison.CurrentCultureIgnoreCase))
             .OrderBy(c => Document.Index.StatsFor(c.Id)?.Lines ?? 0).ToList();
     }

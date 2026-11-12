@@ -47,6 +47,8 @@ background. If `innervoice` isn't on PATH, use
 | `innervoice characters list --json` / `characters show NAME --json` | The cast; one character's facts with sources and Revealed Late flags |
 | `innervoice tag start [--chapter N] --json` / `tag status --json` | Run Tag Speakers and follow it |
 | `innervoice export --kind narrator-script --narrator NAME --format pdf --out PATH --json` | Write a Narrator Script (also manuscript, cast, pronunciations; pdf, word, csv) |
+| `innervoice casting style [one-voice\|shared\|full-cast] --json` | Show or change the Casting Style, and who reads each character (with shade cues) |
+| `innervoice characters gender\|main\|read-by\|shade NAME ... --json` | A character's gender (male, female, other, auto), main mark (yes, no, auto), who reads them (narrator, men, women, other, own, auto), shade (`--pitch -2 --pace -1 --words gravelly`, or `--auto`) |
 
 Everything else (chapters, line kinds, rename, color, merge, summaries, pronunciations, models,
 `open <page>`): `innervoice help`, and `innervoice help <command>` for its options.

@@ -66,6 +66,8 @@ public static class GenderReader
     public static Core.Gender? GenderOf(BookCharacter c, Project project, BookIndex index)
     {
         string FactText(params FactKind[] kinds) => string.Join(" ", c.Facts.Where(f => kinds.Contains(f.Kind)).Select(f => f.Text));
+        // The narrator's choice (Casting Style) comes first; Other counts as neutral.
+        if (c.Gender is { } chosen) return chosen.ToGender();
         if (GenderIn(FactText(FactKind.Gender)) is { } g1) return g1;
         if (TitleGender(c.Name) is { } g2) return g2;
         if (PronounGender(c.Id, project, index) is { } g3) return g3.Gender;

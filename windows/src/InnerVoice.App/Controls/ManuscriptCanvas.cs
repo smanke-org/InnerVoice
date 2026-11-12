@@ -118,7 +118,9 @@ public sealed class ManuscriptCanvas : Control
     double Gutter()
     {
         if (document is null || !document.Project.Settings.ShowInitials) return 72;
-        double widest = document.Project.Characters.Select(c => MarkerWidth(MarkerLabel(c) + "?")).DefaultIfEmpty(0).Max();
+        // Room for a shading arrow too (Casting Style).
+        var extra = document.Project.Settings.CastingStyle is null ? "?" : " ↓↓";
+        double widest = document.Project.Characters.Select(c => MarkerWidth(MarkerLabel(c) + extra)).DefaultIfEmpty(0).Max();
         return Math.Max(72, widest + 40);
     }
 
@@ -347,6 +349,9 @@ public sealed class ManuscriptCanvas : Control
             var color = needs ? Look.Attention : Look.Hex(speaker?.ColorHex);
             var named = speaker is null ? null : MarkerLabel(speaker);
             var label = needs ? (named is null ? "?" : named + "?") : named ?? "";
+            // Casting Style: an arrow for how to shade them (↓ lower, ↑ higher, doubled for more).
+            if (!needs && speaker is not null && document is not null && project.Settings.CastingStyle is not null
+                && document.Shades().TryGetValue(speaker.Id, out var shade) && shade.Arrow is { } arrow) label += " " + arrow;
             var box = TextBox(new Rect(first.X, first.Y, 1, first.Height));
             DrawMarker(context, label, color, b.X - (b.Paragraph?.Style == ParagraphStyle.BlockQuote ? 28 : 0) - 18, box.Center.Y, dark);
         }

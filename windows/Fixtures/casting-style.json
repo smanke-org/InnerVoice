@@ -1,0 +1,139 @@
+{
+  "genderToReview" : [
+    "Mara",
+    "Tom Hale"
+  ],
+  "scenarios" : [
+    {
+      "name" : "just me, a woman narrating",
+      "narrators" : {
+
+      },
+      "readers" : {
+        "Mara" : "narrator",
+        "Tom Hale" : "narrator"
+      },
+      "shades" : {
+        "Mara" : {
+          "pace" : 1,
+          "pitch" : 1,
+          "words" : "bright, clipped"
+        },
+        "Tom Hale" : {
+          "pace" : -1,
+          "pitch" : -1,
+          "words" : "gravelly, husky"
+        }
+      }
+    },
+    {
+      "name" : "just me, a man narrating, strong",
+      "narrators" : {
+
+      },
+      "readers" : {
+        "Mara" : "narrator",
+        "Tom Hale" : "narrator"
+      },
+      "shades" : {
+        "Mara" : {
+          "pace" : 1,
+          "pitch" : 4,
+          "words" : "bright, clipped"
+        },
+        "Tom Hale" : {
+          "pace" : -1,
+          "pitch" : 2,
+          "words" : "gravelly, husky"
+        }
+      }
+    },
+    {
+      "name" : "just me, not said, subtle, Tom's own shade",
+      "narrators" : {
+
+      },
+      "readers" : {
+        "Mara" : "narrator",
+        "Tom Hale" : "narrator"
+      },
+      "shades" : {
+        "Mara" : {
+          "pace" : 1,
+          "pitch" : 2,
+          "words" : "bright, clipped"
+        },
+        "Tom Hale" : {
+          "pace" : 0,
+          "pitch" : 1,
+          "words" : "warm"
+        }
+      }
+    },
+    {
+      "name" : "three narrators, a two-person book",
+      "narrators" : {
+        "Mara" : "Jo",
+        "Tom Hale" : "Jo"
+      },
+      "readers" : {
+        "Mara" : "women",
+        "Tom Hale" : "women"
+      },
+      "shades" : {
+
+      }
+    },
+    {
+      "name" : "full cast, Mara main, minor by gender",
+      "narrators" : {
+        "Tom Hale" : "Sam"
+      },
+      "readers" : {
+        "Mara" : "own",
+        "Tom Hale" : "women"
+      },
+      "shades" : {
+
+      }
+    },
+    {
+      "name" : "full cast, nobody main",
+      "narrators" : {
+
+      },
+      "readers" : {
+        "Mara" : "own",
+        "Tom Hale" : "own"
+      },
+      "shades" : {
+
+      }
+    },
+    {
+      "name" : "just me, a woman narrating, Tom set male",
+      "narrators" : {
+
+      },
+      "readers" : {
+        "Mara" : "narrator",
+        "Tom Hale" : "narrator"
+      },
+      "shades" : {
+        "Mara" : {
+          "pace" : 1,
+          "pitch" : 1,
+          "words" : "bright, clipped"
+        },
+        "Tom Hale" : {
+          "pace" : -1,
+          "pitch" : -3,
+          "words" : "gravelly, husky"
+        }
+      }
+    }
+  ],
+  "suggestedMain" : [
+
+  ]
+}

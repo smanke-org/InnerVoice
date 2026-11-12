@@ -1,3 +1,4 @@
+import AVFoundation
 import InnerVoiceKit
 import SwiftUI
 
@@ -24,22 +25,44 @@ extension Workspace.Page {
     }
 }
 
-/// Asked once per project: what it's for. New projects ask right away; projects made before
-/// the question existed ask the first time they're opened. Producing with AI voices goes on
-/// to a short guided setup: choose an engine, then Tag Speakers reads speakers and tones,
-/// voices are cast, and the project opens on the Voices page.
+/// Asked once per project: what it's for, then how its voices are shared (Casting Style,
+/// docs/CASTING-STYLE.md; nothing is chosen for the narrator). New projects ask right away;
+/// projects made before a question existed ask it the first time they're opened. Producing
+/// with AI voices goes on to a short guided setup: choose an engine, then Tag Speakers reads
+/// speakers and tones, voices are cast, and the project opens on the Voices page.
 struct ProjectTypeSheet: View {
     @ObservedObject var document: InnerVoiceDocument
     @Bindable var workspace: Workspace
     @Environment(\.undoManager) private var undoManager
-    @State private var choice: ProjectPurpose = UserDefaults.standard.string(forKey: "project.lastPurpose").flatMap(ProjectPurpose.init) ?? .narration
+    @State var choice: ProjectPurpose = UserDefaults.standard.string(forKey: "project.lastPurpose").flatMap(ProjectPurpose.init) ?? .narration
+    /// 0: what it's for, 1: Casting Style, 2: the engine (AI voices).
     @State var step = 0
     @State private var engine: VoiceEngine = .apple
     @State private var allowCloud = false
+    /// Casting Style: no default, the narrator always picks.
+    @State private var style: CastingStyle?
+    @State private var strength: ShadeStrength = .clear
+    @State private var narrationRole: VoiceRole = .narrator
+    @State private var minor: MinorVoices = .narrator
+    @State private var yourVoice: CharacterGender?
+    /// The book already had a type (made before Casting Style): only the style is asked.
+    @State private var existing = false
+    @State private var player: AVAudioPlayer?
+    @State private var playing: CastingStyle?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.lg) {
-            if step == 0 { typeStep } else { setupStep }
+            switch step {
+            case 0: typeStep
+            case 1: styleStep
+            default: setupStep
+            }
+        }
+        .onAppear {
+            if let p = document.project.settings.purpose {
+                choice = p
+                existing = true
+            }
         }
         .padding(Space.xl)
         .frame(width: 560)
@@ -65,9 +88,7 @@ struct ProjectTypeSheet: View {
             HStack {
                 HelpButton(topic: .gettingStarted)
                 Spacer()
-                Button(choice == .aiVoices ? "Continue" : "Start") {
-                    if choice == .aiVoices { step = 1 } else { finish(guided: false) }
-                }
+                Button("Continue") { step = 1 }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
             }
@@ -108,7 +129,7 @@ struct ProjectTypeSheet: View {
                 .background(.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
             }
             HStack {
-                Button("Back") { step = 0 }
+                Button("Back") { step = 1 }
                 Spacer()
                 Button("Skip") { finish(guided: false) }
                     .help("Use Produce with AI Voices without setting anything up now")
@@ -162,11 +183,26 @@ struct ProjectTypeSheet: View {
     }
 
     private func finish(guided: Bool) {
+        player?.stop()
         UserDefaults.standard.set(choice.rawValue, forKey: "project.lastPurpose")
         let purpose = choice
-        document.updateSettings("Set Project Type", undoManager: undoManager) { $0.purpose = purpose }
+        let (style, strength, narrationRole, minor, yourVoice) = (style, strength, narrationRole, minor, yourVoice)
+        document.updateSettings("Set Project Type", undoManager: undoManager) { s in
+            s.purpose = purpose
+            s.castingStyle = style
+            s.shadeStrength = strength == .clear ? nil : strength
+            s.narrationRole = narrationRole == .narrator ? nil : narrationRole
+            s.minorVoices = minor == .narrator ? nil : minor
+            if purpose == .narration { s.narratorGender = yourVoice }
+        }
+        if purpose == .narration, style == .shared { document.setUpThreeNarrators(undoManager: undoManager) }
         workspace.showProjectType = false
         guard purpose == .aiVoices else { return }
+        // A book that already had its type and voices keeps them; the style is all that changed.
+        if existing {
+            VoiceCastingRun.castIfNeeded(document: document)
+            return
+        }
         if guided {
             if engine.isCloud { document.setCloudVoicesAllowed(true, undoManager: undoManager) }
             document.setVoiceEngine(engine, undoManager: undoManager)
@@ -178,6 +214,186 @@ struct ProjectTypeSheet: View {
             VoiceCastingRun.castIfNeeded(document: document)
         }
         workspace.page = .voices
+    }
+}
+
+extension ProjectTypeSheet {
+    // MARK: Casting Style
+
+    private var narration: Bool { choice == .narration }
+
+    var styleStep: some View {
+        Group {
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text(narration ? "How many narrators will read it?" : "How will the voices be shared?").font(.title2.weight(.semibold))
+                Text(narration
+                     ? "InnerVoice prepares your cues and scripts for the way you’ll record. Click Hear It for an example."
+                     : "Pick the kind of audiobook you want to make. Click Hear It to hear the same passage in each style.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            ForEach(CastingStyle.allCases) { s in
+                CastingStyleCard(style: s, purpose: choice, selected: style == s, playing: playing == s,
+                                 hasSample: Self.sample(s) != nil, choose: { style = s }, play: { hear(s) })
+            }
+            if let style { followUp(style) }
+            HStack {
+                HelpButton(topic: .castingStyle)
+                Text(narration ? "You can change it later on the Cast page." : "You can change it later on the Voices page.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                if !existing { Button("Back") { step = 0 } }
+                Button(existing || narration ? "Done" : "Continue") {
+                    if existing || narration { finish(guided: false) } else { step = 2 }
+                }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+                .disabled(style == nil)
+                .help(style == nil ? "Choose one first" : "")
+            }
+        }
+    }
+
+    /// The one question each style needs.
+    @ViewBuilder
+    private func followUp(_ s: CastingStyle) -> some View {
+        Group {
+            switch s {
+            case .oneVoice:
+                if narration {
+                    Picker("Your voice", selection: $yourVoice) {
+                        Text("Not Set").tag(CharacterGender?.none)
+                        Text("Male").tag(CharacterGender?.some(.male))
+                        Text("Female").tag(CharacterGender?.some(.female))
+                        Text("Other").tag(CharacterGender?.some(.other))
+                    }
+                    .help("Characters of your own gender are read in your voice; others get a cue to go lower or higher")
+                } else {
+                    Picker("Shading", selection: $strength) {
+                        ForEach(ShadeStrength.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .help("How much the voice changes for a character of another gender")
+                }
+            case .shared:
+                Picker("Who reads the narration?", selection: $narrationRole) {
+                    Text(narration ? "A narrator of its own" : "Its own voice").tag(VoiceRole.narrator)
+                    Text(narration ? "The men’s narrator" : "The men’s voice").tag(VoiceRole.men)
+                    Text(narration ? "The women’s narrator" : "The women’s voice").tag(VoiceRole.women)
+                }
+                .help("Choose the men’s or women’s for a book read by two people")
+            case .fullCast:
+                Picker("Minor characters", selection: $minor) {
+                    Text(narration ? "The narrator" : "The narrator’s voice").tag(MinorVoices.narrator)
+                    Text(narration ? "Men’s, women’s or other narrator" : "Men’s, women’s or other voice").tag(MinorVoices.byGender)
+                    Text(narration ? "A narrator of their own" : "A voice of their own").tag(MinorVoices.own)
+                }
+                .help("Characters you don’t mark as main. Main characters always have their own.")
+            }
+        }
+        .padding(Space.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    /// A short passage of the sample book in each style (Qwen3-TTS), in the app.
+    static func sample(_ s: CastingStyle) -> URL? {
+        Bundle.main.url(forResource: "casting-" + s.rawValue, withExtension: "m4a", subdirectory: "Samples")
+    }
+
+    private func hear(_ s: CastingStyle) {
+        player?.stop()
+        if playing == s { playing = nil; return }
+        guard let url = Self.sample(s), let p = try? AVAudioPlayer(contentsOf: url) else { return }
+        player = p
+        playing = s
+        p.play()
+        let length = p.duration
+        Task {
+            try? await Task.sleep(for: .seconds(length + 0.2))
+            if playing == s, player === p { playing = nil }
+        }
+    }
+}
+
+/// One Casting Style to choose, with who reads what and a sample to hear.
+private struct CastingStyleCard: View {
+    let style: CastingStyle
+    let purpose: ProjectPurpose
+    let selected: Bool
+    let playing: Bool
+    let hasSample: Bool
+    let choose: () -> Void
+    let play: () -> Void
+
+    private var narration: Bool { purpose == .narration }
+
+    private var symbol: String {
+        switch style {
+        case .oneVoice: narration ? "mic" : "person.wave.2"
+        case .shared: "person.3"
+        case .fullCast: "person.3.sequence"
+        }
+    }
+
+    private var detail: String {
+        switch (style, narration) {
+        case (.oneVoice, true): "You read everything and shade each character a little lower or higher. InnerVoice shows how in the margin and the Teleprompter."
+        case (.oneVoice, false): "One AI voice reads everything and shades each character a little lower or higher, like most audiobooks."
+        case (.shared, true): "A narrator for the narration, one for every man and one for every woman, each with a Narrator Script of their own."
+        case (.shared, false): "A narrator voice, one voice for every man and one for every woman. InnerVoice sorts the characters by gender."
+        case (.fullCast, true): "Every main character has a narrator of their own, plus the narrator."
+        case (.fullCast, false): "Every main character gets a voice of their own, plus the narrator."
+        }
+    }
+
+    /// Who reads what, in a few words.
+    private var map: String {
+        switch (style, narration) {
+        case (.oneVoice, true): "Narration: you · Men: you, lower · Women: you, higher"
+        case (.oneVoice, false): "Narration: the voice · Men: a little lower · Women: a little higher"
+        case (.shared, true): "Narration: a narrator · Men: the men’s narrator · Women: the women’s"
+        case (.shared, false): "Narration: the narrator · Men: the men’s voice · Women: the women’s"
+        case (.fullCast, true): "Narration: a narrator · Each main character: their own narrator"
+        case (.fullCast, false): "Narration: the narrator · Each main character: their own voice"
+        }
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Space.md) {
+            Button(action: choose) {
+                HStack(alignment: .top, spacing: Space.md) {
+                    Image(systemName: symbol)
+                        .font(.title2)
+                        .foregroundStyle(selected ? Color.accentColor : .secondary)
+                        .frame(width: 32)
+                    VStack(alignment: .leading, spacing: Space.xs) {
+                        Text(style.title(for: purpose)).font(.headline)
+                        Text(detail).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Text(map).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            VStack(alignment: .trailing, spacing: Space.sm) {
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(selected ? Color.accentColor : .secondary)
+                if hasSample {
+                    Button(playing ? "Stop" : "Hear It", systemImage: playing ? "stop.fill" : "play.fill", action: play)
+                        .controlSize(.small)
+                        .help(narration ? "An example of this kind of audiobook (AI voices)" : "The opening of a sample story read this way")
+                }
+            }
+        }
+        .padding(Space.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(selected ? Color.accentColor.opacity(0.1) : Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(selected ? Color.accentColor : Color(nsColor: .separatorColor)))
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 

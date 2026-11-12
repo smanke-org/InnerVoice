@@ -326,9 +326,13 @@ public enum VoiceCasting {
         let facts = character.facts
         func factText(_ kinds: [FactKind]) -> String { facts.filter { kinds.contains($0.kind) }.map(\.text).joined(separator: " ") }
 
-        // Gender: the summary, then a title, then "she said" after their lines, then
-        // other facts (relationships often name other people, so they come last).
-        if let g = gender(in: factText([.gender])) {
+        // Gender: the narrator's choice, then the summary, then a title, then "she said"
+        // after their lines, then other facts (relationships often name other people, so
+        // they come last).
+        if let g = character.gender {
+            p.gender = g.voiceGender
+            p.evidence.append("Gender: you chose")
+        } else if let g = gender(in: factText([.gender])) {
             p.gender = g
             p.evidence.append("Gender: the summary")
         } else if let first = character.name.split(separator: " ").first.map(String.init),
@@ -385,6 +389,10 @@ public enum VoiceCasting {
         if maleTitles.contains(first) { return .male }
         return nil
     }
+
+    /// The gender a voice description speaks of ("A woman in her forties…"), for a designed
+    /// voice with no catalog entry.
+    public static func gender(ofDescription text: String) -> VoiceGender? { gender(in: text) }
 
     static func gender(in text: String) -> VoiceGender? {
         let w = words(text)
@@ -644,7 +652,42 @@ public enum VoiceCasting {
             taken[voice.voiceID, default: []].append(chapters)
             count += 1
         }
+        castRoles(&project, engine: engine, voices: voices, keepAutomatic: !keep.isEmpty)
         project.voicesCast = .now
+        return count
+    }
+
+    /// Casting Style: a voice for each shared role the style uses (Men, Women, Other) that
+    /// the narrator hasn't chosen. Men get a man's voice, Women a woman's, Other a neutral
+    /// one when the engine has it. Never the narrator's voice or another role's. Callers pass
+    /// castable voices, so clones are never picked. `keepAutomatic` keeps voices casting
+    /// already picked (casting that happens on its own fills only what's missing). Returns
+    /// how many roles got a voice.
+    @discardableResult
+    public static func castRoles(_ project: inout Project, engine: VoiceEngine, voices: [VoiceInfo], keepAutomatic: Bool = false) -> Int {
+        let roles = CastingStyleRules.sharedRolesNeeded(project.settings)
+        guard !roles.isEmpty else { return 0 }
+        var used = Set([project.settings.narratorVoice(for: engine)?.choice.voiceID].compactMap { $0 })
+        for r in roles {
+            if let v = project.settings.roleVoice(r, for: engine), v.source == .user || keepAutomatic { used.insert(v.choice.voiceID) }
+        }
+        var count = 0
+        for r in roles {
+            if let v = project.settings.roleVoice(r, for: engine), v.source == .user || keepAutomatic { continue }
+            let want: VoiceGender = r == .men ? .male : r == .women ? .female : .neutral
+            // Best first: the gender wanted (Other: neutral, else anyone), an adult, quality.
+            func rank(_ v: VoiceInfo) -> Double {
+                (v.gender == want ? 10 : 0) + (v.age == .adult ? 2 : v.age == .young ? 1 : 0) + Double(v.quality)
+            }
+            let pool = voices.filter { !used.contains($0.voiceID) && (r == .other || $0.gender == want) }
+            guard let best = pool.max(by: { rank($0) < rank($1) }) else {
+                project.settings.setRoleVoice(nil, r, for: engine)
+                continue
+            }
+            project.settings.setRoleVoice(CastVoice(choice: best.choice, confidence: best.gender == want ? 0.9 : 0.6, source: .auto), r, for: engine)
+            used.insert(best.voiceID)
+            count += 1
+        }
         return count
     }
 }

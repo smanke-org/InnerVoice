@@ -83,7 +83,9 @@ enum VoiceCastingRun {
             if v.source == .auto, !EngineSwitches.shared.usable(v.choice.engine) { return true }
             return v.source == .auto && v.confidence < project.settings.unsureBelow
         }
-        guard !open.isEmpty || project.settings.narratorVoice(for: engine) == nil else { return }
+        // Casting Style: a shared role (Men, Women, Other) the style uses with no voice yet.
+        let missingRole = CastingStyleRules.sharedRolesNeeded(project.settings).contains { project.settings.roleVoice($0, for: engine) == nil }
+        guard !open.isEmpty || missingRole || project.settings.narratorVoice(for: engine) == nil else { return }
         let voices = ElevenLabs.shared.castable(VoiceCatalog.voices(for: engine, project: project))
         guard !voices.isEmpty else { return }
         let sure = Set(speaking.filter { !open.contains($0) }.map(\.id))

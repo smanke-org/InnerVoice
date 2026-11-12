@@ -83,7 +83,7 @@ enum Exporter {
         switch o.kind {
         case .narratorScript:
             let narrator = project.narrators.first { $0.id == o.narratorID }
-            let cast = project.characters.filter { o.narratorID == nil || $0.narratorID == o.narratorID }
+            let cast = project.characters.filter { o.narratorID == nil || document.effectiveNarrator(for: $0)?.id == o.narratorID }
             let ids = Set(cast.map(\.id))
             out.append(text(project.title, h1, spacing: 4))
             out.append(text("Narrator Script" + (narrator.map { " · \($0.name)" } ?? ""), h2, color: gray, spacing: 16))
@@ -172,7 +172,9 @@ enum Exporter {
         var meta = "\(stats?.lines ?? 0) lines · \(stats?.words ?? 0) words"
         if let first = stats?.firstLine { meta += " · first line Ch \(first.chapter + 1)" }
         if !c.aliases.isEmpty { meta += " · also \(c.aliases.joined(separator: ", "))" }
-        if let n = document.project.narrators.first(where: { $0.id == c.narratorID }) { meta += " · read by \(n.name)" }
+        if let n = document.effectiveNarrator(for: c) { meta += " · read by \(n.name)" }
+        // Casting Style: how the narrator shades them (Just Me).
+        if let cue = document.narrationShades()[c.id]?.cue { meta += " · shade: \(cue)" }
         out.append(text(meta, small, color: NSColor(white: 0.4, alpha: 1), spacing: 4))
         if !c.voiceNotes.isEmpty { out.append(text("Voice: " + c.voiceNotes, body, spacing: 4)) }
         for kind in FactKind.narratorOrder {
@@ -243,7 +245,7 @@ enum Exporter {
                 let s = document.index.stats[c.id]
                 let facts = FactKind.narratorOrder.map { k in q(c.facts.filter { $0.kind == k }.map(\.text).joined(separator: "; ")) }
                 rows.append(([q(c.name), q(c.aliases.joined(separator: ", ")),
-                              q(project.narrators.first { $0.id == c.narratorID }?.name ?? ""),
+                              q(document.effectiveNarrator(for: c)?.name ?? ""),
                               "\(s?.lines ?? 0)", "\(s?.words ?? 0)", s?.firstLine.map { "\($0.chapter + 1)" } ?? ""] + facts
                              + [q(c.voiceNotes), q(c.notes)]).joined(separator: ","))
             }

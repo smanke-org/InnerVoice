@@ -28,7 +28,11 @@ enum AudioExporter {
     }
 
     /// Renders and writes each part. `progress` hears (done, total, what) after each segment.
+    /// With `stem`, each part is written Separate: one file per voice (named by `stem`, such
+    /// as "Narrator" or "Men’s Voice"), all the same length, with silence wherever another
+    /// voice speaks, so they line up when mixed.
     static func write(_ parts: [Part], to folder: URL, format: Format, resolver: VoiceResolver,
+                      stem: ((SpeechSegment) -> String)? = nil,
                       progress: (Int, Int, String) -> Void) async throws -> [URL] {
         let total = parts.reduce(0) { $0 + $1.segments.count }
         var done = 0
@@ -37,28 +41,59 @@ enum AudioExporter {
         var urls: [URL] = []
         let fileFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 44_100, channels: 1, interleaved: false)!
         for part in parts where !part.segments.isEmpty {
-            let url = folder.appending(path: safeName(part.name) + "." + format.fileExtension)
-            try? FileManager.default.removeItem(at: url)
-            let file = try AVAudioFile(forWriting: url, settings: format.settings, commonFormat: .pcmFormatFloat32, interleaved: false)
-            guard let converter = AVAudioConverter(from: SpeechAudio.format, to: fileFormat) else { throw SpeechError.failed("unsupported audio format") }
+            // One file (Combined), or one per voice in this part (Separate), in order of first use.
+            var names: [String] = []
+            for seg in part.segments {
+                let n = stem?(seg) ?? ""
+                if !names.contains(n) { names.append(n) }
+            }
+            var files: [String: (AVAudioFile, AVAudioConverter)] = [:]
+            for n in names {
+                let url = folder.appending(path: safeName(n.isEmpty ? part.name : part.name + " - " + n) + "." + format.fileExtension)
+                try? FileManager.default.removeItem(at: url)
+                let file = try AVAudioFile(forWriting: url, settings: format.settings, commonFormat: .pcmFormatFloat32, interleaved: false)
+                guard let converter = AVAudioConverter(from: SpeechAudio.format, to: fileFormat) else { throw SpeechError.failed("unsupported audio format") }
+                files[n] = (file, converter)
+                urls.append(url)
+            }
+            func put(_ buffer: AVAudioPCMBuffer, in name: String) throws {
+                for (n, (file, converter)) in files {
+                    try write(n == name ? buffer : SpeechAudio.silence(Double(buffer.frameLength) / buffer.format.sampleRate),
+                              to: file, converter: converter, format: fileFormat)
+                }
+            }
             for seg in part.segments {
                 try Task.checkCancellation()
                 progress(done, total, part.name)
                 if let request = resolver.request(for: seg) {
                     let audio = SpeechAudio.trimmed(try await SpeechRenderer.shared.render(request))
-                    try write(audio, to: file, converter: converter, format: fileFormat)
+                    try put(audio, in: stem?(seg) ?? "")
                     exported += Double(audio.frameLength) / audio.format.sampleRate
                 }
                 let gap = seg.pause == .none ? seg.pauseAfter : PauseSettings.current.seconds(seg.pause)
                 if gap > 0 {
-                    try write(SpeechAudio.silence(gap), to: file, converter: converter, format: fileFormat)
+                    // Silence goes in every file alike.
+                    try put(SpeechAudio.silence(gap), in: "\u{0}")
                 }
                 done += 1
             }
-            urls.append(url)
         }
         progress(total, total, "")
         return urls
+    }
+
+    /// Separate: which file a segment goes in. Everything the narrator's voice reads is
+    /// "Narrator"; a shared voice (Casting Style) is its name; anyone else is their own.
+    static func stems(project: Project, index: BookIndex, resolver: VoiceResolver) -> (SpeechSegment) -> String {
+        let readers = CastingStyleRules.readers(project, index: index)
+        let names = Dictionary(uniqueKeysWithValues: project.characters.map { ($0.id, $0.name) })
+        return { seg in
+            guard let id = seg.speakerID, resolver.choice(for: seg) != resolver.narrator || readers[id].map(VoiceRole.sharedRoles.contains) == true else {
+                return "Narrator"
+            }
+            if let r = readers[id], VoiceRole.sharedRoles.contains(r) { return r.voiceTitle }
+            return names[id] ?? "Narrator"
+        }
     }
 
     private static func write(_ buffer: AVAudioPCMBuffer, to file: AVAudioFile, converter: AVAudioConverter, format: AVAudioFormat) throws {
@@ -109,6 +144,8 @@ struct AudioExportSheet: View {
     @State private var characterID: UUID?
     @AppStorage("voices.readNarration") private var narration = true
     @AppStorage("audioExport.perChapter") private var perChapter = true
+    /// Separate: a file per voice (Narrator, Men’s Voice, a character…), lined up for mixing.
+    @AppStorage("audioExport.separate") private var separate = false
     @AppStorage("audioExport.format") private var formatRaw = AudioExporter.Format.m4a.rawValue
     @State private var running: Task<Void, Never>?
     @State private var progress = 0.0
@@ -157,6 +194,13 @@ struct AudioExportSheet: View {
                         Text("One file per chapter").tag(true)
                         Text("One file").tag(false)
                     }
+                }
+                if scope != .character {
+                    Picker("Voices", selection: $separate) {
+                        Text("Combined").tag(false)
+                        Text("Separate, a file per voice").tag(true)
+                    }
+                    .help("Separate saves the narrator, each shared voice and each character with a voice of their own in files of their own. They’re all the same length, so they line up in an audio editor.")
                 }
                 Picker("Format", selection: $formatRaw) {
                     ForEach(AudioExporter.Format.allCases) { Text($0.rawValue).tag($0.rawValue) }
@@ -217,7 +261,7 @@ struct AudioExportSheet: View {
             guard let id = characterID else { return [] }
             if id == Self.narratorTag {
                 // Everything the narrator's voice reads, in order.
-                let resolver = VoiceResolver(project: project)
+                let resolver = VoiceResolver(project: project, index: index)
                 let all = SpeechScript.segments(chapter: 0, chapters: project.chapters.count, project: project, index: index, includeNarration: true)
                 return [AudioExporter.Part(name: "\(title) - Narrator", segments: all.filter { resolver.choice(for: $0) == resolver.narrator })]
             }
@@ -237,14 +281,15 @@ struct AudioExportSheet: View {
         panel.message = "Choose a folder for the audio files."
         guard panel.runModal() == .OK, let folder = panel.url else { return }
         let parts = parts()
-        let resolver = VoiceResolver(project: document.project)
+        let resolver = VoiceResolver(project: document.project, index: document.index)
+        let stem = separate && scope != .character ? AudioExporter.stems(project: document.project, index: document.index, resolver: resolver) : nil
         let format = self.format
         error = nil
         progress = 0
         running = Task {
             defer { running = nil }
             do {
-                let urls = try await AudioExporter.write(parts, to: folder, format: format, resolver: resolver) { done, total, what in
+                let urls = try await AudioExporter.write(parts, to: folder, format: format, resolver: resolver, stem: stem) { done, total, what in
                     progress = total == 0 ? 1 : Double(done) / Double(total)
                     status = what.isEmpty ? "Finishing…" : "Reading \(what) (\(done.formatted()) of \(total.formatted()))…"
                 }

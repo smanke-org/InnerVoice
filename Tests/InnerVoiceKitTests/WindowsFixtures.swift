@@ -146,7 +146,7 @@ import Testing
         // 2. A Mac project with everything the Windows app must keep: tones, voices, an AI
         // voices purpose, cloud permission, plus narrators, retakes, a sample and a revision.
         let tom = p.characters.first { $0.name.hasPrefix("Tom") }!.id
-        let narrator = Narrator(name: "Sample Narrator", notes: "Reads the men.")
+        let narrator = Narrator(name: "Sample Narrator", notes: "Reads the men.", role: .men)
         p.narrators = [narrator]
         if let i = p.characters.firstIndex(where: { $0.id == tom }) {
             p.characters[i].narratorID = narrator.id
@@ -156,7 +156,19 @@ import Testing
             p.characters[i].setVoice(CastVoice(choice: VoiceChoice(engine: .qwen, voiceID: "design", design: "An older man."),
                                                confidence: 0.8, source: .user), for: .qwen)
             p.characters[i].pinned = true
+            // Casting Style (docs/CASTING-STYLE.md): the narrator's gender, main mark, role
+            // and shade.
+            p.characters[i].gender = .male
+            p.characters[i].isMain = true
+            p.characters[i].role = .own
+            p.characters[i].shade = Shade(pitch: -2, pace: -1, words: "gravelly")
         }
+        p.settings.castingStyle = .shared
+        p.settings.narrationRole = .narrator
+        p.settings.minorVoices = .byGender
+        p.settings.shadeStrength = .subtle
+        p.settings.setRoleVoice(CastVoice(choice: VoiceChoice(engine: .qwen, voiceID: "preset:baritone"), confidence: 0.9, source: .auto),
+                                .men, for: .qwen)
         p.lines[0].aiModel = "gemma-4-e2b"
         p.settings.voiceEngine = .qwen
         p.settings.purpose = .aiVoices
@@ -184,6 +196,87 @@ import Testing
         try archive.write(to: folder.appending(path: "sample-mac.innervoice"))
     }
 
+
+    /// The sample with what Casting Style needs (an age, a voice, a brief), as both sides make it.
+    static func castingProject() -> Project {
+        var p = sampleProject()
+        func edit(_ prefix: String, _ body: (inout BookCharacter) -> Void) {
+            if let i = p.characters.firstIndex(where: { $0.name.hasPrefix(prefix) }) { body(&p.characters[i]) }
+        }
+        edit("Tom") { c in
+            c.facts = [Fact(kind: .age, text: "About sixty"), Fact(kind: .voice, text: "A gravelly, deep voice, a little husky")]
+        }
+        edit("Mara") { c in c.voiceNotes = "Steady.\n\nVoice brief:\nPitch: high and bright\nPace: quick, clipped" }
+        edit("Pip") { c in c.facts = [Fact(kind: .appearance, text: "A small boy")] }
+        return p
+    }
+
+    /// Casting Style (docs/CASTING-STYLE.md): who reads each character, their shades and
+    /// narrators in six scenarios, for the C# port's golden test.
+    @Test func writeCastingFixture() throws {
+        guard let folder = Self.outputFolder else { return }
+        let base = Self.castingProject()
+        let index = BookIndex(base)
+        func names(_ ids: [UUID], _ p: Project) -> [String] { ids.compactMap { p.character($0)?.name } }
+        struct ShadeOut: Encodable { var pitch: Int; var pace: Int; var words: String? }
+        struct Scenario: Encodable {
+            var name: String
+            var readers: [String: String]
+            var shades: [String: ShadeOut]
+            var narrators: [String: String]
+        }
+        struct Golden: Encodable { var genderToReview: [String]; var suggestedMain: [String]; var scenarios: [Scenario] }
+        func scenario(_ name: String, _ change: (inout Project) -> Void) -> Scenario {
+            var p = base
+            change(&p)
+            let idx = BookIndex(p)
+            let readers = CastingStyleRules.readers(p, index: idx)
+            let shades = CastingStyleRules.shades(p, index: idx, narratorGender: p.settings.narratorGender)
+            var narrators: [String: String] = [:]
+            for c in p.characters {
+                let g = c.gender ?? VoiceCasting.profile(c, project: p, index: idx).gender.map(CharacterGender.init)
+                if let n = CastingStyleRules.narrator(for: c, in: p, gender: g) { narrators[c.name] = n.name }
+            }
+            return Scenario(name: name,
+                            readers: Dictionary(uniqueKeysWithValues: p.characters.map { ($0.name, readers[$0.id]?.rawValue ?? "own") }),
+                            shades: Dictionary(uniqueKeysWithValues: shades.compactMap { id, s in p.character(id).map { ($0.name, ShadeOut(pitch: s.pitch, pace: s.pace, words: s.words)) } }),
+                            narrators: narrators)
+        }
+        let golden = Golden(
+            genderToReview: names(CastingStyleRules.genderToReview(base, index: index), base),
+            suggestedMain: names(CastingStyleRules.suggestedMain(base, index: index), base),
+            scenarios: [
+                scenario("just me, a woman narrating") { $0.settings.castingStyle = .oneVoice; $0.settings.narratorGender = .female },
+                scenario("just me, a man narrating, strong") { $0.settings.castingStyle = .oneVoice; $0.settings.narratorGender = .male; $0.settings.shadeStrength = .strong },
+                scenario("just me, not said, subtle, Tom's own shade") { p in
+                    p.settings.castingStyle = .oneVoice
+                    p.settings.shadeStrength = .subtle
+                    if let i = p.characters.firstIndex(where: { $0.name.hasPrefix("Tom") }) { p.characters[i].shade = Shade(pitch: 1, pace: 0, words: "warm") }
+                },
+                scenario("three narrators, a two-person book") { p in
+                    p.settings.castingStyle = .shared
+                    p.settings.narrationRole = .women
+                    p.narrators = [Narrator(name: "Alex", role: .men), Narrator(name: "Jo", role: .women)]
+                    for i in p.characters.indices { p.characters[i].narratorID = nil }
+                    if let i = p.characters.firstIndex(where: { $0.name.hasPrefix("Pip") }) { p.characters[i].gender = .other }
+                },
+                scenario("full cast, Mara main, minor by gender") { p in
+                    p.settings.castingStyle = .fullCast
+                    p.settings.minorVoices = .byGender
+                    p.narrators = [Narrator(name: "Sam", role: .narrator), Narrator(name: "Alex", role: .men)]
+                    if let i = p.characters.firstIndex(where: { $0.name.hasPrefix("Mara") }) { p.characters[i].isMain = true }
+                },
+                scenario("full cast, nobody main") { $0.settings.castingStyle = .fullCast },
+                scenario("just me, a woman narrating, Tom set male") { p in
+                    p.settings.castingStyle = .oneVoice
+                    p.settings.narratorGender = .female
+                    if let i = p.characters.firstIndex(where: { $0.name.hasPrefix("Tom") }) { p.characters[i].gender = .male }
+                },
+            ])
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
+        try encoder.encode(golden).write(to: folder.appending(path: "casting-style.json"))
+    }
 
     /// The sample story in each manuscript format, with what the Kit imports from it, so the
     /// C# readers can be checked against the Swift ones.

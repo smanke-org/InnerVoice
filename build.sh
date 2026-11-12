@@ -41,6 +41,8 @@ ditto "$here/Frameworks/llama.xcframework/macos-arm64_x86_64/llama.framework" "$
 [[ -f "$here/Resources/AppIcon.icns" ]] || "$here/Tools/make_icns.sh"
 cp -X "$here/Resources/AppIcon.icns" "$app/Contents/Resources/"
 [[ -d "$here/Resources/Help" ]] && ditto "$here/Resources/Help" "$app/Contents/Resources/Help"
+# The setup sheet's Hear It clips (Casting Style), made by the self-test with APP_MAKE_CASTING_SAMPLES.
+[[ -d "$here/Resources/Samples" ]] && ditto "$here/Resources/Samples" "$app/Contents/Resources/Samples"
 # SwiftPM resource bundles (MLX's Metal library, tokenizer defaults) next to the app's
 # resources, where their Bundle.module looks first. Without the metallib MLX can't run.
 for b in "$bindir"/*.bundle; do ditto "$b" "$app/Contents/Resources/${b:t}"; done

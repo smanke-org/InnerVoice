@@ -197,6 +197,17 @@ public struct BookCharacter: Codable, Identifiable, Hashable, Sendable {
     /// The "Voice brief:" block the AI last wrote into `voiceNotes` (same rule: replaced only
     /// while the narrator hasn't edited it).
     public var voiceBriefGenerated: String?
+    /// The narrator's choice of gender (Male, Female or Other). nil: what the book says
+    /// (`VoiceCasting.profile`). Casting Style sorts by it; colors and casting follow it too.
+    public var gender: CharacterGender?
+    /// Marked a main character by the narrator (true) or not main (false); nil: not marked.
+    /// In Full Cast, main characters always get a voice of their own.
+    public var isMain: Bool?
+    /// Who reads this character, chosen by the narrator; nil: from the Casting Style.
+    public var role: VoiceRole?
+    /// How the narrator's voice changes for this character, set by the narrator; nil:
+    /// automatic (`CastingStyleRules.shade`).
+    public var shade: Shade?
 
     public var isPinned: Bool { pinned ?? false }
 
@@ -267,10 +278,14 @@ public struct Narrator: Codable, Identifiable, Hashable, Sendable {
     public var id: UUID
     public var name: String
     public var notes: String
-    public init(id: UUID = UUID(), name: String, notes: String = "") {
+    /// Three Narrators: the part this person reads (Narrator, Men, Women or Other).
+    /// nil: characters are cast to them one by one, as before.
+    public var role: VoiceRole?
+    public init(id: UUID = UUID(), name: String, notes: String = "", role: VoiceRole? = nil) {
         self.id = id
         self.name = name
         self.notes = notes
+        self.role = role
     }
 }
 
@@ -386,7 +401,35 @@ public struct ProjectSettings: Codable, Hashable, Sendable {
     public var cloudVoicesAllowed: Date?
     /// Steps (`GuidedStep` raw values) the narrator marked done or skipped.
     public var stepsDone: [String]?
+    /// How voices are shared (docs/CASTING-STYLE.md). nil: not chosen yet; the book plays as
+    /// it always has (every character in their own voice) until the narrator picks.
+    public var castingStyle: CastingStyle?
+    /// Narrator + Two Voices: whose voice reads the narration. nil: the narrator's own.
+    /// Men or Women makes a two-person book.
+    public var narrationRole: VoiceRole?
+    /// Full Cast: who reads characters not marked main. nil: the narrator.
+    public var minorVoices: MinorVoices?
+    /// One Voice: how far characters move from the narrator's voice. nil: Clear.
+    public var shadeStrength: ShadeStrength?
+    /// Narration Tools, Just Me: the narrator's own voice, so characters of the same gender
+    /// aren't shaded. nil: not said (men go lower, women higher).
+    public var narratorGender: CharacterGender?
+    /// The voice for each shared role (men, women, other), per engine:
+    /// role → engine → voice, like `narratorVoices`.
+    public var roleVoices: [String: [String: CastVoice]]?
     public init() {}
+
+    public func roleVoice(_ role: VoiceRole, for engine: VoiceEngine) -> CastVoice? {
+        roleVoices?[role.rawValue]?[engine.rawValue]
+    }
+
+    public mutating func setRoleVoice(_ voice: CastVoice?, _ role: VoiceRole, for engine: VoiceEngine) {
+        var all = roleVoices ?? [:]
+        var one = all[role.rawValue] ?? [:]
+        one[engine.rawValue] = voice
+        all[role.rawValue] = one.isEmpty ? nil : one
+        roleVoices = all.isEmpty ? nil : all
+    }
 
     public var engine: VoiceEngine { voiceEngine ?? .apple }
 

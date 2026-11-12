@@ -10,8 +10,11 @@ struct VoicesPage: View {
     @Bindable var workspace: Workspace
     @Environment(\.undoManager) private var undoManager
     @State private var query = ""
+    /// Show only characters whose gender the book doesn't settle.
+    @State private var genderFilter = false
 
     private var engine: VoiceEngine { document.project.engineInUse }
+    private var style: CastingStyle? { document.project.settings.castingStyle }
 
     private var cast: [BookCharacter] {
         let index = document.index
@@ -21,8 +24,12 @@ struct VoicesPage: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            list
-                .frame(width: 280)
+            VStack(spacing: 0) {
+                CastingStyleHeader(document: document, genderFilter: $genderFilter)
+                Divider()
+                list
+            }
+            .frame(width: 280)
             Divider()
             VoiceTargetDetail(document: document, workspace: workspace, target: workspace.voiceTarget)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -64,25 +71,89 @@ struct VoicesPage: View {
                 Task { try? await ElevenLabs.shared.refreshVoices() }
             }
         }
+        .onChange(of: style) { if !CastingStyleRules.usesGender(document.project.settings) { genderFilter = false } }
         .cloudPermissionAlert(document: document, workspace: workspace)
     }
 
     private var subtitle: String {
-        let unsure = cast.filter { document.project.voiceNeedsYou($0, engine: engine) }.count
+        let readers = CastingStyleRules.readers(document.project, index: document.index)
+        let unsure = cast.filter { (readers[$0.id] ?? .own) == .own && document.project.voiceNeedsYou($0, engine: engine) }.count
         return unsure == 1 ? "1 voice needs you" : unsure > 1 ? "\(unsure) voices need you" : engine.title
     }
 
+    // MARK: The list
+
+    /// A group in the list: the characters one role reads, with the role's own voice first
+    /// for Men, Women and Other.
+    private struct Group: Identifiable {
+        var id: String
+        var title: String
+        var role: VoiceRole?
+        var characters: [BookCharacter]
+    }
+
+    private var groups: [Group] {
+        let project = document.project
+        let readers = CastingStyleRules.readers(project, index: document.index)
+        let review = genderFilter ? Set(CastingStyleRules.genderToReview(project, index: document.index)) : nil
+        let shown = cast.filter { (query.isEmpty || $0.matches(query)) && (review?.contains($0.id) ?? true) }
+        func reading(_ r: VoiceRole) -> [BookCharacter] { shown.filter { (readers[$0.id] ?? .own) == r } }
+        guard let style else { return [Group(id: "cast", title: "Cast", role: nil, characters: shown)] }
+        let anyMain = CastingStyleRules.anyMainMarked(project)
+        var out: [Group] = []
+        switch style {
+        case .oneVoice:
+            out.append(Group(id: "narrator", title: "Played by the Narrator", role: nil, characters: reading(.narrator)))
+            out.append(Group(id: "own", title: "Own Voice", role: nil, characters: reading(.own)))
+        case .shared:
+            for r in VoiceRole.sharedRoles { out.append(Group(id: r.rawValue, title: r.title, role: r, characters: reading(r))) }
+            out.append(Group(id: "own", title: "Own Voice", role: nil, characters: reading(.own)))
+            out.append(Group(id: "narrator", title: "Read by the Narrator", role: nil, characters: reading(.narrator)))
+        case .fullCast:
+            out.append(Group(id: "own", title: anyMain ? "Main Characters" : "Cast", role: nil, characters: reading(.own)))
+            out.append(Group(id: "narrator", title: "Read by the Narrator", role: nil, characters: reading(.narrator)))
+            if CastingStyleRules.usesGender(project.settings) {
+                for r in VoiceRole.sharedRoles { out.append(Group(id: r.rawValue, title: r.title, role: r, characters: reading(r))) }
+            }
+        }
+        // A shared voice stays listed even with nobody in it, so it can be chosen ahead.
+        return out.filter { !$0.characters.isEmpty || ($0.role != nil && !genderFilter && query.isEmpty) }
+    }
+
     private var list: some View {
-        List(selection: Binding(get: { workspace.voiceTarget }, set: { workspace.voiceTarget = $0 ?? .narrator })) {
+        let readers = CastingStyleRules.readers(document.project, index: document.index)
+        let shades = document.project.settings.castingStyle == nil ? [:] : VoiceResolver(project: document.project, index: document.index).shades
+        func caption(_ c: BookCharacter, _ reader: VoiceRole) -> String? {
+            switch reader {
+            case .own: nil
+            case .narrator: shades[c.id]?.cue.map { "Narrator, \($0)" } ?? "Narrator’s voice"
+            default: reader.voiceCaption
+            }
+        }
+        let narrationReader = CastingStyleRules.reader(of: .narrator, settings: document.project.settings)
+        return List(selection: Binding(get: { workspace.voiceTarget }, set: { workspace.voiceTarget = $0 ?? .narrator })) {
             Section("Narration") {
                 row(name: "Narrator", color: nil, voice: document.project.settings.narratorVoice(for: engine), needs: false,
-                    pov: VoiceResolver.povNarrator(project: document.project, engine: engine))
+                    pov: VoiceResolver.povNarrator(project: document.project, engine: engine),
+                    caption: narrationReader == .narrator ? nil : "Read in the " + narrationReader.voiceCaption.lowercased())
                     .tag(VoiceTarget.narrator)
             }
-            Section("Cast") {
-                ForEach(cast.filter { query.isEmpty || $0.matches(query) }) { c in
-                    row(name: c.name, color: Color(hexString: c.colorHex), voice: c.voice(for: engine), needs: document.project.voiceNeedsYou(c, engine: engine))
-                        .tag(VoiceTarget.character(c.id))
+            ForEach(groups) { g in
+                Section(g.title) {
+                    if let r = g.role {
+                        row(name: r.voiceTitle, color: nil, voice: document.project.settings.roleVoice(r, for: engine), needs: false,
+                            symbol: "person.2", caption: nil)
+                            .tag(VoiceTarget.role(r))
+                    }
+                    ForEach(g.characters) { c in
+                        let reader = readers[c.id] ?? .own
+                        row(name: c.name, color: Color(hexString: c.colorHex), voice: c.voice(for: engine),
+                            needs: reader == .own && document.project.voiceNeedsYou(c, engine: engine),
+                            caption: caption(c, reader),
+                            isMain: style == .fullCast && c.isMain == true)
+                            .tag(VoiceTarget.character(c.id))
+                            .contextMenu { CastingStyleMenu(document: document, character: c) }
+                    }
                 }
             }
         }
@@ -90,16 +161,23 @@ struct VoicesPage: View {
         .searchable(text: $query, placement: .sidebar, prompt: "Find a character")
     }
 
-    private func row(name: String, color: Color?, voice: CastVoice?, needs: Bool, pov: BookCharacter? = nil) -> some View {
+    private func row(name: String, color: Color?, voice: CastVoice?, needs: Bool, pov: BookCharacter? = nil,
+                     symbol: String = "book.closed", caption: String?, isMain: Bool = false) -> some View {
         HStack(spacing: Space.sm) {
             if let color {
                 Circle().fill(color).frame(width: 10, height: 10)
             } else {
-                Image(systemName: "book.closed").foregroundStyle(.secondary).frame(width: 10)
+                Image(systemName: symbol).foregroundStyle(.secondary).frame(width: 10)
             }
             VStack(alignment: .leading, spacing: 1) {
-                Text(name).lineLimit(1)
-                Text(pov.map { "\($0.firstName)’s voice (first person)" } ?? voice.map { VoiceCatalog.name(of: $0.choice) } ?? "No voice yet")
+                HStack(spacing: Space.xs) {
+                    Text(name).lineLimit(1)
+                    if isMain {
+                        Image(systemName: "star.fill").font(.caption2).foregroundStyle(.secondary)
+                            .help("Main character: always has a voice of their own")
+                    }
+                }
+                Text(caption ?? pov.map { "\($0.firstName)’s voice (first person)" } ?? voice.map { VoiceCatalog.name(of: $0.choice) } ?? "No voice yet")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -110,7 +188,7 @@ struct VoicesPage: View {
                     .font(.caption.weight(.bold))
                     .foregroundStyle(Color(nsColor: .attention))
                     .help("Casting isn’t sure of this voice. Listen, then confirm it or choose another.")
-            } else if voice?.source == .user {
+            } else if caption == nil, voice?.source == .user {
                 Image(systemName: "checkmark").font(.caption).foregroundStyle(.tertiary)
                     .help("You chose this voice")
             }
@@ -119,26 +197,173 @@ struct VoicesPage: View {
     }
 }
 
-/// The narrator or a character, on the Voices page.
+/// The Casting Style above the Voices list: the style, its one follow-up choice, and the
+/// Gender to Review filter.
+struct CastingStyleHeader: View {
+    @ObservedObject var document: InnerVoiceDocument
+    @Binding var genderFilter: Bool
+    /// Narration Tools (the Cast page): people read the parts, not voices.
+    var narration = false
+    @Environment(\.undoManager) private var undoManager
+
+    private var settings: ProjectSettings { document.project.settings }
+
+    var body: some View {
+        let review = CastingStyleRules.genderToReview(document.project, index: document.index).count
+        VStack(alignment: .leading, spacing: Space.sm) {
+            Picker("Casting Style", selection: Binding(get: { settings.castingStyle }, set: { document.setCastingStyle($0, undoManager: undoManager) })) {
+                if settings.castingStyle == nil { Text("Not Chosen").tag(CastingStyle?.none) }
+                ForEach(CastingStyle.allCases) { Text($0.title(for: narration ? .narration : .aiVoices)).tag(CastingStyle?.some($0)) }
+            }
+            .help(narration
+                  ? "How the parts are shared: you read everyone, three narrators (narration, men, women), or a narrator per character. Changing it keeps every assignment."
+                  : "How voices are shared: one voice for everyone, a narrator plus voices for men, women and others, or a voice per character. Changing it keeps every voice.")
+            switch settings.castingStyle {
+            case .shared:
+                Picker("Narration", selection: Binding(get: { settings.narrationRole ?? .narrator }, set: { document.setNarrationRole($0, undoManager: undoManager) })) {
+                    Text(narration ? "A Narrator of Its Own" : "Narrator’s Own Voice").tag(VoiceRole.narrator)
+                    Text(narration ? "The Men’s Narrator" : "Men’s Voice").tag(VoiceRole.men)
+                    Text(narration ? "The Women’s Narrator" : "Women’s Voice").tag(VoiceRole.women)
+                }
+                .help(narration ? "Who reads the narration. Choose the men’s or women’s narrator for a book read by two people."
+                                : "Who reads the narration. Choose the men’s or women’s voice for a book read by two people.")
+                if narration, [VoiceRole.narrator, .men, .women].contains(where: { r in !document.project.narrators.contains { $0.role == r } }) {
+                    Button("Set Up Narrators") { document.setUpThreeNarrators(undoManager: undoManager) }
+                        .help("Add a narrator for the narration, the men and the women. Rename them in Narrators.")
+                }
+            case .fullCast:
+                Picker("Minor", selection: Binding(get: { settings.minorVoices ?? .narrator }, set: { document.setMinorVoices($0, undoManager: undoManager) })) {
+                    Text(narration ? "The Narrator" : "Narrator’s Voice").tag(MinorVoices.narrator)
+                    Text(narration ? "Men’s, Women’s or Other Narrator" : "Men’s, Women’s or Other Voice").tag(MinorVoices.byGender)
+                    Text(narration ? "A Narrator of Their Own" : "Their Own Voice").tag(MinorVoices.own)
+                }
+                .help("Who reads characters you haven’t marked as main. Right-click a character to mark them main.")
+                if (settings.minorVoices ?? .narrator) == .narrator { shading }
+                mainCharacters
+            case .oneVoice:
+                if narration { yourVoice }
+                shading
+                Text(narration
+                     ? "You play every character, shading your voice a little lower for men and higher for women. The cues show in the margin and the Teleprompter."
+                     : "The narrator plays every character, shading their voice a little lower for men and higher for women. Right-click a character to give them a voice of their own.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            case nil:
+                Text(narration
+                     ? "Choose how the parts are shared. Until you do, cast characters to narrators one by one."
+                     : "Choose how this book shares its voices. Every character has a voice of their own until you do.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            if review > 0 || genderFilter {
+                Toggle(isOn: $genderFilter) {
+                    Label(review == 1 ? "1 Gender to Review" : "\(review) Genders to Review", systemImage: "person.fill.questionmark")
+                }
+                .toggleStyle(.button)
+                .controlSize(.small)
+                .help("Show only characters whose gender the book doesn’t settle. Right-click one to choose Male, Female or Other.")
+            }
+        }
+        .controlSize(.small)
+        .padding(Space.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Just Me: the narrator's own voice, so characters of the same gender aren't shaded.
+    private var yourVoice: some View {
+        Picker("Your Voice", selection: Binding(get: { settings.narratorGender }, set: { document.setNarratorGender($0, undoManager: undoManager) })) {
+            Text("Not Set").tag(CharacterGender?.none)
+            Text("Male").tag(CharacterGender?.some(.male))
+            Text("Female").tag(CharacterGender?.some(.female))
+            Text("Other").tag(CharacterGender?.some(.other))
+        }
+        .help("Your own voice: characters of the same gender are read in your voice, others shaded lower or higher")
+    }
+
+    /// How far the narrator's voice moves for the characters it plays.
+    private var shading: some View {
+        Picker("Shading", selection: Binding(get: { settings.shadeStrength ?? .clear }, set: { document.setShadeStrength($0, undoManager: undoManager) })) {
+            ForEach(ShadeStrength.allCases) { Text($0.title).tag($0) }
+        }
+        .help("How much the narrator’s voice changes for a character of another gender: Subtle is about a semitone, Clear two, Strong three. Age and the voice brief add to it.")
+    }
+
+    /// Full Cast: nobody marked main yet, so offer InnerVoice's suggestion (only a suggestion).
+    @ViewBuilder
+    private var mainCharacters: some View {
+        if !CastingStyleRules.anyMainMarked(document.project) {
+            let suggested = CastingStyleRules.suggestedMain(document.project, index: document.index)
+            let names = suggested.compactMap { document.project.character($0)?.firstName }
+            if !names.isEmpty {
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    Text("Main characters always have a voice of their own. \(ListFormatter.localizedString(byJoining: names)) \(names.count == 1 ? "has" : "have") the most lines.")
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Button(names.count == 1 ? "Mark as Main" : "Mark These \(names.count) as Main") {
+                        document.setMain(true, for: suggested, undoManager: undoManager)
+                    }
+                    .help("Mark them as main characters. You can change anyone with a right-click.")
+                }
+            }
+        }
+    }
+}
+
+/// Right-click on a character (Voices page): who reads them, main character, gender.
+struct CastingStyleMenu: View {
+    @ObservedObject var document: InnerVoiceDocument
+    let character: BookCharacter
+    /// Narration Tools: the parts are narrators, not voices.
+    var narration = false
+    @Environment(\.undoManager) private var undoManager
+
+    var body: some View {
+        let style = document.project.settings.castingStyle
+        if let style {
+            Picker("Read By", selection: Binding(get: { character.role }, set: { document.setRole($0, for: character.id, undoManager: undoManager) })) {
+                Text("Automatic").tag(VoiceRole?.none)
+                ForEach(style == .oneVoice ? [VoiceRole.narrator, .own] : VoiceRole.allCases) { r in
+                    Text(narration ? r.narratorTitle : r == .own ? r.title : r.voiceTitle).tag(VoiceRole?.some(r))
+                }
+            }
+            if style == .fullCast {
+                Toggle("Main Character", isOn: Binding(get: { character.isMain == true },
+                                                       set: { document.setMain($0 ? true : false, for: [character.id], undoManager: undoManager) }))
+            }
+        }
+        Picker("Gender", selection: Binding(get: { character.gender }, set: { document.setGender($0, for: [character.id], undoManager: undoManager) })) {
+            Text("From the Book").tag(CharacterGender?.none)
+            ForEach(CharacterGender.allCases) { Text($0.title).tag(CharacterGender?.some($0)) }
+        }
+    }
+}
+
+/// The narrator, a shared role's voice, or a character, on the Voices page.
 enum VoiceTarget: Hashable {
     case narrator
+    case role(VoiceRole)
     case character(UUID)
 
     var characterID: UUID? {
         if case .character(let id) = self { return id }
         return nil
     }
+
+    var role: VoiceRole? {
+        if case .role(let r) = self { return r }
+        return nil
+    }
 }
 
-/// One character's (or the narrator's) voice: what the book says, the voice now, the best
-/// fits and every voice.
+/// One character's (or the narrator's, or a shared role's) voice: what the book says, the
+/// voice now, the best fits and every voice.
 struct VoiceTargetDetail: View {
     @ObservedObject var document: InnerVoiceDocument
     @Bindable var workspace: Workspace
     let target: VoiceTarget
+    @Environment(\.undoManager) private var undoManager
 
     var body: some View {
         let character = target.characterID.flatMap { document.project.character($0) }
+        let readers = CastingStyleRules.readers(document.project, index: document.index)
+        let reader = character.flatMap { readers[$0.id] } ?? .own
         ScrollView {
             VStack(alignment: .leading, spacing: Space.xl) {
                 if let character {
@@ -154,22 +379,34 @@ struct VoiceTargetDetail: View {
                             .help("Open \(character.name)’s page in Cast")
                     }
                     CastingProfileView(document: document, character: character)
+                    if document.project.settings.castingStyle != nil { readBy(character, reader: reader) }
+                    CloudNotice(document: document, workspace: workspace)
+                } else if let role = target.role {
+                    roleHeader(role, readers: readers)
                     CloudNotice(document: document, workspace: workspace)
                 } else {
                     VStack(alignment: .leading, spacing: Space.xs) {
                         Text("Narrator").font(.title2.weight(.semibold))
                         Text("Reads the narration in a table read, lines nobody is cast for, and characters set to Same as Narrator. Letters, signs and other written text too, unless Settings › Voices says otherwise.")
                             .foregroundStyle(.secondary)
-                        if let pov = VoiceResolver.povNarrator(project: document.project) {
+                        let narration = CastingStyleRules.reader(of: .narrator, settings: document.project.settings)
+                        if narration != .narrator {
+                            Label("In this book the \(narration.voiceCaption.lowercased()) reads the narration (Casting Style). The voice below is used only if you change that.", systemImage: "person.2")
+                                .font(.callout)
+                                .padding(.top, Space.xs)
+                        } else if let pov = VoiceResolver.povNarrator(project: document.project) {
                             Label("This book is told in the first person by \(pov.name), so the narration uses \(pov.firstName)’s voice. Choose a voice below to give the narrator a voice of its own.", systemImage: "person.wave.2")
                                 .font(.callout)
                                 .padding(.top, Space.xs)
                         }
                     }
+                    CloudNotice(document: document, workspace: workspace)
                 }
-                if character == nil { CloudNotice(document: document, workspace: workspace) }
-                VoiceChooser(document: document, characterID: character?.id, compact: false,
-                             onClone: { workspace.cloneVoice(for: character?.id) })
+                // A character read by the narrator or a shared voice has no voice to choose here.
+                if character == nil || reader == .own {
+                    VoiceChooser(document: document, characterID: character?.id, role: target.role, compact: false,
+                                 onClone: { workspace.cloneVoice(for: character?.id) })
+                }
             }
             .padding(Space.margin)
             .frame(maxWidth: 760, alignment: .leading)
@@ -177,24 +414,166 @@ struct VoiceTargetDetail: View {
         }
         .id(target)
     }
+
+    private func roleHeader(_ role: VoiceRole, readers: [UUID: VoiceRole]) -> some View {
+        let names = document.project.characters.filter { readers[$0.id] == role && (document.index.stats[$0.id]?.lines ?? 0) > 0 }
+            .sorted { (document.index.stats[$0.id]?.lines ?? 0) > (document.index.stats[$1.id]?.lines ?? 0) }
+            .map(\.name)
+        let who: String = switch role {
+        case .men: "every male character"
+        case .women: "every female character"
+        default: "characters who are neither male nor female, or whose gender the book doesn’t say"
+        }
+        return VStack(alignment: .leading, spacing: Space.xs) {
+            Text(role.voiceTitle).font(.title2.weight(.semibold))
+            Text("One voice for \(who), unless you give someone a voice of their own.")
+                .foregroundStyle(.secondary)
+            Text(names.isEmpty ? "Nobody yet." : "Reads " + ListFormatter.localizedString(byJoining: names) + ".")
+                .font(.callout)
+                .padding(.top, Space.xs)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// Who reads this character under the Casting Style, and how to change it.
+    @ViewBuilder
+    private func readBy(_ c: BookCharacter, reader: VoiceRole) -> some View {
+        let style = document.project.settings.castingStyle
+        VStack(alignment: .leading, spacing: Space.sm) {
+            if reader == .own {
+                Label("\(c.firstName) has a voice of their own\(c.role == .own ? ", as you chose" : "").", systemImage: "person.wave.2")
+            } else {
+                Label("Read in the \(reader.voiceCaption.lowercased())\(c.role == nil ? "" : ", as you chose").", systemImage: "person.2")
+            }
+            HStack(spacing: Space.sm) {
+                if reader != .own {
+                    Button("Give \(c.firstName) a Voice of Their Own") { document.setRole(.own, for: c.id, undoManager: undoManager) }
+                        .help("\(c.firstName) keeps their own voice whatever the Casting Style. Their voice is chosen below.")
+                    if VoiceRole.sharedRoles.contains(reader) {
+                        Button("Show \(reader.voiceTitle)") { workspace.voiceTarget = .role(reader) }
+                    }
+                } else if c.role != nil {
+                    Button("Use the Casting Style") { document.setRole(nil, for: c.id, undoManager: undoManager) }
+                        .help("Let the Casting Style decide who reads \(c.firstName) again")
+                }
+                if style == .fullCast {
+                    Toggle("Main Character", isOn: Binding(get: { c.isMain == true },
+                                                           set: { document.setMain($0 ? true : false, for: [c.id], undoManager: undoManager) }))
+                        .toggleStyle(.checkbox)
+                        .help("Main characters always have a voice of their own")
+                }
+            }
+            .controlSize(.small)
+        }
+        .padding(Space.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
+        if reader == .narrator { ShadeEditor(document: document, character: c) }
+    }
 }
 
-/// What casting read about a character: gender, age, accent and voice, and where from.
+/// How the narrator's voice changes for a character it plays: automatic (from gender, age
+/// and the voice brief) or the narrator's own pitch and pace. Every change can be heard.
+struct ShadeEditor: View {
+    @ObservedObject var document: InnerVoiceDocument
+    let character: BookCharacter
+    @Environment(\.undoManager) private var undoManager
+
+    var body: some View {
+        let resolver = VoiceResolver(project: document.project, index: document.index)
+        let shade = character.shade ?? resolver.shades[character.id] ?? Shade()
+        let engine = resolver.narrator?.engine ?? document.project.engineInUse
+        VStack(alignment: .leading, spacing: Space.md) {
+            HStack {
+                Text("Shade").font(.headline)
+                Spacer()
+                Toggle("Automatic", isOn: Binding(get: { character.shade == nil },
+                                                  set: { document.setShade($0 ? nil : shade, for: character.id, undoManager: undoManager) }))
+                    .toggleStyle(.checkbox)
+                    .help("Work out \(character.firstName)’s shade from their gender, age and voice brief")
+            }
+            Text(shade.cue.map { "The narrator’s voice, \($0)." } ?? "The narrator’s own voice, unchanged.")
+                .foregroundStyle(.secondary)
+            HStack(spacing: Space.xl) {
+                Stepper(value: Binding(get: { shade.pitch }, set: { set(pitch: $0, pace: shade.pace, shade) }), in: Shade.pitchRange) {
+                    Text("Pitch: \(steps(shade.pitch, low: "lower", high: "higher"))")
+                }
+                .help("Semitones lower or higher than the narrator’s voice. Within 2 or 3 it still sounds like the narrator.")
+                Stepper(value: Binding(get: { shade.pace }, set: { set(pitch: shade.pitch, pace: $0, shade) }), in: Shade.paceRange) {
+                    Text("Pace: \(shade.pace == 0 ? "the narrator’s" : shade.pace < 0 ? "slower" : "quicker")")
+                }
+                .help("A little slower or quicker than the narrator")
+            }
+            HStack(spacing: Space.sm) {
+                if let n = resolver.narrator {
+                    Button("Hear \(character.firstName)", systemImage: "play.fill") {
+                        PlayCommand.audition(n, character: character, document: document, shade: shade)
+                    }
+                    Button("Hear the Narrator") { PlayCommand.audition(n, character: character, document: document) }
+                        .help("The same line in the narrator’s own voice, to compare")
+                }
+                Spacer()
+                Text(note(engine)).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.trailing)
+            }
+            .controlSize(.small)
+        }
+        .padding(Space.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func set(pitch: Int, pace: Int, _ old: Shade) {
+        document.setShade(Shade(pitch: pitch, pace: pace, words: old.words), for: character.id, undoManager: undoManager)
+    }
+
+    private func steps(_ n: Int, low: String, high: String) -> String {
+        n == 0 ? "the narrator’s" : "\(abs(n)) \(n < 0 ? low : high)"
+    }
+
+    private func note(_ engine: VoiceEngine) -> String {
+        switch engine {
+        case .qwen: "Qwen3-TTS shifts the narrator’s voice sample, so it stays the same voice."
+        case .apple: "Apple’s voices change pitch and speed."
+        default: "\(engine.title) shifts the finished audio. Keep it within 2 to sound natural."
+        }
+    }
+}
+
+/// What casting read about a character: gender, age, accent and voice, and where from. The
+/// gender can be chosen here (Male, Female, Other, or what the book says).
 struct CastingProfileView: View {
     @ObservedObject var document: InnerVoiceDocument
     let character: BookCharacter
+    @Environment(\.undoManager) private var undoManager
 
     var body: some View {
         let p = VoiceCasting.profile(character, project: document.project, index: document.index)
-        VStack(alignment: .leading, spacing: Space.sm) {
-            HStack(spacing: Space.xl) {
-                trait("Gender", p.gender?.title)
+        var fromBook = character
+        fromBook.gender = nil
+        let book = character.gender == nil ? p : VoiceCasting.profile(fromBook, project: document.project, index: document.index)
+        let review = CastingStyleRules.needsGenderReview(character, profile: book)
+        return VStack(alignment: .leading, spacing: Space.sm) {
+            HStack(alignment: .top, spacing: Space.xl) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Gender").font(.caption).foregroundStyle(.secondary)
+                    Picker("Gender", selection: Binding(get: { character.gender },
+                                                        set: { document.setGender($0, for: [character.id], undoManager: undoManager) })) {
+                        Text(book.gender.map { "\(CharacterGender($0).title) (from the book)" } ?? "Unknown").tag(CharacterGender?.none)
+                        ForEach(CharacterGender.allCases) { Text($0.title).tag(CharacterGender?.some($0)) }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    .controlSize(.small)
+                    .help("Choose \(character.firstName)’s gender, or leave what the book says. Casting and Automatic colors follow it.")
+                }
                 trait("Age", p.age?.title)
                 trait("Accent", p.accent)
                 trait("Voice", p.timbre.isEmpty ? nil : p.timbre.joined(separator: ", "))
             }
-            if p.gender == nil {
-                Text("The book hasn’t said whether \(character.firstName) is a woman or a man. Build Summaries reads it for details, or choose a voice below.")
+            if review, character.gender == nil {
+                Text(book.gender == nil
+                     ? "The book hasn’t said whether \(character.firstName) is a man, a woman or neither. Choose above, or Build Summaries reads it for details."
+                     : "This is a guess from a single pronoun. Choose above to settle it.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             } else if !p.evidence.isEmpty {
@@ -220,8 +599,10 @@ struct CastingProfileView: View {
 /// voice can be heard with the character's own words before choosing it.
 struct VoiceChooser: View {
     @ObservedObject var document: InnerVoiceDocument
-    /// nil is the narrator.
+    /// nil is the narrator (or, with `role`, a shared voice).
     let characterID: UUID?
+    /// A shared Casting Style voice (Men, Women, Other) instead of a character or the narrator.
+    var role: VoiceRole? = nil
     var compact = false
     /// Opens Clone a Voice for this character (only where a window's workspace is at hand).
     var onClone: (() -> Void)? = nil
@@ -236,7 +617,18 @@ struct VoiceChooser: View {
     private var engine: VoiceEngine { document.project.engineInUse }
     private var character: BookCharacter? { characterID.flatMap { document.project.character($0) } }
     private var voice: CastVoice? {
-        characterID == nil ? document.project.settings.narratorVoice(for: engine) : character?.voice(for: engine)
+        if let role { return document.project.settings.roleVoice(role, for: engine) }
+        return characterID == nil ? document.project.settings.narratorVoice(for: engine) : character?.voice(for: engine)
+    }
+
+    /// Whose lines an audition says: the character, or for a shared voice the first
+    /// character it reads.
+    private var sampleCharacter: BookCharacter? {
+        if let character { return character }
+        guard let role else { return nil }
+        let readers = CastingStyleRules.readers(document.project, index: document.index)
+        return document.project.characters.filter { readers[$0.id] == role }
+            .max { (document.index.stats[$0.id]?.lines ?? 0) < (document.index.stats[$1.id]?.lines ?? 0) }
     }
 
     var body: some View {
@@ -297,6 +689,10 @@ struct VoiceChooser: View {
                         Button("Confirm") { document.confirmVoice(for: id, undoManager: undoManager) }
                             .buttonStyle(.borderedProminent)
                             .help("Keep this voice. Casting won’t change it.")
+                    } else if v.source == .auto, let role {
+                        Button("Confirm") { document.setRoleVoice(v.choice, for: role, undoManager: undoManager) }
+                            .buttonStyle(.borderedProminent)
+                            .help("Keep this voice. Casting won’t change it.")
                     }
                 }
             }
@@ -339,6 +735,19 @@ struct VoiceChooser: View {
                 }
                 narratorRow
             }
+        } else if let role {
+            // A shared voice: the engine's best voices of that gender (Other: any), not the narrator's.
+            let want: VoiceGender = role == .men ? .male : role == .women ? .female : .neutral
+            let narratorID = document.project.settings.narratorVoice(for: engine)?.choice.voiceID
+            let best = voices.filter { $0.voiceID != narratorID && (role == .other || $0.gender == want) }
+                .sorted { ($0.gender == want ? 1 : 0, $0.quality) > ($1.gender == want ? 1 : 0, $1.quality) }
+                .prefix(3)
+            if !best.isEmpty {
+                VStack(alignment: .leading, spacing: Space.sm) {
+                    Text("Best Fits").font(.headline)
+                    ForEach(Array(best), id: \.id) { voiceRow($0) }
+                }
+            }
         }
     }
 
@@ -346,7 +755,7 @@ struct VoiceChooser: View {
     private var narratorRow: some View {
         let choice = VoiceChoice(engine: engine, voiceID: VoiceChoice.narratorID)
         let isCurrent = voice?.choice.isNarrator == true
-        let narrator = VoiceResolver(project: document.project).narrator
+        let narrator = VoiceResolver(project: document.project, index: document.index).narrator
         return HStack(spacing: Space.md) {
             Button { audition(choice) } label: {
                 Image(systemName: "play.circle").font(.title3)
@@ -628,11 +1037,15 @@ struct VoiceChooser: View {
     // MARK: Actions
 
     private func choose(_ choice: VoiceChoice) {
-        document.setVoice(choice, for: characterID, undoManager: undoManager)
+        if let role {
+            document.setRoleVoice(choice, for: role, undoManager: undoManager)
+        } else {
+            document.setVoice(choice, for: characterID, undoManager: undoManager)
+        }
     }
 
     private func audition(_ choice: VoiceChoice) {
-        PlayCommand.audition(choice, character: character, document: document)
+        PlayCommand.audition(choice, character: sampleCharacter, document: document)
     }
 }
 

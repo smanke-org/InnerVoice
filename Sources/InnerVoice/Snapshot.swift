@@ -183,6 +183,38 @@ enum Snapshot {
                     await shot("voices", settle: 1.2) { workspace.voiceTarget = .character(main.id); workspace.page = .voices }
                 }
                 await shot("voices-narrator", settle: 1.0) { workspace.voiceTarget = .narrator; workspace.page = .voices }
+                // Casting Style: Narrator + Two Voices (a shared voice, then a character in it)
+                // and Full Cast before anyone is marked main.
+                if let main = document.project.characters.max(by: { (document.index.stats[$0.id]?.lines ?? 0) < (document.index.stats[$1.id]?.lines ?? 0) }) {
+                    document.setCastingStyle(.shared, undoManager: nil)
+                    await shot("voices-shared", settle: 1.2) { workspace.voiceTarget = .role(.women); workspace.page = .voices }
+                    await shot("voices-shared-character", settle: 1.0) { workspace.voiceTarget = .character(main.id); workspace.page = .voices }
+                    await shot("review-genders", settle: 1.0) { workspace.reviewFilter = "genders"; workspace.page = .review }
+                    document.setCastingStyle(.fullCast, undoManager: nil)
+                    await shot("voices-fullcast", settle: 1.0) { workspace.voiceTarget = .character(main.id); workspace.page = .voices }
+                    document.setCastingStyle(.oneVoice, undoManager: nil)
+                    await shot("voices-onevoice", settle: 1.0) { workspace.voiceTarget = .character(main.id); workspace.page = .voices }
+                    document.setCastingStyle(nil, undoManager: nil)
+                    // Narration Tools: Three Narrators on Cast, then Just Me's cues on Cast, a
+                    // character's page, the margin and the Teleprompter.
+                    let before = document.project
+                    document.change("Narration", undoManager: nil) { $0.settings.purpose = .narration }
+                    document.setCastingStyle(.shared, undoManager: nil)
+                    document.setUpThreeNarrators(undoManager: nil)
+                    await shot("cast-threenarrators", settle: 1.2) { workspace.castPath = []; workspace.page = .cast }
+                    document.setCastingStyle(.oneVoice, undoManager: nil)
+                    document.setNarratorGender(.female, undoManager: nil)
+                    await shot("cast-justme", settle: 1.0) { workspace.castPath = []; workspace.page = .cast }
+                    if let tom = document.project.characters.first(where: { document.narrationShades()[$0.id] != nil }) {
+                        await shot("character-justme", settle: 1.0) { workspace.castPath = [tom.id]; workspace.page = .cast }
+                        await shot("manuscript-justme", settle: 1.2) { workspace.castPath = []; workspace.page = .manuscript }
+                        if let line = document.project.lines.first(where: { $0.speakerID == tom.id }) {
+                            await shot("teleprompter-justme", settle: 1.0) { workspace.teleprompterParagraph = line.paragraphID; workspace.page = .teleprompter }
+                        }
+                    }
+                    document.change("Restore", undoManager: nil) { $0 = before }
+                    workspace.castPath = []
+                }
                 if let main = document.project.characters.max(by: { (document.index.stats[$0.id]?.lines ?? 0) < (document.index.stats[$1.id]?.lines ?? 0) }) {
                     for engine in [VoiceEngine.orpheus, .qwen, .mixed] {
                         await shot("voices-\(engine.rawValue)", settle: 1.2) {
@@ -306,12 +338,22 @@ enum Snapshot {
                 workspace.showProjectType = false
                 try? await Task.sleep(for: .seconds(0.5))
                 if wants("project-type-ai") {
-                    let host = NSHostingController(rootView: ProjectTypeSheet(document: document, workspace: workspace, step: 1))
+                    let host = NSHostingController(rootView: ProjectTypeSheet(document: document, workspace: workspace, step: 2))
                     let w = NSWindow(contentViewController: host)
                     w.styleMask = [.titled]
                     w.makeKeyAndOrderFront(nil)
                     try? await Task.sleep(for: .seconds(1.2))
                     capture(w, "\(dir)/project-type-ai-\(mode).png")
+                    w.close()
+                }
+                // Casting Style, the second question: AI voices and Narration Tools wording.
+                for (name, purpose) in [("project-type-style", ProjectPurpose.aiVoices), ("project-type-style-narration", .narration)] where wants(name) {
+                    let host = NSHostingController(rootView: ProjectTypeSheet(document: document, workspace: workspace, choice: purpose, step: 1))
+                    let w = NSWindow(contentViewController: host)
+                    w.styleMask = [.titled]
+                    w.makeKeyAndOrderFront(nil)
+                    try? await Task.sleep(for: .seconds(1.2))
+                    capture(w, "\(dir)/\(name)-\(mode).png")
                     w.close()
                 }
                 await shot("project-settings") { workspace.showProjectSettings = true }

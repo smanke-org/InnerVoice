@@ -135,7 +135,7 @@ public static class Exporter
             case Kind.NarratorScript:
             {
                 var narrator = project.Narrators.FirstOrDefault(n => n.Id == o.NarratorID);
-                var cast = project.Characters.Where(c => o.NarratorID is null || c.NarratorID == o.NarratorID).ToList();
+                var cast = project.Characters.Where(c => o.NarratorID is null || document.EffectiveNarrator(c)?.Id == o.NarratorID).ToList();
                 var ids = cast.Select(c => c.Id).ToHashSet();
                 output.Add(Text(project.Title, H1, Weight.Bold, spacing: 4));
                 output.Add(Text("Narrator Script" + (narrator is null ? "" : $" · {narrator.Name}"), H2, Weight.SemiBold, gray, spacing: 16));
@@ -242,7 +242,9 @@ public static class Exporter
         var meta = $"{stats?.Lines ?? 0} lines · {stats?.Words ?? 0} words";
         if (stats?.FirstLine is { } first) meta += $" · first line Ch {first.Chapter + 1}";
         if (c.Aliases.Count > 0) meta += $" · also {string.Join(", ", c.Aliases)}";
-        if (document.Project.Narrators.FirstOrDefault(n => n.Id == c.NarratorID) is { } narrator) meta += $" · read by {narrator.Name}";
+        if (document.EffectiveNarrator(c) is { } narrator) meta += $" · read by {narrator.Name}";
+        // Casting Style: how the narrator shades them (Just Me).
+        if (document.Project.Settings.CastingStyle is not null && document.Shades().TryGetValue(c.Id, out var shade) && shade.Cue is { } cue) meta += $" · shade: {cue}";
         output.Add(Text(meta, Small, color: Rgba.Gray, spacing: 4));
         if (c.VoiceNotes.Length > 0) output.Add(Text("Voice: " + c.VoiceNotes, Body, spacing: 4));
         foreach (var kind in FactKinds.NarratorOrder)
@@ -422,7 +424,7 @@ public static class Exporter
             var cells = new List<string>
             {
                 Q(c.Name), Q(string.Join(", ", c.Aliases)),
-                Q(project.Narrators.FirstOrDefault(n => n.Id == c.NarratorID)?.Name ?? ""),
+                Q(document.EffectiveNarrator(c)?.Name ?? ""),
                 (s?.Lines ?? 0).ToString(CultureInfo.InvariantCulture), (s?.Words ?? 0).ToString(CultureInfo.InvariantCulture),
                 s?.FirstLine is { } f ? (f.Chapter + 1).ToString(CultureInfo.InvariantCulture) : "",
             };

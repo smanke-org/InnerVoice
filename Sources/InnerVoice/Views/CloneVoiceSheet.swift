@@ -81,6 +81,7 @@ struct CloneVoiceSheet: View {
         switch t {
         case .narrator?: "the Narrator"
         case .character(let id)?: document.project.character(id)?.name
+        case .role(let r)?: "the " + r.voiceTitle
         case nil: nil
         }
     }

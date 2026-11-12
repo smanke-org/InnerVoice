@@ -140,7 +140,8 @@ public sealed class TeleprompterPage : Page
         {
             var nextSpeakers = UniqueSpeakers(index.LinesIn(next.Id).Select(x => p.Lines[x]).ToList());
             col.Children.Add(Ui.Column(Look.Xs,
-                Ui.Text(nextSpeakers.Count == 0 ? "Next: narration" : "Next: " + string.Join(", ", nextSpeakers.Select(s => p.Character(s)?.Name)), 12, FontWeight.SemiBold, Look.Brush(Look.SecondaryInk)),
+                Ui.Text(nextSpeakers.Count == 0 ? "Next: narration" : "Next: " + string.Join(", ", nextSpeakers.Select(s => p.Character(s)?.Name
+                    + (p.Settings.CastingStyle is not null && Document.Shades().TryGetValue(s, out var sh) && sh.Cue is { } cue ? $" ({cue})" : ""))), 12, FontWeight.SemiBold, Look.Brush(Look.SecondaryInk)),
                 new TextBlock { Text = next.Text, FontFamily = family, FontSize = size * 0.55, Foreground = Look.Brush(Look.TertiaryInk), TextWrapping = TextWrapping.Wrap, MaxLines = 2, TextTrimming = TextTrimming.WordEllipsis }));
         }
         return Ui.Scroll(col);
@@ -156,7 +157,9 @@ public sealed class TeleprompterPage : Page
     Control SpeakerChip(Guid id)
     {
         var c = Document.Project.Character(id);
-        var cue = c is null ? "" : ProjectActions.VoiceCue(c);
+        // Casting Style: how to shade them first ("Shade: lower, gravelly"), then the summary.
+        var shade = c is not null && Document.Project.Settings.CastingStyle is not null && Document.Shades().TryGetValue(c.Id, out var s) ? s.Cue : null;
+        var cue = string.Join(" · ", new[] { shade is null ? null : "Shade: " + shade, c is null ? null : ProjectActions.VoiceCue(c) }.Where(x => !string.IsNullOrEmpty(x)));
         var inner = Ui.Row(Look.Sm, Ui.Avatar(c?.ColorHex, c?.Initials ?? "?", 26),
             Ui.Column(0, Ui.Headline(c?.Name ?? ""), Ui.Text(cue, 11, brush: Look.Brush(Look.SecondaryInk), maxLines: 1)));
         return new Border

@@ -11,17 +11,35 @@ struct VoiceResolver {
     /// Engines that can speak now (on and downloaded).
     var usable: Set<VoiceEngine>
 
+    /// `index`: the book's index if the caller has it (the window does); otherwise one is
+    /// made only when the Casting Style sorts characters by gender.
     @MainActor
-    init(project: Project, engine: VoiceEngine? = nil) {
+    init(project: Project, engine: VoiceEngine? = nil, index: BookIndex? = nil) {
         let e = engine ?? project.engineInUse
         self.engine = e
+        // ElevenLabs only for a book that allows its text to be sent.
+        let usable = Set(VoiceEngine.engines.filter { EngineSwitches.shared.usable($0) && (!$0.isCloud || project.settings.cloudVoicesAllowed != nil) })
         var map: [UUID: VoiceChoice] = [:]
         for c in project.characters {
             if let v = c.voice(for: e)?.choice { map[c.id] = Self.withNotes(v, c) }
         }
+        // Casting Style (docs/CASTING-STYLE.md): a character read by the narrator or a shared
+        // voice (Men, Women, Other) speaks in that voice; Own Voice keeps their own.
+        var roleChoices: [VoiceRole: VoiceChoice] = [:]
+        for r in VoiceRole.sharedRoles {
+            if let v = project.settings.roleVoice(r, for: e)?.choice, usable.contains(v.engine) { roleChoices[r] = v }
+        }
+        let readers = project.settings.castingStyle == nil ? [:] : CastingStyleRules.readers(project, index: index)
+        if project.settings.castingStyle != nil {
+            for (id, r) in readers {
+                switch r {
+                case .own: break
+                case .narrator: map[id] = nil
+                case .men, .women, .other: map[id] = roleChoices[r]
+                }
+            }
+        }
         characters = map
-        // ElevenLabs only for a book that allows its text to be sent.
-        let usable = Set(VoiceEngine.engines.filter { EngineSwitches.shared.usable($0) && (!$0.isCloud || project.settings.cloudVoicesAllowed != nil) })
         cloudAllowed = project.settings.cloudVoicesAllowed != nil
         self.usable = usable
         writtenByNarrator = UserDefaults.standard.object(forKey: "voices.writtenByNarrator") as? Bool ?? true
@@ -37,6 +55,31 @@ struct VoiceResolver {
         } else {
             narrator = Self.fallback(e) ?? Self.fallback(.apple)
         }
+        // A two-person book: the men's or women's voice reads the narration too.
+        let narrationReader = CastingStyleRules.reader(of: .narrator, settings: project.settings)
+        if narrationReader != .narrator, let v = roleChoices[narrationReader] { narrator = v }
+        // The narrator playing a character shades their voice for them (One Voice, and anyone
+        // else the Casting Style gives the narrator): a man a little lower, a woman higher…
+        if readers.values.contains(.narrator) {
+            // The narrator's own gender: from the voice list, or a designed voice's description.
+            let narratorGender = narrator.flatMap { n in VoiceCatalog.info(for: n)?.gender ?? n.design.flatMap(VoiceCasting.gender(ofDescription:)) }
+                .flatMap { $0 == .neutral ? nil : CharacterGender($0) }
+            shades = CastingStyleRules.shades(project, index: index ?? BookIndex(project), narratorGender: narratorGender)
+        }
+    }
+
+    /// Casting Style shades for characters the narrator plays, by character.
+    var shades: [UUID: Shade] = [:]
+    /// An audition of a shade (Voices page): every line of it is said with this shade.
+    var auditionShade: Shade?
+
+    /// The shade a segment is said with: the speaker's, when the narrator's voice says their
+    /// spoken or thought line (not narration, and not letters the narrator reads out).
+    func shade(for segment: SpeechSegment, choice: VoiceChoice) -> Shade? {
+        guard segment.lineID != nil, segment.kind != .written else { return nil }
+        if let auditionShade { return auditionShade }
+        guard let id = segment.speakerID, choice == narrator else { return nil }
+        return shades[id]
     }
 
     /// Qwen3-TTS designs a voice from a description: the character's Voice Notes go with it,
@@ -91,7 +134,8 @@ struct VoiceResolver {
     func request(for segment: SpeechSegment) -> SpeechRequest? {
         guard let choice = choice(for: segment) else { return nil }
         return SpeechRequest(text: segment.text, choice: choice, tone: segment.speakerID == nil && segment.lineID == nil ? .neutral : segment.tone,
-                             kind: segment.lineID == nil ? nil : segment.kind, sound: segment.sound, cloudAllowed: cloudAllowed)
+                             kind: segment.lineID == nil ? nil : segment.kind, sound: segment.sound, cloudAllowed: cloudAllowed,
+                             shade: shade(for: segment, choice: choice))
     }
 }
 
@@ -279,7 +323,7 @@ enum PlayCommand {
 
     /// One sample line in a voice, for choosing voices: the character's own words when
     /// they have lines.
-    static func audition(_ choice: VoiceChoice, character: BookCharacter?, document: InnerVoiceDocument, tone: Tone? = nil) {
+    static func audition(_ choice: VoiceChoice, character: BookCharacter?, document: InnerVoiceDocument, tone: Tone? = nil, shade: Shade? = nil) {
         let project = document.project
         let index = document.index
         var text = "The light was never mine to leave you. It belongs to you now."
@@ -303,8 +347,9 @@ enum PlayCommand {
         var seg = SpeechSegment(id: "audition", paragraphID: UUID(), lineID: character == nil ? nil : UUID(), speakerID: nil,
                                 text: SpeechScript.apply([], to: text), tone: sampleTone, kind: .spoken, pauseAfter: 0)
         seg.pause = .none
-        var resolver = VoiceResolver(project: project, engine: choice.isNarrator ? nil : choice.engine)
+        var resolver = VoiceResolver(project: project, engine: choice.isNarrator ? nil : choice.engine, index: index)
         if !choice.isNarrator { resolver.narrator = VoiceResolver.withNotes(choice, character) }
+        resolver.auditionShade = shade
         resolver.characters = [:]
         SpeechPlayer.shared.play([seg], resolver: resolver)
     }

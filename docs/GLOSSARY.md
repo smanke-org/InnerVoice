@@ -37,6 +37,18 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | Mix Engines | A project casting voices from every engine that's on, not one engine | mixed mode, hybrid |
 | Same as Narrator | A character whose lines are read in the narrator's voice | narrator voice, default voice |
 | Project type | What a project is for: Narration Tools or Produce with AI Voices; decides which pages and commands show | mode, workflow |
+| Casting Style | How a book shares its voices: One Voice (Just Me when narrating), Narrator + Two Voices (Three Narrators), Full Cast; chosen after the project type, changed on Voices (AI) or Cast (narration) | voice plan, mode |
+| One Voice / Just Me | One voice (or the narrator, narrating) reads everything and shades each character | single narrator, solo |
+| Narrator + Two Voices / Three Narrators | A narrator, one voice (narrator) for every man, one for every woman, and Other | duet, dual narration |
+| Full Cast | Every main character has a voice (narrator) of their own | multicast |
+| Main character | A character the narrator marked main; in Full Cast they always have their own voice. InnerVoice only suggests | lead, star |
+| Role | Who reads a character under the Casting Style: Narrator, Men, Women, Other, Own Voice; shown as Read By | group, bucket |
+| Other | The group for characters who are neither male nor female, or whose gender isn't known | neutral, unknown |
+| Shade | How the narrator's voice changes for a character: pitch and pace steps, plus a few words ("lower, gravelly"); a cue when narrating | variation, tint |
+| Shading | Subtle, Clear or Strong: how far a character of another gender moves (about 1, 2 or 3 semitones) | strength, amount |
+| Your Voice | Just Me: the narrator's own gender, so characters of the same gender aren't shaded | narrator gender |
+| Gender to Review | A character whose gender the book doesn't settle (none found, or a guess from one pronoun); a filter and a Review list to choose Male, Female or Other | unknown gender |
+| Combined / Separate | Export Audio: one file, or a file per voice, all the same length so they line up | stems, tracks |
 | Project Settings | Book › Project Settings: settings that belong to one book (its project type) | document settings |
 | Activity | Settings › Activity: what InnerVoice did for you across books (numbers only) | analytics, usage, telemetry |
 | Book Stats | Book › Book Stats: the open book's numbers | statistics, report |

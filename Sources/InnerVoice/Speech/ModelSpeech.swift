@@ -41,12 +41,17 @@ enum ModelSpeech {
                                                               seed: seed(piece + request.choice.voiceID))
             case .qwen where LocalClones.isClone(request.choice):
                 // A voice cloned on this Mac: every line from the narrator's own clip.
-                let sample = try LocalClones.shared.sample(for: request.choice.voiceID)
+                let clip = try LocalClones.shared.sample(for: request.choice.voiceID)
+                let sample = try QwenSamples.shaded(QwenSamples.Sample(audio: clip.audio, text: clip.text), key: request.choice.voiceID,
+                                                    semitones: request.shade?.pitch ?? 0)
                 samples += try await MLXSpeech.shared.qwenClone(text: piece, reference: sample.audio, referenceText: sample.text,
                                                                 seed: seed(piece + request.choice.voiceID))
             case .qwen:
                 let design = request.choice.design ?? VoiceResolver.fallback(.qwen)?.design ?? ""
-                let sample = try await QwenSamples.sample(design: design, tone: QwenSamples.sampleTone(for: request))
+                let tone = QwenSamples.sampleTone(for: request)
+                // A shade (Casting Style) shifts the sample's pitch; the clone keeps the voice.
+                let sample = try QwenSamples.shaded(try await QwenSamples.sample(design: design, tone: tone),
+                                                    key: QwenSamples.key(design: design, tone: tone), semitones: request.shade?.pitch ?? 0)
                 samples += try await MLXSpeech.shared.qwenClone(text: piece, reference: sample.audio, referenceText: sample.text,
                                                                 seed: seed(piece + design))
             }
@@ -197,6 +202,25 @@ enum QwenSamples {
         let audio = try await MLXSpeech.shared.qwenDesign(text: sampleText, description: prompt, seed: ModelSpeech.seed(design))
         SpeechRenderer.write(try ModelSpeech.buffer(audio), to: file)
         let s = Sample(audio: audio, text: sampleText)
+        memory[k] = s
+        return s
+    }
+
+    /// The sample with its pitch shifted `semitones` (a shade), kept beside the sample so
+    /// it's made once. 0 is the sample itself.
+    static func shaded(_ sample: Sample, key: String, semitones: Int) throws -> Sample {
+        guard semitones != 0 else { return sample }
+        let k = key + "-shade\(semitones)"
+        if let s = memory[k] { return s }
+        let file = folder.appending(path: k + ".caf")
+        if let b = SpeechRenderer.read(file), let data = b.floatChannelData {
+            let s = Sample(audio: Array(UnsafeBufferPointer(start: data[0], count: Int(b.frameLength))), text: sample.text)
+            memory[k] = s
+            return s
+        }
+        let audio = try ShadeAudio.apply(sample.audio, semitones: semitones, pace: 0)
+        SpeechRenderer.write(try ModelSpeech.buffer(audio), to: file)
+        let s = Sample(audio: audio, text: sample.text)
         memory[k] = s
         return s
     }

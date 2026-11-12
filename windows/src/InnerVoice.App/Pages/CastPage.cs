@@ -76,11 +76,20 @@ public sealed partial class CastPage : Page
             Sort.Appearance => p.Characters.OrderBy(x => index.StatsFor(x.Id)?.FirstLine?.Global ?? int.MaxValue),
             _ => p.Characters.OrderByDescending(x => index.StatsFor(x.Id)?.Lines ?? 0),
         };
-        var wrap = new WrapPanel { Margin = new Thickness(Look.Xl), ItemSpacing = Look.Lg, LineSpacing = Look.Lg };
-        foreach (var ch in ordered) wrap.Children.Add(Card(ch));
+        var shown = Filtered(ordered).ToList();
         var column = new StackPanel();
+        column.Children.Add(StyleBar());
         if (Duplicates.Pairs(p) is { Count: > 0 } dups) column.Children.Add(DuplicatesNote(dups));
-        column.Children.Add(wrap);
+        if (p.Settings.CastingStyle == CastingStyle.Shared)
+        {
+            column.Children.Add(Parts(shown));
+        }
+        else
+        {
+            var wrap = new WrapPanel { Margin = new Thickness(Look.Xl), ItemSpacing = Look.Lg, LineSpacing = Look.Lg };
+            foreach (var ch in shown) wrap.Children.Add(Card(ch));
+            column.Children.Add(wrap);
+        }
         Content = Ui.Scroll(column);
     }
 
@@ -88,8 +97,7 @@ public sealed partial class CastPage : Page
     {
         var p = Document.Project;
         var stats = Document.Index.StatsFor(c.Id);
-        var narrator = p.Narrators.FirstOrDefault(n => n.Id == c.NarratorID);
-        var subtitle = c.Aliases.Count > 0 ? string.Join(", ", c.Aliases) : narrator is not null ? $"Read by {narrator.Name}" : "";
+        var subtitle = CardSubtitle(c);
         var cue = ProjectActions.VoiceCue(c);
         var header = Ui.Row(Look.Md, Ui.Avatar(c.ColorHex, c.Initials, 44),
             Ui.Column(2, Ui.Text(c.Name, 15, FontWeight.SemiBold, maxLines: 1), Ui.Caption(subtitle)));
@@ -150,6 +158,7 @@ public sealed partial class CastPage : Page
                 Ui.Caption($"{stats?.Lines ?? 0:N0} lines · {stats?.Words ?? 0:N0} words" +
                            (stats?.FirstLine is { } f ? $" · first speaks {Document.Index.Reference(p.Chapters[f.Chapter].Paragraphs[f.Paragraph].Id)}" : "")))));
         AddDetailActions(col, c);
+        AddShadeEditor(col, c);
 
         col.Children.Add(Ui.Headline("Summary"));
         if (c.Facts.Count == 0)

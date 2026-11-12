@@ -19,6 +19,8 @@ public sealed partial class CastPage
         menu.Items.Add(ColorMenu(c));
         menu.Items.Add(MergeMenu(c));
         menu.Items.Add(new Separator());
+        AddStyleMenu(menu, c);
+        menu.Items.Add(new Separator());
         menu.Items.Add(Item("Delete Character…", () => ConfirmDelete(c)));
         card.ContextMenu = menu;
     }
@@ -85,7 +87,7 @@ public sealed partial class CastPage
         var narrators = new ComboBox { Width = 200, PlaceholderText = "No narrator" };
         var list = new List<Narrator?> { null };
         list.AddRange(Document.Project.Narrators);
-        narrators.ItemsSource = list.Select(n => n?.Name ?? "No narrator").ToList();
+        narrators.ItemsSource = list.Select(n => n?.Name ?? AutomaticNarratorLabel(c)).ToList();
         narrators.SelectedIndex = Math.Max(0, list.FindIndex(n => n?.Id == c.NarratorID));
         narrators.SelectionChanged += (_, _) =>
         {

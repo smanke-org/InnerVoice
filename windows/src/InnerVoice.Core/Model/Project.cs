@@ -246,6 +246,15 @@ public sealed class BookCharacter : ModelObject
     public string? VoiceNotesFromBook { get; set; }
     /// The "Voice brief:" block the AI last wrote into `VoiceNotes`.
     public string? VoiceBriefGenerated { get; set; }
+    /// Casting Style (docs/CASTING-STYLE.md): the narrator's choice of gender; null is what
+    /// the book says.
+    public CharacterGender? Gender { get; set; }
+    /// Marked a main character (true) or not main (false); null: not marked.
+    public bool? IsMain { get; set; }
+    /// Who reads this character, chosen by the narrator; null: from the Casting Style.
+    public VoiceRole? Role { get; set; }
+    /// How the narrator shades this character, set by the narrator; null: automatic.
+    public Shade? Shade { get; set; }
 
     public BookCharacter() { }
     public BookCharacter(string name, string colorHex) { Name = name; ColorHex = colorHex; }
@@ -312,7 +321,8 @@ public sealed class BookCharacter : ModelObject
         Id = Id, Name = Name, Aliases = [.. Aliases], ColorHex = ColorHex, ColorChosen = ColorChosen,
         Facts = Facts.ConvertAll(f => f.Copy()), Notes = Notes, VoiceNotes = VoiceNotes, NarratorID = NarratorID,
         ShowInIndex = ShowInIndex, Pinned = Pinned, VoiceNotesFromBook = VoiceNotesFromBook,
-        VoiceBriefGenerated = VoiceBriefGenerated, Extra = CopyExtra(),
+        VoiceBriefGenerated = VoiceBriefGenerated, Gender = Gender, IsMain = IsMain, Role = Role, Shade = Shade?.Copy(),
+        Extra = CopyExtra(),
     };
 }
 
@@ -322,8 +332,11 @@ public sealed class Narrator : ModelObject
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = "";
     public string Notes { get; set; } = "";
+    /// Three Narrators: the part this person reads (narrator, men, women, other); null: one
+    /// character at a time.
+    public VoiceRole? Role { get; set; }
 
-    public Narrator Copy() => new() { Id = Id, Name = Name, Notes = Notes, Extra = CopyExtra() };
+    public Narrator Copy() => new() { Id = Id, Name = Name, Notes = Notes, Role = Role, Extra = CopyExtra() };
 }
 
 /// A term and how to say it.
@@ -382,12 +395,24 @@ public sealed class ProjectSettings : ModelObject
     public ProjectPurpose? Purpose { get; set; }
     /// Steps (`GuidedStep` raw values) the narrator marked done or skipped.
     public List<string>? StepsDone { get; set; }
+    /// Casting Style (docs/CASTING-STYLE.md). null: not chosen yet. (The AI voices for each
+    /// shared role, `roleVoices`, stay in Extra for the Mac.)
+    public CastingStyle? CastingStyle { get; set; }
+    /// Three Narrators: who reads the narration; null is a narrator of its own.
+    public VoiceRole? NarrationRole { get; set; }
+    /// Full Cast: who reads characters not marked main; null is the narrator.
+    public MinorVoices? MinorVoices { get; set; }
+    /// How far characters move from the narrator's voice; null is Clear.
+    public ShadeStrength? ShadeStrength { get; set; }
+    /// Just Me: the narrator's own gender; null is not said.
+    public CharacterGender? NarratorGender { get; set; }
 
     public ProjectSettings Copy() => new()
     {
         Style = Style, UnsureBelow = UnsureBelow, ShowInitials = ShowInitials, PovCharacterID = PovCharacterID,
         ColorNarration = ColorNarration, Purpose = Purpose, StepsDone = StepsDone is null ? null : [.. StepsDone],
-        Extra = CopyExtra(),
+        CastingStyle = CastingStyle, NarrationRole = NarrationRole, MinorVoices = MinorVoices, ShadeStrength = ShadeStrength,
+        NarratorGender = NarratorGender, Extra = CopyExtra(),
     };
 }
 

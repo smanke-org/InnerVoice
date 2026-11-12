@@ -8,6 +8,11 @@ struct CastPage: View {
     @Environment(\.undoManager) private var undoManager
     @State private var sort: Sort = .lines
     @State private var showNarrators = false
+    /// Show only characters whose gender the book doesn't settle (Casting Style).
+    @State private var genderFilter = false
+
+    /// Narration Tools projects choose their Casting Style here (AI voices: the Voices page).
+    private var narration: Bool { document.project.settings.purpose == .narration }
 
     enum Sort: String, CaseIterable { case lines = "Most Lines", name = "Name", appearance = "First Appearance" }
 
@@ -51,7 +56,17 @@ struct CastPage: View {
             }
         } else {
             ScrollView {
+                if narration {
+                    CastingStyleHeader(document: document, genderFilter: $genderFilter, narration: true)
+                        .frame(maxWidth: 560, alignment: .leading)
+                        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 12))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding([.horizontal, .top], Space.margin)
+                }
                 duplicates
+                if narration, document.project.settings.castingStyle == .shared {
+                    parts
+                } else {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 260, maximum: 360), spacing: Space.lg)], spacing: Space.lg) {
                     // The narrator first: the voice for everything no character says.
                     if document.project.showsVoices {
@@ -65,17 +80,10 @@ struct CastPage: View {
                         Button("Play the Narrator Voice") { PlayCommand.audition(VoiceChoice(engine: document.project.engineInUse, voiceID: VoiceChoice.narratorID), character: nil, document: document) }
                     }
                     }
-                    ForEach(sorted) { c in
-                        // A button, not a NavigationLink: in this grid the link didn't open on a click.
-                        Button { workspace.castPath = [c.id] } label: {
-                            CastCard(document: document, character: c)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Open \(c.name)’s page")
-                        .contextMenu { menu(c) }
-                    }
+                    ForEach(shown) { c in card(c) }
                 }
                 .padding(Space.margin)
+                }
             }
             .toolbar {
                 if document.project.showsNarrationTools {
@@ -105,6 +113,55 @@ struct CastPage: View {
             }
 
         }
+    }
+
+    /// The characters shown: all, or with Gender to Review on, only those it lists.
+    private var shown: [BookCharacter] {
+        guard genderFilter else { return sorted }
+        let review = Set(CastingStyleRules.genderToReview(document.project, index: document.index))
+        return sorted.filter { review.contains($0.id) }
+    }
+
+    private func card(_ c: BookCharacter) -> some View {
+        // A button, not a NavigationLink: in this grid the link didn't open on a click.
+        Button { workspace.castPath = [c.id] } label: {
+            CastCard(document: document, character: c)
+        }
+        .buttonStyle(.plain)
+        .help("Open \(c.name)’s page")
+        .contextMenu { menu(c) }
+    }
+
+    /// Three Narrators: the cast in parts (Narration, Men, Women, Other, their own), each
+    /// headed by the narrator who reads it.
+    private var parts: some View {
+        let readers = CastingStyleRules.readers(document.project, index: document.index)
+        let narrationReader = CastingStyleRules.reader(of: .narrator, settings: document.project.settings)
+        return VStack(alignment: .leading, spacing: Space.xl) {
+            ForEach([VoiceRole.narrator, .men, .women, .other, .own]) { r in
+                let members = shown.filter { (readers[$0.id] ?? .own) == r }
+                if !members.isEmpty || (r != .own && r != .other && !genderFilter) {
+                    VStack(alignment: .leading, spacing: Space.md) {
+                        HStack(alignment: .firstTextBaseline, spacing: Space.sm) {
+                            Text(r == .narrator ? "Read by the Narrator" : r == .own ? "A Narrator of Their Own" : r.title).font(.title3.weight(.semibold))
+                            if r != .own {
+                                let who = document.project.narrators.first { $0.role == r }
+                                    ?? (r == .other ? CastingStyleRules.narrationNarrator(document.project) : nil)
+                                Text(who.map { "· \($0.name)" + (r == narrationReader && r != .narrator ? ", who also reads the narration" : "") }
+                                     ?? "· no narrator yet")
+                                    .foregroundStyle(who == nil ? Color(nsColor: .attention) : .secondary)
+                            }
+                            Spacer()
+                            Text("\(members.reduce(0) { $0 + (document.index.stats[$1.id]?.lines ?? 0) }) lines").foregroundStyle(.secondary)
+                        }
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 260, maximum: 360), spacing: Space.lg)], spacing: Space.lg) {
+                            ForEach(members) { c in card(c) }
+                        }
+                    }
+                }
+            }
+        }
+        .padding(Space.margin)
     }
 
     /// "Mara" and "Mara Quinn" are probably one person: offer to merge.
@@ -148,6 +205,10 @@ struct CastPage: View {
                 Button(other.name) { document.merge(c.id, into: other.id, undoManager: undoManager) }
             }
         }
+        if narration {
+            Divider()
+            CastingStyleMenu(document: document, character: c, narration: true)
+        }
         Divider()
         Button("Delete Character", role: .destructive) { document.deleteCharacter(c.id, undoManager: undoManager) }
     }
@@ -182,7 +243,13 @@ struct CastCard: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
-                    } else if let narrator = document.project.narrators.first(where: { $0.id == character.narratorID }) {
+                    } else if document.project.settings.purpose == .narration, document.project.settings.castingStyle == .oneVoice
+                                || CastingStyleRules.readers(document.project, index: document.index)[character.id] == .narrator,
+                              let shade = document.narrationShades()[character.id], let cue = shade.cue {
+                        // Just Me: how to shade them.
+                        Label(cue, systemImage: shade.pitch < 0 ? "arrow.down" : shade.pitch > 0 ? "arrow.up" : "waveform")
+                            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    } else if document.project.showsNarrationTools, let narrator = document.effectiveNarrator(for: character) {
                         Text("Read by \(narrator.name)").font(.caption).foregroundStyle(.secondary)
                     }
                 }
@@ -247,8 +314,17 @@ struct NarratorsEditor: View {
                     Image(systemName: "person.wave.2").foregroundStyle(.secondary)
                     Text(n.name)
                     Spacer()
-                    Text(document.project.characters.filter { $0.narratorID == n.id }.map(\.name).joined(separator: ", "))
+                    Text(document.project.characters.filter { document.effectiveNarrator(for: $0)?.id == n.id }.map(\.name).joined(separator: ", "))
                         .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    if document.project.settings.castingStyle != nil {
+                        Picker("Part", selection: Binding(get: { n.role }, set: { document.setNarratorRole($0, for: n.id, undoManager: undoManager) })) {
+                            Text("No Part").tag(VoiceRole?.none)
+                            ForEach([VoiceRole.narrator, .men, .women, .other]) { r in Text(r == .narrator ? "Narration" : r.title).tag(VoiceRole?.some(r)) }
+                        }
+                        .labelsHidden()
+                        .fixedSize()
+                        .help("The part \(n.name) reads: the narration, every man, every woman, or everyone else")
+                    }
                     Button {
                         document.change("Remove Narrator", undoManager: undoManager) { p in
                             p.narrators.removeAll { $0.id == n.id }

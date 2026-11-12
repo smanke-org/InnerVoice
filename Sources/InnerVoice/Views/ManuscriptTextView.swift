@@ -365,7 +365,9 @@ struct ManuscriptTextView: NSViewRepresentable {
         func gutterWidth() -> CGFloat {
             guard project.settings.showInitials else { return 72 }
             let names = parent.look.margin
-            let widest = project.characters.map { LineLayoutManager.markerWidth(names.label(for: $0) + "?") }.max() ?? 0
+            // Room for a shading arrow too, when the Casting Style shows them.
+            let extra = project.showsNarrationTools && project.settings.castingStyle != nil ? " ↓↓" : "?"
+            let widest = project.characters.map { LineLayoutManager.markerWidth(names.label(for: $0) + extra) }.max() ?? 0
             return max(72, widest + 40)
         }
 
@@ -723,10 +725,22 @@ final class ReadingTextView: NSTextView {
     }
 }
 
-/// The speaker's initials (or "?" when the narrator is needed) in the left margin. A
-/// subview, because the text view's own drawing sits under its text layers.
+/// The speaker's initials (or "?" when the narrator is needed) in the left margin, with an
+/// arrow for how to shade them (Casting Style). A subview, because the text view's own
+/// drawing sits under its text layers.
 final class MarginOverlay: NSView {
     weak var textView: ReadingTextView?
+
+    /// ↓ or ↑ (doubled for 3 steps or more); nil when the pitch stays the narrator's.
+    static func arrow(_ s: Shade) -> String? {
+        switch s.pitch {
+        case ...(-3): "↓↓"
+        case -2 ... -1: "↓"
+        case 1...2: "↑"
+        case 3...: "↑↑"
+        default: nil
+        }
+    }
     override var isFlipped: Bool { true }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
@@ -737,6 +751,8 @@ final class MarginOverlay: NSView {
         let glyphs = lm.glyphRange(forBoundingRect: dirtyRect.offsetBy(dx: -origin.x, dy: -origin.y).insetBy(dx: -400, dy: -20), in: tc)
         let chars = lm.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
         let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        // Narration Tools with a Casting Style: an arrow for how to shade each character.
+        let shades = project.showsNarrationTools && project.settings.castingStyle != nil ? c.document.narrationShades() : [:]
         var drawn = Set<Int>()
         for entry in c.layout.entries(in: chars) {
             guard let line = c.line(entry) else { continue }
@@ -751,7 +767,8 @@ final class MarginOverlay: NSView {
             let color = needs ? NSColor.attention : NSColor(hexString: speaker?.colorHex ?? "#888888")
             // An unsure guess shows its name with a question mark ("Cyrus?"), in red.
             let named = speaker.map { c.builtMargin.label(for: $0) }
-            let label = needs ? (named.map { $0 + "?" } ?? "?") : named ?? ""
+            var label = needs ? (named.map { $0 + "?" } ?? "?") : named ?? ""
+            if !needs, let id = speaker?.id, let arrow = shades[id].flatMap(Self.arrow) { label += " " + arrow }
             LineLayoutManager.drawMarker(label, color: color, rightEdge: origin.x - 18, midY: origin.y + c.textBox(first).midY, dark: dark)
         }
     }

@@ -379,6 +379,72 @@ enum AgentCommands {
             if changed { document.setColor(c.id, hex: hex, undoManager: entry.undoManager) }
             return ["project": entry.name, "changed": changed, "character": c.name, "color": hex, "automatic": false]
         },
+        // Casting Style (docs/CASTING-STYLE.md)
+        AgentCommand(name: "casting style", summary: "Show or change the book's Casting Style: one-voice (One Voice, or Just Me when narrating), shared (Narrator + Two Voices, or Three Narrators) or full-cast. Changing it keeps every voice and narrator. Returns `castingStyle` and who reads each character (`readers`).",
+                     params: [.init(name: "style", positional: true, help: "one-voice, shared or full-cast (leave out to show the current one)"), projectParam],
+                     example: "innervoice casting style shared --json") { args in
+            let (entry, document) = try project(args)
+            if let raw = args.string("style") {
+                let styles: [String: CastingStyle] = ["one-voice": .oneVoice, "one": .oneVoice, "just-me": .oneVoice, "shared": .shared,
+                                                      "three-narrators": .shared, "full-cast": .fullCast, "full": .fullCast]
+                guard let style = styles[raw.lowercased()] else { throw AgentError.usage("\"\(raw)\" isn't a Casting Style. Give one-voice, shared or full-cast.") }
+                document.setCastingStyle(style, undoManager: entry.undoManager)
+            }
+            let readers = CastingStyleRules.readers(document.project, index: document.index)
+            let shades = document.project.showsVoices ? VoiceResolver(project: document.project, index: document.index).shades : document.narrationShades()
+            return ["project": entry.name, "castingStyle": document.project.settings.castingStyle?.rawValue ?? NSNull(),
+                    "readers": document.project.characters.filter { (document.index.stats[$0.id]?.lines ?? 0) > 0 }.map { c -> JSONObject in
+                        ["name": c.name, "readBy": readers[c.id]?.rawValue ?? "own", "shade": shades[c.id]?.cue ?? NSNull()]
+                    }]
+        },
+        AgentCommand(name: "characters gender", summary: "Set a character's gender: male, female, other, or auto (what the book says). Casting Style sorts by it; colors and casting follow it.",
+                     params: [characterParam, .init(name: "gender", required: true, positional: true, help: "male, female, other or auto"), projectParam],
+                     example: "innervoice characters gender Quinn other --json") { args in
+            let (entry, document) = try project(args)
+            let c = try character(try args.required("name"), in: document)
+            let raw = try args.required("gender").lowercased()
+            let g: CharacterGender? = raw == "auto" ? nil : try CharacterGender(rawValue: raw) ?? { throw AgentError.usage("Give male, female, other or auto.") }()
+            document.setGender(g, for: [c.id], undoManager: entry.undoManager)
+            return ["project": entry.name, "changed": c.gender != g, "character": c.name, "gender": g?.rawValue ?? "auto"]
+        },
+        AgentCommand(name: "characters main", summary: "Mark a character as a main character (yes), not main (no), or neither (auto). In Full Cast, main characters always have a voice of their own.",
+                     params: [characterParam, .init(name: "main", required: true, positional: true, help: "yes, no or auto"), projectParam],
+                     example: "innervoice characters main Mara yes --json") { args in
+            let (entry, document) = try project(args)
+            let c = try character(try args.required("name"), in: document)
+            let raw = try args.required("main").lowercased()
+            let main: Bool? = ["yes", "true"].contains(raw) ? true : ["no", "false"].contains(raw) ? false : raw == "auto" ? nil
+                : try { throw AgentError.usage("Give yes, no or auto.") }()
+            document.setMain(main, for: [c.id], undoManager: entry.undoManager)
+            return ["project": entry.name, "changed": c.isMain != main, "character": c.name, "main": main.map { $0 as Any } ?? "auto"]
+        },
+        AgentCommand(name: "characters read-by", summary: "Choose who reads a character under the Casting Style: narrator, men, women, other, own (a voice or narrator of their own), or auto (the style decides).",
+                     params: [characterParam, .init(name: "role", required: true, positional: true, help: "narrator, men, women, other, own or auto"), projectParam],
+                     example: "innervoice characters read-by Kade own --json") { args in
+            let (entry, document) = try project(args)
+            let c = try character(try args.required("name"), in: document)
+            let raw = try args.required("role").lowercased()
+            let role: VoiceRole? = raw == "auto" ? nil : try VoiceRole(rawValue: raw) ?? { throw AgentError.usage("Give narrator, men, women, other, own or auto.") }()
+            document.setRole(role, for: c.id, undoManager: entry.undoManager)
+            let reader = CastingStyleRules.readers(document.project, index: document.index)[c.id]
+            return ["project": entry.name, "changed": c.role != role, "character": c.name, "role": role?.rawValue ?? "auto", "readBy": reader?.rawValue ?? "own"]
+        },
+        AgentCommand(name: "characters shade", summary: "Set how the narrator shades a character: pitch (-4 to 4 semitones, lower to higher), pace (-2 to 2) and a few words, or --auto to go back to the shade worked out from gender, age and the voice brief.",
+                     params: [characterParam,
+                              .init(name: "pitch", kind: .integer, help: "-4 (much lower) to 4 (much higher)"),
+                              .init(name: "pace", kind: .integer, help: "-2 (slower) to 2 (quicker)"),
+                              .init(name: "words", help: "texture for the cue: gravelly, clipped…"),
+                              .init(name: "auto", kind: .boolean, help: "use the automatic shade again"),
+                              projectParam],
+                     example: "innervoice characters shade Tom --pitch -2 --pace -1 --words gravelly --json") { args in
+            let (entry, document) = try project(args)
+            let c = try character(try args.required("name"), in: document)
+            let shade: Shade? = try args.bool("auto") == true ? nil
+                : Shade(pitch: try args.int("pitch", default: c.shade?.pitch ?? 0), pace: try args.int("pace", default: c.shade?.pace ?? 0),
+                        words: args.string("words") ?? c.shade?.words)
+            document.setShade(shade, for: c.id, undoManager: entry.undoManager)
+            return ["project": entry.name, "character": c.name, "shade": shade.map { s -> JSONObject in ["pitch": s.pitch, "pace": s.pace, "words": s.words ?? NSNull(), "cue": s.cue ?? NSNull()] } ?? "auto"]
+        },
     ] }
 
     // MARK: AI
@@ -736,7 +802,8 @@ enum AgentCommands {
                 "lines": stats?.lines ?? 0, "words": stats?.words ?? 0,
                 "firstLine": stats?.firstLine.map { "Ch \($0.chapter + 1) ¶\($0.paragraph + 1)" } ?? NSNull(),
                 "chapters": stats?.chapters.count ?? 0, "facts": c.facts.count,
-                "narrator": document.project.narrators.first { $0.id == c.narratorID }?.name ?? NSNull(),
+                "narrator": document.effectiveNarrator(for: c)?.name ?? NSNull(),
+                "gender": c.gender?.rawValue ?? "auto", "main": c.isMain.map { $0 as Any } ?? "auto",
                 "showInIndex": index.showsInIndex(c),
                 "voice": c.voice(for: document.project.engineInUse).map { v -> JSONObject in
                     ["engine": v.choice.engine.rawValue, "name": VoiceCatalog.name(of: v.choice), "source": v.source.rawValue,

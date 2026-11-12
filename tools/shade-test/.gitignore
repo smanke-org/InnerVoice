@@ -1,0 +1,5 @@
+mlx-audio-swift/
+.build/
+Package.resolved
+run*/
+smoke/

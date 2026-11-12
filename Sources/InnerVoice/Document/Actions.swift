@@ -123,7 +123,12 @@ import SwiftUI
         let index = self.index
         Task {
             // Gender reads the whole book: off the main thread, then the colors on it.
-            let families = await Task.detached(priority: .utility) { CharacterPalette.families(project, index: index) }.value
+            let families = await Task.detached(priority: .utility) {
+                // Every character's gender too (Casting Style reads it on Play): this warms the
+                // pronoun cache for characters whose color the narrator picked.
+                _ = CastingStyleRules.genders(project, index: index)
+                return CharacterPalette.families(project, index: index)
+            }.value
             let now = self.index
             applyQuietly { CharacterPalette.recolorAutomatic(&$0, index: now, families: families) }
         }

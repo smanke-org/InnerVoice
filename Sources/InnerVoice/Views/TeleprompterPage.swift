@@ -130,7 +130,11 @@ struct TeleprompterPage: View {
                     .transition(.opacity)
                 if let next {
                     VStack(alignment: .leading, spacing: Space.xs) {
-                        Text(nextSpeakers.isEmpty ? "Next: narration" : "Next: " + nextSpeakers.compactMap { document.project.character($0)?.name }.joined(separator: ", "))
+                        // With a Casting Style, how to shade them too: "Next: Tom Hale (lower, gravelly)".
+                        let shades = document.project.settings.castingStyle == nil ? [:] : document.narrationShades()
+                        Text(nextSpeakers.isEmpty ? "Next: narration" : "Next: " + nextSpeakers.compactMap { id in
+                            document.project.character(id).map { c in c.name + (shades[id]?.cue.map { " (\($0))" } ?? "") }
+                        }.joined(separator: ", "))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                         Text(next.text)
@@ -156,7 +160,9 @@ struct TeleprompterPage: View {
 
     private func speakerChip(_ id: UUID) -> some View {
         let c = document.project.character(id)
-        let cue = c.map { document.voiceCue(for: $0) } ?? ""
+        // Casting Style: how to shade them first ("lower, gravelly"), then the summary.
+        let shade = document.project.settings.castingStyle == nil ? nil : document.narrationShades()[id]?.cue
+        let cue = ([shade.map { "Shade: " + $0 }] + [c.map { document.voiceCue(for: $0) }]).compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
         return HStack(spacing: Space.sm) {
             if let c { Avatar(character: c, size: 26) }
             VStack(alignment: .leading, spacing: 0) {

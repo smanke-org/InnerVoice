@@ -11,6 +11,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
     case colors
     case castAndSummaries
     case voices
+    case castingStyle
     case index
     case narratorsAndScripts
     case pronunciations
@@ -32,6 +33,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
         case .colors: "Colors"
         case .castAndSummaries: "Cast & Summaries"
         case .voices: "Voices & Listening"
+        case .castingStyle: "Casting Style"
         case .index: "Index"
         case .narratorsAndScripts: "Narrators & Scripts"
         case .pronunciations: "Pronunciations"
@@ -53,6 +55,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
         case .colors: "paintpalette"
         case .castAndSummaries: "person.3"
         case .voices: "person.wave.2"
+        case .castingStyle: "person.3"
         case .index: "list.bullet.indent"
         case .narratorsAndScripts: "mic"
         case .pronunciations: "character.bubble"
@@ -176,6 +179,23 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
             .text("Make the text bigger or smaller with the buttons in the toolbar, or View › Bigger Text (⌘+), Smaller Text (⌘−) and Actual Size (⌘0). Switch between single and double line spacing with the spacing button beside them (⌥⌘L), or in Settings › Manuscript. The page keeps your place when you change either."),
         ]
 
+        case .castingStyle: [
+            .text("Casting Style is how a book shares its voices, the way audiobooks are really made. Choose it when you start a project, then change it any time: on the Voices page when you produce with AI voices, on the Cast page when you narrate. Changing it never deletes a voice or a narrator; it only decides who reads each character."),
+            .heading("The three styles"),
+            .keys([
+                ("One Voice / Just Me", "One voice reads the narration and plays everyone, shading a little lower for men and higher for women. Most audiobooks are made this way."),
+                ("Narrator + Two Voices / Three Narrators", "A narrator, one voice (or narrator) for every man, one for every woman, and an Other group for anyone else."),
+                ("Full Cast", "Every main character has a voice (or narrator) of their own, plus the narrator."),
+            ]),
+            .heading("Shading"),
+            .text("When the narrator plays a character, InnerVoice works out a shade from their gender, age and voice brief: Subtle, Clear or Strong is about one, two or three semitones for a character of another gender. Open a character on the Voices page to hear the shade, or set the pitch and pace yourself. Qwen3-TTS shifts the narrator’s voice sample, so a shaded character still sounds like the narrator."),
+            .text("When you narrate yourself (Just Me), choose Your Voice on the Cast page. Characters of your own gender are read in your voice; others get an arrow in the manuscript margin (↓ lower, ↑ higher, doubled for a bigger change) and a Shade cue on the Teleprompter and in Narrator Scripts."),
+            .heading("Who reads whom"),
+            .text("Right-click a character to choose who reads them, to mark them as a main character, or to set their gender. Main characters always have a voice of their own in Full Cast; InnerVoice suggests the characters with the most lines, but only you mark them."),
+            .text("Narrator + Two Voices sorts characters by gender. When the book doesn’t settle someone’s gender, they’re listed under Gender to Review: click the filter on the Voices or Cast page, or the Genders to Review list on the Review page, and choose Male, Female or Other."),
+            .text("For a book read by two people, choose the men’s or women’s voice (or narrator) under Narration: they read the narration too."),
+            .tip("Export Audio can save the voices Separate, a file per voice, all the same length so they line up in an audio editor."),
+        ]
         case .voices: [
             .text("InnerVoice can read the book aloud with a different voice for each character, so you can hear a scene before you record it, check who says what, or rehearse against the other parts. Apple Voices, Qwen3-TTS and Orpheus run on your Mac and send nothing anywhere. ElevenLabs, if you set it up, runs in the cloud (see below)."),
             .heading("Voices for the cast"),

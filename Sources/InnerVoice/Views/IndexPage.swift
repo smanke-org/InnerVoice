@@ -37,7 +37,7 @@ struct IndexPage: View {
     private var cast: [BookCharacter] {
         let index = document.index
         return document.project.characters
-            .filter { narrator == nil || $0.narratorID == narrator }
+            .filter { narrator == nil || document.effectiveNarrator(for: $0)?.id == narrator }
             .filter { filter.isEmpty || $0.name.localizedCaseInsensitiveContains(filter) }
             .sorted { (index.stats[$0.id]?.lines ?? 0) < (index.stats[$1.id]?.lines ?? 0) }
     }

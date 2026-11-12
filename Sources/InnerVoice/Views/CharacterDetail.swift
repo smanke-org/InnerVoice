@@ -148,7 +148,14 @@ struct CharacterDetail: View {
                     Picker("Narrator", selection: Binding(get: { c.narratorID }, set: { v in
                         document.updateCharacter(c.id, "Cast Narrator", undoManager: undoManager) { $0.narratorID = v }
                     })) {
-                        Text("None").tag(UUID?.none)
+                        // With a Casting Style, nil follows the character's part (Three Narrators, Just Me).
+                        if document.project.settings.castingStyle != nil {
+                            var auto = c
+                            let _ = auto.narratorID = nil
+                            Text(document.effectiveNarrator(for: auto).map { "Automatic (\($0.name))" } ?? "Automatic").tag(UUID?.none)
+                        } else {
+                            Text("None").tag(UUID?.none)
+                        }
                         ForEach(document.project.narrators) { Text($0.name).tag(UUID?.some($0.id)) }
                     }
                     .fixedSize()
@@ -161,6 +168,13 @@ struct CharacterDetail: View {
                     }
                 }
                 .padding(.top, Space.xs)
+                // Casting Style: how the narrator shades this character (Just Me, and anyone
+                // else the narrator plays).
+                if document.project.showsNarrationTools, !document.project.showsVoices, document.project.settings.castingStyle != nil,
+                   CastingStyleRules.readers(document.project, index: document.index)[c.id] == .narrator {
+                    ShadeCueEditor(document: document, character: c)
+                        .padding(.top, Space.sm)
+                }
             }
         }
     }
@@ -442,4 +456,48 @@ struct ColorPickerGrid: View {
 
 extension Array {
     subscript(safe i: Int) -> Element? { indices.contains(i) ? self[i] : nil }
+}
+
+
+/// Narration Tools: the cue for how the narrator shades a character, shown in the margin,
+/// the Teleprompter and Narrator Scripts. Automatic comes from gender, age and the voice
+/// brief; the narrator can set pitch, pace and a few words of their own.
+struct ShadeCueEditor: View {
+    @ObservedObject var document: InnerVoiceDocument
+    let character: BookCharacter
+    @Environment(\.undoManager) private var undoManager
+
+    var body: some View {
+        let shade = character.shade ?? document.narrationShades()[character.id] ?? Shade()
+        VStack(alignment: .leading, spacing: Space.sm) {
+            HStack {
+                Text("Shade").font(.headline)
+                Text(shade.cue ?? "your own voice").foregroundStyle(.secondary)
+                Spacer()
+                Toggle("Automatic", isOn: Binding(get: { character.shade == nil },
+                                                  set: { document.setShade($0 ? nil : shade, for: character.id, undoManager: undoManager) }))
+                    .toggleStyle(.checkbox)
+                    .help("Work out \(character.firstName)’s shade from their gender, age and voice brief")
+            }
+            HStack(spacing: Space.xl) {
+                Stepper(value: Binding(get: { shade.pitch }, set: { set(Shade(pitch: $0, pace: shade.pace, words: shade.words)) }), in: Shade.pitchRange) {
+                    Text("Pitch: " + (shade.pitch == 0 ? "yours" : "\(abs(shade.pitch)) \(shade.pitch < 0 ? "lower" : "higher")"))
+                }
+                Stepper(value: Binding(get: { shade.pace }, set: { set(Shade(pitch: shade.pitch, pace: $0, words: shade.words)) }), in: Shade.paceRange) {
+                    Text("Pace: " + (shade.pace == 0 ? "yours" : shade.pace < 0 ? "slower" : "quicker"))
+                }
+            }
+            DraftTextField("A few words: gravelly, clipped, a soft lilt",
+                           text: Binding(get: { shade.words ?? "" }, set: { set(Shade(pitch: shade.pitch, pace: shade.pace, words: $0)) }))
+                .help("Shown with the cue in the margin and the Teleprompter")
+        }
+        .controlSize(.small)
+        .padding(Space.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func set(_ s: Shade) {
+        document.setShade(s, for: character.id, undoManager: undoManager)
+    }
 }

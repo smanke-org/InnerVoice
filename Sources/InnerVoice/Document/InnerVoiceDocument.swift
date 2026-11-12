@@ -25,7 +25,17 @@ nonisolated final class InnerVoiceDocument: ReferenceFileDocument {
 
     private(set) var project: Project {
         willSet { objectWillChange.send() }
-        didSet { index = BookIndex(project) }
+        didSet { index = BookIndex(project); shadeCache = nil }
+    }
+    /// Narration Tools: each character's shade (Casting Style), worked out once per change
+    /// because the margin asks on every scroll.
+    private var shadeCache: [UUID: Shade]?
+
+    @MainActor func narrationShades() -> [UUID: Shade] {
+        if let shadeCache { return shadeCache }
+        let s = CastingStyleRules.shades(project, index: index, narratorGender: project.settings.narratorGender)
+        shadeCache = s
+        return s
     }
     /// Lookups over the project, rebuilt with every change.
     private(set) var index: BookIndex

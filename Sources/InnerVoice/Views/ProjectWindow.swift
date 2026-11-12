@@ -6,7 +6,9 @@ import UniformTypeIdentifiers
 /// One book's window: sidebar, page, inspector.
 struct ProjectWindow: View {
     private func askProjectTypeIfNeeded() {
-        guard !SystemHooks.isTestRun, !document.project.isEmpty, document.project.settings.purpose == nil else { return }
+        // The project type, then the Casting Style (books made before it are asked once).
+        guard !SystemHooks.isTestRun, !document.project.isEmpty,
+              document.project.settings.purpose == nil || document.project.settings.castingStyle == nil else { return }
         workspace.showProjectType = true
     }
 
@@ -41,7 +43,7 @@ struct ProjectWindow: View {
             AudioExportSheet(document: document, isPresented: $workspace.showAudioExport)
         }
         .sheet(isPresented: $workspace.showProjectType) {
-            ProjectTypeSheet(document: document, workspace: workspace)
+            ProjectTypeSheet(document: document, workspace: workspace, step: document.project.settings.purpose == nil ? 0 : 1)
         }
         .sheet(isPresented: $workspace.showProjectSettings) {
             ProjectSettingsSheet(document: document, isPresented: $workspace.showProjectSettings)

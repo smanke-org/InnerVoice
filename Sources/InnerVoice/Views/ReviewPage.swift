@@ -12,7 +12,7 @@ struct ReviewPage: View {
     @Environment(\.undoManager) private var undoManager
 
     enum Filter: String, CaseIterable, Identifiable {
-        case guesses, noSpeaker, all, tones, voices
+        case guesses, noSpeaker, all, tones, voices, genders
         var id: String { rawValue }
         var title: String {
             switch self {
@@ -21,6 +21,7 @@ struct ReviewPage: View {
             case .all: "All Speakers"
             case .tones: "Unsure Tones"
             case .voices: "Unsure Voices"
+            case .genders: "Genders to Review"
             }
         }
     }
@@ -48,7 +49,7 @@ struct ReviewPage: View {
         case .noSpeaker: needing.filter { $0.speakerID == nil }
         case .all: needing
         case .tones: document.project.lines.filter { document.project.toneNeedsYou($0) && !document.project.needsYou($0) }
-        case .voices: []
+        case .voices, .genders: []
         }
     }
 
@@ -60,9 +61,24 @@ struct ReviewPage: View {
             .sorted { (index.stats[$0.id]?.lines ?? 0) > (index.stats[$1.id]?.lines ?? 0) }
     }
 
-    private func count(_ f: Filter) -> Int { f == .voices ? unsureVoices.count : items(f).count }
+    /// Casting Style: characters whose gender the book doesn't settle, most lines first.
+    private var genderReview: [BookCharacter] {
+        guard document.project.settings.castingStyle != nil else { return [] }
+        return CastingStyleRules.genderToReview(document.project, index: document.index).compactMap { document.project.character($0) }
+    }
 
-    private var nothingToReview: Bool { Filter.allCases.allSatisfy { count($0) == 0 || ($0 == .voices && !document.project.showsVoices) } }
+    private func count(_ f: Filter) -> Int { f == .voices ? unsureVoices.count : f == .genders ? genderReview.count : items(f).count }
+
+    /// Filters that apply to this book: voices only with AI voices, genders only with a Casting Style.
+    private func offered(_ f: Filter) -> Bool {
+        switch f {
+        case .voices: document.project.showsVoices
+        case .genders: document.project.settings.castingStyle != nil
+        default: true
+        }
+    }
+
+    private var nothingToReview: Bool { Filter.allCases.allSatisfy { count($0) == 0 || !offered($0) } }
 
     var body: some View {
         let items = items(filter)
@@ -73,21 +89,24 @@ struct ReviewPage: View {
             } else {
                 HStack(spacing: 0) {
                     Group {
-                        if filter == .voices { voiceList } else { list(items) }
+                        if filter == .voices { voiceList } else if filter == .genders { genderList } else { list(items) }
                     }
                     .frame(width: 300)
                     Divider()
                     if filter == .voices, let id = selection, let c = unsureVoices.first(where: { $0.id == id }) {
                         voiceCard(c)
+                    } else if filter == .genders, let id = selection, let c = genderReview.first(where: { $0.id == id }) {
+                        genderCard(c)
                     } else if filter == .tones, let id = selection, let line = items.first(where: { $0.id == id }) {
                         toneCard(line, items: items)
-                    } else if filter != .voices, filter != .tones, let id = selection, let line = items.first(where: { $0.id == id }) {
+                    } else if filter != .voices, filter != .tones, filter != .genders, let id = selection, let line = items.first(where: { $0.id == id }) {
                         card(line, items: items)
-                    } else if count(filter) == 0, let other = Filter.allCases.first(where: { $0 != filter && count($0) > 0 && ($0 != .voices || document.project.showsVoices) }) {
+                    } else if count(filter) == 0, let other = Filter.allCases.first(where: { $0 != filter && count($0) > 0 && offered($0) }) {
                         ContentUnavailableView {
                             Label(filter == .guesses ? "No Unsure Guesses Left" : "Nothing Here", systemImage: "checkmark.circle")
                         } description: {
-                            Text(other == .voices ? (count(other) == 1 ? "1 voice needs you." : "\(count(other)) voices need you.") : (count(other) == 1 ? "1 more line needs you." : "\(count(other)) more lines need you."))
+                            Text(other == .voices ? (count(other) == 1 ? "1 voice needs you." : "\(count(other)) voices need you.")
+                                 : other == .genders ? (count(other) == 1 ? "1 gender to review." : "\(count(other)) genders to review.") : (count(other) == 1 ? "1 more line needs you." : "\(count(other)) more lines need you."))
                         } actions: {
                             Button("Review \(other.title)") { filterRaw = other.rawValue }
                         }
@@ -103,7 +122,7 @@ struct ReviewPage: View {
         .navigationTitle("Review")
         .pageSubtitle(needing.isEmpty ? "" : "\(needing.count) lines need you")
         .toolbar {
-            if !nothingToReview, filter != .voices {
+            if !nothingToReview, filter != .voices, filter != .genders {
                 ToolbarItem { contextControl }
             }
         }
@@ -119,14 +138,14 @@ struct ReviewPage: View {
     }
 
     private func selectFirstIfNeeded() {
-        let ids = filter == .voices ? unsureVoices.map(\.id) : items(filter).map(\.id)
+        let ids = filter == .voices ? unsureVoices.map(\.id) : filter == .genders ? genderReview.map(\.id) : items(filter).map(\.id)
         if selection == nil || !ids.contains(where: { $0 == selection }) { selection = ids.first }
         focused = true
     }
 
     private var filterPicker: some View {
         Picker("Show", selection: $filterRaw) {
-            ForEach(Filter.allCases.filter { $0 != .voices || document.project.showsVoices }) { f in
+            ForEach(Filter.allCases.filter(offered)) { f in
                 Text("\(f.title) (\(count(f)))").tag(f.rawValue)
             }
         }
@@ -627,6 +646,80 @@ struct ReviewPage: View {
                 }
                 CastingProfileView(document: document, character: c)
                 VoiceChooser(document: document, characterID: c.id, compact: true)
+            }
+            .padding(Space.xl)
+            .frame(maxWidth: 760, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
+        .id(c.id)
+    }
+}
+
+extension ReviewPage {
+    // MARK: Genders (Casting Style)
+
+    var genderList: some View {
+        VStack(spacing: 0) {
+            filterPicker
+            Divider()
+            List(genderReview, selection: $selection) { c in
+                HStack(spacing: Space.sm) {
+                    Circle().fill(Color(hexString: c.colorHex)).frame(width: 10, height: 10)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(c.name)
+                        let p = VoiceCasting.profile(c, project: document.project, index: document.index)
+                        Text(p.gender.map { "\(CharacterGender($0).title)?" } ?? "Unknown")
+                            .font(.caption)
+                            .foregroundStyle(Color(nsColor: .attention))
+                    }
+                    Spacer()
+                    Text("\(document.index.stats[c.id]?.lines ?? 0)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                }
+                .tag(c.id)
+            }
+            .listStyle(.inset)
+        }
+    }
+
+    /// One character to settle: what the book says, a few of their lines, and Male, Female
+    /// or Other (keys 1–3). Choosing moves on to the next.
+    func genderCard(_ c: BookCharacter) -> some View {
+        let lines = document.project.lines.filter { $0.speakerID == c.id }.prefix(3)
+        let next = genderReview.first { $0.id != c.id }?.id
+        func choose(_ g: CharacterGender) {
+            document.setGender(g, for: [c.id], undoManager: undoManager)
+            selection = next
+        }
+        return ScrollView {
+            VStack(alignment: .leading, spacing: Space.lg) {
+                HStack(spacing: Space.md) {
+                    Avatar(character: c, size: 40)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(c.name).font(.title3.weight(.semibold))
+                        Text("\(document.index.stats[c.id]?.lines ?? 0) lines").foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Open \(c.firstName)") { workspace.showCharacter(c.id) }
+                }
+                Text("The Casting Style sorts characters by gender, and the book doesn’t settle \(c.firstName)’s. Choose one; Other is a group of its own.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: Space.sm) {
+                    ForEach(Array(lines)) { l in
+                        Text("“" + document.project.text(of: l, index: document.index) + "”")
+                            .font(.system(.body, design: serif ? .serif : .default))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                HStack(spacing: Space.sm) {
+                    ForEach(Array(CharacterGender.allCases.enumerated()), id: \.offset) { i, g in
+                        Button("\(g.title)") { choose(g) }
+                            .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: [])
+                            .help("\(c.firstName) is \(g == .other ? "neither male nor female" : g.title.lowercased()) (\(i + 1))")
+                    }
+                }
+                .controlSize(.large)
+                CastingProfileView(document: document, character: c)
             }
             .padding(Space.xl)
             .frame(maxWidth: 760, alignment: .leading)

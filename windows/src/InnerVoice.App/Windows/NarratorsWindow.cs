@@ -69,7 +69,21 @@ public sealed class NarratorsWindow : Window
                 };
                 cast.Children.Add(box);
             }
-            col.Children.Add(Ui.Card(Ui.Column(Look.Md, Ui.Row(Look.Sm, name, notes, remove), cast), Look.Md));
+            var row = Ui.Row(Look.Sm, name, notes, remove);
+            // Casting Style: the part this narrator reads (one narrator per part).
+            if (p.Settings.CastingStyle is not null)
+            {
+                VoiceRole?[] parts = [null, VoiceRole.Narrator, VoiceRole.Men, VoiceRole.Women, VoiceRole.Other];
+                var part = new ComboBox
+                {
+                    ItemsSource = parts.Select(r => r is null ? "No Part" : r == VoiceRole.Narrator ? "Narration" : r.Value.Title()).ToList(),
+                    SelectedIndex = Math.Max(0, Array.IndexOf(parts, n.Role)), Width = 130,
+                };
+                ToolTip.SetTip(part, $"The part {n.Name} reads: the narration, every man, every woman, or everyone else");
+                part.SelectionChanged += (_, _) => { if (part.SelectedIndex >= 0 && parts[part.SelectedIndex] != n.Role) document.SetNarratorRole(id, parts[part.SelectedIndex]); };
+                row.Children.Insert(2, part);
+            }
+            col.Children.Add(Ui.Card(Ui.Column(Look.Md, row, cast), Look.Md));
         }
         col.Children.Add(Ui.Button("Add Narrator", async () =>
         {

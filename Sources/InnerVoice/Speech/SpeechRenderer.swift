@@ -12,12 +12,17 @@ struct SpeechRequest: Hashable, Sendable {
     var sound: VocalSound? = nil
     /// The book allows its text to go to a cloud engine (ElevenLabs). Not part of the cache key.
     var cloudAllowed = false
+    /// Casting Style: how the narrator's voice changes for the character saying this
+    /// (pitch and pace; `ShadeAudio`). nil or neutral: the voice as it is.
+    var shade: Shade? = nil
 
     /// The file name of the rendered audio in the cache. Version 1 of the rendering.
     var cacheKey: String {
         var parts = ["v1", choice.engine.rawValue, choice.voiceID, choice.design ?? "", String(choice.rate ?? 1), String(choice.pitch ?? 1),
                      tone.rawValue, kind?.rawValue ?? "narration", text]
         if choice.engine == .orpheus || choice.engine == .elevenlabs, let sound { parts.append(sound.rawValue) }
+        // Unshaded audio keeps the key it always had, so the cache stays warm.
+        if let shade, shade.pitch != 0 || shade.pace != 0 { parts.append("shade \(shade.pitch) \(shade.pace)") }
         return SHA256.hash(data: Data(parts.joined(separator: "\u{1F}").utf8)).map { String(format: "%02x", $0) }.joined()
     }
 }
@@ -122,12 +127,21 @@ final class SpeechRenderer {
         guard !text.isEmpty else { return SpeechAudio.silence(0.05) }
         let file = cacheFolder.appending(path: request.cacheKey + ".caf")
         if let cached = Self.read(file) { return cached }
-        let buffer: AVAudioPCMBuffer
+        var buffer: AVAudioPCMBuffer
         switch request.choice.engine {
         case .apple: buffer = try await AppleSpeech.render(request)
         case .qwen, .orpheus: buffer = try await ModelSpeech.render(request)
         case .elevenlabs: buffer = try await ElevenLabs.shared.render(request, allowed: request.cloudAllowed)
         case .mixed: throw SpeechError.engineUnavailable(.mixed)
+        }
+        // Shading: Apple's voices did it themselves; Qwen3-TTS shifted its voice sample, so
+        // only the pace is left; Orpheus and ElevenLabs shift the finished audio.
+        if let s = request.shade, s.pitch != 0 || s.pace != 0 {
+            switch request.choice.engine {
+            case .apple, .mixed: break
+            case .qwen: buffer = try ShadeAudio.apply(buffer, semitones: 0, pace: s.pace)
+            case .orpheus, .elevenlabs: buffer = try ShadeAudio.apply(buffer, semitones: s.pitch, pace: s.pace)
+            }
         }
         Self.write(buffer, to: file)
         pruneIfNeeded()
@@ -250,7 +264,12 @@ enum AppleSpeech {
         guard let voice = AVSpeechSynthesisVoice(identifier: request.choice.voiceID) else {
             throw SpeechError.voiceMissing(request.choice.voiceID.components(separatedBy: ".").last ?? request.choice.voiceID)
         }
-        let (r, p, v) = nudge(request.tone)
+        var (r, p, v) = nudge(request.tone)
+        // A shade (Casting Style): pitch in semitones, pace in steps.
+        if let s = request.shade {
+            p *= Float(ShadeAudio.pitchMultiplier(s.pitch))
+            r *= Float(ShadeAudio.paceRate(s.pace))
+        }
         let u = AVSpeechUtterance(string: request.text)
         u.voice = voice
         u.rate = min(AVSpeechUtteranceMaximumSpeechRate,
