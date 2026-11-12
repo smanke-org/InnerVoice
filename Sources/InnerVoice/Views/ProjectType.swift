@@ -360,40 +360,52 @@ private struct CastingStyleCard: View {
         }
     }
 
-    var body: some View {
-        HStack(alignment: .top, spacing: Space.md) {
-            Button(action: choose) {
-                HStack(alignment: .top, spacing: Space.md) {
-                    Image(systemName: symbol)
-                        .font(.title2)
-                        .foregroundStyle(selected ? Color.accentColor : .secondary)
-                        .frame(width: 32)
-                    VStack(alignment: .leading, spacing: Space.xs) {
-                        Text(style.title(for: purpose)).font(.headline)
-                        Text(detail).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                        Text(map).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 0)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            VStack(alignment: .trailing, spacing: Space.sm) {
-                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(selected ? Color.accentColor : .secondary)
-                if hasSample {
-                    Button(playing ? "Stop" : "Hear It", systemImage: playing ? "stop.fill" : "play.fill", action: play)
-                        .controlSize(.small)
-                        .help(narration ? "An example of this kind of audiobook (AI voices)" : "The opening of a sample story read this way")
-                }
+    /// The circle, then Hear It. The card draws it with Hear It hidden (a button can't hold
+    /// another button), and the real Hear It lies over that spot.
+    private func trailing(circle: Bool, hearIt: Bool) -> some View {
+        VStack(alignment: .trailing, spacing: Space.sm) {
+            Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(selected ? Color.accentColor : .secondary)
+                .opacity(circle ? 1 : 0)
+                .allowsHitTesting(circle)
+            if hasSample {
+                Button(playing ? "Stop" : "Hear It", systemImage: playing ? "stop.fill" : "play.fill", action: play)
+                    .controlSize(.small)
+                    .help(narration ? "An example of this kind of audiobook (AI voices)" : "The opening of a sample story read this way")
+                    .opacity(hearIt ? 1 : 0)
+                    .allowsHitTesting(hearIt)
+                    .accessibilityHidden(!hearIt)
             }
         }
-        .padding(Space.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(selected ? Color.accentColor.opacity(0.1) : Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(selected ? Color.accentColor : Color(nsColor: .separatorColor)))
-        .accessibilityElement(children: .contain)
+    }
+
+    var body: some View {
+        // The whole card is one button, the circle and the padding included.
+        Button(action: choose) {
+            HStack(alignment: .top, spacing: Space.md) {
+                Image(systemName: symbol)
+                    .font(.title2)
+                    .foregroundStyle(selected ? Color.accentColor : .secondary)
+                    .frame(width: 32)
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    Text(style.title(for: purpose)).font(.headline)
+                    Text(detail).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text(map).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                trailing(circle: true, hearIt: false)
+            }
+            .padding(Space.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(selected ? Color.accentColor.opacity(0.1) : Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(selected ? Color.accentColor : Color(nsColor: .separatorColor)))
+            .contentShape(RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
+        .overlay(alignment: .topTrailing) {
+            trailing(circle: false, hearIt: true).padding(Space.md)
+        }
     }
 }
 

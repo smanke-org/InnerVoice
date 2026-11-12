@@ -356,6 +356,31 @@ enum Snapshot {
                     capture(w, "\(dir)/\(name)-\(mode).png")
                     w.close()
                 }
+                // Clicks on a style card's circle choose it (it once sat outside the card's button).
+                if wants("project-type-style-click") {
+                    let host = NSHostingController(rootView: ProjectTypeSheet(document: document, workspace: workspace, choice: .aiVoices, step: 1))
+                    let w = NSWindow(contentViewController: host)
+                    w.styleMask = [.titled]
+                    w.makeKeyAndOrderFront(nil)
+                    try? await Task.sleep(for: .seconds(1.2))
+                    @MainActor func click(_ x: CGFloat, _ yFromTop: CGFloat) async {
+                        let p = NSPoint(x: x, y: w.frame.height - yFromTop)
+                        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                            if let e = NSEvent.mouseEvent(with: type, location: p, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                                          windowNumber: w.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) { w.sendEvent(e) }
+                            try? await Task.sleep(for: .seconds(0.05))
+                        }
+                        try? await Task.sleep(for: .seconds(0.6))
+                    }
+                    await click(520, 250)   // Narrator + Two Voices: the circle
+                    capture(w, "\(dir)/project-type-style-click-\(mode).png")
+                    await click(500, 168)   // One Voice: Hear It plays, and Narrator + Two Voices stays chosen
+                    capture(w, "\(dir)/project-type-style-click2-\(mode).png")
+                    await click(500, 168)   // Stop
+                    await click(24, 400)    // Full Cast: the card's padding, left of the icon
+                    capture(w, "\(dir)/project-type-style-click3-\(mode).png")
+                    w.close()
+                }
                 await shot("project-settings") { workspace.showProjectSettings = true }
                 workspace.showProjectSettings = false
                 try? await Task.sleep(for: .seconds(0.5))
