@@ -80,9 +80,8 @@ public static class RecapPrompt
     /// What Export Audio says for a chapter's recap when "Say chapter recaps" is on: "Previously…",
     /// then the recap a sentence at a time, after the chapter's title, in the narrator's voice.
     /// Empty when the chapter has no recap.
-    /// TODO(voices): the voices work's SpeechScript.segments(chapter:…, recaps:) inserts these
-    /// as narration segments after the title (the last with a chapter pause), and Export Audio
-    /// gets its "Say chapter recaps" checkbox (the Mac's AudioExport).
+    /// SpeechScript.RecapSegments speaks these after the chapter's title (Export Audio's
+    /// "Say chapter recaps").
     public static List<string> SpokenParts(Chapter chapter) =>
         chapter.RecapText is { } recap ? ["Previously…", .. Sentences(recap)] : [];
 

@@ -1,4 +1,5 @@
-// Ported from Sources/InnerVoiceKit/ReadAlongEpub.swift (the packaging only: no audio here).
+// Ported from Sources/InnerVoiceKit/ReadAlongEpub.swift. Export EPUB with Audio
+// (Speech/EpubAudioExport.cs) renders each chapter and passes its audio and timings here.
 
 using System.Globalization;
 using System.IO.Compression;
@@ -9,8 +10,8 @@ using System.Text.RegularExpressions;
 namespace InnerVoice.Core;
 
 /// One stretch the voices read, for a read-along page: which paragraph, and where its words are
-/// in the paragraph's text (UTF-16). Source is null for a scene break. Stands in for the Mac's
-/// SpeechSegment (id, paragraphID, source); the voices work's SpeechScript segments map onto it.
+/// in the paragraph's text (UTF-16). Source is null for a scene break. The parts of a
+/// SpeechSegment a page needs (id, paragraphID, source).
 public sealed record ReadAlongSegment(string Id, Guid ParagraphID, TextSpan? Source);
 
 /// EPUB with Audio: an EPUB 3 book whose text plays in the book's voices and highlights as
@@ -24,7 +25,6 @@ public sealed record ReadAlongSegment(string Id, Guid ParagraphID, TextSpan? Sou
 ///   OEBPS/text/c001.xhtml         (media-overlay="mo-c001")
 ///   OEBPS/smil/c001.smil
 ///   OEBPS/audio/c001.m4a
-// TODO(voices): Export EPUB with Audio renders each chapter with the voice engine (the Mac's AudioExporter.write timing callback) and passes the file and segment timings here.
 public static class ReadAlongEpub
 {
     /// One stretch of text and when the audio reads it, in seconds from the start of its chapter's audio.
@@ -44,54 +44,17 @@ public static class ReadAlongEpub
 
     // MARK: Segments
 
-    /// Read-along segments for a chapter without the voices: each line and each sentence of
-    /// narration, in reading order. Line ranges are kept whole, narration is split into
-    /// sentences with a simple splitter (the Mac uses NLTokenizer through SpeechScript).
-    // TODO(voices): replace with the ported SpeechScript.segments (with each segment's source), which also knows pronunciations, pauses and who reads what.
-    public static List<ReadAlongSegment> Segments(Chapter chapter, Project project)
-    {
-        var output = new List<ReadAlongSegment>();
-        var byParagraph = project.Lines.GroupBy(l => l.ParagraphID).ToDictionary(g => g.Key, g => g.OrderBy(l => l.Range.Location).ToList());
-        int n = 0;
-        foreach (var paragraph in chapter.Paragraphs)
-        {
-            if (paragraph.Style == ParagraphStyle.SceneBreak)
-            {
-                output.Add(new ReadAlongSegment($"s{++n}", paragraph.Id, null));
-                continue;
-            }
-            int cursor = 0;
-            foreach (var line in byParagraph.GetValueOrDefault(paragraph.Id) ?? [])
-            {
-                if (line.Range.Location < cursor) continue;
-                foreach (var s in SentenceSpans(paragraph.Text, new TextSpan(cursor, line.Range.Location - cursor), narration: true))
-                    output.Add(new ReadAlongSegment($"s{++n}", paragraph.Id, s));
-                foreach (var s in SentenceSpans(paragraph.Text, line.Range, narration: false))
-                    output.Add(new ReadAlongSegment($"s{++n}", paragraph.Id, s));
-                cursor = line.Range.End;
-            }
-            foreach (var s in SentenceSpans(paragraph.Text, new TextSpan(cursor, paragraph.Text.Length - cursor), narration: true))
-                output.Add(new ReadAlongSegment($"s{++n}", paragraph.Id, s));
-        }
-        return output;
-    }
+    /// What a page highlights for these segments.
+    public static List<ReadAlongSegment> Segments(IEnumerable<SpeechSegment> segments) =>
+        segments.Select(s => new ReadAlongSegment(s.Id, s.ParagraphID, s.Source)).ToList();
 
-    static readonly Regex Sentence = new(@"[^.!?…]+(?:[.!?…]+[""”’)\]]*|$)", RegexOptions.CultureInvariant);
-
-    /// The sentences of `range` in `text`, trimmed of spaces (and, for narration, of the quote
-    /// marks left next to a line).
-    static IEnumerable<TextSpan> SentenceSpans(string text, TextSpan range, bool narration)
+    /// Read-along segments for a chapter: SpeechScript's, with narration, so each piece the
+    /// voices say (a sentence of narration, a line or its sentences) is a fragment of the page.
+    public static List<ReadAlongSegment> Segments(Chapter chapter, Project project, BookIndex? index = null)
     {
-        if (range.Length <= 0) yield break;
-        var piece = text.Substring(range.Location, range.Length);
-        foreach (Match m in Sentence.Matches(piece))
-        {
-            int start = m.Index, end = m.Index + m.Length;
-            bool Skip(char c) => char.IsWhiteSpace(c) || (narration && c is '"' or '“' or '”' or '‘' or '’');
-            while (start < end && Skip(piece[start])) start++;
-            while (end > start && Skip(piece[end - 1])) end--;
-            if (end > start && piece[start..end].Any(char.IsLetterOrDigit)) yield return new TextSpan(range.Location + start, end - start);
-        }
+        int c = project.Chapters.IndexOf(chapter);
+        if (c < 0) return [];
+        return Segments(SpeechScript.Segments(c, project, index ?? new BookIndex(project), includeNarration: true, pauses: new PauseSettings()));
     }
 
     // MARK: Pages
