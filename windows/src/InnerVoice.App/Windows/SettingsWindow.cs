@@ -9,7 +9,7 @@ using InnerVoice.Core.AI;
 
 namespace InnerVoice.App.Windows;
 
-/// Settings: General (appearance, reading text), AI (the model), Teleprompter, Activity.
+/// Settings: General (appearance, reading text), AI (the model), Voices, Teleprompter, Activity.
 public sealed partial class SettingsWindow : Window
 {
     static SettingsWindow? shown;
@@ -42,7 +42,12 @@ public sealed partial class SettingsWindow : Window
         ModelManager.Shared.Changed += Build;
         AppSettings.Changed += Build;
         ClaudeAccount.Shared.Changed += Build;
-        Closed += (_, _) => { ModelManager.Shared.Changed -= Build; AppSettings.Changed -= Build; ClaudeAccount.Shared.Changed -= Build; };
+        Speech.ElevenLabsEngine.Shared.Changed += Build;
+        Closed += (_, _) =>
+        {
+            ModelManager.Shared.Changed -= Build; AppSettings.Changed -= Build; ClaudeAccount.Shared.Changed -= Build;
+            Speech.ElevenLabsEngine.Shared.Changed -= Build;
+        };
     }
 
     void Select(string tab)
@@ -57,6 +62,7 @@ public sealed partial class SettingsWindow : Window
         tabs.Items.Clear();
         tabs.Items.Add(new TabItem { FontSize = 16, Header = "General", Content = Ui.Scroll(General()) });
         tabs.Items.Add(new TabItem { FontSize = 16, Header = "AI", Content = Ui.Scroll(AIPane()) });
+        AddVoicesTab(tabs);
         tabs.Items.Add(new TabItem { FontSize = 16, Header = "Teleprompter", Content = Ui.Scroll(TeleprompterPane()) });
         AddActivityTab(tabs);
         Select(selected);

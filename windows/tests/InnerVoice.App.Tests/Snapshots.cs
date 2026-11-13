@@ -83,6 +83,11 @@ public class Snapshots
         Pump();
         settings.CaptureRenderedFrame()?.Save(Path.Combine(dir, "Settings-AI.png"), (int?)null);
         settings.Close();
+        var voices = InnerVoice.App.Windows.SettingsWindow.Show(null, "Voices");
+        voices.Height = 1800;
+        Pump();
+        voices.CaptureRenderedFrame()?.Save(Path.Combine(dir, "Settings-Voices.png"), (int?)null);
+        voices.Close();
         // A revised draft: one paragraph edited, one added.
         {
             var doc = ProjectDocument.Unsaved(TestApp.Sample());

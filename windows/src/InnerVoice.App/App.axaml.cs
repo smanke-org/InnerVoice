@@ -17,6 +17,9 @@ public partial class App : Application
     public static string Version => typeof(App).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "0.1.0";
 
     readonly List<ProjectWindow> projects = [];
+
+    /// The project window used last (Settings › Voices › Try It plays from its book).
+    public ProjectWindow? FrontProject => projects.LastOrDefault(p => p.IsActive) ?? projects.LastOrDefault();
     StartWindow? start;
     IClassicDesktopStyleApplicationLifetime? desktop;
 
