@@ -1,8 +1,8 @@
 import Foundation
 
 /// What Build Summary learns about how a character sounds, written into their Voice Notes
-/// as a "From the book:" block for the narrator, and read back by voice casting (and the
-/// Qwen3-TTS voice description). The narrator's own notes are never touched; a block the
+/// as a "From the book:" block for the narrator, and read back by voice casting (and
+/// ElevenLabs' Voice Design). The narrator's own notes are never touched; a block the
 /// narrator edited is left as it is.
 public enum VoiceNotesFromBook {
     public static let heading = "From the book:"
@@ -74,7 +74,7 @@ public enum GeneratedNotes {
 }
 
 /// A character's Voice Notes turned into words a voice model can design a voice from
-/// (Qwen3-TTS's VoiceDesign, ElevenLabs' Voice Design). The narrator's own notes come
+/// (ElevenLabs' Voice Design; the on-device engines can't take a description). The narrator's own notes come
 /// first, then the voice brief, then what the book says; headings go, and the result is
 /// cut at a whole line to fit the model.
 public enum VoiceDescription {

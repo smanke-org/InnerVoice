@@ -4,7 +4,7 @@ import Observation
 import Speech
 
 /// Voices cloned on this Mac: a short clip of one real person's voice and exactly what it
-/// says, from which Qwen3-TTS speaks every line. Nothing leaves the Mac. Kept in
+/// says, from which Chatterbox speaks every line. Nothing leaves the Mac. Kept in
 /// Application Support/Inner Voice/Cloned Voices, so every project can use them; casting
 /// never gives one out (a real person's voice goes only where the narrator puts it).
 @Observable
@@ -25,11 +25,17 @@ final class LocalClones {
     }
 
     /// `VoiceChoice.voiceID` for a clone: "clone:" and its id.
-    nonisolated static let prefix = "clone:"
-    nonisolated static func isClone(_ choice: VoiceChoice) -> Bool { choice.engine == .qwen && choice.voiceID.hasPrefix(prefix) }
+    nonisolated static let prefix = ChatterboxVoice.clonePrefix
+    nonisolated static func isClone(_ choice: VoiceChoice) -> Bool { choice.engine == .chatterbox && choice.voiceID.hasPrefix(prefix) }
+
+    /// A clone's clip and what it says.
+    struct Sample: Sendable {
+        var audio: [Float]
+        var text: String
+    }
 
     private(set) var clones: [Clone] = []
-    @ObservationIgnored private var samples: [String: QwenSamples.Sample] = [:]
+    @ObservationIgnored private var samples: [String: Sample] = [:]
 
     /// Test runs keep their clones in a temporary folder, never the person's own.
     static let folder: URL = {
@@ -53,13 +59,13 @@ final class LocalClones {
         if let data = try? JSONEncoder().encode(clones) { try? data.write(to: Self.listFile, options: .atomic) }
     }
 
-    /// The clones as voices for the Qwen3-TTS lists, newest first.
+    /// The clones as voices for the Chatterbox lists, newest first.
     var voices: [VoiceInfo] {
         clones.sorted { $0.created > $1.created }.map(Self.info)
     }
 
     static func info(_ c: Clone) -> VoiceInfo {
-        VoiceInfo(engine: .qwen, voiceID: c.voiceID, name: c.name, gender: c.gender, age: .adult, accent: "",
+        VoiceInfo(engine: .chatterbox, voiceID: c.voiceID, name: c.name, gender: c.gender, age: .adult, accent: "",
                   quality: 3, detail: "Cloned on this Mac")
     }
 
@@ -79,7 +85,7 @@ final class LocalClones {
         SpeechRenderer.write(try ModelSpeech.buffer(audio), to: file)
         guard FileManager.default.fileExists(atPath: file.path) else { throw CloneError.couldNotSave }
         clones.append(c)
-        samples[c.id] = QwenSamples.Sample(audio: audio, text: c.text)
+        samples[c.id] = Sample(audio: audio, text: c.text)
         save()
         ActivityStore.shared.record(ActivityKey.voicesCloned)
         return c
@@ -101,13 +107,13 @@ final class LocalClones {
     }
 
     /// The clip every line is spoken from.
-    func sample(for voiceID: String) throws -> QwenSamples.Sample {
+    func sample(for voiceID: String) throws -> Sample {
         guard let c = clone(for: voiceID) else { throw SpeechError.voiceMissing("a cloned voice deleted from this Mac") }
         if let s = samples[c.id] { return s }
         guard let b = SpeechRenderer.read(Self.audioFile(c.id)), let data = b.floatChannelData else {
             throw SpeechError.voiceMissing(c.name)
         }
-        let s = QwenSamples.Sample(audio: Array(UnsafeBufferPointer(start: data[0], count: Int(b.frameLength))), text: c.text)
+        let s = Sample(audio: Array(UnsafeBufferPointer(start: data[0], count: Int(b.frameLength))), text: c.text)
         samples[c.id] = s
         return s
     }

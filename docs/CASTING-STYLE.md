@@ -1,6 +1,6 @@
 # Casting Style: feature plan
 
-Status: phases 0–6 done (2026-11-12). Left: phase 7 (suggestions), texture words for Qwen3-TTS, ElevenLabs remixing (needs the narrator's OK), the Characters step count. Mockups: the "InnerVoice Casting Style Mockups"
+Status: phases 0–6 done (2026-11-12). 2026-11-13: Chatterbox replaced Qwen3-TTS (no Chinese models); Qwen notes below are kept as the record of the shading spike. Left: phase 7 (suggestions), ElevenLabs remixing (needs the narrator's OK), the Characters step count. (Texture words for Qwen3-TTS are dropped: Chatterbox can't take words.) Mockups: the "InnerVoice Casting Style Mockups"
 design canvas (private Claude artifact; ask for the link).
 
 ## 1. What and why
@@ -44,16 +44,19 @@ Narration Tools says **narrator**, never "reader" (decided 2026-11-12): "Three N
 - `BookCharacter.voices` (per engine), `ProjectSettings.narratorVoices` (per engine),
   `VoiceChoice.isNarrator` ("Same as Narrator"), `CastVoice.source` (`.user` is never
   changed by casting).
-- `VoiceChoice.rate` / `.pitch`. **Only Apple voices use them**
-  (`SpeechRenderer` sets `pitchMultiplier`). Casting already fakes Apple voice ages with
-  pitch and nudges pitch from the voice brief (`Voices.swift` ~L631–640).
+- `VoiceChoice.rate` / `.pitch`. Apple voices take them directly (`pitchMultiplier`);
+  Chatterbox turns pitch into whole semitones of its clip (`ChatterboxVoice.semitones`) and
+  rate into a time-stretch of the finished audio. Casting fakes ages with them for both
+  (`VoiceCasting.ageAdjusted`) and nudges them from the voice brief.
 - `CastingProfile`: gender (+ `genderGuessed`), age, accent, timbre, `pitchLean` /
   `paceLean` from the voice brief. That's everything needed for an automatic shade.
 - `VoiceResolver.choice(for:)` (`Speech/SpeechPlayer.swift`): character voice →
   narrator. Every voice decision already goes through it: it's where the plan plugs in.
-- Qwen3-TTS: VoiceDesign records one sample per (description, tone); the Base model clones
-  every line from it (`ModelSpeech.render`, `QwenSamples`). Cloned voices use their Clip
-  the same way. CLAUDE.md: designing each line separately drifts.
+- Chatterbox: every line is cloned from a clip (`ModelSpeech.render`, `ChatterboxClips`): a
+  stock voice's clip from Resources/StockVoices, or a cloned voice's Clip. The tone sets
+  its exaggeration (`ChatterboxDelivery`). (Before 2026-11-13, Qwen3-TTS: VoiceDesign
+  recorded one sample per description and tone, and the Base model cloned every line from
+  it.)
 - Narration Tools: `Narrator` people, `BookCharacter.narratorID`, Narrator Scripts
   (`Export/Exporter.swift`), MarginOverlay initials, the Teleprompter.
 - Windows (narration only) keeps unknown fields (`[JsonExtensionData]`) but must learn
@@ -143,35 +146,32 @@ character).
 
 ## 6. Shading AI voices (the hard part: spike first)
 
-Each engine shades with its own way of changing a voice from words: Voice Notes for
-Qwen3-TTS, Voice Remixing for ElevenLabs. A pitch shift is used only where neither exists.
+Each engine shades with its own way of changing a voice: Voice Remixing for ElevenLabs
+(words), a pitch shift of the clip for Chatterbox, a shift of the finished audio for
+Orpheus.
 
-What the code does today (checked 2026-11-12):
-- **Qwen3-TTS:** a character's Voice Notes change a **designed** voice (`voiceID ==
-  "design"`). `VoiceResolver.withNotes` adds them to the description at speaking time,
-  VoiceDesign records a new sample from that description, and every line is cloned from
-  it. So notes really do change the voice: it's a new design built from the old
-  description plus the notes. **Ready-made voices (`preset:…`) and cloned voices ignore
-  notes.**
+What the code does today (checked 2026-11-13):
+- **Chatterbox:** Voice Notes don't change the sound (it can't take a description); casting
+  reads them for gender, age, pitch and pace. (Qwen3-TTS, until 2026-11-12, redesigned a
+  "design" voice from them at speaking time.)
 - **ElevenLabs:** notes are **not** sent when speaking. Only the text, the tone and sound
   audio tags (`[whispers]`, `[sighs]`) and speed go. Notes reach ElevenLabs only through
   Design a Voice from Voice Notes, which makes a new voice.
 
 | Engine | How a character is shaded | Confidence |
 |---|---|---|
-| Qwen3-TTS, any narrator (designed, ready-made or cloned) | **Pitch:** shift the narrator's sample, then clone (tested: exact, sounds like the same narrator). **Texture:** shade words in the description, picked from 3–4 auditioned candidates | Pitch: confirmed. Texture: random amount, so audition only |
-| Qwen3-TTS, alternative | The CustomVoice 1.7B model: a fixed voice plus a spoken instruction per line ("slightly deeper, gruff"). Real shading of one voice, but a new download, only 9 voices, and mlx-audio-swift support unknown | Spike |
-| Qwen3-TTS, ready-made or cloned narrator | Notes do nothing here: shift the pitch of the reference sample or Clip, then clone from it | Spike |
+| Chatterbox, any narrator (stock or cloned) | **Pitch:** shift the narrator's clip, then clone (the method tested exact with Qwen3-TTS, below); pace time-stretches the finished line. No texture: it takes no words | Pitch: same method as the Qwen test; not listened to with Chatterbox yet |
 | ElevenLabs | **Voice Remixing** of the narrator's voice with the shade words, at low prompt strength so it stays close to the original. The original isn't changed. Each remix uses credits and a voice slot, so only main characters, only on the person's click, only for books that allow ElevenLabs (like Design a Voice). Minor characters: narrator voice + speed | Medium–high |
 | Orpheus | No descriptions: shift the output's pitch (±2 steps max) and time-stretch it | Medium |
 | Apple | `pitchMultiplier` + `rate` (already works) | Works, but lower quality: **never a default or a fallback** |
 
-One `Shade` feeds both kinds of engine. For Qwen3-TTS and ElevenLabs, pitch and pace steps
-become words ("a little deeper", "quicker"), joined with the texture words. For Orpheus and
+One `Shade` feeds both kinds of engine. For ElevenLabs, pitch and pace steps become words
+("a little deeper", "quicker"), joined with the texture words. For Chatterbox, Orpheus and
 Apple they're numbers. Texture is back for AI voices, but only on engines that read words.
 The shade editor hides it where it does nothing.
 
-**Qwen3-TTS test results (2026-11-12, `tools/shade-test`, 6 lines per voice):**
+**Qwen3-TTS test results (2026-11-12, `tools/shade-test`, 6 lines per voice; the tool was
+removed with Qwen3-TTS on 2026-11-13, the numbers are why Chatterbox shifts its clip):**
 
 | Way to shade | Pitch moved as asked? | Similarity to narrator | Verdict |
 |---|---|---|---|
@@ -211,10 +211,9 @@ The shade editor hides it where it does nothing.
 - Write the results into CLAUDE.md's Qwen and ElevenLabs notes either way.
 
 Rules:
-- Add the shade to the `SpeechRenderer` cache key. Qwen samples are already keyed by
-  description + tone, so shaded designs cache themselves.
-- Derived (pitch-shifted) Qwen samples go in Voice Models/Samples, keyed (preset or clone
-  id, tone, pitch step).
+- Add the shade to the `SpeechRenderer` cache key.
+- Shifted Chatterbox clips are made once per (voice, semitones) and kept in memory
+  (`ChatterboxClips`); they take milliseconds.
 - ElevenLabs remixes are listed as the narrator's variants and never cast to other
   characters (same rule as clones: `ElevenLabs.castable`).
 
@@ -249,7 +248,8 @@ Rules:
   - The engine step never preselects Apple's voices. If no voice pack is downloaded, it
     leads with the free download, and Apple stays an option further down.
 - **Hear It:** bundle six short pre-rendered clips (3 plans × AI wording; narration
-  reuses them labeled "Example"), made once from SeedData's sample book with Qwen3-TTS.
+  reuses them labeled "Example"), made from SeedData's sample book with Chatterbox's Tara
+  (`APP_MAKE_CASTING_SAMPLES`; remade 2026-11-13, first made with Qwen3-TTS).
   This works before any voice pack is downloaded. Keep each under 20 s (app size).
 - **Voices (AI):** the plan segmented control under the title; characters grouped by role
   (Narrator, Men, Women, Own Voice); drag between groups or right-click › Read By.
@@ -290,7 +290,7 @@ Phases 2 and 4 don't depend on each other once Phase 1 lands.
   - Each plan resolves the expected voice for a known male, female and no-gender character.
   - Same as Narrator and written text still go to the narrator.
   - The redraw voice-question timing stays < 1 ms.
-- Self-test with `APP_SELFTEST_VOICES=1`: a shaded line renders on Apple and Qwen, and
+- Self-test with `APP_SELFTEST_VOICES=1`: a shaded line renders on Apple and Chatterbox (Qwen3-TTS until 2026-11-13), and
   its pitch differs from the narrator's in the expected direction.
 - Snapshots: setup step (both types, light/dark), Voices in each plan, Cast columns,
   Review gender card, margin cues.
@@ -304,7 +304,7 @@ Phases 2 and 4 don't depend on each other once Phase 1 lands.
 5. **Other** is a group of its own in Narrator + Two Voices, for non-binary characters and
    unknown genders. Characters whose gender is a guess or missing get a **Gender to
    review** filter (Cast, and the Review page) to choose Male, Female or Other.
-6. **Apple's voices are never a default or a fallback.** Qwen3-TTS shading passed (section 6).
+6. **Apple's voices are never a default or a fallback.** Qwen3-TTS shading passed (section 6), by the clip shift Chatterbox now uses.
 7. **ElevenLabs remixes:** only for characters marked main. Up to 5 per book without
    asking. Beyond that, InnerVoice says how many voice slots it would use and asks.
    Remixes are tested only after the person says so (credits).

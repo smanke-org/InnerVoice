@@ -30,8 +30,8 @@ public enum SeriesVoices {
     }
 
     public struct Options: Sendable {
-        /// Bring each character's Voice Notes too. Qwen3-TTS designs voices from them, so
-        /// without them a designed voice comes out different.
+        /// Bring each character's Voice Notes too: casting and ElevenLabs' Voice Design read
+        /// them, so the characters come out the same as in the earlier book.
         public var voiceNotes = true
         /// Use the earlier book's narrator voice.
         public var narrator = true

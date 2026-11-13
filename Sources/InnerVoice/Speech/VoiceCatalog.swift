@@ -95,7 +95,7 @@ enum VoiceCatalog {
         switch engine {
         case .apple: appleVoices()
         case .orpheus: VoiceInfo.orpheus
-        case .qwen: LocalClones.shared.voices + VoiceInfo.qwenPresets
+        case .chatterbox: LocalClones.shared.voices + VoiceInfo.chatterbox
         case .elevenlabs: ElevenLabs.shared.voices
         // Every engine that's on and ready, best first within each.
         case .mixed: VoiceEngine.engines.filter { EngineSwitches.shared.usable($0) && (!$0.isCloud || project?.settings.cloudVoicesAllowed != nil) }
@@ -111,28 +111,17 @@ enum VoiceCatalog {
                 AVSpeechSynthesisVoice(identifier: choice.voiceID).map(info).map { v in appleByID[choice.voiceID] = v; return v }
             }
         case .orpheus: VoiceInfo.orpheus.first { $0.voiceID == choice.voiceID }
-        case .qwen: LocalClones.shared.clone(for: choice.voiceID).map(LocalClones.info)
-            ?? VoiceInfo.qwenPresets.first { $0.voiceID == choice.voiceID }
+        case .chatterbox: LocalClones.shared.clone(for: choice.voiceID).map(LocalClones.info)
+            ?? VoiceInfo.chatterbox.first { $0.voiceID == choice.voiceID }
         case .elevenlabs: ElevenLabs.shared.voices.first { $0.voiceID == choice.voiceID }
         case .mixed: nil
         }
     }
 
-    /// "Ava (Premium)", "Tara", or the start of a Qwen3-TTS design.
+    /// "Ava (Premium)", "Tara".
     static func name(of choice: VoiceChoice) -> String {
         if choice.isNarrator { return "Same as Narrator" }
-        switch choice.engine {
-        case .qwen where !choice.voiceID.hasPrefix("preset:") && !LocalClones.isClone(choice):
-            // Short enough for a list row, cut at a word.
-            return choice.design.map { d in
-                guard d.count > 48 else { return d }
-                let head = d.prefix(47)
-                let cut = head.lastIndex(of: " ").map { head[..<$0] } ?? head
-                return cut.trimmingCharacters(in: CharacterSet(charactersIn: " ,;")) + "…"
-            } ?? "Designed voice"
-        default:
-            guard let v = info(for: choice) else { return "Missing voice" }
-            return v.name
-        }
+        guard let v = info(for: choice) else { return "Missing voice" }
+        return v.name
     }
 }

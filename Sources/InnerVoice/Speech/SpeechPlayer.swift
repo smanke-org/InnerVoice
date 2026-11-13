@@ -21,7 +21,7 @@ struct VoiceResolver {
         let usable = Set(VoiceEngine.engines.filter { EngineSwitches.shared.usable($0) && (!$0.isCloud || project.settings.cloudVoicesAllowed != nil) })
         var map: [UUID: VoiceChoice] = [:]
         for c in project.characters {
-            if let v = c.voice(for: e)?.choice { map[c.id] = Self.withNotes(v, c) }
+            if let v = c.voice(for: e)?.choice { map[c.id] = v }
         }
         // Casting Style (docs/CASTING-STYLE.md): a character read by the narrator or a shared
         // voice (Men, Women, Other) speaks in that voice; Own Voice keeps their own.
@@ -62,7 +62,7 @@ struct VoiceResolver {
         // The narrator playing a character shades their voice for them (One Voice, and anyone
         // else the Casting Style gives the narrator): a man a little lower, a woman higher…
         if readers.values.contains(.narrator) {
-            // The narrator's own gender: from the voice list, or a designed voice's description.
+            // The narrator's own gender: from the voice list, or a voice's description.
             let narratorGender = narrator.flatMap { n in VoiceCatalog.info(for: n)?.gender ?? n.design.flatMap(VoiceCasting.gender(ofDescription:)) }
                 .flatMap { $0 == .neutral ? nil : CharacterGender($0) }
             shades = CastingStyleRules.shades(project, index: index ?? BookIndex(project), narratorGender: narratorGender)
@@ -83,15 +83,9 @@ struct VoiceResolver {
         return shades[id]
     }
 
-    /// Qwen3-TTS designs a voice from a description: the character's Voice Notes go with it,
-    /// so what the narrator writes there shapes how they sound. (ElevenLabs gets the notes
-    /// once, when it designs a voice for them; other engines can't take a description.)
-    static func withNotes(_ v: VoiceChoice, _ c: BookCharacter?) -> VoiceChoice {
-        guard let c, v.engine == .qwen, v.voiceID == "design" else { return v }
-        var out = v
-        out.design = VoiceDescription.design(base: v.design ?? "", character: c)
-        return out
-    }
+    // Voice Notes don't reach the on-device engines when they speak: Chatterbox, Orpheus and
+    // Apple's voices can't take a description. ElevenLabs gets the notes once, when it
+    // designs a voice from them (Voice Design, on the narrator's click).
 
     /// The book allows its text to go to ElevenLabs.
     var cloudAllowed = false
@@ -112,14 +106,14 @@ struct VoiceResolver {
         return pov
     }
 
-    /// A voice when nothing is cast yet: the best Apple voice, Orpheus's first, or a plain
-    /// Qwen3-TTS design.
+    /// A voice when nothing is cast yet: the best Apple voice, Orpheus's first, or
+    /// Chatterbox's own voice.
     @MainActor
     static func fallback(_ engine: VoiceEngine) -> VoiceChoice? {
         switch engine {
         case .apple: VoiceCatalog.appleVoices().first.map { VoiceChoice(engine: .apple, voiceID: $0.voiceID) }
         case .orpheus: VoiceChoice(engine: .orpheus, voiceID: "tara")
-        case .qwen: VoiceInfo.qwenPresets.first?.choice
+        case .chatterbox: VoiceInfo.chatterbox.first?.choice
         case .elevenlabs: ElevenLabs.shared.voices.first?.choice
         case .mixed: EngineSwitches.shared.enabled.first.flatMap { $0 == .mixed ? nil : fallback($0) }
         }
@@ -157,7 +151,7 @@ final class SpeechPlayer {
     private(set) var isPlaying = false
     /// "Making Mara’s voice…" while the first audio is being made.
     private(set) var preparing = false
-    /// The engine making the first audio (for "Getting Qwen3-TTS ready…").
+    /// The engine making the first audio (for "Getting Chatterbox ready…").
     private(set) var preparingEngine: VoiceEngine?
     var failure: String?
 
@@ -353,7 +347,7 @@ enum PlayCommand {
                                 text: SpeechScript.apply([], to: text), tone: sampleTone, kind: .spoken, pauseAfter: 0)
         seg.pause = .none
         var resolver = VoiceResolver(project: project, engine: choice.isNarrator ? nil : choice.engine, index: index)
-        if !choice.isNarrator { resolver.narrator = VoiceResolver.withNotes(choice, character) }
+        if !choice.isNarrator { resolver.narrator = choice }
         resolver.auditionShade = shade
         resolver.characters = [:]
         SpeechPlayer.shared.play([seg], resolver: resolver)

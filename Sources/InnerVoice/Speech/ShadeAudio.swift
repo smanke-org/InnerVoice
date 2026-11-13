@@ -1,9 +1,10 @@
 @preconcurrency import AVFoundation
 import InnerVoiceKit
 
-/// Shading one voice for a character (Casting Style, docs/CASTING-STYLE.md §6). Qwen3-TTS
-/// shifts the voice sample before cloning (tested: exact, and it keeps the narrator's voice);
-/// Orpheus and ElevenLabs shift the finished audio; Apple's voices take pitch and rate.
+/// Shading one voice for a character (Casting Style, docs/CASTING-STYLE.md §6). Chatterbox
+/// shifts the clip before cloning (as Qwen3-TTS did: exact, and ±2 semitones kept the
+/// narrator's voice); Orpheus and ElevenLabs shift the finished audio; Apple's voices take
+/// pitch and rate.
 nonisolated enum ShadeAudio {
     /// How much one pace step changes speed (±2 steps: ±16%).
     static func paceRate(_ pace: Int) -> Double { 1 + 0.08 * Double(pace) }
@@ -13,8 +14,13 @@ nonisolated enum ShadeAudio {
 
     /// The audio shifted `semitones` and sped up or slowed by `pace` steps, in the app's format.
     static func apply(_ input: AVAudioPCMBuffer, semitones: Int, pace: Int) throws -> AVAudioPCMBuffer {
-        guard semitones != 0 || pace != 0, input.frameLength > 0, let data = input.floatChannelData else { return input }
-        let samples = try apply(Array(UnsafeBufferPointer(start: data[0], count: Int(input.frameLength))), semitones: semitones, pace: pace,
+        try apply(input, semitones: semitones, rate: paceRate(pace))
+    }
+
+    /// The audio shifted `semitones` and played at `rate` (1 is as it is), in the app's format.
+    static func apply(_ input: AVAudioPCMBuffer, semitones: Int, rate: Double) throws -> AVAudioPCMBuffer {
+        guard semitones != 0 || abs(rate - 1) > 0.001, input.frameLength > 0, let data = input.floatChannelData else { return input }
+        let samples = try apply(Array(UnsafeBufferPointer(start: data[0], count: Int(input.frameLength))), semitones: semitones, rate: rate,
                                 format: input.format)
         guard let out = AVAudioPCMBuffer(pcmFormat: input.format, frameCapacity: AVAudioFrameCount(max(1, samples.count))) else { return input }
         out.frameLength = AVAudioFrameCount(samples.count)
@@ -22,14 +28,18 @@ nonisolated enum ShadeAudio {
         return out
     }
 
-    /// Offline AVAudioUnitTimePitch: pitch in cents, rate as a speed.
     static func apply(_ input: [Float], semitones: Int, pace: Int, format: AVAudioFormat = SpeechAudio.format) throws -> [Float] {
-        guard semitones != 0 || pace != 0, !input.isEmpty else { return input }
+        try apply(input, semitones: semitones, rate: paceRate(pace), format: format)
+    }
+
+    /// Offline AVAudioUnitTimePitch: pitch in cents, rate as a speed.
+    static func apply(_ input: [Float], semitones: Int, rate: Double, format: AVAudioFormat = SpeechAudio.format) throws -> [Float] {
+        guard semitones != 0 || abs(rate - 1) > 0.001, !input.isEmpty else { return input }
         let engine = AVAudioEngine()
         let player = AVAudioPlayerNode()
         let unit = AVAudioUnitTimePitch()
         unit.pitch = Float(semitones * 100)
-        unit.rate = Float(paceRate(pace))
+        unit.rate = Float(rate)
         engine.attach(player)
         engine.attach(unit)
         engine.connect(player, to: unit, format: format)
@@ -44,7 +54,7 @@ nonisolated enum ShadeAudio {
         player.scheduleBuffer(b, completionHandler: nil)
         player.play()
         // The unit's latency comes first; render past the end to get it all back.
-        let expected = Int(Double(input.count) / paceRate(pace)) + 8192
+        let expected = Int(Double(input.count) / rate) + 8192
         var out: [Float] = []
         out.reserveCapacity(expected)
         while out.count < expected {

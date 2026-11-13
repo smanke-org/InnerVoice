@@ -4,7 +4,7 @@ import InnerVoiceKit
 import MLXAudioCore
 import Observation
 
-/// The speech models Qwen3-TTS and Orpheus need, downloaded from Hugging Face into
+/// The speech models Chatterbox and Orpheus need, downloaded from Hugging Face into
 /// Application Support. Downloading is the only time they touch the network; the book's
 /// text never leaves the Mac.
 nonisolated struct VoicePack: Sendable {
@@ -22,23 +22,62 @@ nonisolated struct VoicePack: Sendable {
         bytes: 3_620_000_000,
         summary: "Eight natural American voices that act out the words, with sighs, laughs and gasps from the speech tags.")
 
-    static let qwen = VoicePack(
-        engine: .qwen,
-        repos: [VoicePack.qwenDesignRepo, VoicePack.qwenCloneRepo],
-        bytes: 6_180_000_000,
-        summary: "A voice designed for each character from their summary and Voice Notes, kept the same on every line and acted in each tone.")
+    static let chatterbox = VoicePack(
+        engine: .chatterbox,
+        repos: [VoicePack.chatterboxRepo, VoicePack.chatterboxTokenizerRepo],
+        bytes: 3_192_000_000,
+        summary: "Nine stock voices and the voices you clone on this Mac, kept the same on every line and acted in each tone. Uses about 4 GB of memory while it speaks.")
 
-    /// Designs a voice from a description and acts in a tone.
-    static let qwenDesignRepo = "mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit"
-    /// Speaks every line in a designed voice.
-    static let qwenCloneRepo = "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit"
+    /// Chatterbox (Resemble AI, MIT): clones a voice from a short clip and speaks the lines.
+    static let chatterboxRepo = "mlx-community/Chatterbox-TTS-fp16"
+    /// The speech tokenizer Chatterbox reads a clip with (part of Chatterbox's design; it
+    /// comes from CosyVoice 2).
+    static let chatterboxTokenizerRepo = "mlx-community/S3TokenizerV2"
 
     static func pack(for engine: VoiceEngine) -> VoicePack? {
         switch engine {
         case .apple, .mixed, .elevenlabs: nil
         case .orpheus: orpheus
-        case .qwen: qwen
+        case .chatterbox: chatterbox
         }
+    }
+
+    /// mlx-audio loads Chatterbox's speech tokenizer from its default Hugging Face cache, which
+    /// is ~/.cache/huggingface unless `HF_HUB_CACHE` says otherwise: point it at the voice
+    /// models, so it finds the copy downloaded with the pack and never fetches one elsewhere.
+    /// Called at launch, before anything reads the default cache.
+    static func pinHubCache() {
+        let base = ProcessInfo.processInfo.environment["APP_VOICE_MODELS"].map { URL(fileURLWithPath: $0) }
+            ?? URL.applicationSupportDirectory.appending(path: "Inner Voice/Voice Models")
+        setenv("HF_HUB_CACHE", base.path, 1)
+    }
+
+    /// Qwen3-TTS (retired 2026-11-13): its models and voice samples, if this Mac still has them.
+    static var oldQwenFiles: [URL] {
+        let fm = FileManager.default
+        var out: [URL] = []
+        let models = folder.appending(path: "mlx-audio")
+        for name in (try? fm.contentsOfDirectory(atPath: models.path)) ?? [] where name.hasPrefix("mlx-community_Qwen3-TTS") {
+            out.append(models.appending(path: name))
+        }
+        for name in (try? fm.contentsOfDirectory(atPath: folder.path)) ?? [] where name.hasPrefix("models--mlx-community--Qwen3-TTS") {
+            out.append(folder.appending(path: name))
+        }
+        let samples = folder.appending(path: "Samples")
+        if fm.fileExists(atPath: samples.path) { out.append(samples) }
+        return out
+    }
+
+    /// How much room the old files take.
+    static func size(of urls: [URL]) -> Int64 {
+        var total: Int64 = 0
+        for url in urls {
+            guard let e = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.totalFileAllocatedSizeKey]) else { continue }
+            for case let f as URL in e {
+                total += Int64((try? f.resourceValues(forKeys: [.totalFileAllocatedSizeKey]))?.totalFileAllocatedSize ?? 0)
+            }
+        }
+        return total
     }
 
     /// Where the models live. `APP_VOICE_MODELS` points test runs somewhere else.
@@ -173,11 +212,27 @@ final class VoiceModelManager {
             let hub = VoicePack.folder.appending(path: "models--" + repo.replacingOccurrences(of: "/", with: "--"))
             trash(hub)
         }
-        if pack.engine == .qwen {
-            trash(VoicePack.folder.appending(path: "Samples"))
-            QwenSamples.forget()
-        }
+        if pack.engine == .chatterbox { ChatterboxClips.forget() }
         revision += 1
+    }
+
+    /// The files Qwen3-TTS left (Settings › Voices › Remove Old Voice Files), worked out once
+    /// per change: the Settings row asks on every redraw.
+    private(set) var oldFiles: (urls: [URL], bytes: Int64)?
+
+    func checkOldFiles() {
+        let urls = VoicePack.oldQwenFiles
+        oldFiles = urls.isEmpty ? nil : (urls, VoicePack.size(of: urls))
+    }
+
+    /// Moves Qwen3-TTS's models and voice samples to the Trash. Test runs touch only a
+    /// test folder (APP_VOICE_MODELS), never the person's own, and delete outright there.
+    func removeOldFiles() {
+        if SystemHooks.isTestRun, ProcessInfo.processInfo.environment["APP_VOICE_MODELS"] == nil { return }
+        for url in VoicePack.oldQwenFiles {
+            if SystemHooks.isTestRun { try? FileManager.default.removeItem(at: url) } else { try? FileManager.default.trashItem(at: url, resultingItemURL: nil) }
+        }
+        checkOldFiles()
     }
 
     static func describe(_ error: Error) -> String {

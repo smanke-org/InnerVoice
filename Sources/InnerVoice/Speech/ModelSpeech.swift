@@ -2,20 +2,22 @@
 import CryptoKit
 import InnerVoiceKit
 import MLX
+import MLXAudioCodecs
 import MLXAudioCore
 import MLXAudioTTS
 import NaturalLanguage
 import Observation
 
-/// Qwen3-TTS and Orpheus, on Apple's MLX (Apple silicon only).
+/// Chatterbox and Orpheus, on Apple's MLX (Apple silicon only).
 ///
 /// Orpheus has eight fixed voices and acts from the words; the speech tag's sighs, laughs
 /// and gasps are added as its sound tags.
 ///
-/// Qwen3-TTS gives each character a voice designed from their summary. The design model
-/// first records a short sample in that voice (once, kept in Voice Models/Samples); every
-/// line is then spoken by the clone model from that sample, so the voice stays the same
-/// from line to line.
+/// Chatterbox (Resemble AI, MIT) clones every voice from a short clip: a stock voice's clip
+/// ships with the app (`ChatterboxClips`), and a voice cloned on this Mac uses the
+/// narrator's recording. The tone sets its emotion exaggeration
+/// (`ChatterboxDelivery`). A shade, or casting's age pitch, shifts the clip before cloning,
+/// so the voice stays the same person.
 enum ModelSpeech {
     @MainActor
     static func isInstalled(_ engine: VoiceEngine) -> Bool { VoiceModelManager.shared.isInstalled(engine) }
@@ -28,6 +30,7 @@ enum ModelSpeech {
         let pieces = chunks(request.text)
         var samples: [Float] = []
         let gap = [Float](repeating: 0, count: Int(SpeechAudio.format.sampleRate * 0.18))
+        var volume: Float = request.kind == .thought ? 0.85 : 1
         for (n, piece) in pieces.enumerated() {
             try Task.checkCancellation()
             if n > 0 { samples += gap }
@@ -39,24 +42,19 @@ enum ModelSpeech {
                 if n > 0 { r.sound = nil }
                 samples += try await MLXSpeech.shared.orpheus(text: OrpheusText.make(r), voice: request.choice.voiceID,
                                                               seed: seed(piece + request.choice.voiceID))
-            case .qwen where LocalClones.isClone(request.choice):
-                // A voice cloned on this Mac: every line from the narrator's own clip.
-                let clip = try LocalClones.shared.sample(for: request.choice.voiceID)
-                let sample = try QwenSamples.shaded(QwenSamples.Sample(audio: clip.audio, text: clip.text), key: request.choice.voiceID,
-                                                    semitones: request.shade?.pitch ?? 0)
-                samples += try await MLXSpeech.shared.qwenClone(text: piece, reference: sample.audio, referenceText: sample.text,
-                                                                seed: seed(piece + request.choice.voiceID))
-            case .qwen:
-                let design = request.choice.design ?? VoiceResolver.fallback(.qwen)?.design ?? ""
-                let tone = QwenSamples.sampleTone(for: request)
-                // A shade (Casting Style) shifts the sample's pitch; the clone keeps the voice.
-                let sample = try QwenSamples.shaded(try await QwenSamples.sample(design: design, tone: tone),
-                                                    key: QwenSamples.key(design: design, tone: tone), semitones: request.shade?.pitch ?? 0)
-                samples += try await MLXSpeech.shared.qwenClone(text: piece, reference: sample.audio, referenceText: sample.text,
-                                                                seed: seed(piece + design))
+            case .chatterbox:
+                // A shade (Casting Style) and casting's age pitch shift the clip; the clone keeps the voice.
+                let semitones = (request.shade?.pitch ?? 0) + ChatterboxVoice.semitones(pitch: request.choice.pitch)
+                let reference = try ChatterboxClips.reference(for: request.choice, semitones: semitones)
+                let delivery = ChatterboxDelivery.for(request.tone, narration: request.kind == nil)
+                if n == 0 { volume *= Float(delivery.volume) }
+                let said = try await MLXSpeech.shared.chatterbox(text: piece, reference: reference, delivery: delivery,
+                                                                 seed: seed(piece + request.choice.voiceID))
+                // A short line can run on into made-up speech after a pause: cut it there.
+                samples += ChatterboxRunOn.trim(said, sampleRate: SpeechAudio.format.sampleRate, text: piece)
             }
         }
-        return try buffer(level(samples), volume: request.kind == .thought ? 0.85 : 1)
+        return try buffer(level(samples), volume: volume)
     }
 
     /// Splits text into runs of whole sentences of at most about `limit` characters.
@@ -124,7 +122,7 @@ enum ModelSpeech {
     /// Loads the engine's models ahead of the first line (they take several seconds).
     static func prepare(_ engine: VoiceEngine) {
         Task { @MainActor in
-            let wanted = engine == .mixed ? [VoiceEngine.qwen, .orpheus] : [engine]
+            let wanted = engine == .mixed ? [VoiceEngine.chatterbox, .orpheus] : [engine]
             let ready = wanted.filter { $0 != .apple && EngineSwitches.shared.usable($0) }
             guard !ready.isEmpty else { return }
             await MLXSpeech.shared.preload(ready)
@@ -159,70 +157,43 @@ enum OrpheusText {
     }
 }
 
-/// Qwen3-TTS voice samples: a few seconds in the designed voice that every line is cloned
-/// from. Made once per design (and tone), then kept.
+/// The clips Chatterbox clones its voices from: a stock voice's clip from the app
+/// (Resources/StockVoices), a cloned voice's recording, each shifted by a shade's semitones
+/// when asked (made once, kept in memory). Every voice has a clip: the Chatterbox model
+/// InnerVoice downloads has no built-in voice of its own.
 @MainActor
-enum QwenSamples {
-    struct Sample: Sendable {
-        var audio: [Float]
-        var text: String
+enum ChatterboxClips {
+    /// What every stock clip says: plain, unhurried and long enough to carry the voice.
+    static let passage = "I have lived in this town for a long time, and I know every road that leads out of it. "
+        + "In the spring the river runs high, and the whole valley smells of rain."
+
+    private static var memory: [String: [Float]] = [:]
+
+    /// The folder of stock clips inside the app.
+    static var stockFolder: URL? { Bundle.main.url(forResource: "StockVoices", withExtension: nil) }
+
+    /// The stock clip for a voice name ("tara"), or nil when the app has none.
+    static func stockClipURL(_ name: String) -> URL? {
+        stockFolder.map { $0.appending(path: name + ".m4a") }.flatMap { FileManager.default.fileExists(atPath: $0.path) ? $0 : nil }
     }
 
-    /// What the sample says: plain, unhurried and long enough to carry the voice.
-    static let sampleText = "I have lived in this town for a long time, and I know every road that leads out of it."
-
-    static var folder: URL {
-        let dir = VoicePack.folder.appending(path: "Samples")
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir
-    }
-
-    private static var memory: [String: Sample] = [:]
-
-    /// The tone the line's sample is recorded in. Narration is always even.
-    static func sampleTone(for request: SpeechRequest) -> Tone {
-        request.kind == nil ? .neutral : request.tone
-    }
-
-    static func key(design: String, tone: Tone) -> String {
-        let s = "v1\u{1F}" + design + "\u{1F}" + tone.rawValue
-        return SHA256.hash(data: Data(s.utf8)).map { String(format: "%02x", $0) }.joined()
-    }
-
-    static func sample(design: String, tone: Tone) async throws -> Sample {
-        let k = key(design: design, tone: tone)
-        if let s = memory[k] { return s }
-        let file = folder.appending(path: k + ".caf")
-        if let b = SpeechRenderer.read(file), let data = b.floatChannelData {
-            let s = Sample(audio: Array(UnsafeBufferPointer(start: data[0], count: Int(b.frameLength))), text: sampleText)
-            memory[k] = s
-            return s
+    /// The clip a voice is cloned from, shifted `semitones`.
+    static func reference(for choice: VoiceChoice, semitones: Int) throws -> [Float] {
+        let key = choice.voiceID + "\u{1F}\(semitones)"
+        if let hit = memory[key] { return hit }
+        let clip: [Float]
+        if LocalClones.isClone(choice) {
+            clip = try LocalClones.shared.sample(for: choice.voiceID).audio
+        } else {
+            let name = ChatterboxVoice.stockName(choice.voiceID) ?? choice.voiceID
+            guard let url = stockClipURL(name), let b = SpeechRenderer.read(url), let data = b.floatChannelData else {
+                throw SpeechError.voiceMissing(VoiceCatalog.info(for: choice)?.name ?? name.capitalized)
+            }
+            clip = Array(UnsafeBufferPointer(start: data[0], count: Int(b.frameLength)))
         }
-        let prompt = tone == .neutral ? design : design + " Speaking " + tone.direction + "."
-        let audio = try await MLXSpeech.shared.qwenDesign(text: sampleText, description: prompt, seed: ModelSpeech.seed(design))
-        SpeechRenderer.write(try ModelSpeech.buffer(audio), to: file)
-        let s = Sample(audio: audio, text: sampleText)
-        memory[k] = s
-        return s
-    }
-
-    /// The sample with its pitch shifted `semitones` (a shade), kept beside the sample so
-    /// it's made once. 0 is the sample itself.
-    static func shaded(_ sample: Sample, key: String, semitones: Int) throws -> Sample {
-        guard semitones != 0 else { return sample }
-        let k = key + "-shade\(semitones)"
-        if let s = memory[k] { return s }
-        let file = folder.appending(path: k + ".caf")
-        if let b = SpeechRenderer.read(file), let data = b.floatChannelData {
-            let s = Sample(audio: Array(UnsafeBufferPointer(start: data[0], count: Int(b.frameLength))), text: sample.text)
-            memory[k] = s
-            return s
-        }
-        let audio = try ShadeAudio.apply(sample.audio, semitones: semitones, pace: 0)
-        SpeechRenderer.write(try ModelSpeech.buffer(audio), to: file)
-        let s = Sample(audio: audio, text: sample.text)
-        memory[k] = s
-        return s
+        let shifted = try ShadeAudio.apply(clip, semitones: semitones, pace: 0)
+        memory[key] = shifted
+        return shifted
     }
 
     static func forget() { memory = [:] }
@@ -234,8 +205,7 @@ actor MLXSpeech {
     static let shared = MLXSpeech()
 
     private var orpheusModel: LlamaTTSModel?
-    private var designModel: Qwen3TTSModel?
-    private var cloneModel: Qwen3TTSModel?
+    private var chatterboxModel: ChatterboxModel?
     private var busy = false
     private var waiters: [CheckedContinuation<Void, Never>] = []
 
@@ -251,8 +221,7 @@ actor MLXSpeech {
     func unload() async {
         await acquire(); defer { release() }
         orpheusModel = nil
-        designModel = nil
-        cloneModel = nil
+        chatterboxModel = nil
         Memory.clearCache()
     }
 
@@ -263,13 +232,13 @@ actor MLXSpeech {
         return m
     }
 
-    /// Macs with room for both keep Qwen3-TTS and Orpheus loaded together (about 10 GB), so a
+    /// Macs with room for both keep Chatterbox and Orpheus loaded together (about 7 GB), so a
     /// project that mixes engines doesn't reload a model between lines. Others keep one.
     private let keepBoth = ProcessInfo.processInfo.physicalMemory >= 32 * 1_073_741_824
 
     private func loadOrpheus() async throws -> LlamaTTSModel {
         if let m = orpheusModel { return m }
-        if !keepBoth { designModel = nil; cloneModel = nil }
+        if !keepBoth { chatterboxModel = nil }
         await SpeechModelActivity.begin(.orpheus)
         defer { Task { await SpeechModelActivity.end(.orpheus) } }
         let m = try await Self.load(VoicePack.orpheus.repos[0], as: LlamaTTSModel.self)
@@ -277,23 +246,19 @@ actor MLXSpeech {
         return m
     }
 
-    private func loadDesign() async throws -> Qwen3TTSModel {
-        if let m = designModel { return m }
+    private func loadChatterbox() async throws -> ChatterboxModel {
+        if let m = chatterboxModel { return m }
         if !keepBoth { orpheusModel = nil }
-        await SpeechModelActivity.begin(.qwen)
-        defer { Task { await SpeechModelActivity.end(.qwen) } }
-        let m = try await Self.load(VoicePack.qwenDesignRepo, as: Qwen3TTSModel.self)
-        designModel = m
-        return m
-    }
-
-    private func loadClone() async throws -> Qwen3TTSModel {
-        if let m = cloneModel { return m }
-        if !keepBoth { orpheusModel = nil }
-        await SpeechModelActivity.begin(.qwen)
-        defer { Task { await SpeechModelActivity.end(.qwen) } }
-        let m = try await Self.load(VoicePack.qwenCloneRepo, as: Qwen3TTSModel.self)
-        cloneModel = m
+        await SpeechModelActivity.begin(.chatterbox)
+        defer { Task { await SpeechModelActivity.end(.chatterbox) } }
+        Memory.cacheLimit = 512 * 1024 * 1024
+        // Loaded from its folder, never fetched: the speech tokenizer it clones with comes from
+        // mlx-audio's default cache, which `VoicePack.pinHubCache` points at the same folder.
+        let m = try await ChatterboxModel.fromModelDirectory(VoicePack.directory(VoicePack.chatterboxRepo), hfToken: nil)
+        if m.s3Tokenizer == nil {
+            m.s3Tokenizer = try S3TokenizerV2.fromModelDirectory(VoicePack.directory(VoicePack.chatterboxTokenizerRepo))
+        }
+        chatterboxModel = m
         return m
     }
 
@@ -302,7 +267,7 @@ actor MLXSpeech {
         await acquire(); defer { release() }
         switch engine {
         case .orpheus: orpheusModel = nil
-        case .qwen: designModel = nil; cloneModel = nil
+        case .chatterbox: chatterboxModel = nil
         case .apple, .mixed, .elevenlabs: break
         }
         Memory.clearCache()
@@ -314,7 +279,7 @@ actor MLXSpeech {
             do {
                 switch engine {
                 case .orpheus: _ = try await loadOrpheus()
-                case .qwen: _ = try await loadClone(); _ = try await loadDesign()
+                case .chatterbox: _ = try await loadChatterbox()
                 case .apple, .mixed, .elevenlabs: break
                 }
             } catch {
@@ -334,32 +299,37 @@ actor MLXSpeech {
         return audio.asArray(Float.self)
     }
 
-    func qwenDesign(text: String, description: String, seed: UInt64) async throws -> [Float] {
+    /// One piece of text in a voice cloned from `reference` (24 kHz mono), said the way
+    /// `delivery` asks. nil: the voice in `defaultVoice`, which only the stock-clip maker
+    /// sets (the model InnerVoice downloads has none).
+    func chatterbox(text: String, reference: [Float]?, delivery: ChatterboxDelivery, seed: UInt64,
+                    defaultVoice: URL? = nil) async throws -> [Float] {
         await acquire(); defer { release() }
         try Task.checkCancellation()
-        let model = try await loadDesign()
+        let model = try await loadChatterbox()
+        if let defaultVoice {
+            // Chatterbox's default voice (the conds.safetensors Resemble ships with Chatterbox
+            // Turbo): for making the "Chatterbox" stock clip once, never at speaking time.
+            let w = try MLX.loadArrays(url: defaultVoice)
+            if let spk = w["t3.speaker_emb"], let x = w["gen.embedding"] {
+                model.defaultConditioning = DefaultConditioning(
+                    speakerEmb: spk, condPromptSpeechTokens: w["t3.cond_prompt_speech_tokens"] ?? MLXArray.zeros([1, 0]).asType(.int32),
+                    emotionAdv: w["t3.emotion_adv"] ?? MLXArray(Float(0.5)).reshaped([1, 1, 1]), xVector: x,
+                    promptToken: w["gen.prompt_token"] ?? MLXArray.zeros([1, 0]).asType(.int32),
+                    promptTokenLen: w["gen.prompt_token_len"] ?? MLXArray([Int32(0)]),
+                    promptFeat: w["gen.prompt_feat"] ?? MLXArray.zeros([1, 0, 80]), promptFeatLen: MLXArray([Int32(0)]))
+            }
+        }
+        model.emotionAdvOverride = Float(delivery.exaggeration)
+        model.cfgWeightOverride = Float(delivery.cfgWeight)
         var p = model.defaultGenerationParameters
         p.seed = seed
-        p.maxTokens = 1200
         MLXRandom.seed(seed)
-        let audio = try await model.generate(text: text, voice: description, refAudio: nil, refText: nil, language: "English", generationParameters: p)
-        return audio.asArray(Float.self)
-    }
-
-    func qwenClone(text: String, reference: [Float], referenceText: String, seed: UInt64) async throws -> [Float] {
-        await acquire(); defer { release() }
-        try Task.checkCancellation()
-        let model = try await loadClone()
-        var p = model.defaultGenerationParameters
-        p.seed = seed
-        p.maxTokens = 2400
-        MLXRandom.seed(seed)
-        let ref = MLXArray(reference).materialized()
-        let audio = try await model.generate(text: text, voice: nil, refAudio: ref, refText: referenceText, language: "English", generationParameters: p)
+        let ref = reference.map { MLXArray($0).materialized() }
+        let audio = try await model.generate(text: text, voice: nil, refAudio: ref, refText: nil, language: nil, generationParameters: p)
         return audio.asArray(Float.self)
     }
 }
-
 
 /// Which AI voice engine is loading its models right now, for the progress bar in every
 /// project window (loading takes several seconds and happens in the background).

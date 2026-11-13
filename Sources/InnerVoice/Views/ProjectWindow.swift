@@ -97,7 +97,10 @@ struct ProjectWindow: View {
         // projects from before color families up to date).
         .task { document.recolorAutomatic() }
         // The agent CLI finds open projects through OpenProjects (Agent/AgentCommands.swift).
-        .task(id: fileURL) { OpenProjects.register(document, workspace: workspace, undoManager: undoManager, fileURL: fileURL) }
+        .task(id: fileURL) {
+            OpenProjects.register(document, workspace: workspace, undoManager: undoManager, fileURL: fileURL)
+            document.markMigrationEdited(fileURL: fileURL)
+        }
         .onChange(of: undoManager) { OpenProjects.register(document, workspace: workspace, undoManager: undoManager, fileURL: fileURL) }
         .onDisappear { OpenProjects.unregister(workspace) }
         .noInitialFocus()
@@ -378,7 +381,7 @@ struct SpeechStatusBar: View {
 
     private var message: String {
         switch player.preparingEngine {
-        case .qwen?, .orpheus?: "Getting \(player.preparingEngine!.title) ready… The first line takes a few seconds."
+        case .chatterbox?, .orpheus?: "Getting \(player.preparingEngine!.title) ready… The first line takes a few seconds."
         case .elevenlabs?: "Sending the line to ElevenLabs…"
         default: "Making the audio…"
         }

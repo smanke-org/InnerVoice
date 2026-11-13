@@ -1,6 +1,7 @@
 import AppKit
 @preconcurrency import AVFoundation
 import InnerVoiceKit
+import Speech
 import SwiftUI
 
 /// Self-test for agents: runs the app's real functions on the sample book (never a real
@@ -109,7 +110,7 @@ enum SelfTest {
                 doc.setRole(.own, for: tom.id, undoManager: undo)
                 let own = doc.project.character(tom.id)?.voice(for: engine)?.choice
                 check("Own Voice keeps a character's own voice in a shared style",
-                      own != nil && VoiceResolver(project: doc.project, index: doc.index).choice(for: tomLine) == own.map { VoiceResolver.withNotes($0, doc.project.character(tom.id)) })
+                      own != nil && VoiceResolver(project: doc.project, index: doc.index).choice(for: tomLine) == own)
                 doc.setNarrationRole(.women, undoManager: undo)
                 check("a two-person book reads the narration in the women's voice", VoiceResolver(project: doc.project, index: doc.index).narrator == women)
                 doc.setCastingStyle(.oneVoice, undoManager: undo)
@@ -286,7 +287,7 @@ enum SelfTest {
         switches.set(.orpheus, on: true)
         check("turning it back on brings the project's own engine back", doc.project.engineInUse == .orpheus)
         switches.set(.apple, on: false)
-        switches.set(.qwen, on: false)
+        switches.set(.chatterbox, on: false)
         switches.set(.orpheus, on: false)
         check("the last engine that's on stays on", switches.isOn(.orpheus) && !switches.canTurnOff(.orpheus) && switches.enabled == [.orpheus])
         for e in VoiceEngine.engines { switches.set(e, on: true) }
@@ -376,12 +377,12 @@ enum SelfTest {
     }
 
     /// The setup sheet's Hear It clips (Resources/Samples/casting-<style>.m4a): the opening
-    /// of the sample book in each Casting Style, with Qwen3-TTS (APP_MAKE_CASTING_SAMPLES=<folder>,
+    /// of the sample book in each Casting Style, with Chatterbox (APP_MAKE_CASTING_SAMPLES=<folder>,
     /// with APP_SELFTEST_VOICES).
     private static func castingSamples(_ doc: InnerVoiceDocument, undo: UndoManager, to dir: URL) async {
-        guard ModelSpeech.isInstalled(.qwen), let storyteller = VoiceInfo.qwenPresets.first(where: { $0.name == "Warm Storyteller" }) else { return }
+        guard ModelSpeech.isInstalled(.chatterbox), let storyteller = VoiceInfo.chatterbox.first(where: { $0.name == "Tara" }) else { return }
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        doc.setVoiceEngine(.qwen, undoManager: undo)
+        doc.setVoiceEngine(.chatterbox, undoManager: undo)
         doc.setVoice(storyteller.choice, for: nil, undoManager: undo)
         var steps = 2
         for c in doc.project.characters {
@@ -405,47 +406,47 @@ enum SelfTest {
         for _ in 0..<steps { undo.undo() }
     }
 
-    /// One Voice with Qwen3-TTS (APP_SELFTEST_VOICES): the opening of the sample book read by
-    /// the Warm Storyteller, shaded and unshaded, saved in APP_SELFTEST_AUDIO_OUT for listening.
+    /// One Voice with Chatterbox (APP_SELFTEST_VOICES): the opening of the sample book read by
+    /// Tara, shaded and unshaded, saved in APP_SELFTEST_AUDIO_OUT for listening.
     private static func oneVoiceTableRead(_ doc: InnerVoiceDocument, undo: UndoManager) async {
-        guard ModelSpeech.isInstalled(.qwen), let storyteller = VoiceInfo.qwenPresets.first(where: { $0.name == "Warm Storyteller" }) else { return }
+        guard ModelSpeech.isInstalled(.chatterbox), let storyteller = VoiceInfo.chatterbox.first(where: { $0.name == "Tara" }) else { return }
         let out = ProcessInfo.processInfo.environment["APP_SELFTEST_AUDIO_OUT"].map { URL(fileURLWithPath: $0) }
-        doc.setVoiceEngine(.qwen, undoManager: undo)
+        doc.setVoiceEngine(.chatterbox, undoManager: undo)
         doc.setVoice(storyteller.choice, for: nil, undoManager: undo)
         doc.setCastingStyle(.oneVoice, undoManager: undo)
         let segs = Array(SpeechScript.segments(chapter: 0, project: doc.project, index: doc.index, includeNarration: true).prefix(16))
         let shaded = VoiceResolver(project: doc.project, index: doc.index)
         let lines = segs.filter { $0.lineID != nil && $0.kind != .written }
-        check("Qwen3-TTS One Voice: the Warm Storyteller plays every character", lines.allSatisfy { shaded.choice(for: $0) == shaded.narrator })
-        check("Qwen3-TTS One Voice: men's lines are shaded lower", lines.contains { (shaded.request(for: $0)?.shade?.pitch ?? 0) < 0 })
+        check("Chatterbox One Voice: Tara plays every character", lines.allSatisfy { shaded.choice(for: $0) == shaded.narrator })
+        check("Chatterbox One Voice: men's lines are shaded lower", lines.contains { (shaded.request(for: $0)?.shade?.pitch ?? 0) < 0 })
         var plain = shaded
         plain.shades = [:]
-        for (name, resolver) in [("onevoice-qwen-shaded", shaded), ("onevoice-qwen-unshaded", plain)] {
+        for (name, resolver) in [("onevoice-chatterbox-shaded", shaded), ("onevoice-chatterbox-unshaded", plain)] {
             do {
                 let dir = out ?? FileManager.default.temporaryDirectory.appending(path: "iv-onevoice")
                 try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
                 let start = Date()
                 let urls = try await AudioExporter.write([AudioExporter.Part(name: name, segments: segs)], to: dir, format: .wav, resolver: resolver) { _, _, _ in }
-                check("Qwen3-TTS One Voice reads the opening \(name.hasSuffix("unshaded") ? "unshaded" : "shaded")", !urls.isEmpty,
+                check("Chatterbox One Voice reads the opening \(name.hasSuffix("unshaded") ? "unshaded" : "shaded")", !urls.isEmpty,
                       String(format: "%.0f s", Date().timeIntervalSince(start)))
                 for (seg, n) in zip(lines, 0...) where n < 8 {
                     let s = resolver.request(for: seg)?.shade
                     if name.hasSuffix("-shaded") { print("SHADE \(doc.project.character(seg.speakerID)?.firstName ?? "?"): \(s?.cue ?? "narrator's own") — \(seg.text.prefix(50))") }
                 }
             } catch {
-                check("Qwen3-TTS One Voice reads the opening", false, error.localizedDescription)
+                check("Chatterbox One Voice reads the opening", false, error.localizedDescription)
             }
         }
         for _ in 0..<3 { undo.undo() }
     }
 
-    /// Qwen3-TTS and Orpheus speak real lines (APP_SELFTEST_VOICES=1, with the models in
+    /// Chatterbox and Orpheus speak real lines (APP_SELFTEST_VOICES=1, with the models in
     /// APP_VOICE_MODELS). APP_SELFTEST_AUDIO_OUT keeps the audio for listening.
     private static func modelVoices(_ doc: InnerVoiceDocument, undo: UndoManager) async {
         let out = ProcessInfo.processInfo.environment["APP_SELFTEST_AUDIO_OUT"].map { URL(fileURLWithPath: $0) }
         if let out { try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true) }
         SpeechRenderer.shared.clearCache()
-        for engine in [VoiceEngine.orpheus, .qwen] {
+        for engine in [VoiceEngine.orpheus, .chatterbox] {
             guard ModelSpeech.isInstalled(engine) else {
                 check("\(engine.title) is downloaded", false, VoicePack.folder.path)
                 continue
@@ -490,38 +491,46 @@ enum SelfTest {
             if let seg = picks.last, let request = resolver.request(for: seg) {
                 let start = Date()
                 _ = try? await SpeechRenderer.shared.render(request)
-                check("\(engine.title): a line plays at once the second time", Date().timeIntervalSince(start) < 0.5)
+                check("\(engine.title): a line plays at once the second time", Date().timeIntervalSince(start) < 0.5, String(format: "%.2f s, cached: %@", Date().timeIntervalSince(start), SpeechRenderer.shared.isCached(request) ? "yes" : "no"))
             }
-            // A voice designed from long Voice Notes still speaks (the description is capped).
-            if engine == .qwen, var c = top {
-                c.voiceNotes = "Gravelly and slow, a voice worn down by sea air. Speaks from the chest; rarely raises it.\n\n"
-                    + "Voice brief:\nPitch: Low, rough at the bottom\nPace: Slow, long pauses before answers\nTexture: Hoarse, weathered\nAttitude: Guarded, dry humor\nContrast: Deeper and slower than anyone around him\n\n"
-                    + "From the book:\nAge: In his seventies\nAccent: Cornish\nVoice: Rasping\nManner: Stubborn; kind underneath"
-                let choice = VoiceResolver.withNotes(VoiceChoice(engine: .qwen, voiceID: "design", design: "An older man with a deep voice."), c)
-                do {
-                    let audio = try await SpeechRenderer.shared.render(SpeechRequest(text: "I told you the tide would turn before morning, and it did.", choice: choice, tone: .neutral, kind: .spoken))
-                    let seconds = Double(audio.frameLength) / audio.format.sampleRate
-                    check("Qwen3-TTS speaks a voice designed from Voice Notes", seconds > 1.5 && seconds < 20,
-                          String(format: "%d-character description, %.1f s of audio", choice.design?.count ?? 0, seconds))
-                    if let out { SpeechRenderer.write(audio, to: out.appending(path: "qwen-notes.caf")) }
-                } catch {
-                    check("Qwen3-TTS speaks a voice designed from Voice Notes", false, error.localizedDescription)
+            // Chatterbox acts the tone: an angry line and a whispered one from the same stock
+            // voice, a child's voice from a shifted clip, and the engine's own voice.
+            if engine == .chatterbox, let tara = VoiceInfo.chatterbox.first(where: { $0.name == "Tara" }) {
+                let said = "I told you the tide would turn before morning, and it did."
+                let child = VoiceCasting.ageAdjusted(tara, for: .child)
+                let tries: [(String, SpeechRequest)] = [
+                    ("chatterbox-angry", SpeechRequest(text: said, choice: tara.choice, tone: .angry, kind: .spoken)),
+                    ("chatterbox-whispered", SpeechRequest(text: said, choice: tara.choice, tone: .whispered, kind: .spoken)),
+                    ("chatterbox-child", SpeechRequest(text: said, choice: child, tone: .neutral, kind: .spoken)),
+                    ("chatterbox-builtin", SpeechRequest(text: said, choice: VoiceInfo.chatterbox[0].choice, tone: .neutral, kind: .spoken)),
+                ]
+                for (name, request) in tries {
+                    do {
+                        let audio = try await SpeechRenderer.shared.render(request)
+                        let seconds = Double(audio.frameLength) / audio.format.sampleRate
+                        let match = await heard(audio).map { wordMatch(said, $0) }
+                        check("Chatterbox speaks \(name.dropFirst("chatterbox-".count))", seconds > 1.5 && seconds < 20 && (match ?? 1) >= 0.8,
+                              String(format: "%.1f s of audio, words heard %.0f%%", seconds, (match ?? -1) * 100))
+                        if let out { SpeechRenderer.write(audio, to: out.appending(path: name + ".caf")) }
+                    } catch {
+                        check("Chatterbox speaks \(name.dropFirst("chatterbox-".count))", false, error.localizedDescription)
+                    }
                 }
             }
         }
         // Mix Engines: each character can have a voice from any engine; two engines take turns.
-        if ModelSpeech.isInstalled(.qwen), ModelSpeech.isInstalled(.orpheus) {
+        if ModelSpeech.isInstalled(.chatterbox), ModelSpeech.isInstalled(.orpheus) {
             doc.setVoiceEngine(.mixed, undoManager: undo)
             let speaking = doc.project.characters.filter { (doc.index.stats[$0.id]?.lines ?? 0) > 0 }
             let engines = Set(speaking.compactMap { $0.voice(for: .mixed)?.choice.engine })
             check("Mix Engines: every speaking character gets a voice from a real engine",
                   speaking.allSatisfy { $0.voice(for: .mixed) != nil } && !engines.contains(.mixed), engines.map(\.rawValue).sorted().joined(separator: ", "))
             let mara = speaking.first { $0.name.hasPrefix("Mara") }, tom = speaking.first { $0.name.hasPrefix("Tom") }
-            if let mara, let tom, let orph = VoiceInfo.orpheus.first(where: { $0.gender == .female }), let preset = VoiceInfo.qwenPresets.first(where: { $0.voiceID == "preset:elder" }) {
+            if let mara, let tom, let orph = VoiceInfo.orpheus.first(where: { $0.gender == .female }), let preset = VoiceInfo.chatterbox.first(where: { $0.voiceID == "stock:dan" }) {
                 doc.setVoice(orph.choice, for: mara.id, undoManager: undo)
                 doc.setVoice(preset.choice, for: tom.id, undoManager: undo)
                 check("Mix Engines: a chosen voice is kept with the mixed casting",
-                      doc.project.character(mara.id)?.voice(for: .mixed)?.choice.engine == .orpheus && doc.project.character(tom.id)?.voice(for: .mixed)?.choice.engine == .qwen)
+                      doc.project.character(mara.id)?.voice(for: .mixed)?.choice.engine == .orpheus && doc.project.character(tom.id)?.voice(for: .mixed)?.choice.engine == .chatterbox)
                 SpeechRenderer.shared.clearCache()
                 let segs = SpeechScript.segments(chapter: 0, project: doc.project, index: doc.index, includeNarration: false)
                 let turns = Array(segs.filter { $0.speakerID == mara.id || $0.speakerID == tom.id }.prefix(4))
@@ -531,17 +540,17 @@ enum SelfTest {
                 player.play(turns, resolver: VoiceResolver(project: doc.project)) { heard.append($0.speakerID) }
                 while player.isPlaying, Date().timeIntervalSince(start) < 180 { try? await Task.sleep(for: .milliseconds(100)) }
                 let took = Date().timeIntervalSince(start)
-                print(String(format: "VOICE mixed table read: %d lines (Orpheus and Qwen3-TTS taking turns) in %.1f s", heard.count, took))
-                check("Mix Engines: Orpheus and Qwen3-TTS take turns in one table read",
+                print(String(format: "VOICE mixed table read: %d lines (Orpheus and Chatterbox taking turns) in %.1f s", heard.count, took))
+                check("Mix Engines: Orpheus and Chatterbox take turns in one table read",
                       heard.count == turns.count && player.failure == nil && Set(heard.compactMap { $0 }).count == 2, player.failure ?? "\(heard.count) of \(turns.count)")
             }
         }
 
         // Play from a cold start, as a person would: models unloaded, nothing cached.
-        for engine in [VoiceEngine.qwen, .orpheus] where ModelSpeech.isInstalled(engine) {
+        for engine in [VoiceEngine.chatterbox, .orpheus] where ModelSpeech.isInstalled(engine) {
             doc.setVoiceEngine(engine, undoManager: undo)
             await ModelSpeech.unload()
-            QwenSamples.forget()
+            ChatterboxClips.forget()
             SpeechRenderer.shared.clearCache()
             guard let c = doc.project.characters.first(where: { $0.voice(for: engine) != nil && (doc.index.stats[$0.id]?.lines ?? 0) > 0 }),
                   let v = c.voice(for: engine) else { continue }
@@ -562,6 +571,148 @@ enum SelfTest {
         doc.setVoiceEngine(.apple, undoManager: undo)
         await ModelSpeech.unload()
         SpeechRenderer.shared.clearCache()
+    }
+
+    /// Chatterbox's stock voices: every one but the engine's own has its clip in the app, and
+    /// mlx-audio's default cache points at the voice models (so the speech tokenizer is never
+    /// fetched from anywhere else).
+    private static func chatterboxSetup() {
+        let missing = VoiceInfo.chatterbox.compactMap { ChatterboxVoice.stockName($0.voiceID) }
+            .filter { ChatterboxClips.stockClipURL($0) == nil }
+        check("every Chatterbox stock voice has its clip in the app", missing.isEmpty, missing.joined(separator: ", "))
+        check("mlx-audio's default cache is the voice models folder",
+              ProcessInfo.processInfo.environment["HF_HUB_CACHE"] == VoicePack.folder.path, ProcessInfo.processInfo.environment["HF_HUB_CACHE"] ?? "unset")
+        check("Qwen3-TTS is no longer an engine", !VoiceEngine.engines.map(\.rawValue).contains(VoiceEngine.retiredQwen) && VoicePack.pack(for: .chatterbox) != nil)
+        // Remove Old Voice Files, in the test folder only: Qwen3-TTS's leftovers are found and
+        // removed, and nothing else in the folder is touched.
+        if ProcessInfo.processInfo.environment["APP_VOICE_MODELS"] != nil {
+            let fm = FileManager.default
+            let fakes = [VoicePack.folder.appending(path: "mlx-audio/mlx-community_Qwen3-TTS-test"), VoicePack.folder.appending(path: "Samples")]
+            for f in fakes {
+                try? fm.createDirectory(at: f, withIntermediateDirectories: true)
+                try? Data(count: 4096).write(to: f.appending(path: "x.bin"))
+            }
+            let manager = VoiceModelManager.shared
+            manager.checkOldFiles()
+            check("Settings finds the old Qwen3-TTS files", manager.oldFiles.map { Set($0.urls.map(\.lastPathComponent)) == Set(fakes.map(\.lastPathComponent)) && $0.bytes > 0 } == true,
+                  manager.oldFiles?.urls.map(\.lastPathComponent).joined(separator: ", ") ?? "none")
+            let before = (try? fm.contentsOfDirectory(atPath: VoicePack.folder.appending(path: "mlx-audio").path).filter { !$0.contains("Qwen3-TTS") }) ?? []
+            manager.removeOldFiles()
+            let after = (try? fm.contentsOfDirectory(atPath: VoicePack.folder.appending(path: "mlx-audio").path)) ?? []
+            check("Remove Old Voice Files takes only the Qwen3-TTS files", manager.oldFiles == nil && fakes.allSatisfy { !fm.fileExists(atPath: $0.path) } && Set(after) == Set(before))
+        }
+    }
+
+    /// A book saved with Qwen3-TTS voices opens with Chatterbox voices: read from disk the
+    /// way Use Voices from Another Project reads one (the window's own read does the same).
+    private static func oldBookMigrates() async {
+        var p = SeedData.project()
+        guard let i = p.characters.indices.first else { return }
+        let id = p.characters[i].id
+        p.characters[i].voices = nil
+        p.settings.narratorVoices = nil
+        do {
+            var json = try JSONSerialization.jsonObject(with: InnerVoiceDocument.encoder.encode(p)) as! [String: Any]
+            var characters = json["characters"] as! [[String: Any]]
+            characters[0]["voices"] = ["qwen": ["choice": ["engine": "qwen", "voiceID": "preset:storyteller"], "confidence": 1, "source": "user"]]
+            json["characters"] = characters
+            var settings = json["settings"] as! [String: Any]
+            settings["voiceEngine"] = "qwen"
+            json["settings"] = settings
+            let old = try InnerVoiceDocument.decoder.decode(Project.self, from: JSONSerialization.data(withJSONObject: json))
+            let url = FileManager.default.temporaryDirectory.appending(path: "InnerVoice-test-qwen-book.innervoice")
+            try InnerVoiceDocument.archive(.init(project: old, audio: [:], original: nil)).write(to: url)
+            let read = try InnerVoiceDocument.readProject(at: url)
+            try? FileManager.default.removeItem(at: url)
+            let v = read.character(id)?.voice(for: .chatterbox)
+            check("a book saved with Qwen3-TTS opens with Chatterbox voices",
+                  read.settings.engine == .chatterbox && v?.choice.voiceID == "stock:tara" && v?.source == .user && !LegacyVoices.needsMigration(read),
+                  v?.choice.voiceID ?? "no voice")
+        } catch {
+            check("a book saved with Qwen3-TTS opens with Chatterbox voices", false, error.localizedDescription)
+        }
+    }
+
+    /// Downloads the real Chatterbox pack (APP_SELFTEST_GET_CHATTERBOX=1), only into the test
+    /// folder APP_VOICE_MODELS names.
+    private static func getChatterbox() async {
+        guard ProcessInfo.processInfo.environment["APP_VOICE_MODELS"] != nil else {
+            check("Chatterbox downloads only into a test folder (set APP_VOICE_MODELS)", false); return
+        }
+        let manager = VoiceModelManager.shared
+        guard !manager.isInstalled(.chatterbox) else { return }
+        let start = Date()
+        manager.download(VoiceEngine.chatterbox)
+        await manager.waitForDownload(.chatterbox)
+        let failed: String? = if case .failed(let m)? = manager.states[.chatterbox] { m } else { nil }
+        check("Chatterbox downloads", manager.isInstalled(.chatterbox) && failed == nil,
+              failed ?? String(format: "%.0f s, %@", Date().timeIntervalSince(start), VoicePack.folder.path))
+    }
+
+    /// The stock voices' clips (APP_MAKE_STOCK_VOICES=<folder>, with Orpheus in APP_VOICE_MODELS):
+    /// each of Orpheus's eight voices says the same plain passage once. Made for
+    /// Resources/StockVoices (converted to Apple Lossless there); a take whose length is off
+    /// (Orpheus now and then trails off or runs on) is made again with another seed. With
+    /// APP_CHATTERBOX_CONDS=<conds.safetensors> (Chatterbox Turbo's default voice) and Chatterbox
+    /// installed, Chatterbox says it too in that voice, for the "Chatterbox" stock voice.
+    private static func makeStockVoices(to dir: URL) async {
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let text = ChatterboxClips.passage
+        if let conds = ProcessInfo.processInfo.environment["APP_CHATTERBOX_CONDS"], ModelSpeech.isInstalled(.chatterbox) {
+            do {
+                let audio = try await MLXSpeech.shared.chatterbox(text: text, reference: nil, delivery: .even, seed: ModelSpeech.seed(text),
+                                                                  defaultVoice: URL(fileURLWithPath: conds))
+                let clip = SpeechAudio.trimmed(try ModelSpeech.buffer(ModelSpeech.level(audio)))
+                SpeechRenderer.write(clip, to: dir.appending(path: "chatterbox.caf"))
+                let match = await heard(clip).map { wordMatch(text, $0) }
+                print(String(format: "STOCK chatterbox: %.1f s, words heard %.0f%%", Double(clip.frameLength) / clip.format.sampleRate, (match ?? -1) * 100))
+                check("stock clip for Chatterbox", (match ?? 1) >= 0.85)
+            } catch {
+                check("stock clip for Chatterbox", false, error.localizedDescription)
+            }
+            // The default voice stays on the loaded model only for this run.
+            await ModelSpeech.unload(.chatterbox)
+        }
+        guard ModelSpeech.isInstalled(.orpheus) else { check("Orpheus is there to make the stock voices", false); return }
+        let words = Double(text.split(separator: " ").count)
+        for v in VoiceInfo.orpheus {
+            var made = false
+            for take in 0..<4 where !made {
+                do {
+                    let audio = try await MLXSpeech.shared.orpheus(text: text, voice: v.voiceID, seed: ModelSpeech.seed(text + v.voiceID + "\(take)"))
+                    let clip = SpeechAudio.trimmed(try ModelSpeech.buffer(ModelSpeech.level(audio)))
+                    let seconds = Double(clip.frameLength) / clip.format.sampleRate
+                    // Plain reading is 2 to 4.3 words a second; and every word should be there.
+                    let match = await heard(clip).map { wordMatch(text, $0) }
+                    guard words / seconds > 2, words / seconds < 4.3, (match ?? 1) >= 0.85 else {
+                        print(String(format: "STOCK %@ take %d: %.1f s, words heard %.0f%%, again", v.voiceID, take, seconds, (match ?? -1) * 100)); continue
+                    }
+                    SpeechRenderer.write(clip, to: dir.appending(path: v.voiceID + ".caf"))
+                    print(String(format: "STOCK %@ take %d: %.1f s, words heard %.0f%%", v.voiceID, take, seconds, (match ?? -1) * 100))
+                    made = true
+                } catch {
+                    print("STOCK \(v.voiceID): \(error)")
+                }
+            }
+            check("stock clip for \(v.name)", made)
+        }
+    }
+
+    /// What on-device speech recognition hears in some audio, only when this Mac already
+    /// allows InnerVoice to use it (a test never asks). nil: not allowed, or nothing heard.
+    static func heard(_ audio: AVAudioPCMBuffer) async -> String? {
+        guard SFSpeechRecognizer.authorizationStatus() == .authorized, let data = audio.floatChannelData else { return nil }
+        return await CloneAudio.transcribe(Array(UnsafeBufferPointer(start: data[0], count: Int(audio.frameLength))))?.text
+    }
+
+    /// The share of the words said that were heard, in any order (0…1).
+    static func wordMatch(_ said: String, _ heard: String) -> Double {
+        func words(_ s: String) -> [String] { s.lowercased().split { !$0.isLetter && $0 != "'" }.map(String.init) }
+        var pool = words(heard)
+        let want = words(said)
+        var found = 0
+        for w in want { if let i = pool.firstIndex(of: w) { pool.remove(at: i); found += 1 } }
+        return want.isEmpty ? 1 : Double(found) / Double(want.count)
     }
 
     /// The voice pack download, with the small audio codec only (APP_SELFTEST_DOWNLOAD=1
@@ -820,7 +971,7 @@ enum SelfTest {
         for _ in 0..<500 {
             _ = EngineSwitches.shared.choices
             _ = doc.project.engineInUse
-            _ = EngineSwitches.shared.usable(.qwen)
+            _ = EngineSwitches.shared.usable(.chatterbox)
             _ = EngineSwitches.shared.usable(.orpheus)
             _ = VoiceCatalog.voices(for: .mixed, project: doc.project)
             for c in doc.project.characters { if let v = c.voice(for: .apple) { _ = VoiceCatalog.name(of: v.choice); _ = VoiceCatalog.info(for: v.choice) } }
@@ -834,7 +985,7 @@ enum SelfTest {
     /// the name (never book text), only after the narrator confirms the right to clone; the
     /// clone is listed first, never cast on its own, and can be renamed and deleted.
     /// Clone a Voice on this Mac: the clip is kept in a test folder, listed with the
-    /// Qwen3-TTS voices, never cast on its own, and can be renamed and deleted. With the
+    /// Chatterbox voices, never cast on its own, and can be renamed and deleted. With the
     /// models (APP_SELFTEST_VOICES), a clip made from an Apple voice is cloned and speaks a
     /// line; APP_SELFTEST_TRANSCRIBE also finds its words with on-device recognition.
     private static func localClones(_ doc: InnerVoiceDocument, undo: UndoManager) async {
@@ -846,10 +997,10 @@ enum SelfTest {
             check("a voice cloned on this Mac is saved", false); return
         }
         let info = LocalClones.info(c)
-        check("a voice cloned on this Mac is saved and listed first with Qwen3-TTS",
-              VoiceCatalog.voices(for: .qwen).first?.voiceID == c.voiceID && VoiceCatalog.info(for: info.choice)?.name == "Test Voice"
+        check("a voice cloned on this Mac is saved and listed first with Chatterbox",
+              VoiceCatalog.voices(for: .chatterbox).first?.voiceID == c.voiceID && VoiceCatalog.info(for: info.choice)?.name == "Test Voice"
               && VoiceCatalog.name(of: info.choice) == "Test Voice")
-        check("casting never gives out a voice cloned on this Mac", !ElevenLabs.shared.castable(VoiceCatalog.voices(for: .qwen)).contains { $0.voiceID == c.voiceID })
+        check("casting never gives out a voice cloned on this Mac", !ElevenLabs.shared.castable(VoiceCatalog.voices(for: .chatterbox)).contains { $0.voiceID == c.voiceID })
         check("its clip and words are read back", (try? store.sample(for: c.voiceID))?.text == "Testing one two three.")
         store.rename(c.id, to: "Renamed")
         check("renaming a cloned voice changes its name everywhere", VoiceCatalog.name(of: info.choice) == "Renamed")
@@ -857,7 +1008,7 @@ enum SelfTest {
         let clip = CloneAudio.trim([Float](repeating: 0, count: Int(rate)) + tone + [Float](repeating: 0, count: Int(rate)))
         check("silence before and after a recording is trimmed", abs(Double(clip.count) / rate - 6.2) < 0.1, String(format: "%.2f s", Double(clip.count) / rate))
 
-        if ProcessInfo.processInfo.environment["APP_SELFTEST_VOICES"] != nil, ModelSpeech.isInstalled(.qwen),
+        if ProcessInfo.processInfo.environment["APP_SELFTEST_VOICES"] != nil, ModelSpeech.isInstalled(.chatterbox),
            let apple = VoiceCatalog.appleVoices().first(where: { $0.quality >= 2 }) ?? VoiceCatalog.appleVoices().first {
             // The "recording": an Apple voice reading two sentences, written to a file.
             let said = "The train was late again, so I walked. It was the kind of autumn morning that makes you forgive the whole year."
@@ -1007,10 +1158,7 @@ enum SelfTest {
         if var c = speaking.first {
             c.voiceNotes = "Husky and unhurried, a smoker's rasp. Drops her voice when she lies."
             let description = VoiceDescription.design(base: "A woman with a low voice.", character: c, limit: ElevenLabs.designLimit)
-            let designed = VoiceResolver.withNotes(VoiceChoice(engine: .qwen, voiceID: "design", design: "A woman."), c)
-            let preset = VoiceInfo.qwenPresets[0].choice
-            check("Qwen3-TTS designs from the Voice Notes too (a ready-made voice stays as it is)",
-                  designed.design?.contains("smoker's rasp") == true && VoiceResolver.withNotes(preset, c) == preset, designed.design ?? "")
+            check("Voice Design's description carries the Voice Notes", description.contains("smoker's rasp"), description)
             let blocked = try? await eleven.designVoice(name: "Test", description: description, labels: [:], allowed: false)
             check("Voice Design sends nothing for a book that hasn't allowed ElevenLabs", blocked == nil && FakeElevenLabs.designRequests.isEmpty)
             do {
@@ -1283,6 +1431,11 @@ enum SelfTest {
         _ = index
 
         await voices(doc, undo: undo)
+        chatterboxSetup()
+        await oldBookMigrates()
+        // Downloads Chatterbox into a test folder (never the person's own) for the voice checks.
+        if ProcessInfo.processInfo.environment["APP_SELFTEST_GET_CHATTERBOX"] != nil { await getChatterbox() }
+        if let dir = ProcessInfo.processInfo.environment["APP_MAKE_STOCK_VOICES"] { await makeStockVoices(to: URL(fileURLWithPath: dir)) }
         if ProcessInfo.processInfo.environment["APP_SELFTEST_VOICES"] != nil {
             await modelVoices(doc, undo: undo)
             await oneVoiceTableRead(doc, undo: undo)
