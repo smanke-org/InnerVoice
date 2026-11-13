@@ -11,7 +11,7 @@ namespace InnerVoice.App.AI;
 /// takes a whole run back without touching the narrator's own fixes.
 public sealed partial class AIRunner(ProjectDocument document)
 {
-    public enum Job { Tagging, Summaries, Cleanup, Recaps }
+    public enum Job { Tagging, Summaries, Claude }
 
     public sealed record Status(Job Job, double Progress, string Message, string? Character = null, double CharacterProgress = 0,
                                 int CharacterNumber = 0, int CharacterCount = 0, string Phase = "");

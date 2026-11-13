@@ -121,6 +121,8 @@ public sealed partial class ManuscriptPage
             menu.Items.Add(kind);
             menu.Items.Add(Item(ids.Count == 1 ? "Mark as Narration" : $"Mark {ids.Count} Lines as Narration", () => Document.RemoveLines(ids)));
             menu.Items.Add(Item("Who's Speaking?", () => Document.Assign(ids, null)));
+            if (Document.Project.ShowsVoices)
+                menu.Items.Add(Item("Delivery Hint…", () => _ = EditDelivery(ids, line.Delivery)));
             if (Document.Project.Character(line.SpeakerID) is { } sp)
             {
                 menu.Items.Add(new Separator());
@@ -166,6 +168,19 @@ public sealed partial class ManuscriptPage
         var anchor = AnchorAt(new Rect(point, new Size(1, 1)));
         menu.Closed += (_, _) => RemoveAnchor(anchor);
         menu.Open(anchor);
+    }
+
+    /// How ElevenLabs performs the lines beyond their tone, sent as an audio tag (ElevenLabs
+    /// only; other voices ignore it). Book › Claude › Suggest Delivery Hints fills these in.
+    /// TODO(voices): the voices work moves this into the line's voice controls, next to its tone.
+    async Task EditDelivery(List<Guid> ids, string? current)
+    {
+        var text = await Dialogs.Ask(this, "Delivery Hint",
+            "How ElevenLabs performs " + (ids.Count == 1 ? "this line" : $"these {ids.Count} lines") +
+            " beyond its tone, sent as an audio tag (ElevenLabs only; other voices ignore it). Leave it empty to clear it.",
+            "Save", current ?? "", "e.g. barely audible");
+        if (text is null || text == (current ?? "")) return;
+        Document.Change("Delivery Hint", p => InnerVoice.Core.AI.DeliveryPrompt.Set(text, ids, p));
     }
 
     /// "Previously…": the chapter's recap, editable. Shown in Narrator Scripts. An edit makes it

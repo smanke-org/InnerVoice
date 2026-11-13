@@ -5,9 +5,9 @@ using InnerVoice.Core.Import;
 
 namespace InnerVoice.Core.Tests;
 
-/// Ports of the Kit's ClaudeFeatureTests that apply to Windows: cost estimate, Clean Up Text,
-/// Chapter Recaps and older files. (Delivery Hints and Suggest Spellings need AI voices and the
-/// pronunciation guide, which the Windows app doesn't have.) Pure logic; no network.
+/// Ports of the Kit's ClaudeFeatureTests: cost estimate, Clean Up Text, Chapter Recaps,
+/// Delivery Hints, Suggest Spellings and older files. (The SpeechScript parts wait for the
+/// voices work.) Pure logic; no network.
 public class ClaudeFeatureTests
 {
     static Project Make(params string[][] chapters) =>
@@ -93,7 +93,8 @@ public class ClaudeFeatureTests
         here[0].Source = AssignmentSource.User;
         here[1].SpeakerID = tom.Id;
         here[1].Source = AssignmentSource.Ai;
-        here[1].Extra = new() { ["tone"] = JsonSerializer.SerializeToElement("scared"), ["delivery"] = JsonSerializer.SerializeToElement("out of breath") };
+        here[1].Extra = new() { ["tone"] = JsonSerializer.SerializeToElement("scared") };
+        here[1].Delivery = "out of breath";
         var ids = here.Select(l => l.Id).ToList();
         var fixes = new[]
         {
@@ -111,7 +112,8 @@ public class ClaudeFeatureTests
         Assert.Contains("Hurry.", Texts(p));
         Assert.True(lines[0].Source == AssignmentSource.User && lines[0].SpeakerID == tom.Id);
         Assert.Equal("scared", lines[1].Extra!["tone"].GetString());
-        Assert.Equal("out of breath", lines[1].Extra!["delivery"].GetString());
+        Assert.Equal("out of breath", lines[1].Delivery);
+        Assert.Equal(Tone.Scared, Tones.ToneOf(lines[1]));
         var paragraphs = p.Chapters.SelectMany(c => c.Paragraphs).ToDictionary(x => x.Id);
         Assert.All(p.Lines, l => Assert.True(l.Range.End <= paragraphs[l.ParagraphID].Text.Length));
     }
@@ -184,6 +186,91 @@ public class ClaudeFeatureTests
         var parsed = RecapPrompt.Parse($$"""{"recap":"{{longText}}"}""") ?? "";
         Assert.True(Words.Count(parsed) <= RecapPrompt.MaximumWords && parsed.EndsWith('.'), parsed);
         Assert.True(Words.Count(parsed) > 60);
+    }
+
+    [Fact]
+    public void RecapIsSpokenAsPreviouslyThenItsSentences()
+    {
+        var chapter = new Chapter("Two", [new Paragraph("It went on.")]) { Recap = "It began. Then more." };
+        Assert.Equal(["Previously…", "It began.", "Then more."], RecapPrompt.SpokenParts(chapter));
+        Assert.Empty(RecapPrompt.SpokenParts(new Chapter("One", [])));
+    }
+
+    // MARK: Delivery Hints
+
+    static void SetTone(Line l, string tone) => (l.Extra ??= [])["tone"] = JsonSerializer.SerializeToElement(tone);
+
+    [Fact]
+    public void DeliveryChunksMarkLinesAndProposalsSkipTheNarratorsHints()
+    {
+        var p = Make(["“Not here,” Mara whispered. “Not now.”"]);
+        var mara = new BookCharacter("Mara", "#3366CC");
+        p.Characters = [mara];
+        foreach (var l in p.Lines) { l.SpeakerID = mara.Id; SetTone(l, "whispered"); }
+        p.Lines[1].Delivery = "pleading";
+        p.Lines[1].DeliverySource = ToneSource.User;
+        var index = new BookIndex(p);
+        var chunks = DeliveryPrompt.Chunks(p, index);
+        Assert.True(chunks.Count == 1 && chunks[0].Labels.Count == 1);
+        Assert.Contains("{L1 Mara, whispered}“Not here,”", chunks[0].Messages[1].Content);
+        var replies = DeliveryPrompt.Parse("""{"lines":[{"line":"L1","hint":"[Barely Audible]"},{"line":"L2","hint":"shouts"}]}""") ?? [];
+        var proposals = DeliveryPrompt.Proposals(replies, chunks[0], p, index);
+        Assert.Equal(["barely audible"], proposals.Select(x => x.Hint));
+        DeliveryPrompt.Apply([.. proposals, new DeliveryProposal(p.Lines[1].Id, "shouts")], p);
+        Assert.True(p.Lines[0].Delivery == "barely audible" && p.Lines[0].DeliverySource == ToneSource.Ai);
+        Assert.Equal("pleading", p.Lines[1].Delivery);
+        // The Mac's field names and values.
+        var json = JsonNode.Parse(ProjectJson.Encode(p))!["lines"]![0]!;
+        Assert.Equal("barely audible", (string?)json["delivery"]);
+        Assert.Equal("ai", (string?)json["deliverySource"]);
+        Assert.Equal("whispered", (string?)json["tone"]);
+    }
+
+    [Fact]
+    public void DeliveryHintsAreCleanedForElevenLabs()
+    {
+        Assert.Equal("whispers loud aside", DeliveryPrompt.Clean("[whispers] {loud} (aside)"));
+        Assert.Null(DeliveryPrompt.Clean("  "));
+        Assert.Equal("one two three four five six", DeliveryPrompt.Clean("one two three four five six seven"));
+        Assert.Equal("[sad, barely audible]", DeliveryPrompt.AudioTag(Tone.Sad, "barely audible"));
+        Assert.Equal("[laughing]", DeliveryPrompt.AudioTag(Tone.Neutral, "laughing"));
+        Assert.Equal("[whispers, slowly]", DeliveryPrompt.AudioTag(Tone.Whispered, "slowly"));
+        Assert.Null(DeliveryPrompt.AudioTag(null, null));
+        var p = Make(["“Run,” said Tom."]);
+        DeliveryPrompt.Set("through gritted teeth", [p.Lines[0].Id], p);
+        Assert.Equal(ToneSource.User, p.Lines[0].DeliverySource);
+        DeliveryPrompt.Set("", [p.Lines[0].Id], p);
+        Assert.Null(p.Lines[0].Delivery);
+        Assert.Null(p.Lines[0].DeliverySource);
+    }
+
+    // MARK: Suggest Spellings
+
+    [Fact]
+    public void SpellingsSendOnlyTermsAndTheirSentenceAndNeverOverwrite()
+    {
+        var p = Make(["The road was long. Siobhan waited by the gate of Dunmore."]);
+        var pid = p.Chapters[0].Paragraphs[0].Id;
+        p.Pronunciations =
+        [
+            new Pronunciation { Term = "Siobhan", Occurrences = 3, FirstParagraphID = pid },
+            new Pronunciation { Term = "Dunmore", SayItAs = "dun-MORE", Occurrences = 1, FirstParagraphID = pid },
+            new Pronunciation { Term = "Gone", Dismissed = true },
+        ];
+        var index = new BookIndex(p);
+        var chunks = SpellingPrompt.Chunks(p, index);
+        Assert.True(chunks.Count == 1 && chunks[0].Labels.Count == 1);
+        var user = chunks[0].Messages[1].Content;
+        Assert.Contains("[T1] Siobhan — “Siobhan waited by the gate of Dunmore.”", user);
+        Assert.DoesNotContain("The road was long", user);
+        var proposals = SpellingPrompt.Parse("""{"terms":[{"id":"T1","sayItAs":"shiv-AWN","note":"Irish name","confidence":90},{"id":"T9","sayItAs":"x"}]}""", chunks[0], p);
+        Assert.Equal("shiv-AWN", Assert.Single(proposals!).SayItAs);
+        Assert.Equal(1, SpellingPrompt.Apply(proposals!, p));
+        Assert.True(p.Pronunciations[0].SayItAs == "shiv-AWN" && !p.Pronunciations[0].Confirmed);
+        Assert.Contains("Claude", p.Pronunciations[0].Notes);
+        // Filled in meanwhile: kept.
+        Assert.Equal(0, SpellingPrompt.Apply([new SpellingProposal(p.Pronunciations[1].Id, "Dunmore", "DUN-mor")], p));
+        Assert.Equal("dun-MORE", p.Pronunciations[1].SayItAs);
     }
 
     // MARK: Older files

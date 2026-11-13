@@ -62,18 +62,22 @@ public sealed partial class ProjectWindow
         var setUpLine = new Separator();
         claude.Items.Add(setUp);
         claude.Items.Add(setUpLine);
-        var jobs = new List<MenuItem>();
-        foreach (var job in new[] { AIRunner.ClaudeJob.Cleanup, AIRunner.ClaudeJob.Recaps })
+        var jobs = new List<(AIRunner.ClaudeJob Job, MenuItem Item)>();
+        foreach (var job in AIRunner.ClaudeJobs)
         {
             var item = Item(AIRunner.Title(job) + "…", null, () => _ = RunClaude(job));
-            jobs.Add(item);
+            jobs.Add((job, item));
             claude.Items.Add(item);
         }
         claude.SubmenuOpened += (_, _) =>
         {
             bool ready = ClaudeAccount.Shared.IsSetUp;
             setUp.IsVisible = setUpLine.IsVisible = !ready;
-            foreach (var item in jobs) item.IsEnabled = ready && !Runner.IsRunning;
+            foreach (var (job, item) in jobs)
+            {
+                item.IsVisible = AIRunner.Offered(job, Document.Project);
+                item.IsEnabled = ready && !Runner.IsRunning;
+            }
         };
         book.Items.Add(claude);
     }

@@ -77,6 +77,15 @@ public static class RecapPrompt
     public static IEnumerable<string> Sentences(string text) =>
         SentenceEnd.Split(text.Trim()).Where(s => s.Length > 0);
 
+    /// What Export Audio says for a chapter's recap when "Say chapter recaps" is on: "Previously…",
+    /// then the recap a sentence at a time, after the chapter's title, in the narrator's voice.
+    /// Empty when the chapter has no recap.
+    /// TODO(voices): the voices work's SpeechScript.segments(chapter:…, recaps:) inserts these
+    /// as narration segments after the title (the last with a chapter pause), and Export Audio
+    /// gets its "Say chapter recaps" checkbox (the Mac's AudioExport).
+    public static List<string> SpokenParts(Chapter chapter) =>
+        chapter.RecapText is { } recap ? ["Previously…", .. Sentences(recap)] : [];
+
     /// Stores a recap unless the narrator wrote or edited this chapter's own. True if stored.
     public static bool Put(string recap, Guid chapterID, Project p)
     {

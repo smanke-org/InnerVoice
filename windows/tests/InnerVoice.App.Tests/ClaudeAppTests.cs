@@ -39,6 +39,13 @@ public class ClaudeAppTests
                 text = label.Length == 0 ? """{"fixes":[]}"""
                     : new JsonObject { ["fixes"] = new JsonArray(new JsonObject { ["paragraph"] = label, ["find"] = "tbe night", ["replace"] = "the night", ["issue"] = "ocr", ["note"] = "tbe" }) }.ToJsonString();
             }
+            else if (system.StartsWith("You help an audiobook producer direct"))
+            {
+                var label = Regex.Match(prompt, @"\{(L\d+) ").Groups[1].Value;
+                text = new JsonObject { ["lines"] = new JsonArray(new JsonObject { ["line"] = label, ["hint"] = "[Barely Audible]" }) }.ToJsonString();
+            }
+            else if (system.StartsWith("You help an audiobook narrator pronounce"))
+                text = """{"terms":[{"id":"T1","sayItAs":"shiv-AWN","note":"Irish name","confidence":90}]}""";
             else if (system.Contains("\"Previously…\" recap"))
                 text = """{"recap":"Previously… Mara waited at the harbor for news of the boat."}""";
             else
@@ -124,6 +131,62 @@ public class ClaudeAppTests
             await runner.RunClaude(AIRunner.ClaudeJob.Cleanup);
             Assert.Equal(ClaudeException.BookNotAllowed, runner.Failure);
             Assert.Equal(sent, fake.Sent.Count);
+            w.Close();
+        }
+        finally
+        {
+            account.Disconnect();
+            ClaudeAccount.TestHttp = null;
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task DeliveryHintsAndSpellingsOnlyInBooksWithVoices()
+    {
+        var fake = new FakeAnthropic();
+        ClaudeAccount.TestHttp = new HttpClient(fake);
+        var account = ClaudeAccount.Shared;
+        try
+        {
+            account.Save("sk-ant-test", consent: true);
+            var doc = ProjectDocument.Unsaved(TestApp.Sample());
+            // The sample is a Narration Tools book: no voices, so neither is offered.
+            Assert.False(AIRunner.Offered(AIRunner.ClaudeJob.Delivery, doc.Project));
+            Assert.False(AIRunner.Offered(AIRunner.ClaudeJob.Spellings, doc.Project));
+            Assert.True(AIRunner.Offered(AIRunner.ClaudeJob.Cleanup, doc.Project));
+            doc.UpdateSettings("Purpose", st => st.Purpose = ProjectPurpose.AiVoices);
+            Assert.True(AIRunner.Offered(AIRunner.ClaudeJob.Delivery, doc.Project));
+            Assert.True(AIRunner.Offered(AIRunner.ClaudeJob.Spellings, doc.Project));
+            var firstParagraph = doc.Project.Chapters.SelectMany(c => c.Paragraphs).First(x => x.Style == ParagraphStyle.Body).Id;
+            doc.Change("Add Term", p => p.Pronunciations.Add(new Pronunciation { Term = "Siobhan", Occurrences = 1, FirstParagraphID = firstParagraph }));
+            doc.SetCloudTextAllowed(true);
+            var w = new ProjectWindow(doc) { Width = 1280, Height = 820 };
+            w.Show();
+            var runner = w.Runner;
+
+            await runner.RunClaude(AIRunner.ClaudeJob.Delivery);
+            Assert.Null(runner.Failure);
+            var hints = runner.Proposals;
+            Assert.NotNull(hints);
+            var hint = Assert.Single(hints.Hints);
+            Assert.Equal("barely audible", hint.Hint);
+            Snap(new ClaudeProposalsWindow(doc, runner, hints), "ReviewDeliveryHints.png");
+            runner.Apply(hints);
+            var line = doc.Project.Lines.First(l => l.Id == hint.LineID);
+            Assert.Equal("barely audible", line.Delivery);
+            Assert.Equal(ToneSource.Ai, line.DeliverySource);
+
+            // Spellings wait for the narrator even with review off, and start unchecked.
+            doc.UpdateSettings("Review Claude's Changes", st => st.ReviewCloudAI = false);
+            await runner.RunClaude(AIRunner.ClaudeJob.Spellings);
+            var spellings = runner.Proposals;
+            Assert.NotNull(spellings);
+            Assert.Equal("shiv-AWN", Assert.Single(spellings.Spellings).SayItAs);
+            Assert.Equal("", doc.Project.Pronunciations.First(x => x.Term == "Siobhan").SayItAs);
+            Snap(new ClaudeProposalsWindow(doc, runner, spellings), "SuggestedSpellings.png");
+            runner.Apply(spellings);
+            Assert.Equal("shiv-AWN", doc.Project.Pronunciations.First(x => x.Term == "Siobhan").SayItAs);
+            Assert.Equal("Use Suggested Spellings", doc.UndoName);
             w.Close();
         }
         finally

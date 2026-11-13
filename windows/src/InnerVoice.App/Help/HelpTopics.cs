@@ -291,12 +291,13 @@ public static class HelpContent
             H("What it costs"),
             T("Before Tag Speakers, Build Summaries or any of Claude's own features sends a book, InnerVoice shows the estimated cost for the model you picked, worked out on your PC from the book's length (nothing is sent to count it). It's an estimate: your bill may differ. A model InnerVoice doesn't know the price of shows tokens only. Tick \"Don't show the estimate again\" to skip it next time."),
             H("Claude's own features"),
-            T("Book › Claude (Cloud) has features that only Claude does. Each one sends text to Anthropic, so each asks first, and each is one Undo step. They use the Claude model you picked, or Claude Sonnet when a downloaded model is chosen."),
+            T("Book › Claude (Cloud) has four features that only Claude does. Each one sends text to Anthropic, so each asks first, and each is one Undo step. They use the Claude model you picked, or Claude Sonnet when a downloaded model is chosen."),
             Keys(
                 ("Clean Up Text…", "Finds what importing left behind: scanning mistakes, words broken by a hyphen, page numbers and headers, footnote markers, spaced-out letters. Only the project changes; your manuscript file never does, and lines you assigned keep their speakers"),
-                ("Write Chapter Recaps…", "A short \"Previously…\" for each chapter; right-click the chapter's text and choose Chapter Recap… to read or edit it. Edit it, and it's yours. Narrator Scripts include it")),
-            T("With Book › Review Claude's Changes on, fixes and recaps wait in a list to keep or leave out; nothing changes until you apply them."),
-            Tip("On the Mac, Book › Claude also suggests delivery hints for ElevenLabs voices and spellings for the pronunciation guide. Those need AI voices, which InnerVoice for Windows doesn't have; a project's hints and spellings are kept when you open it here."),
+                ("Write Chapter Recaps…", "A short \"Previously…\" for each chapter; right-click the chapter's text and choose Chapter Recap… to read or edit it. Edit it, and it's yours. Narrator Scripts include it"),
+                ("Suggest Delivery Hints…", "How each line is performed beyond its tone (\"barely audible\", \"through gritted teeth\"). Hints go to ElevenLabs only, as audio tags; right-click a line and choose Delivery Hint… to edit one. Produce with AI Voices books only"),
+                ("Suggest Spellings…", "A Say It As for each pronunciation without one; only the terms and the sentence each first appears in are sent. You confirm each one. Produce with AI Voices books only")),
+            T("With Book › Review Claude's Changes on, fixes, recaps and hints wait in a list to keep or leave out; nothing changes until you apply them. Suggested spellings always wait for you."),
             Tip("With a downloaded model, your manuscript never leaves this PC. The model download is the only time the AI goes online."),
         ],
 

@@ -1,6 +1,6 @@
-// Ported from Sources/InnerVoiceKit/TextCleanup.swift. Windows has no tones, so the Mac's
-// ToneRules pass after a cleanup is left out; tone and delivery fields ride along in each
-// line's Extra, so a kept line keeps them.
+// Ported from Sources/InnerVoiceKit/TextCleanup.swift. A kept line keeps its delivery hint
+// and its tone (still in Extra on Windows).
+// TODO(voices): run ToneRules after a cleanup, as the Mac does, once tones are ported.
 
 using System.Text.Json.Serialization;
 using InnerVoice.Core.AI;
