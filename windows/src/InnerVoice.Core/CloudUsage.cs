@@ -63,9 +63,8 @@ public sealed record CloudUsageRecord
     public static string DayOf(DateTime? date = null) =>
         (date ?? DateTime.Now).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
-    /// One ElevenLabs request, for the store.
-    /// TODO(voices): the ElevenLabs engine records each request with this (characters sent),
-    /// as the Mac's ElevenLabs.render does.
+    /// One ElevenLabs request, for the store: the ElevenLabs engine records each request with
+    /// this (characters sent), as the Mac's ElevenLabs.render does.
     public static CloudUsageRecord ElevenLabs(string book, string model, int characters) =>
         new(DayOf(), book, CloudService.Elevenlabs, model) { Characters = characters, Requests = 1 };
 }
@@ -116,8 +115,8 @@ public sealed record ElevenLabsCredits(string Tier, long Used, long Limit)
     public const string Host = "https://api.elevenlabs.io";
 
     /// Asks ElevenLabs for the plan's credits. Sends the key only, never text from a book.
-    /// TODO(voices): the ElevenLabs engine keeps the key (Windows Credential Manager) and the
-    /// narrator's yes; Cloud Usage calls this with that key.
+    /// The ElevenLabs engine keeps the key (Windows Credential Manager) and the narrator's
+    /// yes; Cloud Usage and the setup check call this with that key.
     public static async Task<ElevenLabsCredits> Read(string apiKey, HttpClient? http = null, CancellationToken ct = default)
     {
         var client = http ?? Shared;

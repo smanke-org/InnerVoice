@@ -146,8 +146,8 @@ public static class DeliveryPrompt
 
     /// The audio tag ElevenLabs gets for a line: tone and hint in one bracket
     /// ("[sad, barely audible]"), since stacked tags can blur the performance.
-    /// TODO(voices): the ElevenLabs engine puts this before the line's text in its request
-    /// (the Mac's VoiceResolver / SpeechRequest); no other engine is sent the hint.
+    /// The ElevenLabs engine puts this before the line's text in its request; no other
+    /// engine is sent the hint (VoiceResolver sets it for ElevenLabs voices alone).
     public static string? AudioTag(Tone? tone, string? delivery)
     {
         var parts = new List<string>();

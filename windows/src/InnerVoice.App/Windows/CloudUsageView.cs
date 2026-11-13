@@ -8,6 +8,7 @@ using InnerVoice.App.AI;
 using InnerVoice.App.UI;
 using InnerVoice.Core;
 using InnerVoice.Core.AI;
+using InnerVoice.Core.Speech;
 using ScottPlot.Avalonia;
 
 namespace InnerVoice.App.Windows;
@@ -19,18 +20,18 @@ public static class CloudInUse
 {
     public static bool Claude() => ModelManager.Shared.SelectionIsClaude;
 
-    /// The ElevenLabs key, once the voices work stores one.
-    /// TODO(voices): read the ElevenLabs key from Windows Credential Manager (with the
-    /// narrator's yes), as the Mac's ElevenLabs.apiKey; until then ElevenLabs is never in use.
+    /// The ElevenLabs key while ElevenLabs is set up (Credential Manager, with the narrator's
+    /// yes); the engine sets this when it starts. null: not set up, so never in use.
     public static Func<string?> ElevenLabsKey { get; set; } = () => null;
 
-    /// The book allows ElevenLabs (`cloudVoicesAllowed`, kept in Extra), shows voices, and a
-    /// key is set up.
-    /// TODO(voices): also require ElevenLabs to be the book's engine, or one of Mix Engines'
-    /// (the Mac's `engineInUse` and EngineSwitches).
-    public static bool ElevenLabs(Project project) =>
-        project.ShowsVoices && project.Settings.Extra?.ContainsKey("cloudVoicesAllowed") == true
-        && !string.IsNullOrWhiteSpace(ElevenLabsKey());
+    /// The book shows voices and allows ElevenLabs, a key is set up, and ElevenLabs is the
+    /// book's engine or one of Mix Engines'.
+    public static bool ElevenLabs(Project project)
+    {
+        if (!project.ShowsVoices || project.Settings.CloudVoicesAllowed is null || string.IsNullOrWhiteSpace(ElevenLabsKey())) return false;
+        var engine = Speech.VoiceSetup.EngineInUse(project);
+        return engine == VoiceEngine.Elevenlabs || (engine == VoiceEngine.Mixed && EngineSwitches.Shared.IsOn(VoiceEngine.Elevenlabs));
+    }
 
     public static bool Any(Project project) => Claude() || ElevenLabs(project);
 }
