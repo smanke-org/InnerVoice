@@ -25,11 +25,16 @@ public partial class App : Application
     public override void OnFrameworkInitializationCompleted()
     {
         ApplyAppearance();
+        Speech.VoiceSetup.Start();
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime d)
         {
             desktop = d;
             d.ShutdownMode = ShutdownMode.OnLastWindowClose;
-            d.Exit += (_, _) => InnerVoice.App.AI.ModelManager.Shared.UnloadNow();
+            d.Exit += (_, _) =>
+            {
+                InnerVoice.App.AI.ModelManager.Shared.UnloadNow();
+                Speech.SpeechPlayer.Shared.Stop();
+            };
             var files = (d.Args ?? []).Where(a => !a.StartsWith("--")).ToList();
             foreach (var f in files) OpenPath(f);
             if (projects.Count == 0) ShowStart();

@@ -77,6 +77,12 @@ public static class ActivityKey
     public const string Pronunciations = "pronunciations";
     public const string ParagraphsRecorded = "paragraphsRecorded", RetakesMarked = "retakesMarked", RetakesCleared = "retakesCleared";
     public const string LinesCarriedOver = "linesCarriedOver";
+    /// Voices: tones the AI read and the narrator kept or changed, audio played and exported,
+    /// voices kept or changed, characters sent to ElevenLabs, voices cloned.
+    public const string TonesAI = "tonesAI", TonesKept = "tonesKept", TonesChanged = "tonesChanged";
+    public const string SecondsPlayed = "secondsPlayed", SecondsExported = "secondsExported";
+    public const string VoicesKept = "voicesKept", VoicesChanged = "voicesChanged";
+    public const string ElevenLabsCharacters = "elevenLabsCharacters", VoicesCloned = "voicesCloned";
     public static string AiKept(string model) => "aiKept|" + model;
     public static string AiChanged(string model) => "aiChanged|" + model;
 

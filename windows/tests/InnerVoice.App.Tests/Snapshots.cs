@@ -31,6 +31,8 @@ public static class TestApp
         var chapters = ChapterDetector.Chapters(blocks, SampleStory.Title);
         var p = ProjectBuilder.Make(new ImportedBook(SampleStory.Title, SampleStory.Author, chapters), "Sample Story.md");
         p.LastTagged = AppleDate.Now;
+        // The sample is a Narration Tools book unless a test says otherwise.
+        p.Settings.Purpose = ProjectPurpose.Narration;
         return p;
     }
 }
@@ -251,7 +253,8 @@ public class Books
             Assert.Equal(2, p.Recorded.Count);
             Assert.Single(p.Retakes);
             Assert.Equal(pronunciations, p.Pronunciations.Count);
-            Assert.True(p.Settings.Extra!.ContainsKey("voiceEngine"));
+            Assert.NotNull(p.Settings.VoiceEngine);
+            Assert.Contains(p.Characters, c => c.Voices is { Count: > 0 });
             Assert.True(again.Audio.ContainsKey("Kerensa.m4a"));
             doc.Undo();
             Assert.Equal(initials, doc.Project.Settings.ShowInitials);
@@ -269,7 +272,8 @@ public class Books
             var book = ManuscriptImporter.Read(Fixture($"import/sample.{f}"));
             var p = ProjectBuilder.Make(book, $"sample.{f}");
             Assert.True(p.Lines.Count > 20, $"{f}: {p.Lines.Count} lines");
-            Assert.Equal(ProjectPurpose.Narration, p.Settings.Purpose);
+            // Not asked yet: the window asks once, as on the Mac.
+            Assert.Null(p.Settings.Purpose);
         }
         var doc = ProjectDocument.Unsaved(TestApp.Sample());
         var project = doc.Project;

@@ -38,6 +38,28 @@ public sealed class AppSettings
     /// The narrator checked "Don't show the estimate again" before a Claude run.
     public bool SkipClaudeCostQuestion { get; set; }
     public List<string> RecentProjects { get; set; } = [];
+
+    // Voices (Settings › Voices), kept per PC like the Mac's.
+    /// Engines turned off (raw values: "apple", "elevenlabs"…).
+    public List<string> VoicesOffEngines { get; set; } = [];
+    /// Pauses between pieces of speech; null is Natural.
+    public InnerVoice.Core.PauseSettings? Pauses { get; set; }
+    /// Play's speed, 0.5× to 2×. Export Audio is always 1×.
+    public double PlaybackSpeed { get; set; } = 1;
+    /// Table reads read the narration too.
+    public bool ReadNarration { get; set; } = true;
+    /// Play from Here selects each line as it's read.
+    public bool FollowAlong { get; set; } = true;
+    /// Letters, signs and other written text are read by the narrator.
+    public bool WrittenByNarrator { get; set; } = true;
+    /// When the narrator agreed to send book text to ElevenLabs (the key is in Credential Manager).
+    public DateTime? ElevenLabsConsent { get; set; }
+    /// ElevenLabs' voice list as last fetched, so the Voices page shows it without asking.
+    public List<CachedVoice>? ElevenLabsVoices { get; set; }
+    /// Export Audio's last choices.
+    public string? ExportAudioFormat { get; set; }
+    public bool ExportAudioSeparateVoices { get; set; }
+    public bool ExportAudioRecaps { get; set; }
     public double WindowWidth { get; set; } = 1280;
     public double WindowHeight { get; set; } = 820;
 
@@ -89,3 +111,6 @@ public sealed class AppSettings
         });
     }
 }
+
+/// A voice remembered between runs (ElevenLabs' list).
+public sealed record CachedVoice(string VoiceID, string Name, string Gender, string Age, string Accent, string Detail, string? Category = null);

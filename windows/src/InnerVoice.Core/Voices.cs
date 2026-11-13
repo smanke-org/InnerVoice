@@ -216,8 +216,15 @@ public sealed record VoiceInfo(
     /// A short description for the voice list ("Bright, conversational").
     string Detail = "",
     /// Qwen3-TTS: the description the voice is designed from.
-    string? Design = null)
+    string? Design = null,
+    /// A voice cloned from someone's recordings (ElevenLabs' cloned or professional voices,
+    /// and "clone:" voices): listed first and never cast.
+    bool Cloned = false)
 {
+    /// The voices casting may pick from: never a clone.
+    public static IReadOnlyList<VoiceInfo> Castable(IEnumerable<VoiceInfo> voices) =>
+        voices.Where(v => !v.Cloned && !v.VoiceID.StartsWith("clone:", StringComparison.Ordinal)).ToList();
+
     public string Id => Engine.Raw() + ":" + VoiceID;
 
     /// What choosing this voice stores.

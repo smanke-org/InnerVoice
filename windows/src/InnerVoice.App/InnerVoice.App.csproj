@@ -8,6 +8,16 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
 
+  <!-- A Windows build (dotnet publish -r win-x64 / win-arm64) targets the Windows SDK, for
+       WinRT speech (Windows' OneCore voices) and Media Foundation (M4A). Builds without a
+       Windows runtime (tests on the Mac, `dotnet run` on a PC) are plain net10.0: there the
+       system voices come through SAPI (System.Speech) on Windows, and nothing elsewhere. -->
+  <PropertyGroup Condition="$(RuntimeIdentifier.StartsWith('win'))">
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.6" />
     <PackageReference Include="Avalonia.Desktop" Version="12.1.6" />
@@ -20,6 +30,10 @@
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
     <PackageReference Include="ScottPlot.Avalonia" Version="5.1.59" />
+    <!-- Audio out (WinMM) on Windows; SAPI voices when WinRT isn't there. Both are no-ops
+         elsewhere (the app checks OperatingSystem.IsWindows()). -->
+    <PackageReference Include="NAudio.WinMM" Version="2.2.1" />
+    <PackageReference Include="System.Speech" Version="10.0.0" />
   </ItemGroup>
 
   <ItemGroup>
