@@ -5,8 +5,9 @@ character summaries with a local AI model (or Claude, in the cloud, once the nar
 up and allows the book), keep an index and narrator scripts, and read from the teleprompter in
 the booth (record in your own audio app). Books made with AI voices give every character a
 voice and a tone, play table reads and export audio or an EPUB with audio, with Windows' own
-voices or ElevenLabs (in the cloud, set up and allowed per book); Qwen3-TTS and Orpheus on
-ONNX Runtime come later (docs/WINDOWS-PLAN.md § Voice engines). Projects (`.innervoice`) open
+voices, Qwen3-TTS and Orpheus (downloaded once, running on this PC through ONNX Runtime, on
+the graphics card with DirectML or on the processor), or ElevenLabs (in the cloud, set up and
+allowed per book). See docs/WINDOWS-PLAN.md § Local voices. Projects (`.innervoice`) open
 on both Windows and the Mac.
 
 The plan and the decisions behind it are in [../docs/WINDOWS-PLAN.md](../docs/WINDOWS-PLAN.md).
@@ -17,7 +18,8 @@ The plan and the decisions behind it are in [../docs/WINDOWS-PLAN.md](../docs/WI
   (no UI). `Model/` (project.json rules, archive), `Import/` (Word, PDF, RTF, text, Markdown,
   OpenDocument, Pages, EPUB, HTML), rules, dialogue finder, prompts, llama.cpp binding, voices
   (`Voices.cs`, `ToneRules.cs`, `SpeechScript.cs`, `SeriesVoices.cs`) and `Speech/` (the voice
-  engine interface, renderer and audio cache, resolver, audio DSP, WAV, audio export).
+  engine interface, renderer and audio cache, resolver, audio DSP, WAV, audio export;
+  `Speech/Neural/`: Qwen3-TTS and Orpheus on ONNX Runtime, voice packs, the hardware check).
 - `src/InnerVoice.Agent` — the agent interface shared by the app and the CLI (the Mac's
   `Sources/InnerVoice/Agent/`): the command list, parser, help, output, MCP server, named pipe,
   `innervoice://` links. No packages.
@@ -25,7 +27,9 @@ The plan and the decisions behind it are in [../docs/WINDOWS-PLAN.md](../docs/WI
   windowed program no console). Publishing the app puts it in the app's `cli\` folder.
 - `src/InnerVoice.App` — the Avalonia app: `Agent/` (what each command does, the pipe server,
   link registration), `Document/` (open, save, undo, edits), `Pages/`, `Windows/`, `Controls/`
-  (the manuscript view), `AI/`, `Speech/` (Windows Voices, ElevenLabs, the player), `Export/`, `Help/`.
+  (the manuscript view), `AI/`, `Speech/` (Windows Voices, ElevenLabs, the voice model
+  downloads, cloning on this PC, the player), `Export/`, `Help/`.
+- `tools/VoiceBench` — measures Qwen3-TTS and Orpheus on a computer (`--hardware`, `--bench`).
 - `tests/InnerVoice.Core.Tests` — xUnit tests, including golden checks against fixtures the Mac's
   Kit writes (`Fixtures/`).
 - `tests/InnerVoice.App.Tests` — headless app tests and light/dark snapshots of every page.
@@ -86,8 +90,11 @@ way on both.
   in its manifest; a copy run from a folder writes `HKCU\Software\Classes\innervoice` at launch.
   `innervoice <link>` follows one from the command line.
 - **MCP:** `claude mcp add --scope user innervoice -- innervoice mcp`.
-- **Not yet:** `lines tone`, `open voices`/`pronunciations` and `export --kind pronunciations`
-  answer error code `not_available` until AI voices come to Windows (`TODO(voices)`).
+- **Voices:** `lines tone`, tones in `lines list`, each character's `voice` (on the engine in use),
+  `casting style` shades and `export --kind pronunciations` work as on the Mac. The Windows app
+  has no Pronunciations page, so `open pronunciations` shows the Manuscript, as `open` does for
+  any page the project type doesn't show (Narration Tools hides Voices; Produce with AI Voices
+  hides Index and the Teleprompter).
 - **Test copies:** `APP_STORE=<folder>` makes a test copy: its own pipe (named from the folder),
   its settings and models in that folder, and it only opens or saves projects in the temporary
   folder. `INNERVOICE_DEMO=1` opens the sample book at launch; `projects demo` opens another.
@@ -141,6 +148,12 @@ Voices: Windows Voices and the speakers work in the VM if it has audio; check re
 output, the ElevenLabs key in Credential Manager, the microphone in Clone a Voice and M4A
 export (Media Foundation) there or on a PC. On the Mac, tests use fake engines and play
 silently (`INNERVOICE_SPEECH_AUDIBLE` has no effect off Windows).
+
+Qwen3-TTS and Orpheus: the tests use fake models. To run the real ones (11 GB), download the
+packs into a folder laid out like Voice Models and set `INNERVOICE_TEST_VOICE_MODELS` to it for
+`NeuralVoiceTests.TheRealModelsSpeak`, or run `dotnet run --project tools/VoiceBench -- --bench
+<folder> <output folder>` for speeds and WAV files to listen to. On a PC, run VoiceBench
+`--hardware` too and compare a graphics card with the processor.
 
 ## Releasing
 

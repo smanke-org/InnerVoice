@@ -83,7 +83,8 @@ public class ExportTests
                             var bytes = File.ReadAllBytes(path);
                             Assert.Equal(new byte[] { 0xEF, 0xBB, 0xBF }, bytes[..3]);
                             var header = Encoding.UTF8.GetString(bytes[3..]).Split('\n')[0];
-                            Assert.Equal("Name,Also Called,Narrator,Lines,Words,First Chapter,Age,Gender,Accent & Origin,Voice,Personality,Appearance,History,Relationships,Other,Voice Notes,Notes",
+                            Assert.Equal(kind == Exporter.Kind.Pronunciations ? "Term,Say It As,Notes,Confirmed,Count"
+                                : "Name,Also Called,Narrator,Lines,Words,First Chapter,Age,Gender,Accent & Origin,Voice,Personality,Appearance,History,Relationships,Other,Voice Notes,Notes",
                                 header);
                             break;
                         }
@@ -136,5 +137,36 @@ public class ExportTests
         for (int i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
         window.Close();
         owner.Close();
+    }
+
+    /// The pronunciation guide, as the Mac's: terms A to Z with how to say them, confirmed ones
+    /// marked, notes under them, dismissed ones left out; the CSV in the book's order.
+    [AvaloniaFact]
+    public void WritesThePronunciationGuide()
+    {
+        var doc = ProjectDocument.Unsaved(TestApp.Sample());
+        doc.Change("Add Terms", p =>
+        {
+            p.Pronunciations.Clear();
+            p.Pronunciations.Add(new Pronunciation { Term = "Tresco", SayItAs = "TRESS-koh", Notes = "like the island", Confirmed = true, Occurrences = 3 });
+            p.Pronunciations.Add(new Pronunciation { Term = "aldous", Notes = "ask the author" });
+            p.Pronunciations.Add(new Pronunciation { Term = "Zennor", SayItAs = "ZEN-er", Dismissed = true });
+        });
+        var guide = Exporter.Build(new Exporter.Options { Kind = Exporter.Kind.Pronunciations }, doc).Select(p => p.PlainText).ToList();
+        Assert.Equal([doc.Project.Title, "Pronunciation Guide", "aldous  —", "ask the author", "Tresco  TRESS-koh  ✓ confirmed", "like the island"], guide);
+
+        var csv = Exporter.Csv(new Exporter.Options { Kind = Exporter.Kind.Pronunciations, Format = Exporter.Format.Csv }, doc);
+        Assert.Equal("Term,Say It As,Notes,Confirmed,Count\n\"Tresco\",\"TRESS-koh\",\"like the island\",yes,3\n\"aldous\",\"\",\"ask the author\",no,0", csv);
+
+        // File › Export… offers it to books with AI voices, Narrator Scripts to narration
+        // (a project not asked yet shows both).
+        doc.Change("Project Type", p => p.Settings.Purpose = null);
+        Assert.Equal(Exporter.Kinds, Exporter.KindsShown(doc.Project));
+        doc.Change("Project Type", p => p.Settings.Purpose = ProjectPurpose.Narration);
+        Assert.DoesNotContain(Exporter.Kind.Pronunciations, Exporter.KindsShown(doc.Project));
+        Assert.Contains(Exporter.Kind.NarratorScript, Exporter.KindsShown(doc.Project));
+        doc.Change("Project Type", p => p.Settings.Purpose = ProjectPurpose.AiVoices);
+        Assert.Contains(Exporter.Kind.Pronunciations, Exporter.KindsShown(doc.Project));
+        Assert.DoesNotContain(Exporter.Kind.NarratorScript, Exporter.KindsShown(doc.Project));
     }
 }

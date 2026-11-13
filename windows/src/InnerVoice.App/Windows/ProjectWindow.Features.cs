@@ -10,7 +10,8 @@ namespace InnerVoice.App.Windows;
 /// Pages and commands that arrive milestone by milestone.
 public sealed partial class ProjectWindow
 {
-    IEnumerable<PageKind> VisiblePages()
+    /// The pages the sidebar lists for the project type (the Mac's `Page.isShown(in:)`).
+    internal IEnumerable<PageKind> VisiblePages()
     {
         var project = Document.Project;
         yield return PageKind.Manuscript;

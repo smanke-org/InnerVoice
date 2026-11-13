@@ -55,6 +55,7 @@ public sealed partial class VoicesPage : Page
         toolbar = Ui.Row(Look.Sm, engineBox, castAgain, series, playButton, help);
         search.TextChanged += (_, _) => BuildList();
         SpeechPlayer.Shared.Changed += UpdatePlayButton;
+        VoiceHooks.EnginesUpdated += () => Refresh(false);
         DetachedFromVisualTree += (_, _) => SpeechPlayer.Shared.Changed -= UpdatePlayButton;
 
         var left = new DockPanel { Width = 290 };
@@ -178,6 +179,14 @@ public sealed partial class VoicesPage : Page
                 return;
             }
             Document.SetCloudVoicesAllowed(true);
+        }
+        // Qwen3-TTS and Orpheus run on this PC: offer the download, and say first if it's too weak for them.
+        if (e is VoiceEngine.Qwen or VoiceEngine.Orpheus && !VoiceModels.Shared.IsInstalled(e))
+            await VoiceModels.Shared.OfferDownload(this, e);
+        else if (e is VoiceEngine.Qwen or VoiceEngine.Orpheus && !await VoiceModels.Shared.ConfirmHardware(this, e, downloading: false))
+        {
+            Refresh(false);
+            return;
         }
         Document.SetVoiceEngine(e);
     }

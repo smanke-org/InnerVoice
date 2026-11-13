@@ -35,6 +35,16 @@
     <PackageReference Include="NAudio.WinMM" Version="2.2.1" />
     <PackageReference Include="System.Speech" Version="10.0.0" />
   </ItemGroup>
+  <!-- Reading MP3, M4A and other recordings for Clone a Voice › On This PC (Media Foundation). -->
+  <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('win'))">
+    <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
+    <!-- DirectML.dll for ONNX Runtime's DirectML provider (the local voices on the graphics
+         card). Its package only copies it for C++ platform targets, so it's copied here. -->
+    <PackageReference Include="Microsoft.AI.DirectML" Version="1.15.4" GeneratePathProperty="true" ExcludeAssets="build" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'win-x64' Or '$(RuntimeIdentifier)' == 'win-arm64'">
+    <None Include="$(PkgMicrosoft_AI_DirectML)\bin\$(RuntimeIdentifier.Substring(4))-win\DirectML.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Link="DirectML.dll" Visible="false" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\InnerVoice.Core\InnerVoice.Core.csproj" />

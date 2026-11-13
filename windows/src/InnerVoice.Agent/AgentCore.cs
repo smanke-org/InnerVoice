@@ -97,8 +97,6 @@ public sealed class AgentError(string code, string message, int exit) : Exceptio
     public static AgentError Busy(string message) => new("busy", message, 1);
     /// No model is downloaded and chosen, so the AI can't run.
     public static AgentError NoModel(string message) => new("no_model", message, 1);
-    /// Windows only: a Mac feature the Windows app doesn't have yet (AI voices).
-    public static AgentError NotYet(string message) => new("not_available", message, 1);
     /// No project window is open.
     public static AgentError NoProject => new("no_project", "No project is open. Open one with `innervoice projects open <path>`, "
                                               + "or start one with `innervoice projects new --manuscript <file>`", 3);

@@ -4,6 +4,7 @@
 using InnerVoice.Core;
 using InnerVoice.App.Document;
 using InnerVoice.Core.Speech;
+using InnerVoice.Core.Speech.Neural;
 
 namespace InnerVoice.App.Speech;
 
@@ -24,6 +25,13 @@ public static class VoiceSetup
         SpeechRenderer.Shared = new SpeechRenderer(CacheFolder);
         VoiceEngineRegistry.Register(new WindowsVoices());
         ElevenLabsEngine.Register();
+        // Qwen3-TTS and Orpheus on ONNX Runtime (DirectML or the CPU). Test runs keep their
+        // models, samples and clones in temporary folders, never the narrator's own.
+        VoicePacks.Folder = AppPaths.IsTestRun ? Path.Combine(Path.GetTempPath(), "InnerVoice Voice Models (test)") : Path.Combine(AppPaths.Support, "Voice Models");
+        LocalClones.Shared = new LocalClones(AppPaths.IsTestRun ? Path.Combine(Path.GetTempPath(), $"InnerVoice Cloned Voices (test {Environment.ProcessId})") : Path.Combine(AppPaths.Support, "Cloned Voices"));
+        VoiceEngineRegistry.Register(new QwenEngine());
+        VoiceEngineRegistry.Register(new OrpheusEngine());
+        VoiceModels.Shared.DetectHardware();
         VoiceHooks.Install();
         LoadSwitches();
         PauseSettings.Current = AppPaths.IsTestRun ? PauseSettings.Standard : AppSettings.Current.Pauses ?? PauseSettings.Standard;

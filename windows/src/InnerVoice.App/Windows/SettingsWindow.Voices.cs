@@ -9,6 +9,7 @@ using InnerVoice.App.UI;
 using InnerVoice.Core;
 using InnerVoice.Core.Import;
 using InnerVoice.Core.Speech;
+using InnerVoice.Core.Speech.Neural;
 
 namespace InnerVoice.App.Windows;
 
@@ -39,6 +40,7 @@ public sealed partial class SettingsWindow
 
         pane.Children.Add(PausesSection());
         pane.Children.Add(EnginesSection());
+        if (LocalClones.Shared.All.Count > 0) pane.Children.Add(LocalClonesSection());
         if (ElevenLabsEngine.Shared.IsSetUp && EngineSwitches.Shared.IsOn(VoiceEngine.Elevenlabs)) pane.Children.Add(ClonedVoicesSection());
         pane.Children.Add(SavedAudioSection());
         return pane;
@@ -217,13 +219,12 @@ public sealed partial class SettingsWindow
         wCol.Children.Add(wActions);
         col.Children.Add(Ui.Card(wCol, Look.Md));
 
-        // Local models come with a later update (part B adds them here, with the hardware check).
-        col.Children.Add(Ui.Card(Ui.Column(Look.Xs,
-            Ui.Row(Look.Sm, Ui.Text("Qwen3-TTS and Orpheus", 14, FontWeight.SemiBold), Ui.Caption("Coming later")),
-            Ui.Text("The voice models that act out tones and design voices from Voice Notes run on this PC in a later version. They work best with a DirectX 12 graphics card.", 12, wrap: TextWrapping.Wrap)), Look.Md));
+        // Qwen3-TTS and Orpheus: downloaded voice models that run on this PC.
+        foreach (var pack in VoicePacks.Packs) col.Children.Add(LocalModelCard(pack));
+        col.Children.Add(HardwareCard());
 
         col.Children.Add(ElevenLabsRow());
-        col.Children.Add(Note("Windows Voices run on this PC. ElevenLabs is different: it makes its voices in the cloud, so the text it speaks is sent to ElevenLabs, and each book asks first. Choose the engine for each project on its Voices page; turn an engine off to hide it there."));
+        col.Children.Add(Note("Windows Voices, Qwen3-TTS and Orpheus run on this PC; downloading them is the only time they use the internet. ElevenLabs is different: it makes its voices in the cloud, so the text it speaks is sent to ElevenLabs, and each book asks first. Choose the engine for each project on its Voices page; turn an engine off to hide it there."));
         return col;
     }
 
@@ -341,6 +342,109 @@ public sealed partial class SettingsWindow
             },
         };
         return dialog;
+    }
+
+    // MARK: Local voice models
+
+    static readonly Color Caution = Color.Parse("#B8860B");
+
+    /// Qwen3-TTS or Orpheus: what it does, Download (with progress, Cancel) or Installed
+    /// (Remove), where it runs, and the hardware warning when this PC is weak for it.
+    Control LocalModelCard(VoicePack pack)
+    {
+        var models = VoiceModels.Shared;
+        var e = pack.Engine;
+        var title = Ui.Row(Look.Sm, Ui.Text(pack.Title, 14, FontWeight.SemiBold), Ui.Caption("Runs on this PC"));
+        if (models.IsInstalled(e)) title.Children.Add(Ui.Pill("Installed", Look.Gray));
+        var col = Ui.Column(Look.Xs, title, Ui.Text(pack.Summary, 12, wrap: TextWrapping.Wrap));
+        var actions = Ui.Row(Look.Sm);
+        switch (models.States.GetValueOrDefault(e))
+        {
+            case VoiceModels.State.Downloading d:
+                var bar = new ProgressBar { Minimum = 0, Maximum = 1, Value = d.Fraction, Width = 160, VerticalAlignment = VerticalAlignment.Center };
+                actions.Children.Add(bar);
+                actions.Children.Add(Ui.Caption(d.Verifying ? "Checking…" : $"{(int)(d.Fraction * 100)}% of {pack.SizeDescription}"));
+                actions.Children.Add(Ui.Button("Cancel", () => models.Cancel(e), tip: "Stop the download. Download again later to pick up where it stopped."));
+                break;
+            case VoiceModels.State.Failed f:
+                actions.Children.Add(Ui.Text(f.Message, 12, brush: Look.Brush(Caution), wrap: TextWrapping.Wrap));
+                actions.Children.Add(Ui.Button("Download", () => _ = StartDownload(e)));
+                break;
+            default:
+                if (models.IsInstalled(e))
+                {
+                    actions.Children.Add(EngineSwitch(e, Build));
+                    actions.Children.Add(Ui.Button("Remove…", async () =>
+                    {
+                        if (await Dialogs.Confirm(this, $"Remove {pack.Title}?",
+                            $"Its models ({pack.SizeDescription}) are deleted from this PC{(e == VoiceEngine.Qwen ? ", with the voice samples made from them" : "")}. Books cast with it keep their voices and can download it again.", "Remove"))
+                            models.Remove(e);
+                    }, tip: $"Delete the {pack.Title} models from this PC ({pack.SizeDescription})"));
+                }
+                else actions.Children.Add(Ui.Button($"Download ({pack.SizeDescription})", () => _ = StartDownload(e), tip: $"Download {pack.Title} from Hugging Face"));
+                break;
+        }
+        col.Children.Add(actions);
+        if (models.HardwareKnown && models.Warning(e) is { } why)
+            col.Children.Add(Ui.Text(why, 12, brush: Look.Brush(Caution), wrap: TextWrapping.Wrap));
+        if (NeuralModels.Shared.IsLoaded(e)) col.Children.Add(Ui.Caption($"Loaded, running on the {(Onnx.LastDevice == "CPU" ? "processor" : "graphics card")}."));
+        return Ui.Card(col, Look.Md);
+    }
+
+    async Task StartDownload(VoiceEngine e)
+    {
+        if (await VoiceModels.Shared.ConfirmHardware(this, e, downloading: true)) VoiceModels.Shared.Download(e);
+    }
+
+    /// What this PC has, and what makes the local voices fast.
+    Control HardwareCard()
+    {
+        var models = VoiceModels.Shared;
+        var hw = models.Hardware;
+        var col = Ui.Column(Look.Xs, Ui.Text("This PC", 14, FontWeight.SemiBold));
+        if (!models.HardwareKnown) col.Children.Add(Ui.Caption("Checking the graphics card and memory…"));
+        else
+        {
+            col.Children.Add(Ui.Text(hw.HasGpu
+                ? $"Graphics card: {hw.GpuName}, {hw.GpuMemoryGB:0.#} GB of video memory (DirectX 12)."
+                : "Graphics card: none that runs DirectX 12 with memory of its own, so the voice models run on the processor.", 12, wrap: TextWrapping.Wrap));
+            col.Children.Add(Ui.Text($"Memory: {hw.MemoryGB} GB. Processor: {hw.CpuName} ({hw.CpuThreads} threads, {hw.Architecture}).", 12, wrap: TextWrapping.Wrap));
+        }
+        col.Children.Add(Ui.Caption(VoiceHardwareCheck.Recommended, TextWrapping.Wrap));
+        return Ui.Card(col, Look.Md);
+    }
+
+    // MARK: Voices cloned on this PC
+
+    Control LocalClonesSection()
+    {
+        var store = LocalClones.Shared;
+        var col = Ui.Column(Look.Sm, Ui.Headline("Voices Cloned on This PC"));
+        foreach (var c in store.All)
+        {
+            var rename = Ui.Button("Rename…", async () =>
+            {
+                var name = await Dialogs.Ask(this, "Rename Voice", "The new name shows in every project.", "Rename", c.Name, "Name");
+                if (!string.IsNullOrWhiteSpace(name)) { store.Rename(c.Id, name); Build(); }
+            }, tip: "Change the name it has in every project");
+            var delete = Ui.Button("Delete…", async () =>
+            {
+                if (await Dialogs.Confirm(this, $"Delete “{c.Name}”?",
+                    "The voice and its recording are removed from this PC. Characters that use it, in any book, will need another voice. This can’t be undone.", "Delete"))
+                { store.Delete(c.Id); Build(); }
+            }, tip: "Delete the voice and its recording from this PC");
+            var row = new DockPanel();
+            var actions = Ui.Row(Look.Sm, rename, delete);
+            DockPanel.SetDock(actions, Dock.Right);
+            row.Children.Add(actions);
+            var label = Ui.Column(0, Ui.Text(c.Name, 13),
+                Ui.Caption($"{c.Gender} · {(int)c.Seconds / 60}:{(int)c.Seconds % 60:00} clip · {c.Created.ToLocalTime():MMM d, yyyy}"));
+            label.VerticalAlignment = VerticalAlignment.Center;
+            row.Children.Add(label);
+            col.Children.Add(row);
+        }
+        col.Children.Add(Note("Qwen3-TTS speaks these from a short recording kept on this PC, so every project here can use them. Casting never chooses them on its own."));
+        return col;
     }
 
     // MARK: Cloned Voices

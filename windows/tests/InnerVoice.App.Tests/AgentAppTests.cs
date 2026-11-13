@@ -2,7 +2,10 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using InnerVoice.Agent;
 using InnerVoice.App.Agent;
+using InnerVoice.App.Document;
 using InnerVoice.App.Pages;
+using InnerVoice.App.Speech;
+using InnerVoice.Core;
 using Xunit;
 using JObject = System.Collections.Generic.Dictionary<string, object?>;
 
@@ -129,7 +132,28 @@ public class AgentAppTests
             Assert.Equal(true, kind["changed"]);
             Assert.Equal(false, Ok("lines", "kind", id, "--kind", "thought")["changed"]);
             Assert.Contains("\"loud\" isn't a kind", ((JObject)Run(2, "lines", "kind", id, "loud")["error"]!)["message"] as string);
-            Assert.Equal("not_available", ErrorCode(1, "lines", "tone", id, "angry"));
+
+            // Tones: the narrator's (Tag Speakers never changes them), one undo step, shown in lines list.
+            var toned = Ok("lines", "tone", id, "angry");
+            Assert.Equal("angry", toned["tone"]);
+            var tonedLine = List(toned, "lines")[0];
+            Assert.Equal(id, tonedLine["id"]);
+            Assert.Equal("angry", tonedLine["tone"]);
+            Assert.Equal("user", tonedLine["toneSource"]);
+            Assert.Equal(1.0, Convert.ToDouble(tonedLine["toneConfidence"]));
+            Assert.Equal(false, tonedLine["toneNeedsYou"]);
+            Assert.Equal("Set Tone", List(Ok("projects", "list"), "projects")[0]["undo"]);
+            var model = App.Current.FrontProject!.Document.Project.Lines.First(l => l.Id.ToString("N").StartsWith(id, StringComparison.Ordinal));
+            Assert.Equal(Core.Tone.Angry, model.Tone);
+            Assert.Equal(Core.ToneSource.User, model.ToneSource);
+            Assert.Equal("sad", List(Ok("lines", "tone", id, "--tone", "Sad"), "lines")[0]["tone"]);
+            var listed = List(Ok("lines", "list", "--limit", "1000"), "lines").First(l => (string)l["id"]! == id);
+            Assert.Equal("sad", listed["tone"]);
+            Assert.Equal("user", listed["toneSource"]);
+            Assert.Contains("Give a tone: neutral, excited, confused, sad, angry, whispered, scared, tender, sarcastic.",
+                ((JObject)Run(2, "lines", "tone", id, "loud")["error"]!)["message"] as string);
+            Assert.Equal("usage", ErrorCode(2, "lines", "tone", id));
+            Assert.Equal("not_found", ErrorCode(3, "lines", "tone", "ffffffff", "angry"));
 
             var reveal = Ok("lines", "reveal", id);
             Assert.Equal(id, ((JObject)reveal["line"]!)["id"]);
@@ -144,6 +168,19 @@ public class AgentAppTests
             Assert.Equal(name, shown["name"]);
             Assert.True(shown.ContainsKey("facts") && shown.ContainsKey("voiceCue"));
             Assert.Equal("not_found", ErrorCode(3, "characters", "show", "Zzyzx"));
+
+            // Each character's voice on the engine the book speaks with now.
+            var doc = App.Current.FrontProject!.Document;
+            var engine = doc.Project.EngineInUse();
+            var topCharacter = doc.Project.Characters.First(c => c.Name == name);
+            doc.SetVoice(new Core.VoiceChoice(engine == Core.VoiceEngine.Mixed ? Core.VoiceEngine.Apple : engine, "agent-test-voice"), topCharacter.Id);
+            var voice = (JObject)Ok("characters", "show", name)["voice"]!;
+            Assert.Equal((engine == Core.VoiceEngine.Mixed ? Core.VoiceEngine.Apple : engine).Raw(), voice["engine"]);
+            Assert.Equal(Core.Speech.VoiceNames.Name(topCharacter.Voice(engine)!.Choice), voice["name"]);
+            Assert.Equal("user", voice["source"]);
+            Assert.Equal(1.0, Convert.ToDouble(voice["confidence"]));
+            Assert.Equal(false, voice["needsYou"]);
+            Assert.Equal(voice["source"], ((JObject)List(Ok("characters", "list"), "characters").First(c => (string)c["name"]! == name)["voice"]!)["source"]);
 
             var renamed = Ok("characters", "rename", "Quill Agent", "--to", "Quill Tester");
             Assert.Equal("Quill Agent", renamed["was"]);
@@ -168,6 +205,19 @@ public class AgentAppTests
             Assert.Equal("shared", style["castingStyle"]);
             Assert.NotEmpty(List(style, "readers"));
             Assert.Equal("usage", ErrorCode(2, "casting", "style", "choir"));
+            // One Voice: the narrator shades everyone. A book with voices takes the shades from
+            // the voices (the narrator's voice), a narration book from the narrator's gender.
+            void ShadesMatch(JObject result, Dictionary<Guid, Core.Shade> shades)
+            {
+                var readers = List(result, "readers");
+                Assert.Contains(readers, r => r["shade"] is string);
+                Assert.All(readers, r => Assert.Equal(shades.GetValueOrDefault(doc.Project.Characters.First(c => c.Name == (string)r["name"]!).Id)?.Cue, r["shade"]));
+            }
+            ShadesMatch(Ok("casting", "style", "one-voice"), VoiceSetup.Resolver(doc).Shades);
+            doc.Change("Project Type", p => { p.Settings.Purpose = Core.ProjectPurpose.Narration; p.Settings.NarratorGender = Core.CharacterGender.Male; });
+            ShadesMatch(Ok("casting", "style"), doc.Shades());
+            doc.Change("Project Type", p => { p.Settings.Purpose = null; p.Settings.NarratorGender = null; });
+            Ok("casting", "style", "shared");
 
             // Merge reports until --yes.
             Ok("lines", "assign", id, "--to", "Quill Tester");
@@ -194,8 +244,22 @@ public class AgentAppTests
             Assert.Equal(PageKind.Cast, App.Current.FrontProject!.Workspace.Page);
             Assert.Equal("record", Ok("open", "teleprompter")["page"]);
             Assert.Equal(name, Ok("open", "--character", name)["character"]);
-            Assert.Equal("not_available", ErrorCode(1, "open", "voices"));
+            Assert.Equal("voices", Ok("open", "voices")["page"]);
+            Assert.Equal(PageKind.Voices, App.Current.FrontProject!.Workspace.Page);
+            // No Pronunciations page on Windows: the Manuscript, as for a page the project type hides.
+            Assert.Equal("manuscript", Ok("open", "pronunciations")["page"]);
+            Assert.Equal(PageKind.Manuscript, App.Current.FrontProject!.Workspace.Page);
+            doc.Change("Project Type", p => p.Settings.Purpose = Core.ProjectPurpose.Narration);
+            Assert.Equal("manuscript", Ok("open", "voices")["page"]);
+            Assert.Equal(PageKind.Manuscript, App.Current.FrontProject!.Workspace.Page);
+            Assert.Equal("record", Ok("open", "teleprompter")["page"]);
+            doc.Change("Project Type", p => p.Settings.Purpose = Core.ProjectPurpose.AiVoices);
+            Assert.Equal("manuscript", Ok("open", "teleprompter")["page"]);
+            Assert.Equal("manuscript", Ok("open", "index")["page"]);
+            Assert.Equal("voices", Ok("open", "voices")["page"]);
+            doc.Change("Project Type", p => p.Settings.Purpose = null);
             Assert.Equal("usage", ErrorCode(2, "open", "attic"));
+            Assert.Equal("usage", ErrorCode(2, "open", "retakes"));
 
             // Export, into the temporary folder.
             var dir = Path.Combine(Path.GetTempPath(), $"iv-agent-{Guid.NewGuid():N}");
@@ -208,7 +272,16 @@ public class AgentAppTests
                 Assert.Equal("invalid", ErrorCode(1, "export", "--kind", "cast", "--format", "csv", "--out", Path.Combine(dir, "Cast.csv")));
                 Ok("export", "--kind", "cast", "--format", "csv", "--out", Path.Combine(dir, "Cast.csv"), "--replace");
                 Assert.Equal("usage", ErrorCode(2, "export", "--kind", "manuscript", "--format", "csv", "--out", Path.Combine(dir, "M")));
-                Assert.Equal("not_available", ErrorCode(1, "export", "--kind", "pronunciations", "--out", Path.Combine(dir, "P")));
+                // The pronunciation guide: terms the narrator dismissed are left out.
+                var guide = Ok("export", "--kind", "pronunciations", "--format", "csv", "--out", Path.Combine(dir, "Guide"));
+                Assert.Equal(Path.Combine(dir, "Guide.csv"), guide["path"]);
+                Assert.Equal("pronunciations", guide["kind"]);
+                var guideText = File.ReadAllText(Path.Combine(dir, "Guide.csv"));
+                Assert.StartsWith("Term,Say It As,Notes,Confirmed,Count\n", guideText);
+                Assert.Contains("\"Kerensa\",\"keh-REN-sah\",\"\",yes,", guideText);
+                Assert.True((long)Ok("export", "--kind", "pronunciations", "--out", Path.Combine(dir, "Guide"))["bytes"]! > 0);
+                Assert.True(new FileInfo(Path.Combine(dir, "Guide.pdf")).Length > 0);
+                Assert.Equal("usage", ErrorCode(2, "export", "--kind", "glossary", "--out", Path.Combine(dir, "G")));
                 Assert.True(File.Exists(Path.Combine(dir, "Narrator Script.pdf")) is false);
                 Ok("export", "--kind", "narrator-script", "--out", Path.Combine(dir, "Narrator Script"));
                 Assert.True(new FileInfo(Path.Combine(dir, "Narrator Script.pdf")).Length > 0);

@@ -52,6 +52,8 @@ public sealed class AppSettings
     public bool FollowAlong { get; set; } = true;
     /// Letters, signs and other written text are read by the narrator.
     public bool WrittenByNarrator { get; set; } = true;
+    /// Local voice models ("qwen", "orpheus") whose slow-hardware warning the narrator has seen.
+    public List<string> VoiceModelsWarned { get; set; } = [];
     /// When the narrator agreed to send book text to ElevenLabs (the key is in Credential Manager).
     public DateTime? ElevenLabsConsent { get; set; }
     /// ElevenLabs' voice list as last fetched, so the Voices page shows it without asking.

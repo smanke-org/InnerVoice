@@ -35,6 +35,9 @@ public sealed class ExportWindow : Window
         Content = content;
         document.Changed += OnChanged;
         Closed += (_, _) => document.Changed -= OnChanged;
+        // Narrator Scripts belong to narration projects, the pronunciation guide to AI voices.
+        if (!document.Project.ShowsNarrationTools && options.Kind == Exporter.Kind.NarratorScript) options.Kind = Exporter.Kind.Manuscript;
+        if (!document.Project.ShowsPronunciations && options.Kind == Exporter.Kind.Pronunciations) options.Kind = Exporter.Kind.NarratorScript;
         Build();
     }
 
@@ -51,7 +54,7 @@ public sealed class ExportWindow : Window
         content.Children.Add(Ui.Text("Export", 17, FontWeight.SemiBold));
 
         var kinds = new StackPanel { Spacing = Look.Xs };
-        foreach (var kind in Exporter.Kinds)
+        foreach (var kind in Exporter.KindsShown(document.Project))
         {
             var radio = new RadioButton { Content = kind.Title(), GroupName = "ExportKind", IsChecked = options.Kind == kind };
             radio.IsCheckedChanged += (_, _) =>

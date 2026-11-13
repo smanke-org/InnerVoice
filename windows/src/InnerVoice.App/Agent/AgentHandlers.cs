@@ -8,9 +8,11 @@ using System.Text.Json;
 using InnerVoice.Agent;
 using InnerVoice.App.AI;
 using InnerVoice.App.Document;
+using InnerVoice.App.Speech;
 using InnerVoice.App.Windows;
 using InnerVoice.Core;
 using InnerVoice.Core.AI;
+using InnerVoice.Core.Speech;
 
 namespace InnerVoice.App.Agent;
 
@@ -186,28 +188,18 @@ public static partial class AgentHandlers
         };
     }
 
-    // TODO(voices): tone, toneSource and toneConfidence move from Extra to Line with the voices work.
-    static string? ExtraString(Line line, string key) =>
-        line.Extra is { } x && x.TryGetValue(key, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
-
-    static double? ExtraNumber(Line line, string key) =>
-        line.Extra is { } x && x.TryGetValue(key, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : null;
-
     static JObject LineJSON(Line line, ProjectDocument d)
     {
         var p = d.Project;
-        var tone = Tones.ToneOf(line);
-        var toneSource = ExtraString(line, "toneSource");
-        var toneConfidence = ExtraNumber(line, "toneConfidence");
         return new JObject
         {
             ["id"] = Short(line.Id), ["ref"] = d.Index.Reference(line.ParagraphID),
             ["speaker"] = p.Character(line.SpeakerID)?.Name, ["kind"] = Raw(line.Kind),
             ["source"] = Raw(line.Source), ["confidence"] = Json.Hundredths(line.Confidence),
             ["needsYou"] = p.NeedsYou(line), ["text"] = p.TextOf(line, d.Index),
-            ["tone"] = tone?.Raw(), ["toneSource"] = toneSource,
-            ["toneConfidence"] = toneConfidence is { } c ? Json.Hundredths(c) : null,
-            ["toneNeedsYou"] = tone is not null && toneSource != "user" && (toneConfidence ?? 0) < p.Settings.UnsureBelow,
+            ["tone"] = line.Tone?.Raw(), ["toneSource"] = line.ToneSource is { } ts ? Raw(ts) : null,
+            ["toneConfidence"] = line.ToneConfidence is { } c ? Json.Hundredths(c) : null,
+            ["toneNeedsYou"] = p.ToneNeedsYou(line),
         };
     }
 
@@ -224,8 +216,19 @@ public static partial class AgentHandlers
             ["narrator"] = d.EffectiveNarrator(c)?.Name,
             ["gender"] = c.Gender is { } g ? Raw(g) : "auto", ["main"] = c.IsMain is { } m ? m : "auto",
             ["showInIndex"] = d.Index.ShowsInIndex(c),
-            // TODO(voices): the character's voice for the engine in use, as on the Mac.
-            ["voice"] = null,
+            ["voice"] = VoiceJSON(c, d.Project),
+        };
+    }
+
+    /// The character's voice on the engine the book speaks with now, as on the Mac.
+    static JObject? VoiceJSON(BookCharacter c, Project p)
+    {
+        var engine = p.EngineInUse();
+        if (c.Voice(engine) is not { } v) return null;
+        return new JObject
+        {
+            ["engine"] = v.Choice.Engine.Raw(), ["name"] = VoiceNames.Name(v.Choice), ["source"] = Raw(v.Source),
+            ["confidence"] = Json.Hundredths(v.Confidence), ["needsYou"] = p.VoiceNeedsYou(c, engine),
         };
     }
 

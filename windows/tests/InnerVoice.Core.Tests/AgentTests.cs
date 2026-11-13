@@ -113,7 +113,6 @@ public class AgentTests
         Assert.Equal(3, AgentError.ExitFor("not_found"));
         Assert.Equal(3, AgentError.ExitFor("no_project"));
         Assert.Equal(4, AgentError.ExitFor("app_unavailable"));
-        Assert.Equal(1, AgentError.ExitFor("not_available"));
         Assert.Equal(1, AgentError.ExitFor("busy"));
     }
 
@@ -204,6 +203,16 @@ public class AgentTests
         Assert.Equal(3L, (long)parsed!["n"]!);
         Assert.Equal(0.5, (double)parsed["f"]!);
         Assert.Null(Json.Parse("not json"));
+    }
+
+    /// The MCP server's instructions are the Mac's (Fixtures/agent/mac-mcp-instructions.txt, from
+    /// AgentMCP.swift) but for "this PC": voices answer as on the Mac, so no Windows-only error code.
+    [Fact]
+    public void McpInstructionsMatchTheMac()
+    {
+        var mac = File.ReadAllText(Fixtures.PathOf("agent/mac-mcp-instructions.txt")).TrimEnd('\n');
+        Assert.Equal(mac.Replace("app on this Mac", "app on this PC"), AgentMcp.Instructions);
+        Assert.DoesNotContain("not_available", AgentMcp.Instructions);
     }
 
     [Fact]
