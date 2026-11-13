@@ -57,3 +57,16 @@ MCP server for Claude Desktop and other clients without a shell (not registered 
 `claude mcp add --scope user innervoice -- "/Applications/InnerVoice.app/Contents/MacOS/InnerVoice" mcp`
 
 - `innervoice lines tone <ids> <tone>` sets how lines are said (neutral, excited, confused, sad, angry, whispered, scared, tender, sarcastic). `lines list` shows each line's tone, and `characters list` each character's voice.
+
+## Links
+
+`innervoice://` links run one command that only shows something; the words after `innervoice://`
+name the command, then its positional values, and the query gives its options (`project=` names
+the project). Give the person a link to click when they should look at something themselves:
+`innervoice://open/cast?character=Mara`, `innervoice://open/review?project=Harbor`,
+`innervoice://lines/reveal/3f2a9c1e`, `innervoice://projects/open?path=/Users/…/Harbor.innervoice`
+(percent-encode the path; it must be absolute). `innervoice://` alone brings InnerVoice forward.
+Only `open`, `lines reveal` and `projects open` work from a link; anything else is refused in an
+alert. Use the commands, not links, to change a book. A test copy gets a link with
+`open -a .build/app/InnerVoice.app "innervoice://…"` while it runs (plain `open` goes to the
+person's own copy).

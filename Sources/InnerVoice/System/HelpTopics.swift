@@ -19,6 +19,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
     case revisedManuscripts
     case choosingModel
     case keyboardShortcuts
+    case commandLine
     case settings
     case updates
 
@@ -41,6 +42,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
         case .revisedManuscripts: "Revised Manuscripts"
         case .choosingModel: "Choosing a Model"
         case .keyboardShortcuts: "Keyboard Shortcuts"
+        case .commandLine: "Command Line & Links"
         case .settings: "Settings & Sync"
         case .updates: "Updates"
         }
@@ -63,6 +65,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
         case .revisedManuscripts: "arrow.triangle.2.circlepath.doc.on.clipboard"
         case .choosingModel: "cpu"
         case .keyboardShortcuts: "keyboard"
+        case .commandLine: "link"
         case .settings: "gearshape"
         case .updates: "arrow.down.circle"
         }
@@ -399,6 +402,15 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
                 ("⌘?", "InnerVoice Help"),
             ]),
             .tip("ShortcutsLens lists InnerVoice's shortcuts too."),
+        ]
+
+        case .commandLine: [
+            .text("The innervoice command runs InnerVoice from Terminal, a script or an AI agent such as Claude Code: list the lines and the cast, assign lines, run Tag Speakers and Build Summaries, and export. Changes show in the project's window at once, and Edit › Undo takes them back. If InnerVoice isn't open, the command opens it in the background. Type innervoice help for the list, and add --json to get JSON for scripts. If innervoice isn't found, type the full path: /Applications/InnerVoice.app/Contents/MacOS/InnerVoice."),
+            .text("Merging characters, clearing lines back to Who's Speaking? and downloading a model only say what they would do until you add --yes."),
+            .heading("Links"),
+            .text("An innervoice:// link opens InnerVoice and shows something, in the project in front or the one you name with project=: innervoice://open/cast?character=Mara opens Mara on the Cast page, innervoice://open/review?project=Harbor the Review page of Harbor, innervoice://lines/reveal/3f2a9c1e a line in the manuscript, and innervoice://projects/open?path=/Users/you/Books/Harbor.innervoice a project. Put a link in your notes, a document or a web page, and click it."),
+            .text("Links only show things: they never change your book, save, export, run the AI or download anything. A link that can't be followed says why."),
+            .tip("Everything happens on this Mac: the command and links talk only to InnerVoice, never to the internet."),
         ]
 
         case .settings: [

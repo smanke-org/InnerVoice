@@ -779,6 +779,38 @@ enum SelfTest {
         window.close()
     }
 
+    /// innervoice:// links (Agent/AgentLinks.swift) against the app's real commands: only the
+    /// ones that show things run, and a refused link never runs its command.
+    private static func links() async {
+        let commands = AgentLinks.commands
+        for name in AgentLink.allowed {
+            let command = AgentCommands.all.first { $0.name == name }
+            check("a link may run `\(name)`, which only shows things", command != nil && command?.destructive == false)
+        }
+        let examples = ["innervoice://open/cast?character=Mara", "innervoice://open/review?project=Harbor",
+                        "innervoice://lines/reveal/3f2a9c1e", "innervoice://projects/open?path=/tmp/Harbor.innervoice"]
+        let parsed = examples.map { try? AgentLink.parse($0, commands: commands) }
+        check("the example links parse", parsed.allSatisfy { $0 != nil },
+              zip(examples, parsed).filter { $1 == nil }.map(\.0).joined(separator: ", "))
+        check("a link's words fill positional params", parsed[2]?.args["id"] == "3f2a9c1e" && parsed[0]?.args["page"] == "cast")
+        let others = AgentCommands.all.filter { !AgentLink.allowed.contains($0.name) }
+        let followed = others.filter { command in
+            let words = command.name.replacingOccurrences(of: " ", with: "/")
+            let positional = command.params.filter(\.positional).map { _ in "x" }.joined(separator: "/")
+            let required = command.params.filter { $0.required && !$0.positional }.map { "\($0.name)=x" }.joined(separator: "&")
+            return (try? AgentLink.parse("innervoice://\(words)/\(positional)?\(required)", commands: commands)) != nil
+        }
+        check("no other command runs from a link", followed.isEmpty, followed.map(\.name).joined(separator: ", "))
+        do {
+            _ = try await AgentLinks.run("innervoice://lines/assign/3f2a9c1e?to=Mara")
+            check("following a link that edits is refused", false)
+        } catch let error as AgentError {
+            check("following a link that edits is refused", error.code == "usage" && error.message.contains("a link can't run `lines assign`"), error.message)
+        } catch {
+            check("following a link that edits is refused", false, "\(error)")
+        }
+    }
+
     /// What views ask on every redraw (which engines are on and downloaded, the engine in use,
     /// the voice lists and names) must be cheap: these used to read the keychain, list the
     /// model folders and ask the system for its voices each time, and the window lagged.
@@ -1260,6 +1292,7 @@ enum SelfTest {
         await elevenLabs(doc, undo: undo)
         await localClones(doc, undo: undo)
         redrawCost(doc)
+        await links()
         seriesVoices(doc, undo: undo)
         await claudeFeatures()
 

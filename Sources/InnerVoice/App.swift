@@ -83,7 +83,14 @@ enum AppState {
     static var launched = false
 
     static func showStart() {
-        openWindow?(id: "start")
+        if let openWindow {
+            openWindow(id: "start")
+            return
+        }
+        // Launched by an innervoice:// link, SwiftUI shows no window, so there is no openWindow
+        // yet; the Window menu still lists the Welcome window.
+        let item = NSApp.mainMenu?.items.lazy.compactMap { $0.submenu?.items.first { $0.title == "Welcome to InnerVoice" } }.first
+        if let item, let action = item.action { NSApp.sendAction(action, to: item.target, from: item) }
     }
 
     static var hasDocumentWindows: Bool { !NSDocumentController.shared.documents.isEmpty }
@@ -94,6 +101,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // The Welcome window replaces the open panel macOS shows at launch for document apps.
         UserDefaults.standard.register(defaults: ["NSShowAppCentricOpenPanelInsteadOfUntitledFile": false])
         super.init()
+    }
+
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // innervoice:// links, including the one that launched the app (Agent/AgentLinks.swift).
+        if AgentSocket.shouldListen { AgentLinks.install() }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -110,6 +122,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if AgentSocket.shouldListen {
             AgentSocket.listen { await AgentRouter.handle($0) }
             AgentDemo.openIfRequested()
+            AgentLinks.launched()
         }
         NotificationCenter.default.addObserver(forName: SystemHooks.newFromManuscript, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated {

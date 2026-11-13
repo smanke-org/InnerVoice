@@ -677,7 +677,7 @@ enum AgentCommands {
     static func short(_ id: UUID) -> String { String(id.uuidString.prefix(8)).lowercased() }
 
     /// The project named by --project, or the frontmost one.
-    private static func project(_ args: Args) throws -> (OpenProjects.Entry, InnerVoiceDocument) {
+    static func project(_ args: Args) throws -> (OpenProjects.Entry, InnerVoiceDocument) {
         let open = OpenProjects.all
         guard !open.isEmpty else { throw AgentError.noProject }
         let entry: OpenProjects.Entry
