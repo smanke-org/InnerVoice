@@ -246,14 +246,14 @@ private func tempDir() -> URL {
 }
 
 @Test func modelAdviceFollowsMemory() {
-    #expect(ModelCatalog.recommendedID(memoryGB: 8) == "qwen3-4b")
+    #expect(ModelCatalog.recommendedID(memoryGB: 8) == "gemma-4-e2b")
     #expect(ModelCatalog.recommendedID(memoryGB: 16) == "gemma-4-e4b")
-    #expect(ModelCatalog.recommendedID(memoryGB: 32) == "qwen3-14b")
+    #expect(ModelCatalog.recommendedID(memoryGB: 32) == "phi-4")
     #expect(ModelCatalog.recommendedID(memoryGB: 48) == "gemma-4-26b-a4b")
     let big = ModelCatalog.model(id: "gemma-4-31b")!
     #expect(ModelCatalog.advice(for: big, memoryGB: 16).fit == .tooLarge)
     #expect(ModelCatalog.advice(for: big, memoryGB: 16).note.contains("16 GB"))
-    let small = ModelCatalog.model(id: "qwen3-4b")!
+    let small = ModelCatalog.model(id: "gemma-4-e2b")!
     #expect(ModelCatalog.advice(for: small, memoryGB: 64).fit == .good)
 }
 
@@ -1226,4 +1226,15 @@ private extension Line {
     var cached = CloudUsageRecord(day: "d", book: "A", service: .claude, model: "claude-haiku-5-5")
     cached.cacheReadTokens = 1_000_000; cached.cacheWriteTokens = 1_000_000
     #expect(abs((cached.cost ?? 0) - 0.135) < 0.0001)
+}
+
+/// Mistral Small and gpt-oss chat formats are found from their GGUF templates and rendered
+/// with the system prompt in its own place; gpt-oss starts its answer on the final channel.
+@Test func mistralAndHarmonyTemplates() {
+    #expect(ChatTemplate.detect(template: "{{ '[SYSTEM_PROMPT]' }}{{ '[INST]' }}") == .mistral)
+    #expect(ChatTemplate.detect(template: "<|start|>assistant<|channel|>final<|message|>") == .harmony)
+    let msgs = [ChatMessage(.system, "Be brief."), ChatMessage(.user, "Who speaks?")]
+    #expect(ChatTemplate.mistral.render(msgs, prefill: "") == "[SYSTEM_PROMPT]Be brief.[/SYSTEM_PROMPT][INST]Who speaks?[/INST]")
+    #expect(ChatTemplate.harmony.render(msgs, prefill: "").hasSuffix("<|start|>user<|message|>Who speaks?<|end|><|start|>assistant<|channel|>final<|message|>"))
+    #expect(!ModelCatalog.all.contains { $0.id.hasPrefix("qwen") })
 }

@@ -1270,7 +1270,7 @@ enum SelfTest {
         }
 
         // Model advice.
-        check("8 GB Macs get a small model", ModelCatalog.recommendedID(memoryGB: 8) == "qwen3-4b")
+        check("8 GB Macs get a small model", ModelCatalog.recommendedID(memoryGB: 8) == "gemma-4-e2b")
         if let big = ModelCatalog.model(id: "gemma-4-31b") {
             check("a 31B model is too large for 16 GB", ModelCatalog.advice(for: big, memoryGB: 16).fit == .tooLarge)
             check("a 31B model is recommended for 64 GB", ModelCatalog.advice(for: big, memoryGB: 64).fit == .recommended)

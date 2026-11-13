@@ -134,6 +134,7 @@ final class ModelManager {
 
     private init() {
         selection = ProcessInfo.processInfo.environment["APP_MODEL"] ?? UserDefaults.standard.string(forKey: "ai.model") ?? ""
+        if selection.hasPrefix("catalog:"), ModelCatalog.retiredIDs.contains(String(selection.dropFirst(8))) { selection = "" }
         refresh()
     }
 

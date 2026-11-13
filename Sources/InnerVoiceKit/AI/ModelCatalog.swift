@@ -43,10 +43,6 @@ public struct ModelAdvice: Hashable, Sendable {
 
 public enum ModelCatalog {
     public static let all: [CatalogModel] = [
-        CatalogModel(id: "qwen3-4b", name: "Qwen 3 4B Instruct", repo: "unsloth/Qwen3-4B-Instruct-2507-GGUF",
-                     file: "Qwen3-4B-Instruct-2507-UD-Q4_K_XL.gguf", bytes: 2_546_340_960,
-                     sha256: "4bbe1f2f8ebe69fad3be8e15d69f220b06448a9dd26f82d7d81cce88ebfc39fd",
-                     quality: 2, speed: 5, blurb: "Small and quick, and good at following the answer format.", license: "Apache 2.0"),
         CatalogModel(id: "gemma-4-e2b", name: "Gemma 4 E2B", repo: "unsloth/gemma-4-E2B-it-GGUF",
                      file: "gemma-4-E2B-it-UD-Q4_K_XL.gguf", bytes: 3_184_496_736,
                      sha256: "b52f438017efaec5debf1c0d8be690571e212a07c312f1102bbce927258cfc32",
@@ -55,22 +51,26 @@ public enum ModelCatalog {
                      file: "gemma-4-E4B-it-UD-Q4_K_XL.gguf", bytes: 5_126_306_944,
                      sha256: "3cf61de12daa015ee0f7b68e7b7c541405bf220e1e942bad8b47cab827d7df80",
                      quality: 3, speed: 4, blurb: "A strong all-rounder: follows who is speaking through most scenes.", license: "Apache 2.0"),
-        CatalogModel(id: "qwen3-8b", name: "Qwen 3 8B", repo: "unsloth/Qwen3-8B-GGUF",
-                     file: "Qwen3-8B-UD-Q4_K_XL.gguf", bytes: 5_135_722_304,
-                     sha256: "34a514d08f7449cb4a694a707aaa2eedccb7bb68290121bf5e5a569b2abe71c3",
-                     quality: 3, speed: 4, blurb: "Careful reader, good with books in other languages.", license: "Apache 2.0"),
-        CatalogModel(id: "qwen3-14b", name: "Qwen 3 14B", repo: "unsloth/Qwen3-14B-GGUF",
-                     file: "Qwen3-14B-UD-Q4_K_XL.gguf", bytes: 9_159_818_624,
-                     sha256: "7f371adeaaf51dc97da927c61e6573e75e3ea33d76ec09dddb8cad00d0d5b6cb",
-                     quality: 4, speed: 3, blurb: "Keeps track of who's who in busy scenes; builds fuller summaries.", license: "Apache 2.0"),
+        CatalogModel(id: "llama-3.1-8b", name: "Llama 3.1 8B Instruct", repo: "unsloth/Llama-3.1-8B-Instruct-GGUF",
+                     file: "Llama-3.1-8B-Instruct-Q4_K_M.gguf", bytes: 4_920_739_200,
+                     sha256: "b3bdbf23b47d7e6bb791c99b206deb169cd5a96362a9e3399028df2faacdc506",
+                     quality: 3, speed: 5, blurb: "Quick and careful; builds full character summaries for its size.", license: "Llama 3.1 Community License"),
+        CatalogModel(id: "phi-4", name: "Phi-4 14B", repo: "unsloth/phi-4-GGUF",
+                     file: "phi-4-Q4_K_M.gguf", bytes: 8_890_306_112,
+                     sha256: "01e1f25b3e6931054c6c2227b06f4969828434eebc299e8e171f55dab6814485",
+                     quality: 4, speed: 3, blurb: "Keeps track of who's who in busy scenes, on a mid-size Mac.", license: "MIT"),
+        CatalogModel(id: "gpt-oss-20b", name: "gpt-oss 20B", repo: "unsloth/gpt-oss-20b-GGUF",
+                     file: "gpt-oss-20b-Q4_K_M.gguf", bytes: 11_624_759_488,
+                     sha256: "c27536640e410032865dc68781d80a08b98f8db5e93575919af8ccc0568aeb4f",
+                     quality: 4, speed: 5, blurb: "Very fast at tagging speakers; writes thinner character summaries.", license: "Apache 2.0"),
+        CatalogModel(id: "mistral-small-3.2", name: "Mistral Small 3.2 24B", repo: "unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF",
+                     file: "Mistral-Small-3.2-24B-Instruct-2506-UD-Q4_K_XL.gguf", bytes: 14_548_880_928,
+                     sha256: "bcf82c1d4963f91d744d202efeee0724c0987625cd97a737ea2af68b49f141cf",
+                     quality: 4, speed: 3, blurb: "The fullest character summaries here, and a steady reader of dialogue.", license: "Apache 2.0"),
         CatalogModel(id: "gemma-4-26b-a4b", name: "Gemma 4 26B A4B", repo: "unsloth/gemma-4-26B-A4B-it-GGUF",
                      file: "gemma-4-26B-A4B-it-UD-Q4_K_XL.gguf", bytes: 17_010_980_576,
                      sha256: "ef728c8e0c337fd1067b947af006e38a9ef2419e56feced4fd29b4bf0636e30c",
                      quality: 4, speed: 4, blurb: "Large-model accuracy at mid-size speed (it only wakes part of itself per word).", license: "Apache 2.0"),
-        CatalogModel(id: "qwen3-30b-a3b", name: "Qwen 3 30B A3B Instruct", repo: "unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF",
-                     file: "Qwen3-30B-A3B-Instruct-2507-UD-Q4_K_XL.gguf", bytes: 17_690_497_440,
-                     sha256: "535f831bf3034a7fcfdcc8f0277a57cbad3a36c650c6068bf1d0894f25fb4383",
-                     quality: 4, speed: 4, blurb: "Fast for its size and very good at the answer format.", license: "Apache 2.0"),
         CatalogModel(id: "gemma-4-31b", name: "Gemma 4 31B", repo: "unsloth/gemma-4-31B-it-GGUF",
                      file: "gemma-4-31B-it-UD-Q4_K_XL.gguf", bytes: 18_822_970_304,
                      sha256: "9e92cb6236044c6a9870af406029c74a76e0571c157a6f95df724dcc8c7a1575",
@@ -79,12 +79,16 @@ public enum ModelCatalog {
 
     public static func model(id: String) -> CatalogModel? { all.first { $0.id == id } }
 
+    /// Models no longer offered (the Qwen 3 family, removed 2026-11-13). A saved choice of
+    /// one of these is cleared so the narrator picks again; the file stays until removed.
+    public static let retiredIDs: Set<String> = ["qwen3-4b", "qwen3-8b", "qwen3-14b", "qwen3-30b-a3b"]
+
     /// The model to suggest for this much unified memory.
     public static func recommendedID(memoryGB: Int) -> String {
         switch memoryGB {
-        case ..<12: "qwen3-4b"
+        case ..<12: "gemma-4-e2b"
         case ..<24: "gemma-4-e4b"
-        case ..<40: "qwen3-14b"
+        case ..<40: "phi-4"
         case ..<56: "gemma-4-26b-a4b"
         default: "gemma-4-31b"
         }

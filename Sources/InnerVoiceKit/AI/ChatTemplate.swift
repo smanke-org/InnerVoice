@@ -15,7 +15,7 @@ public struct ChatMessage: Sendable, Equatable {
 /// template stored in the GGUF, so the prefill can be appended right after the
 /// assistant header — which a generic template engine would not allow.
 public enum ChatTemplate: String, Sendable, Equatable {
-    case gemma4, gemma, chatml, llama3, phi, plain
+    case gemma4, gemma, chatml, llama3, phi, mistral, harmony, plain
 
     public static func detect(template: String?) -> ChatTemplate {
         guard let t = template else { return .plain }
@@ -23,7 +23,9 @@ public enum ChatTemplate: String, Sendable, Equatable {
         if t.contains("<start_of_turn>") { return .gemma }
         if t.contains("<|im_start|>") { return .chatml }
         if t.contains("<|start_header_id|>") { return .llama3 }
+        if t.contains("<|channel|>") { return .harmony }
         if t.contains("<|assistant|>") && t.contains("<|end|>") { return .phi }
+        if t.contains("[INST]") { return .mistral }
         return .plain
     }
 
@@ -42,6 +44,8 @@ public enum ChatTemplate: String, Sendable, Equatable {
         case .chatml: ["<|im_end|>", "<|im_start|>"]
         case .llama3: ["<|eot_id|>", "<|start_header_id|>"]
         case .phi: ["<|end|>", "<|user|>"]
+        case .mistral: ["</s>", "[INST]"]
+        case .harmony: ["<|return|>", "<|end|>", "<|start|>"]
         case .plain: []
         }
     }
@@ -83,6 +87,26 @@ public enum ChatTemplate: String, Sendable, Equatable {
         case .phi:
             for m in messages { out += "<|\(m.role.rawValue)|>\(m.content)<|end|>" }
             out += "<|assistant|>"
+        case .mistral:
+            // Mistral Small 3.x (Tekken): the system prompt has its own tags; <s> is the BOS token.
+            for m in messages {
+                switch m.role {
+                case .system: out += "[SYSTEM_PROMPT]\(m.content)[/SYSTEM_PROMPT]"
+                case .user: out += "[INST]\(m.content)[/INST]"
+                case .assistant: out += "\(m.content)</s>"
+                }
+            }
+        case .harmony:
+            // gpt-oss: system text goes in the developer turn; the answer is started on the final
+            // channel so the model skips its reasoning, like closing a <think> block.
+            for m in messages {
+                switch m.role {
+                case .system: out += "<|start|>developer<|message|># Instructions\n\n\(m.content)<|end|>"
+                case .user: out += "<|start|>user<|message|>\(m.content)<|end|>"
+                case .assistant: out += "<|start|>assistant<|channel|>final<|message|>\(m.content)<|end|>"
+                }
+            }
+            out += "<|start|>assistant<|channel|>final<|message|>"
         case .plain:
             for m in messages where m.role != .assistant { out += m.content + "\n\n" }
         }
