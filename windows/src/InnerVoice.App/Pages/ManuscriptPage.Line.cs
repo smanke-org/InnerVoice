@@ -153,10 +153,60 @@ public sealed partial class ManuscriptPage
             var pid = paragraph.Id;
             menu.Items.Add(Item("Open Teleprompter Here", () => { Workspace.TeleprompterParagraph = pid; Workspace.Go(PageKind.Teleprompter); }));
         }
+        // "Previously…": the chapter's recap, for every chapter after the first (or one that has one).
+        var recapParagraph = line?.ParagraphID ?? paragraph?.Id;
+        if (recapParagraph is { } rp && Document.Index.Positions.TryGetValue(rp, out var at)
+            && (at.Chapter > 0 || Document.Project.Chapters[at.Chapter].RecapText is not null))
+        {
+            int chapterIndex = at.Chapter;
+            if (menu.Items.Count > 0) menu.Items.Add(new Separator());
+            menu.Items.Add(Item("Chapter Recap…", () => _ = EditRecap(chapterIndex)));
+        }
         if (menu.Items.Count == 0) return;
         var anchor = AnchorAt(new Rect(point, new Size(1, 1)));
         menu.Closed += (_, _) => RemoveAnchor(anchor);
         menu.Open(anchor);
+    }
+
+    /// "Previously…": the chapter's recap, editable. Shown in Narrator Scripts. An edit makes it
+    /// the narrator's own (Write Chapter Recaps leaves it alone); clearing it lets Claude write one.
+    public async Task EditRecap(int chapterIndex)
+    {
+        var chapter = Document.Project.Chapters[chapterIndex];
+        var id = chapter.Id;
+        bool saved = false;
+        var box = new TextBox
+        {
+            Text = chapter.Recap ?? "", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 96,
+            PlaceholderText = "A short recap of the story so far",
+        };
+        var dialog = new Window
+        {
+            Title = "Chapter Recap", Width = 480, SizeToContent = SizeToContent.Height, CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner, ShowInTaskbar = false,
+            FontFamily = Look.UIFamily, Background = Look.Brush(Look.Paper),
+        };
+        var save = new Button { Content = "Save", IsDefault = true };
+        save.Classes.Add("accent");
+        save.Click += (_, _) => { saved = true; dialog.Close(); };
+        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        cancel.Click += (_, _) => dialog.Close();
+        var buttons = Ui.Row(Look.Sm, cancel, save);
+        buttons.HorizontalAlignment = HorizontalAlignment.Right;
+        var panel = new StackPanel
+        {
+            Margin = new Thickness(Look.Xl), Spacing = Look.Md,
+            Children = { Ui.Headline($"Previously… ({chapter.Title})"), box },
+        };
+        if (chapter.RecapText is not null && chapter.RecapEdited != true)
+            panel.Children.Add(Ui.Caption("Written by Claude (Book › Claude › Write Chapter Recaps). Edit it, and it's yours.", TextWrapping.Wrap));
+        panel.Children.Add(Ui.Caption("Shown at the chapter's start in Narrator Scripts.", TextWrapping.Wrap));
+        panel.Children.Add(buttons);
+        dialog.Content = panel;
+        if (TopLevel.GetTopLevel(this) is Window owner) await dialog.ShowDialog(owner); else return;
+        var text = box.Text ?? "";
+        if (!saved || text == (chapter.Recap ?? "")) return;
+        Document.Change("Edit Recap", p => InnerVoice.Core.AI.RecapPrompt.Edit(text, id, p));
     }
 
     void CopySelection()

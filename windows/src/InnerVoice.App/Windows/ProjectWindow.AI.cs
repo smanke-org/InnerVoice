@@ -38,7 +38,7 @@ public sealed partial class ProjectWindow
             Document.UpdateSettings("Review Claude's Changes", s => s.ReviewCloudAI = on ? null : false);
         });
         review.ToggleType = MenuItemToggleType.CheckBox;
-        ToolTip.SetTip(review, "After Tag Speakers runs with Claude, list every line it changed so you can keep or undo each one");
+        ToolTip.SetTip(review, "After a Claude run, list every line it changed (and its text fixes and recaps) so you can keep or leave out each one");
         var stop = Item("Stop Sending This Book to Claude", null, () => Document.SetCloudTextAllowed(false));
         book.SubmenuOpened += (_, _) =>
         {
@@ -50,11 +50,61 @@ public sealed partial class ProjectWindow
         };
         book.Items.Add(review);
         book.Items.Add(stop);
+        AddClaudeMenu(book);
+    }
+
+    /// Book › Claude (Cloud): the features only Claude does. Each one asks before it sends
+    /// anything (the book's permission, then the estimated cost).
+    void AddClaudeMenu(MenuItem book)
+    {
+        var claude = new MenuItem { Header = "Claude (Cloud)" };
+        var setUp = Item("Set Up Claude…", null, () => SettingsWindow.Show(this, "AI"));
+        var setUpLine = new Separator();
+        claude.Items.Add(setUp);
+        claude.Items.Add(setUpLine);
+        var jobs = new List<MenuItem>();
+        foreach (var job in new[] { AIRunner.ClaudeJob.Cleanup, AIRunner.ClaudeJob.Recaps })
+        {
+            var item = Item(AIRunner.Title(job) + "…", null, () => _ = RunClaude(job));
+            jobs.Add(item);
+            claude.Items.Add(item);
+        }
+        claude.SubmenuOpened += (_, _) =>
+        {
+            bool ready = ClaudeAccount.Shared.IsSetUp;
+            setUp.IsVisible = setUpLine.IsVisible = !ready;
+            foreach (var item in jobs) item.IsEnabled = ready && !Runner.IsRunning;
+        };
+        book.Items.Add(claude);
+    }
+
+    public async Task RunClaude(AIRunner.ClaudeJob job)
+    {
+        if (Runner.IsRunning) return;
+        if (!ClaudeAccount.Shared.IsSetUp)
+        {
+            Runner.Failure = "Set up Claude first: Book › Choose a Model…, then Set Up next to Claude.";
+            RefreshAIBar();
+            return;
+        }
+        if (Runner.NothingToSend(job) is { } nothing)
+        {
+            Runner.Finished = nothing;
+            RefreshAIBar();
+            return;
+        }
+        if (!await ConfirmClaude(AIRunner.Title(job), AIRunner.FeatureModelID, Runner.Estimate(job), AIRunner.What(job))) return;
+        await Runner.RunClaude(job);
+        if (Runner.Proposals is { } found)
+        {
+            Runner.Proposals = null;
+            await ClaudeProposalsWindow.Show(this, Document, Runner, found);
+        }
     }
 
     public async Task TagSpeakers()
     {
-        if (!await EnsureModel() || !await ClaudeAllowed()) return;
+        if (!await EnsureModel() || !await ClaudeAllowed("Tag Speakers", () => CostEstimator.TagSpeakers(Document.Project))) return;
         await Runner.TagSpeakers();
         if (Runner.Review is { } r)
         {
@@ -65,20 +115,39 @@ public sealed partial class ProjectWindow
 
     public async Task BuildSummaries()
     {
-        if (!await EnsureModel() || !await ClaudeAllowed()) return;
+        if (!await EnsureModel() || !await ClaudeAllowed("Build Summaries", () => CostEstimator.BuildSummaries(Document.Project, Document.Project.Characters.Count))) return;
         await Runner.BuildSummaries();
     }
 
-    /// With Claude chosen, a book that hasn't said yes asks once (the narrator just clicked,
-    /// so a question is expected). Any other model: always true. Test runs never send.
-    async Task<bool> ClaudeAllowed()
+    /// With Claude chosen: a book that hasn't said yes asks once (the narrator just clicked, so
+    /// a question is expected), and every whole-book run shows its estimated cost first. Any
+    /// other model: always true.
+    Task<bool> ClaudeAllowed(string action, Func<CostEstimate> estimate) =>
+        ModelManager.Shared.SelectionIsClaude
+            ? ConfirmClaude(action, ModelManager.Shared.Selection[Claude.SelectionPrefix.Length..], estimate())
+            : Task.FromResult(true);
+
+    /// The questions before a Claude run (the Mac's ClaudeAsk): the book's permission, asked
+    /// once with the estimated cost; on later runs the estimated cost again, unless the
+    /// narrator turned that off. The estimate is worked out on this PC; nothing is sent to
+    /// count tokens. Test runs never say yes to a book, and skip the cost question.
+    async Task<bool> ConfirmClaude(string action, string modelID, CostEstimate estimate, string what = "the book, a passage at a time")
     {
-        if (!ModelManager.Shared.SelectionIsClaude || Document.Project.Settings.CloudTextAllowed is not null) return true;
-        if (AppPaths.IsTestRun) return false;
-        if (!await Dialogs.Confirm(this, Claude.BookQuestion, Claude.BookQuestionDetail, "Send to Claude", destructive: false, cancel: "Don't Send"))
-            return false;
-        Document.SetCloudTextAllowed(true);
-        return true;
+        var name = ClaudeAccount.Shared.NameOf(modelID);
+        if (Document.Project.Settings.CloudTextAllowed is null)
+        {
+            if (AppPaths.IsTestRun) return false;
+            if (!await Dialogs.Confirm(this, Claude.BookQuestion, Claude.BookQuestionDetail(action, what, name, estimate.Sentence(modelID)),
+                                       "Send to Claude", destructive: false, cancel: "Don't Send"))
+                return false;
+            Document.SetCloudTextAllowed(true);
+            return true;
+        }
+        if (AppPaths.IsTestRun || AppSettings.Current.SkipClaudeCostQuestion) return true;
+        var (ok, skip) = await Dialogs.ConfirmWithCheck(this, $"{action} with {name}?",
+            $"This sends {what} to Anthropic (Cloud). {estimate.Sentence(modelID)}", action, "Don't show the estimate again");
+        if (ok && skip) AppSettings.Update(s => s.SkipClaudeCostQuestion = true);
+        return ok;
     }
 
     /// No model yet: say so and open Settings › AI.

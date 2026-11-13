@@ -100,9 +100,21 @@ public sealed class Chapter : ModelObject
         Paragraphs = paragraphs;
     }
 
+    /// "Previously…": a short recap of the story so far, heard at the chapter's start
+    /// (Chapter Recaps). Optional, like `RecapEdited`, so older projects open unchanged.
+    public string? Recap { get; set; }
+    /// The narrator changed the recap: Write Chapter Recaps leaves it alone.
+    public bool? RecapEdited { get; set; }
+
     [JsonIgnore] public int WordCount => Paragraphs.Sum(p => p.WordCount);
 
-    public Chapter Copy() => new() { Id = Id, Title = Title, Paragraphs = Paragraphs.ConvertAll(p => p.Copy()), Extra = CopyExtra() };
+    /// The recap to show, if there is one.
+    [JsonIgnore] public string? RecapText => string.IsNullOrWhiteSpace(Recap) ? null : Recap.Trim();
+
+    public Chapter Copy() => new()
+    {
+        Id = Id, Title = Title, Paragraphs = Paragraphs.ConvertAll(p => p.Copy()), Recap = Recap, RecapEdited = RecapEdited, Extra = CopyExtra(),
+    };
 }
 
 public enum LineKind { Spoken, Thought, Written }
@@ -149,8 +161,9 @@ public static class ModelTitles
     };
 }
 
-/// One piece of text spoken, thought or written by a character. Tone fields (for AI
-/// voices) aren't modeled here; they stay in `Extra` and round-trip.
+/// One piece of text spoken, thought or written by a character. Tone and delivery-hint
+/// fields (for AI voices: `tone`, `delivery`, `deliverySource`) aren't modeled here; they stay
+/// in `Extra` and round-trip.
 public sealed class Line : ModelObject
 {
     public Guid Id { get; set; } = Guid.NewGuid();

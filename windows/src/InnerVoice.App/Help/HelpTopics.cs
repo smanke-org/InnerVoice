@@ -124,6 +124,9 @@ public static class HelpContent
             T("Download the document as Word first: in Google Docs, choose File › Download › Microsoft Word (.docx), then open that file in InnerVoice."),
             H("PDF"),
             T("Running headers, footers and page numbers are left out, and paragraphs split across pages are joined again. Lines that a book spreads out to fill the width (with wide gaps between the letters) are read as ordinary words in their paragraph. A scanned PDF has pictures of pages and no text: export it with text from the app that made it, or run it through a text recognition (OCR) app first."),
+            H("EPUB"),
+            T("An EPUB's chapters come from its own table of contents, with the chapter titles it gives, even when the whole book is one long file inside. The contents page and the copyright page are left out. If the book has no table of contents, or one with a single entry, InnerVoice finds the chapters at their headings instead."),
+            T("Footnotes and endnotes aren't part of the narration: the notes are left out, and so are the little numbers and symbols in the text that link to them."),
             Tip("InnerVoice keeps its own copy of the manuscript in the project, so moving or changing the original file doesn't change your project. To bring in a new draft, see Revised Manuscripts."),
         ],
 
@@ -233,6 +236,7 @@ public static class HelpContent
             T("For a production with more than one narrator, choose Book › Narrators… (or click Narrators… in Cast) and add them. Then cast each character to one of them on the character's page."),
             H("Narrator Scripts"),
             T("Choose File › Export…, pick Narrator Script and the narrator, and save it as PDF or Word. It has only their lines, each with its cue line and its chapter and paragraph, and the summaries of the characters they voice. Send it to the narrator; they don't need InnerVoice."),
+            T("A chapter with a recap (\"Previously…\", from right-clicking the chapter's text and choosing Chapter Recap…, or from Book › Claude (Cloud) › Write Chapter Recaps) has it under the chapter's title."),
             H("The whole manuscript"),
             T("File › Export… also saves the Tagged Manuscript as PDF or Word, with colors, initials and a key to the characters, for printing or reading on a tablet, and the Cast List as PDF, Word or CSV."),
         ],
@@ -284,6 +288,15 @@ public static class HelpContent
                 ("Disconnect", "Forget the key; nothing more is sent")),
             T("Each book asks once before anything is sent: \"Send this book to Claude?\" Until you say yes, nothing from that book leaves your PC. To take the yes back, choose Book › Stop Sending This Book to Claude. Anthropic doesn't train on API data unless your organization has opted in; the setup window links to how to check."),
             T("After Tag Speakers runs with Claude, Review Claude's Changes lists every line it gave a new speaker. Everything starts checked; uncheck what you don't want and click Undo Unchecked, and those lines go back to how they were, in one Undo step. Keep All keeps everything. Lines you assigned yourself are never changed. To keep Claude's changes straight away instead, turn off Book › Review Claude's Changes for that book."),
+            H("What it costs"),
+            T("Before Tag Speakers, Build Summaries or any of Claude's own features sends a book, InnerVoice shows the estimated cost for the model you picked, worked out on your PC from the book's length (nothing is sent to count it). It's an estimate: your bill may differ. A model InnerVoice doesn't know the price of shows tokens only. Tick \"Don't show the estimate again\" to skip it next time."),
+            H("Claude's own features"),
+            T("Book › Claude (Cloud) has features that only Claude does. Each one sends text to Anthropic, so each asks first, and each is one Undo step. They use the Claude model you picked, or Claude Sonnet when a downloaded model is chosen."),
+            Keys(
+                ("Clean Up Text…", "Finds what importing left behind: scanning mistakes, words broken by a hyphen, page numbers and headers, footnote markers, spaced-out letters. Only the project changes; your manuscript file never does, and lines you assigned keep their speakers"),
+                ("Write Chapter Recaps…", "A short \"Previously…\" for each chapter; right-click the chapter's text and choose Chapter Recap… to read or edit it. Edit it, and it's yours. Narrator Scripts include it")),
+            T("With Book › Review Claude's Changes on, fixes and recaps wait in a list to keep or leave out; nothing changes until you apply them."),
+            Tip("On the Mac, Book › Claude also suggests delivery hints for ElevenLabs voices and spellings for the pronunciation guide. Those need AI voices, which InnerVoice for Windows doesn't have; a project's hints and spellings are kept when you open it here."),
             Tip("With a downloaded model, your manuscript never leaves this PC. The model download is the only time the AI goes online."),
         ],
 

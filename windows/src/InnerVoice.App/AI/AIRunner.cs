@@ -9,9 +9,9 @@ namespace InnerVoice.App.AI;
 /// without the tone pass and voice casting, which only matter to AI voices). Results show
 /// up chapter by chapter while the narrator keeps reading; Stop keeps what is done; one Undo
 /// takes a whole run back without touching the narrator's own fixes.
-public sealed class AIRunner(ProjectDocument document)
+public sealed partial class AIRunner(ProjectDocument document)
 {
-    public enum Job { Tagging, Summaries }
+    public enum Job { Tagging, Summaries, Cleanup, Recaps }
 
     public sealed record Status(Job Job, double Progress, string Message, string? Character = null, double CharacterProgress = 0,
                                 int CharacterNumber = 0, int CharacterCount = 0, string Phase = "");

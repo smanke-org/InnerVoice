@@ -95,7 +95,29 @@ Selection string: `claude:<model id>`.
    - Checks: `ClaudeTests` (fake HttpMessageHandler: nothing sent without all three yeses),
      `PdfLetterSpacingTests`, and `ClaudeAppTests` (the real runner against a fake Anthropic).
      Credential Manager and the real API need a Windows PC and a key.
-   - 3–4 not ported yet.
+   - 3–4 ported 2026-11-12 (Windows has no voices, audio or pronunciation guide, so only
+     what doesn't need them):
+     - Core: `CostEstimate.cs` (Tag Speakers counts one pass: Windows has no tone pass),
+       `RecapPrompt.cs`, `TextCleanup.cs` (no ToneRules pass; tone and delivery ride in each
+       line's Extra, so a kept line keeps them), `Chapter.Recap` / `RecapEdited` (same JSON
+       names); `Line.delivery` / `deliverySource` stay in Extra and round-trip.
+       `Import/EpubReader.cs`: TOC chapters, notes left out (the Kit's EpubReader and
+       XHTMLBlocks); reads the zip in place, falls back to the HTML reader for files that
+       aren't well-formed XHTML.
+     - App: Book › Claude (Cloud) with Clean Up Text and Write Chapter Recaps
+       (`AI/ClaudeFeatures.cs`, a partial of `AIRunner`, so the progress bar and Stop are
+       shared); `Windows/ClaudeProposalsWindow.cs` (keep/leave out, recaps editable);
+       the estimate before every Claude run (`ConfirmClaude` in `ProjectWindow.AI.cs`,
+       "Don't show the estimate again" in AppSettings). Recaps are edited from the
+       manuscript's right-click menu (Chapter Recap…; Windows has no inspector) and printed
+       under the chapter title in Narrator Scripts.
+     - Not ported, by design: Suggest Delivery Hints (ElevenLabs only), Suggest Spellings
+       (the pronunciation guide shows only for AI voices), "Say chapter recaps" in Export
+       Audio and Export EPUB with Audio (no audio on Windows). The Mac's gating
+       (`ClaudeFeatures.offered`) would hide the first two in a Narration Tools book too.
+     - Checks: `ClaudeFeatureTests` (Kit ports), `EpubTests`, `ClaudeAppTests` (fake
+       Anthropic: cleanup and recaps through review, refused without the book's yes),
+       Narrator Script recap in `ExportTests`.
 
 ## API notes
 Raw HTTPS (no Swift SDK): POST /v1/messages, `anthropic-version: 2026-10-21`, streaming for
