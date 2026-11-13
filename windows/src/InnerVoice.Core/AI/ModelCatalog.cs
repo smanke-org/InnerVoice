@@ -37,25 +37,38 @@ public static class ModelCatalog
 {
     public static readonly IReadOnlyList<CatalogModel> All =
     [
-        new("qwen3-4b", "Qwen 3 4B Instruct", "unsloth/Qwen3-4B-Instruct-2507-GGUF", "Qwen3-4B-Instruct-2507-UD-Q4_K_XL.gguf", 2_546_340_960,
-            "4bbe1f2f8ebe69fad3be8e15d69f220b06448a9dd26f82d7d81cce88ebfc39fd", 2, 5, "Small and quick, and good at following the answer format.", "Apache 2.0"),
         new("gemma-4-e2b", "Gemma 4 E2B", "unsloth/gemma-4-E2B-it-GGUF", "gemma-4-E2B-it-UD-Q4_K_XL.gguf", 3_184_496_736,
             "b52f438017efaec5debf1c0d8be690571e212a07c312f1102bbce927258cfc32", 2, 5, "Light and fast; reads plain dialogue well, struggles with long back-and-forths.", "Apache 2.0"),
         new("gemma-4-e4b", "Gemma 4 E4B", "unsloth/gemma-4-E4B-it-GGUF", "gemma-4-E4B-it-UD-Q4_K_XL.gguf", 5_126_306_944,
             "3cf61de12daa015ee0f7b68e7b7c541405bf220e1e942bad8b47cab827d7df80", 3, 4, "A strong all-rounder: follows who is speaking through most scenes.", "Apache 2.0"),
-        new("qwen3-8b", "Qwen 3 8B", "unsloth/Qwen3-8B-GGUF", "Qwen3-8B-UD-Q4_K_XL.gguf", 5_135_722_304,
-            "34a514d08f7449cb4a694a707aaa2eedccb7bb68290121bf5e5a569b2abe71c3", 3, 4, "Careful reader, good with books in other languages.", "Apache 2.0"),
-        new("qwen3-14b", "Qwen 3 14B", "unsloth/Qwen3-14B-GGUF", "Qwen3-14B-UD-Q4_K_XL.gguf", 9_159_818_624,
-            "7f371adeaaf51dc97da927c61e6573e75e3ea33d76ec09dddb8cad00d0d5b6cb", 4, 3, "Keeps track of who's who in busy scenes; builds fuller summaries.", "Apache 2.0"),
+        new("llama-3.1-8b", "Llama 3.1 8B Instruct", "unsloth/Llama-3.1-8B-Instruct-GGUF", "Llama-3.1-8B-Instruct-Q4_K_M.gguf", 4_920_739_200,
+            "b3bdbf23b47d7e6bb791c99b206deb169cd5a96362a9e3399028df2faacdc506", 3, 5, "Quick and careful; builds full character summaries for its size.", "Llama 3.1 Community License"),
+        new("phi-4", "Phi-4 14B", "unsloth/phi-4-GGUF", "phi-4-Q4_K_M.gguf", 8_890_306_112,
+            "01e1f25b3e6931054c6c2227b06f4969828434eebc299e8e171f55dab6814485", 4, 3, "Keeps track of who's who in busy scenes, on a mid-size PC.", "MIT"),
+        new("gpt-oss-20b", "gpt-oss 20B", "unsloth/gpt-oss-20b-GGUF", "gpt-oss-20b-Q4_K_M.gguf", 11_624_759_488,
+            "c27536640e410032865dc68781d80a08b98f8db5e93575919af8ccc0568aeb4f", 4, 5, "Very fast at tagging speakers; writes thinner character summaries.", "Apache 2.0"),
+        new("mistral-small-3.2", "Mistral Small 3.2 24B", "unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF", "Mistral-Small-3.2-24B-Instruct-2506-UD-Q4_K_XL.gguf", 14_548_880_928,
+            "bcf82c1d4963f91d744d202efeee0724c0987625cd97a737ea2af68b49f141cf", 4, 3, "The fullest character summaries here, and a steady reader of dialogue.", "Apache 2.0"),
         new("gemma-4-26b-a4b", "Gemma 4 26B A4B", "unsloth/gemma-4-26B-A4B-it-GGUF", "gemma-4-26B-A4B-it-UD-Q4_K_XL.gguf", 17_010_980_576,
             "ef728c8e0c337fd1067b947af006e38a9ef2419e56feced4fd29b4bf0636e30c", 4, 4, "Large-model accuracy at mid-size speed (it only wakes part of itself per word).", "Apache 2.0"),
-        new("qwen3-30b-a3b", "Qwen 3 30B A3B Instruct", "unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF", "Qwen3-30B-A3B-Instruct-2507-UD-Q4_K_XL.gguf", 17_690_497_440,
-            "535f831bf3034a7fcfdcc8f0277a57cbad3a36c650c6068bf1d0894f25fb4383", 4, 4, "Fast for its size and very good at the answer format.", "Apache 2.0"),
         new("gemma-4-31b", "Gemma 4 31B", "unsloth/gemma-4-31B-it-GGUF", "gemma-4-31B-it-UD-Q4_K_XL.gguf", 18_822_970_304,
             "9e92cb6236044c6a9870af406029c74a76e0571c157a6f95df724dcc8c7a1575", 5, 2, "The most accurate reader here, best for tangled ensemble scenes. Slow.", "Apache 2.0"),
     ];
 
     public static CatalogModel? Model(string id) => All.FirstOrDefault(m => m.Id == id);
+
+    /// Models no longer offered (the Qwen 3 family, removed 2026-11-13). A saved choice of
+    /// one of these is cleared so the narrator picks again; the file stays until removed.
+    public static readonly IReadOnlySet<string> RetiredIDs = new HashSet<string> { "qwen3-4b", "qwen3-8b", "qwen3-14b", "qwen3-30b-a3b" };
+
+    /// Whether a saved selection ("catalog:<id>") names a retired model.
+    public static bool IsRetiredSelection(string? selection) =>
+        selection is { } s && s.StartsWith("catalog:") && RetiredIDs.Contains(s["catalog:".Length..]);
+
+    /// The models the Mac suggests at some memory size (its `recommendedID`). gpt-oss and
+    /// Mistral Small stay choices, never the suggestion: the Mac doesn't suggest them either
+    /// (gpt-oss writes thinner summaries, and Phi-4 or Gemma 26B do as well at their sizes).
+    static readonly HashSet<string> Suggested = ["gemma-4-e2b", "gemma-4-e4b", "phi-4", "gemma-4-26b-a4b", "gemma-4-31b"];
 
     /// Fits entirely in the graphics card's own memory.
     public static bool FitsGpu(CatalogModel m, Hardware hw) => hw.HasGpu && m.WorkingGB <= hw.GpuGB * 0.92;
@@ -64,9 +77,9 @@ public static class ModelCatalog
     /// memory. Without one the processor does the work, which is much slower, so a small model.
     public static string RecommendedID(Hardware hw)
     {
-        var onGpu = All.Where(m => FitsGpu(m, hw) && m.WorkingGB <= hw.MemoryGB * 0.66).ToList();
+        var onGpu = All.Where(m => Suggested.Contains(m.Id) && FitsGpu(m, hw) && m.WorkingGB <= hw.MemoryGB * 0.66).ToList();
         if (onGpu.Count > 0) return onGpu.OrderByDescending(m => m.Quality).ThenByDescending(m => m.Speed).ThenBy(m => m.Bytes).First().Id;
-        return hw.MemoryGB >= 16 ? "gemma-4-e4b" : "qwen3-4b";
+        return hw.MemoryGB >= 16 ? "gemma-4-e4b" : "gemma-4-e2b";
     }
 
     /// Why a model is a good or bad choice for this PC. The narrator usually has recording

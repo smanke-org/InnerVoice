@@ -11,7 +11,7 @@ public readonly record struct ChatMessage(ChatRole Role, string Content);
 /// Renders chat messages in a model family's turn format. Detected from the Jinja template
 /// stored in the GGUF, so the prefill can be appended right after the assistant header,
 /// which a generic template engine would not allow.
-public enum ChatTemplate { Gemma4, Gemma, ChatML, Llama3, Phi, Plain }
+public enum ChatTemplate { Gemma4, Gemma, ChatML, Llama3, Phi, Mistral, Harmony, Plain }
 
 public static class ChatTemplates
 {
@@ -22,11 +22,14 @@ public static class ChatTemplates
         if (template.Contains("<start_of_turn>")) return ChatTemplate.Gemma;
         if (template.Contains("<|im_start|>")) return ChatTemplate.ChatML;
         if (template.Contains("<|start_header_id|>")) return ChatTemplate.Llama3;
+        if (template.Contains("<|channel|>")) return ChatTemplate.Harmony;
         if (template.Contains("<|assistant|>") && template.Contains("<|end|>")) return ChatTemplate.Phi;
+        if (template.Contains("[INST]")) return ChatTemplate.Mistral;
         return ChatTemplate.Plain;
     }
 
-    /// Whether the template opens a reasoning block that must be closed up front (Qwen 3).
+    /// Whether the template opens a reasoning block that must be closed up front so the
+    /// model writes the continuation straight away (Qwen 3 hybrid models).
     public static bool HasThinking(string? template) => template?.Contains("<think>") == true;
 
     /// Text that ends a turn, for trimming output when the end token is printed as text.
@@ -37,6 +40,8 @@ public static class ChatTemplates
         ChatTemplate.ChatML => ["<|im_end|>", "<|im_start|>"],
         ChatTemplate.Llama3 => ["<|eot_id|>", "<|start_header_id|>"],
         ChatTemplate.Phi => ["<|end|>", "<|user|>"],
+        ChatTemplate.Mistral => ["</s>", "[INST]"],
+        ChatTemplate.Harmony => ["<|return|>", "<|end|>", "<|start|>"],
         _ => [],
     };
 
@@ -78,6 +83,32 @@ public static class ChatTemplates
             case ChatTemplate.Phi:
                 foreach (var m in messages) o.Append("<|").Append(Raw(m.Role)).Append("|>").Append(m.Content).Append("<|end|>");
                 o.Append("<|assistant|>");
+                break;
+            case ChatTemplate.Mistral:
+                // Mistral Small 3.x (Tekken): the system prompt has its own tags; <s> is the BOS token.
+                foreach (var m in messages)
+                {
+                    switch (m.Role)
+                    {
+                        case ChatRole.System: o.Append("[SYSTEM_PROMPT]").Append(m.Content).Append("[/SYSTEM_PROMPT]"); break;
+                        case ChatRole.User: o.Append("[INST]").Append(m.Content).Append("[/INST]"); break;
+                        case ChatRole.Assistant: o.Append(m.Content).Append("</s>"); break;
+                    }
+                }
+                break;
+            case ChatTemplate.Harmony:
+                // gpt-oss: system text goes in the developer turn; the answer is started on the final
+                // channel so the model skips its reasoning, like closing a <think> block.
+                foreach (var m in messages)
+                {
+                    switch (m.Role)
+                    {
+                        case ChatRole.System: o.Append("<|start|>developer<|message|># Instructions\n\n").Append(m.Content).Append("<|end|>"); break;
+                        case ChatRole.User: o.Append("<|start|>user<|message|>").Append(m.Content).Append("<|end|>"); break;
+                        case ChatRole.Assistant: o.Append("<|start|>assistant<|channel|>final<|message|>").Append(m.Content).Append("<|end|>"); break;
+                    }
+                }
+                o.Append("<|start|>assistant<|channel|>final<|message|>");
                 break;
             default:
                 foreach (var m in messages.Where(m => m.Role != ChatRole.Assistant)) o.Append(m.Content).Append("\n\n");

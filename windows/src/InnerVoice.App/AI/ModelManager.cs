@@ -63,11 +63,20 @@ public sealed class ModelManager
     string? loadedPath;
     Hardware? hardware;
 
-    ModelManager() => Refresh();
+    ModelManager()
+    {
+        // A saved Qwen 3 choice (retired 2026-11-13) is cleared so the narrator picks again.
+        if (ModelCatalog.IsRetiredSelection(AppSettings.Current.ModelID)) AppSettings.Update(s => s.ModelID = null);
+        Refresh();
+    }
 
     public string Selection
     {
-        get => Environment.GetEnvironmentVariable("INNERVOICE_MODEL") is { Length: > 0 } m ? m : AppSettings.Current.ModelID ?? "";
+        get
+        {
+            var m = Environment.GetEnvironmentVariable("INNERVOICE_MODEL") is { Length: > 0 } env ? env : AppSettings.Current.ModelID ?? "";
+            return ModelCatalog.IsRetiredSelection(m) ? "" : m;
+        }
         set
         {
             AppSettings.Update(s => s.ModelID = value);
