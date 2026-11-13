@@ -54,19 +54,9 @@
             <uap:DisplayName>InnerVoice Link</uap:DisplayName>
           </uap3:Protocol>
         </uap3:Extension>
-      </Extensions>
-    </Application>
-    <!-- The `innervoice` command for agents and scripts (src/InnerVoice.Cli, a console program
-         in cli\): the alias puts innervoice.exe on PATH. Not in the Start menu. -->
-    <Application Id="InnerVoiceCli" Executable="cli\innervoice.exe" EntryPoint="Windows.FullTrustApplication">
-      <uap:VisualElements
-        DisplayName="innervoice"
-        Description="The InnerVoice command line, for agents and scripts."
-        BackgroundColor="transparent"
-        Square150x150Logo="Assets\Square150x150Logo.png"
-        Square44x44Logo="Assets\Square44x44Logo.png"
-        AppListEntry="none" />
-      <Extensions>
+        <!-- The `innervoice` command for agents and scripts (src/InnerVoice.Cli, a console program
+             in cli\): the alias puts innervoice.exe on PATH. It lives on the main app because the
+             Store rejects a second, hidden (AppListEntry="none") app without a waiver. -->
         <uap3:Extension Category="windows.appExecutionAlias" Executable="cli\innervoice.exe" EntryPoint="Windows.FullTrustApplication">
           <uap3:AppExecutionAlias>
             <desktop:ExecutionAlias Alias="innervoice.exe" />
