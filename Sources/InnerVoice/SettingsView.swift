@@ -335,7 +335,11 @@ struct ClonedVoicesSection: View {
     @State private var deleting: VoiceInfo?
     @State private var busy: String?
     @State private var error: String?
+    @State private var refreshing = false
+    @State private var playingID: String?
+    @Environment(\.openURL) private var openURL
     private var eleven: ElevenLabs { .shared }
+    private var player: SpeechPlayer { .shared }
     private var clones: [VoiceInfo] { eleven.voices.filter { eleven.clonedIDs.contains($0.voiceID) } }
 
     var body: some View {
@@ -345,7 +349,7 @@ struct ClonedVoicesSection: View {
                     .foregroundStyle(.secondary)
             }
             ForEach(clones) { v in
-                LabeledContent(v.name) {
+                LabeledContent {
                     HStack {
                         if busy == v.voiceID { ProgressView().controlSize(.small) }
                         Button("Rename…") { newName = v.name; renaming = v }
@@ -355,6 +359,17 @@ struct ClonedVoicesSection: View {
                     }
                     .controlSize(.small)
                     .disabled(busy != nil)
+                } label: {
+                    HStack(spacing: Space.sm) {
+                        let playing = playingID == v.voiceID && player.isPlaying
+                        Button(playing ? "Stop" : "Play", systemImage: playing ? "stop.fill" : "play.fill") {
+                            if playing { stopSample() } else { play(v) }
+                        }
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(.borderless)
+                        .help(playing ? "Stop" : "Hear \(v.name) read a random passage from \(sampleSource)")
+                        Text(v.name)
+                    }
                 }
             }
             if let error {
@@ -364,13 +379,24 @@ struct ClonedVoicesSection: View {
             HStack(spacing: Space.xs) {
                 Text("Cloned Voices")
                 CloudBadge()
+                Spacer()
+                if refreshing { ProgressView().controlSize(.small) }
+                Button("Refresh", systemImage: "arrow.clockwise") { refresh() }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .disabled(refreshing)
+                    .help("Get the list from your ElevenLabs account again")
+                Button("Open ElevenLabs") { openURL(Self.voicesPage) }
+                    .buttonStyle(.link)
+                    .help("Open your voices at elevenlabs.io")
             }
         } footer: {
-            Text("Voices you cloned from recordings are kept in your ElevenLabs account, so every project can use them. Casting never chooses them on its own.")
+            Text("To add a voice, choose Book › Clone a Voice… in a book with voices and pick ElevenLabs (Cloud), or clone one at elevenlabs.io (Voices › Add a new voice › Instant or Professional Voice Clone), then click Refresh. Voices you clone are kept in your ElevenLabs account, so every project can use them. Casting never chooses them on its own. Play reads a random passage, which uses a few of your plan’s credits.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
         .task { if eleven.voices.isEmpty { try? await eleven.refreshVoices() } }
+        .onDisappear { stopSample() }
         .alert("Rename Voice", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Name", text: $newName)
             Button("Rename") { if let v = renaming { run(v) { try await eleven.renameVoice(v.voiceID, to: newName) } } }
@@ -385,6 +411,60 @@ struct ClonedVoicesSection: View {
         } message: {
             Text("It’s removed from your ElevenLabs account, which frees a voice slot. Characters that use it, in any book, will need another voice. This can’t be undone.")
         }
+    }
+
+    static let voicesPage = URL(string: "https://elevenlabs.io/app/voice-lab")!
+
+    private func refresh() {
+        refreshing = true
+        error = nil
+        Task {
+            defer { refreshing = false }
+            do { _ = try await eleven.refreshVoices() } catch { self.error = error.localizedDescription }
+        }
+    }
+
+    /// The front book when it lets ElevenLabs read it; otherwise the sample book, so no
+    /// book text is sent without that book's yes.
+    private var sampleDocument: InnerVoiceDocument {
+        if let doc = OpenProjects.front?.document, doc.project.settings.cloudVoicesAllowed != nil { return doc }
+        var sample = SeedData.project()
+        sample.settings.cloudVoicesAllowed = .now
+        return InnerVoiceDocument(project: sample)
+    }
+
+    private var sampleSource: String {
+        if let doc = OpenProjects.front?.document, doc.project.settings.cloudVoicesAllowed != nil { return "“\(doc.project.title)”" }
+        return "the sample book"
+    }
+
+    /// A random paragraph of 15 to 70 words, every part read in this one voice.
+    private func play(_ v: VoiceInfo) {
+        let document = sampleDocument
+        let project = document.project
+        let index = document.index
+        let candidates: [[SpeechSegment]] = project.chapters.flatMap { $0.paragraphs }.compactMap { para in
+            let segs = SpeechScript.segments(for: para, project: project, index: index, includeNarration: true)
+            let n = Words.count(segs.map(\.text).joined(separator: " "))
+            return n >= 15 && n <= 70 ? segs : nil
+        }
+        guard var segs = candidates.randomElement() else { error = "The book has no passage to read."; return }
+        for i in segs.indices { segs[i].speakerID = nil; segs[i].lineID = nil }
+        segs[segs.count - 1].pause = .none
+        let choice = VoiceChoice(engine: .elevenlabs, voiceID: v.voiceID)
+        var resolver = VoiceResolver(project: project, engine: .elevenlabs, index: index)
+        resolver.narrator = choice
+        resolver.characters = [:]
+        error = nil
+        player.stop()
+        playingID = v.voiceID
+        player.play(segs, resolver: resolver, onFinish: { Task { @MainActor in if playingID == v.voiceID { playingID = nil } } })
+    }
+
+    private func stopSample() {
+        guard playingID != nil else { return }
+        playingID = nil
+        player.stop()
     }
 
     private func run(_ v: VoiceInfo, _ work: @escaping () async throws -> Void) {

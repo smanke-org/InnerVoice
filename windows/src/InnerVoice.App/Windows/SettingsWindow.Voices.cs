@@ -454,7 +454,9 @@ public sealed partial class SettingsWindow
     Control ClonedVoicesSection()
     {
         var eleven = ElevenLabsEngine.Shared;
-        var col = Ui.Column(Look.Sm, Ui.Row(Look.Sm, Ui.Headline("Cloned Voices"), ElevenLabsCloudBadge()));
+        var refresh = Ui.Button("Refresh", () => { }, tip: "Get the list from your ElevenLabs account again");
+        var openSite = Ui.Button("Open ElevenLabs", () => _ = Launcher.LaunchUriAsync(new Uri(ClonedVoicesPage)), tip: "Open your voices at elevenlabs.io");
+        var col = Ui.Column(Look.Sm, Ui.Row(Look.Sm, Ui.Headline("Cloned Voices"), ElevenLabsCloudBadge(), refresh, openSite));
         var clones = eleven.Clones;
         if (clones.Count == 0)
             col.Children.Add(Ui.Text("None yet. To clone a voice with ElevenLabs, choose Book › Clone a Voice… and ElevenLabs (Cloud).", 13, brush: Look.Brush(Look.SecondaryInk), wrap: TextWrapping.Wrap));
@@ -466,8 +468,16 @@ public sealed partial class SettingsWindow
             try { await work(); }
             catch (Exception e) { problem.Text = e.Message; problem.IsVisible = true; }
         }
+        refresh.Click += async (_, _) => { refresh.IsEnabled = false; await Run(() => eleven.RefreshVoices()); refresh.IsEnabled = true; Build(); };
         foreach (var v in clones)
         {
+            bool playing = playingClone == v.VoiceID && SpeechPlayer.Shared.IsPlaying;
+            var play = Ui.Button(playing ? "■" : "▶", () =>
+            {
+                if (playing) StopClone();
+                else if (!PlayClone(v.VoiceID)) { problem.Text = "The book has no passage to read."; problem.IsVisible = true; }
+                Build();
+            }, tip: playing ? "Stop" : $"Hear {v.Name} read a random passage from {CloneSampleSource()}");
             var rename = Ui.Button("Rename…", async () =>
             {
                 var name = await Dialogs.Ask(this, "Rename Voice", "The new name shows in every project and at elevenlabs.io.", "Rename", v.Name, "Name");
@@ -485,12 +495,57 @@ public sealed partial class SettingsWindow
             row.Children.Add(actions);
             var name = Ui.Text(v.Name, 13);
             name.VerticalAlignment = VerticalAlignment.Center;
-            row.Children.Add(name);
+            var label = Ui.Row(Look.Sm, play, name);
+            row.Children.Add(label);
             col.Children.Add(row);
         }
         col.Children.Add(problem);
-        col.Children.Add(Note("Voices you cloned from recordings are kept in your ElevenLabs account, so every project can use them. Casting never chooses them on its own."));
+        col.Children.Add(Note("To add a voice, choose Book › Clone a Voice… in a book with voices and pick ElevenLabs (Cloud), or clone one at elevenlabs.io (Voices › Add a new voice › Instant or Professional Voice Clone), then click Refresh. Voices you clone are kept in your ElevenLabs account, so every project can use them. Casting never chooses them on its own. Play reads a random passage, which uses a few of your plan’s credits."));
         return col;
+    }
+
+    const string ClonedVoicesPage = "https://elevenlabs.io/app/voice-lab";
+    static string? playingClone;
+
+    /// The front book when it lets ElevenLabs read it; otherwise the sample book, so no
+    /// book text is sent without that book's yes.
+    static ProjectDocument CloneSampleDocument()
+    {
+        if (App.Current.FrontProject?.Document is { } d && d.Project.Settings.CloudVoicesAllowed is not null) return d;
+        var sample = SampleDocument();
+        sample.Project.Settings.CloudVoicesAllowed = AppleDate.Now;
+        return sample;
+    }
+
+    static string CloneSampleSource() =>
+        App.Current.FrontProject?.Document is { } d && d.Project.Settings.CloudVoicesAllowed is not null ? $"“{d.Project.Title}”" : "the sample book";
+
+    /// A random paragraph of 15 to 70 words, every part read in this one voice.
+    static bool PlayClone(string voiceID)
+    {
+        var document = CloneSampleDocument();
+        var project = document.Project;
+        var index = document.Index;
+        var candidates = project.Chapters.SelectMany(c => c.Paragraphs)
+            .Select(p => SpeechScript.Segments(p, project, index, includeNarration: true).ToList())
+            .Where(segs => segs.Count > 0 && Words.Count(string.Join(" ", segs.Select(x => x.Text))) is >= 15 and <= 70)
+            .ToList();
+        if (candidates.Count == 0) return false;
+        var segs = candidates[Random.Shared.Next(candidates.Count)].Select(x => x with { SpeakerID = null, LineID = null }).ToList();
+        segs[^1].Pause = PauseKind.None;
+        var resolver = new VoiceResolver(project, VoiceEngine.Elevenlabs, index) { Narrator = new VoiceChoice(VoiceEngine.Elevenlabs, voiceID) };
+        resolver.Characters.Clear();
+        SpeechPlayer.Shared.Stop();
+        playingClone = voiceID;
+        SpeechPlayer.Shared.Play(segs, resolver, onFinish: () => { if (playingClone == voiceID) playingClone = null; });
+        return true;
+    }
+
+    static void StopClone()
+    {
+        if (playingClone is null) return;
+        playingClone = null;
+        SpeechPlayer.Shared.Stop();
     }
 
     // MARK: Saved audio
