@@ -3,7 +3,7 @@ using InnerVoice.App.Document;
 
 namespace InnerVoice.App.Pages;
 
-public enum PageKind { Manuscript, Cast, Index, Teleprompter, Review, Revisions }
+public enum PageKind { Manuscript, Cast, Index, Teleprompter, Review, Revisions, Voices }
 
 public static class PageKinds
 {
@@ -14,6 +14,7 @@ public static class PageKinds
         PageKind.Index => "Index",
         PageKind.Teleprompter => "Teleprompter",
         PageKind.Review => "Review",
+        PageKind.Voices => "Voices",
         _ => "Revisions",
     };
 

@@ -59,12 +59,14 @@ public sealed partial class ProjectWindow
         menu.Items.Add(edit);
 
         var view = Top("_View");
+        view.SubmenuOpened += (_, _) => UpdateTypedItems();
         for (int i = 0; i < PageKinds.Numbered.Length; i++)
         {
             var kind = PageKinds.Numbered[i];
-            var item = Item(kind.Title(), $"Ctrl+{i + 1}", () => Workspace.Go(kind));
-            view.Items.Add(item);
+            var item = Item(kind.Title(), $"Ctrl+{i + 1}", () => { if (VisiblePages().Contains(kind)) Workspace.Go(kind); });
+            view.Items.Add(kind is PageKind.Index or PageKind.Teleprompter ? Typed(item, p => p.ShowsNarrationTools) : item);
         }
+        view.Items.Add(Typed(Item("Voi_ces", "Ctrl+5", () => { if (Document.Project.ShowsVoices) Workspace.Go(PageKind.Voices); }), p => p.ShowsVoices));
         view.Items.Add(Item("Re_view", null, () => Workspace.Go(PageKind.Review)));
         view.Items.Add(new Separator());
         foreach (var style in new[] { ColorStyle.Highlight, ColorStyle.Outline, ColorStyle.Underline })

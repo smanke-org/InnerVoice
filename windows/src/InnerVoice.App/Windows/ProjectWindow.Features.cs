@@ -12,11 +12,13 @@ public sealed partial class ProjectWindow
 {
     IEnumerable<PageKind> VisiblePages()
     {
+        var project = Document.Project;
         yield return PageKind.Manuscript;
         yield return PageKind.Review;
         yield return PageKind.Cast;
-        yield return PageKind.Index;
-        yield return PageKind.Teleprompter;
+        if (project.ShowsVoices) yield return PageKind.Voices;
+        if (project.ShowsNarrationTools) yield return PageKind.Index;
+        if (project.ShowsNarrationTools) yield return PageKind.Teleprompter;
         if (Document.Project.Revisions.Count > 0) yield return PageKind.Revisions;
     }
 
@@ -25,6 +27,7 @@ public sealed partial class ProjectWindow
         PageKind.Review => new ReviewPage(Document, Workspace),
         PageKind.Index => new IndexPage(Document, Workspace),
         PageKind.Revisions => new RevisionsPage(Document, Workspace),
+        PageKind.Voices => new VoicesPage(Document, Workspace),
         _ => new ManuscriptPage(Document, Workspace),
     };
 
@@ -54,13 +57,13 @@ public sealed partial class ProjectWindow
     void AddBookItems(MenuItem book)
     {
         book.Items.Add(new Separator());
-        book.Items.Add(Item("_Narrators…", null, () => NarratorsWindow.Show(this, Document)));
+        book.Items.Add(Typed(Item("_Narrators…", null, () => NarratorsWindow.Show(this, Document)), p => p.ShowsNarrationTools));
         book.Items.Add(Item("_Next Line That Needs You", "Ctrl+Down", () => { Workspace.Go(PageKind.Manuscript); (Get(PageKind.Manuscript) as ManuscriptPage)?.NextNeedingYou(1); }));
         book.Items.Add(Item("Pre_vious Line That Needs You", "Ctrl+Up", () => { Workspace.Go(PageKind.Manuscript); (Get(PageKind.Manuscript) as ManuscriptPage)?.NextNeedingYou(-1); }));
         AddMoreBookItems(book);
     }
 
-    void AddMoreBookItems(MenuItem book) { }
+    void AddMoreBookItems(MenuItem book) => AddVoiceItems(book);
 
     void AddHelpWindowItem(MenuItem help) => help.Items.Add(Item("InnerVoice _Help", "F1", () => InnerVoice.App.Help.HelpWindow.Show()));
 
@@ -106,13 +109,23 @@ public sealed partial class ProjectWindow
         else steps.Refresh();
     }
 
-    void GoToStep(GuidedStep step) => Workspace.Go(step switch
+    void GoToStep(GuidedStep step)
     {
-        GuidedStep.Review => PageKind.Review,
-        GuidedStep.Characters => PageKind.Cast,
-        GuidedStep.Teleprompter => PageKind.Teleprompter,
-        _ => PageKind.Manuscript,
-    });
+        // Listen: a table read from the top of the chapter in view (Export Audio is in the File menu).
+        if (step == GuidedStep.Listen)
+        {
+            ListenStep();
+            return;
+        }
+        Workspace.Go(step switch
+        {
+            GuidedStep.Review => PageKind.Review,
+            GuidedStep.Characters => PageKind.Cast,
+            GuidedStep.Teleprompter => PageKind.Teleprompter,
+            GuidedStep.Voices => PageKind.Voices,
+            _ => PageKind.Manuscript,
+        });
+    }
 
     void AddHelpItems(MenuItem help)
     {

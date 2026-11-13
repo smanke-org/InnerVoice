@@ -73,8 +73,9 @@ public sealed partial class AIRunner(ProjectDocument document)
                     l.Confidence = 0;
                 }
                 RuleAttribution.Apply(p);
+                ToneRules.Apply(p);
                 foreach (var l in p.Lines)
-                    if (before.TryGetValue(l.Id, out var b) && !b.SameAssignment(l)) changed.TryAdd(l.Id, b);
+                    if (before.TryGetValue(l.Id, out var b) && (!b.SameAssignment(l) || !b.SameTone(l))) changed.TryAdd(l.Id, b);
             });
             // Pronoun hints ("she said") for the prompt, from the rules run on a copy.
             var hints = RuleAttribution.Apply(document.Project.Copy());
@@ -109,19 +110,41 @@ public sealed partial class AIRunner(ProjectDocument document)
                             foreach (var l in p.Lines.Where(l => ids.Contains(l.Id) && l.Source == AssignmentSource.Ai)) l.AiModel = modelName;
                         });
                     }
-                    Set(Current! with { Progress = (n + (double)(k + 1) / Math.Max(1, chunks.Count)) / total });
+                    Set(Current! with { Progress = (n + 0.7 * (k + 1) / Math.Max(1, chunks.Count)) / total });
+                }
+                // Then how each line is said, now that the speakers are known (the Mac's tone
+                // pass): a grammar per chunk that needs an answer for every line.
+                var toneChunks = TonePrompt.Chunks(document.Project, document.Index, c, model.PassageWords);
+                for (int k = 0; k < toneChunks.Count; k++)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var chunk = toneChunks[k];
+                    var text = await model.Complete(chunk.Messages, chunk.Grammar, 40 + chunk.Labels.Count * 22, ct: ct);
+                    ct.ThrowIfCancellationRequested();
+                    if (TonePrompt.Parse(text) is { } toneReplies)
+                        document.ApplyQuietly(p =>
+                        {
+                            foreach (var l in TonePrompt.Apply(toneReplies, chunk, p)) changed.TryAdd(l.Id, l);
+                        });
+                    Set(Current! with { Progress = (n + 0.7 + 0.3 * (k + 1) / Math.Max(1, toneChunks.Count)) / total });
                 }
             }
+            document.ApplyQuietly(p => p.TonesTagged = AppleDate.Now);
             foreach (var line in document.Project.Lines)
             {
                 if (!changed.TryGetValue(line.Id, out var old) || old.SpeakerID is not null || line.SpeakerID is null) continue;
                 if (line.Source == AssignmentSource.Ai) Activity.Record(ActivityKey.LinesAI);
                 if (line.Source is AssignmentSource.Rule or AssignmentSource.Exchange) Activity.Record(ActivityKey.LinesRules);
             }
+            foreach (var line in document.Project.Lines)
+                if (changed.TryGetValue(line.Id, out var old) && line.ToneSource == ToneSource.Ai && old.ToneSource != ToneSource.Ai)
+                    Activity.Record(ActivityKey.TonesAI);
             int newCharacters = document.Project.Characters.Count(x => !charactersBefore.Contains(x.Id));
             document.ApplyQuietly(p => p.LastTagged = AppleDate.Now);
             int needs = document.Project.LinesNeedingYou;
             _ = document.RecolorAutomaticAsync();
+            // Casting that happens on its own: new characters get voices.
+            Speech.VoiceCastingRun.CastIfNeeded(document);
             if (model.IsCloud && document.Project.Settings.ReviewsCloudAI)
             {
                 var items = AIReview.Items(changed, document.Project);
@@ -150,9 +173,17 @@ public sealed partial class AIRunner(ProjectDocument document)
         document.RegisterRunUndo("Tag Speakers", p =>
         {
             // Put back only what the AI or the rules still own; the narrator's later fixes stay.
+            // Speaker and tone are separate: a line can have the narrator's speaker and the AI's tone.
             foreach (var l in p.Lines)
             {
-                if (!changed.TryGetValue(l.Id, out var old) || l.Source is not (AssignmentSource.Ai or AssignmentSource.Rule or AssignmentSource.Exchange)) continue;
+                if (!changed.TryGetValue(l.Id, out var old)) continue;
+                if (l.ToneSource != ToneSource.User)
+                {
+                    l.Tone = old.Tone;
+                    l.ToneConfidence = old.ToneConfidence;
+                    l.ToneSource = old.ToneSource;
+                }
+                if (l.Source is not (AssignmentSource.Ai or AssignmentSource.Rule or AssignmentSource.Exchange)) continue;
                 l.SpeakerID = old.SpeakerID;
                 l.Confidence = old.Confidence;
                 l.Source = old.Source;
@@ -255,6 +286,8 @@ public sealed partial class AIRunner(ProjectDocument document)
             if (only is null) document.ApplyQuietly(p => p.SummariesBuilt = AppleDate.Now);
             Activity.Record(ActivityKey.Facts, added);
             _ = document.RecolorAutomaticAsync();
+            // Voice Notes and facts shape casting: voices it was unsure of are decided again.
+            Speech.VoiceCastingRun.CastIfNeeded(document);
             Finished = $"Found {added:N0} facts" + (briefsWritten > 0 ? $" and wrote {briefsWritten} voice briefs." : ".");
         }
         catch (OperationCanceledException) { Finished = "Stopped. Summaries so far are kept."; }

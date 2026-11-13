@@ -1,10 +1,11 @@
-// Ported from Sources/InnerVoiceKit/GuidedSteps.swift (the Narration Tools steps).
+// Ported from Sources/InnerVoiceKit/GuidedSteps.swift: the Narration Tools steps and, for a
+// book made with AI voices, Voices and Listen in place of the Teleprompter.
 
 namespace InnerVoice.Core;
 
 /// The steps from a manuscript to a finished book, in order. The first one not done is the
 /// current step. Nothing is locked: the narrator can skip a step or go back to any of them.
-public enum GuidedStep { Manuscript, Speakers, Review, Characters, Teleprompter }
+public enum GuidedStep { Manuscript, Speakers, Review, Characters, Voices, Listen, Teleprompter }
 
 public sealed record GuidedStepStatus(GuidedStep Step, int Number, bool IsDone, bool IsMarked, bool IsSkipped, string Detail);
 
@@ -12,6 +13,11 @@ public sealed class GuidedSteps
 {
     public static readonly GuidedStep[] Narration =
         [GuidedStep.Manuscript, GuidedStep.Speakers, GuidedStep.Review, GuidedStep.Characters, GuidedStep.Teleprompter];
+    public static readonly GuidedStep[] AiVoices =
+        [GuidedStep.Manuscript, GuidedStep.Speakers, GuidedStep.Review, GuidedStep.Characters, GuidedStep.Voices, GuidedStep.Listen];
+
+    /// The steps for a project: narrating it yourself, or producing it with AI voices.
+    public static GuidedStep[] Steps(bool narration) => narration ? Narration : AiVoices;
 
     public List<GuidedStepStatus> All { get; }
     public GuidedStepStatus? Current => All.FirstOrDefault(s => !s.IsDone);
@@ -25,16 +31,17 @@ public sealed class GuidedSteps
     public static string Title(GuidedStep s) => s.ToString();
 
     /// The last step has no end of its own: it's done when the narrator says so.
-    public static bool IsLast(GuidedStep s) => s == GuidedStep.Teleprompter;
+    public static bool IsLast(GuidedStep s) => s is GuidedStep.Teleprompter or GuidedStep.Listen;
 
-    public GuidedSteps(Project p, int speaking)
+    /// `voicesNeeded`: speaking characters whose voice needs the narrator, on the engine in use.
+    public GuidedSteps(Project p, int speaking, bool narration = true, int voicesNeeded = 0)
     {
         var marked = (p.Settings.StepsDone ?? []).ToHashSet();
         bool tagged = p.LastTagged is not null;
         int needing = p.LinesNeedingYou;
         static string Plural(int n, string one, string many) => $"{n:N0} {(n == 1 ? one : many)}";
 
-        All = Narration.Select((step, i) =>
+        All = Steps(narration).Select((step, i) =>
         {
             bool isMarked = marked.Contains(RawValue(step));
             bool done;
@@ -49,6 +56,11 @@ public sealed class GuidedSteps
                     done = tagged && needing == 0; detail = !tagged ? "After tagging" : needing == 0 ? "All confirmed" : $"{needing:N0} to review"; break;
                 case GuidedStep.Characters:
                     done = p.SummariesBuilt is not null; detail = done ? Plural(speaking, "character", "characters") : "Not read yet"; break;
+                case GuidedStep.Voices:
+                    done = tagged && p.VoicesCast is not null && voicesNeeded == 0;
+                    detail = p.VoicesCast is null ? "Not cast yet" : voicesNeeded == 0 ? "All cast" : $"{voicesNeeded:N0} need a voice"; break;
+                case GuidedStep.Listen:
+                    done = false; detail = "Export audio"; break;
                 default:
                     // InnerVoice doesn't record: reading in the booth is done when the narrator says so.
                     done = false; detail = "Read in the booth"; break;

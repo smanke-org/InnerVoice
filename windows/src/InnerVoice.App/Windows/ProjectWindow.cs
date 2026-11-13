@@ -80,6 +80,7 @@ public sealed partial class ProjectWindow : Window
         Content = root;
         Background = Look.Brush(Look.Paper);
 
+        shownPurpose = Document.Project.Settings.Purpose;
         Workspace.PageChanged += ShowPage;
         Workspace.TagRequested += () => _ = TagSpeakers();
         Document.Changed += OnChanged;
@@ -94,8 +95,7 @@ public sealed partial class ProjectWindow : Window
             ShowPage();
             if (Document.IsReadOnly)
                 await Dialogs.Alert(this, "Opened Read-Only", "A newer version of InnerVoice made this project, so this one can show it but won't save over it.");
-            else if (Document.Project.IsAIVoicesProject)
-                SetStatus("This book is set up for AI voices on the Mac. Its voices are kept; this app shows the narration tools.");
+            else await AskProjectTypeIfNeeded();
             _ = Document.RecolorAutomaticAsync();
         };
         ShowPage();
@@ -103,8 +103,15 @@ public sealed partial class ProjectWindow : Window
 
     void UpdateTitle() => Title = $"{Document.DisplayName}{(Document.IsDirty && Document.FilePath is null ? " (not saved)" : "")} — InnerVoice";
 
+    ProjectPurpose? shownPurpose;
+
     void OnChanged(bool textChanged)
     {
+        if (Document.Project.Settings.Purpose != shownPurpose)
+        {
+            shownPurpose = Document.Project.Settings.Purpose;
+            ProjectTypeChanged();
+        }
         current?.Refresh(textChanged);
         foreach (var p in pages.Values.Where(p => p != current)) p.Tag = "stale";
         RefreshChrome();

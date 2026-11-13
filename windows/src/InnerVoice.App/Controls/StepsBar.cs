@@ -30,7 +30,14 @@ public sealed class StepsBar : Border
     {
         var p = document.Project;
         int speaking = p.Characters.Count(c => (document.Index.StatsFor(c.Id)?.Lines ?? 0) > 0);
-        var steps = new GuidedSteps(p, speaking);
+        // A book with voices has Voices and Listen in place of the Teleprompter (as on the Mac).
+        int voicesNeeded = 0;
+        if (p.ShowsVoices)
+        {
+            var engine = Speech.VoiceSetup.EngineInUse(p);
+            voicesNeeded = p.Characters.Count(c => (document.Index.StatsFor(c.Id)?.Lines ?? 0) > 0 && p.VoiceNeedsYou(c, engine));
+        }
+        var steps = new GuidedSteps(p, speaking, narration: !p.ShowsVoices, voicesNeeded: voicesNeeded);
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Look.Xs, Margin = new Thickness(Look.Md, Look.Sm) };
         foreach (var s in steps.All)
         {

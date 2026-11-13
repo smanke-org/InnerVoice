@@ -7,6 +7,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using InnerVoice.App.Controls;
 using InnerVoice.App.Document;
+using InnerVoice.App.Speech;
 using InnerVoice.App.UI;
 using InnerVoice.Core;
 
@@ -122,7 +123,21 @@ public sealed partial class ManuscriptPage
             menu.Items.Add(Item(ids.Count == 1 ? "Mark as Narration" : $"Mark {ids.Count} Lines as Narration", () => Document.RemoveLines(ids)));
             menu.Items.Add(Item("Who's Speaking?", () => Document.Assign(ids, null)));
             if (Document.Project.ShowsVoices)
+            {
+                // How the line is said: the tone the voices act (the system's voices only nudge
+                // speed, pitch and loudness), and ElevenLabs' delivery hint.
+                var tone = new MenuItem { Header = "Tone" };
+                foreach (var t in Tones.All)
+                {
+                    var tt = t;
+                    tone.Items.Add(Item((line.Tone == t ? "✓ " : "") + t.Title(), () => Document.SetTone(tt, ids), t.Key().ToString()));
+                }
+                menu.Items.Add(tone);
                 menu.Items.Add(Item("Delivery Hint…", () => _ = EditDelivery(ids, line.Delivery)));
+                menu.Items.Add(new Separator());
+                menu.Items.Add(Item("Play Line", () => PlayLines(ids), "Ctrl+Space"));
+                menu.Items.Add(Item("Play from Here", () => PlayFromHere(line.Id), "Ctrl+Shift+Space"));
+            }
             if (Document.Project.Character(line.SpeakerID) is { } sp)
             {
                 menu.Items.Add(new Separator());
@@ -172,7 +187,6 @@ public sealed partial class ManuscriptPage
 
     /// How ElevenLabs performs the lines beyond their tone, sent as an audio tag (ElevenLabs
     /// only; other voices ignore it). Book › Claude › Suggest Delivery Hints fills these in.
-    /// TODO(voices): the voices work moves this into the line's voice controls, next to its tone.
     async Task EditDelivery(List<Guid> ids, string? current)
     {
         var text = await Dialogs.Ask(this, "Delivery Hint",

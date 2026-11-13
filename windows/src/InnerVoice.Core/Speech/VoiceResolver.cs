@@ -116,7 +116,7 @@ public sealed class VoiceResolver
 {
     public VoiceEngine Engine { get; }
     public Dictionary<Guid, VoiceChoice> Characters { get; } = [];
-    public VoiceChoice? Narrator { get; private set; }
+    public VoiceChoice? Narrator { get; set; }
     /// Engines that can speak now (on and ready).
     public HashSet<VoiceEngine> Usable { get; }
     /// Casting Style shades for characters the narrator plays, by character.

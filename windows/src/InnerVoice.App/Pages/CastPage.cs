@@ -17,13 +17,14 @@ public sealed partial class CastPage : Page
     Sort sort = Sort.Lines;
     readonly ComboBox sortBox = new() { ItemsSource = new[] { "Most Lines", "Name", "First Appearance" }, SelectedIndex = 0, Width = 150 };
     readonly Button back;
+    readonly Button narrators;
     readonly StackPanel toolbar;
 
     public CastPage(ProjectDocument document, Workspace workspace) : base(document, workspace)
     {
         sortBox.SelectionChanged += (_, _) => { sort = (Sort)Math.Max(0, sortBox.SelectedIndex); Refresh(false); };
         back = Ui.Button("‹ Cast", () => { Workspace.SelectedCharacter = null; Refresh(false); }, tip: "Back to the cast");
-        var narrators = Ui.Button("Narrators…", () => { if (TopLevel.GetTopLevel(this) is Window w) InnerVoice.App.Windows.NarratorsWindow.Show(w, Document); },
+        narrators = Ui.Button("Narrators…", () => { if (TopLevel.GetTopLevel(this) is Window w) InnerVoice.App.Windows.NarratorsWindow.Show(w, Document); },
             tip: "Who reads the book, and which characters each narrator reads");
         toolbar = Ui.Row(Look.Sm, back, sortBox, narrators);
         Refresh(true);
@@ -54,6 +55,8 @@ public sealed partial class CastPage : Page
             return;
         }
         var p = Document.Project;
+        // Narrators belong to Narration Tools; a book made with AI voices has voices instead.
+        narrators.IsVisible = p.ShowsNarrationTools;
         if (Workspace.SelectedCharacter is { } id && p.Character(id) is { } c)
         {
             back.IsVisible = true;
