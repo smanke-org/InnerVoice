@@ -87,8 +87,9 @@ way on both.
   its settings and models in that folder, and it only opens or saves projects in the temporary
   folder. `INNERVOICE_DEMO=1` opens the sample book at launch; `projects demo` opens another.
   `APP_AGENT_PIPE` names the pipe outright, `INNERVOICE_APP` the app to start. Unlike the Mac,
-  Release builds honor these too (CI tests a Release build), and a Debug CLI only ever starts
-  test copies. Stop a test copy by its process id (`status --json` gives `pid` in test copies),
+  Release builds honor these too (CI tests a Release build). A Debug CLI only ever starts test
+  copies, and a Debug app that isn't one stays off the pipe (it would otherwise hand itself to
+  the person's running InnerVoice). Stop a test copy by its process id (`status --json` gives `pid` in test copies),
   never by name: that would also close the person's own copy.
 
 ```bash
