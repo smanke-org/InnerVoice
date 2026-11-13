@@ -72,6 +72,12 @@ public sealed partial class ManuscriptPage : Page
             if (!mods.HasFlag(KeyModifiers.Shift) && Canvas.SelectedLines.Count > 0) { Canvas.SelectedLines.Clear(); Canvas.InvalidateVisual(); }
         };
         workspace.ShowParagraphRequested += id => Avalonia.Threading.Dispatcher.UIThread.Post(() => Canvas.ScrollToParagraph(id, flash: true), Avalonia.Threading.DispatcherPriority.Background);
+        workspace.SelectLineRequested += id =>
+        {
+            Canvas.SelectedLines.Clear();
+            Canvas.SelectedLines.Add(id);
+            Canvas.InvalidateVisual();
+        };
         workspace.ShowChapterRequested += c => Avalonia.Threading.Dispatcher.UIThread.Post(() => Canvas.ScrollToChapter(c), Avalonia.Threading.DispatcherPriority.Background);
         Refresh(true);
     }

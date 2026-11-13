@@ -15,18 +15,24 @@ The plan and the decisions behind it are in [../docs/WINDOWS-PLAN.md](../docs/WI
 
 - `src/InnerVoice.Core` — the book model and logic, ported from the Mac's `Sources/InnerVoiceKit`
   (no UI). `Model/` (project.json rules, archive), `Import/` (Word, PDF, RTF, text, Markdown,
-  OpenDocument, EPUB, HTML), rules, dialogue finder, prompts, llama.cpp binding, voices
+  OpenDocument, Pages, EPUB, HTML), rules, dialogue finder, prompts, llama.cpp binding, voices
   (`Voices.cs`, `ToneRules.cs`, `SpeechScript.cs`, `SeriesVoices.cs`) and `Speech/` (the voice
   engine interface, renderer and audio cache, resolver, audio DSP, WAV, audio export).
-- `src/InnerVoice.App` — the Avalonia app: `Document/` (open, save, undo, edits), `Pages/`,
-  `Windows/`, `Controls/` (the manuscript view), `AI/`, `Speech/` (Windows Voices, ElevenLabs,
-  the player), `Export/`, `Help/`.
+- `src/InnerVoice.Agent` — the agent interface shared by the app and the CLI (the Mac's
+  `Sources/InnerVoice/Agent/`): the command list, parser, help, output, MCP server, named pipe,
+  `innervoice://` links. No packages.
+- `src/InnerVoice.Cli` — `innervoice.exe`, the command line (a console program: Windows gives a
+  windowed program no console). Publishing the app puts it in the app's `cli\` folder.
+- `src/InnerVoice.App` — the Avalonia app: `Agent/` (what each command does, the pipe server,
+  link registration), `Document/` (open, save, undo, edits), `Pages/`, `Windows/`, `Controls/`
+  (the manuscript view), `AI/`, `Speech/` (Windows Voices, ElevenLabs, the player), `Export/`, `Help/`.
 - `tests/InnerVoice.Core.Tests` — xUnit tests, including golden checks against fixtures the Mac's
   Kit writes (`Fixtures/`).
 - `tests/InnerVoice.App.Tests` — headless app tests and light/dark snapshots of every page.
 - `packaging/` — the Microsoft Store manifest, tiles, and `pack.ps1`.
 - `tools/fetch-llama.sh` — downloads llama.cpp b11205 for Windows (x64 Vulkan, ARM64 CPU) with
   SHA-256 checks into `native/` (not committed).
+- `tools/check-agent-cli.ps1` — the agent-CLI check (the Mac's `check-agent-cli.sh`), on Windows.
 
 ## Build and test (on the Mac or Windows)
 
@@ -58,7 +64,53 @@ tools/fetch-llama.sh && dotnet publish src/InnerVoice.App -c Release -r win-x64 
 ```
 
 The x64 build needs the Visual C++ runtime next to it (CI copies it in) or installed on the PC;
-the Store package gets it from its VCLibs dependency.
+the Store package gets it from its VCLibs dependency. The publish also writes `cli\innervoice.exe`
+(one self-contained file, about 14 MB).
+
+## Agent CLI, MCP and links
+
+The same commands, options, JSON and exit codes as the Mac's `innervoice` (`innervoice help` is
+the Mac's word for word, but for the five Mac/PC words in `AgentCommands.WindowsWording`;
+`AgentTests` compares it with `Fixtures/agent/`, taken from the Mac build's `innervoice help`,
+`help <command>` and `help --json`). Agents use the repo's `.claude/skills/innervoice` the same
+way on both.
+
+- **Transport:** one JSON line each way over the named pipe `\\.\pipe\InnerVoice.Agent.<user>`
+  (current user only), where the Mac uses a Unix socket. If nothing answers, the CLI starts
+  `..\InnerVoice.exe --agent` (in the background) and waits up to 10 seconds.
+- **One copy at a time:** a second start of the app (a double-clicked project, a link) hands its
+  files and links to the running one through the pipe and quits.
+- **Links:** `innervoice://open/cast?character=Mara`, `innervoice://open/review`,
+  `innervoice://lines/reveal/3f2a9c1e`, `innervoice://projects/open?path=C:\Books\Harbor.innervoice`.
+  Links only run `open`, `lines reveal` and `projects open`. The Store package declares the scheme
+  in its manifest; a copy run from a folder writes `HKCU\Software\Classes\innervoice` at launch.
+  `innervoice <link>` follows one from the command line.
+- **MCP:** `claude mcp add --scope user innervoice -- innervoice mcp`.
+- **Not yet:** `lines tone`, `open voices`/`pronunciations` and `export --kind pronunciations`
+  answer error code `not_available` until AI voices come to Windows (`TODO(voices)`).
+- **Test copies:** `APP_STORE=<folder>` makes a test copy: its own pipe (named from the folder),
+  its settings and models in that folder, and it only opens or saves projects in the temporary
+  folder. `INNERVOICE_DEMO=1` opens the sample book at launch; `projects demo` opens another.
+  `APP_AGENT_PIPE` names the pipe outright, `INNERVOICE_APP` the app to start. Unlike the Mac,
+  Release builds honor these too (CI tests a Release build). A Debug CLI only ever starts test
+  copies, and a Debug app that isn't one stays off the pipe (it would otherwise hand itself to
+  the person's running InnerVoice). Stop a test copy by its process id (`status --json` gives `pid` in test copies),
+  never by name: that would also close the person's own copy.
+
+```bash
+dotnet run --project tests/InnerVoice.App.Tests -- -class InnerVoice.App.Tests.AgentAppTests
+```
+
+On Windows, after a publish:
+
+```powershell
+pwsh tools/check-agent-cli.ps1 artifacts/win-x64/cli/innervoice.exe
+```
+
+Needs a Windows PC to confirm: the pipe's per-user security, starting the app from the CLI,
+protocol activation (Store and registry), the `innervoice.exe` alias from the Store package, and
+the check script. The pipe itself also runs on the Mac (.NET uses a Unix socket there), which is
+how the tests above exercise it.
 
 ## Fixtures
 

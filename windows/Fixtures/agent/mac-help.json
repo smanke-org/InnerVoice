@@ -1,0 +1,772 @@
+{
+    "commands": [
+        {
+            "description": "Show the version, the open projects (the frontmost first), the model and whether it is ready, and what the AI is doing in each project. Example: innervoice status --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {},
+                "required": [],
+                "type": "object"
+            },
+            "name": "status",
+            "readOnly": true
+        },
+        {
+            "description": "Show a page in a project's window: manuscript, cast, voices, index, pronunciations, record, retakes, review or revisions. With --character, opens that character on the Cast page. Example: innervoice open cast --character Mara --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "character": {
+                        "description": "open this character's page in Cast (a name, alias or id)",
+                        "type": "string"
+                    },
+                    "page": {
+                        "description": "manuscript, cast, voices, index, pronunciations, record, retakes, review or revisions (default manuscript)",
+                        "type": "string"
+                    },
+                    "project": {
+                        "description": "the project: its name, path or id from `innervoice projects list` (default: the frontmost)",
+                        "type": "string"
+                    }
+                },
+                "required": [],
+                "type": "object"
+            },
+            "name": "open",
+            "readOnly": false
+        },
+        {
+            "description": "List the open projects, the frontmost first. Returns `projects` (id, name, title, author, path, front, edited, chapters, lines, linesNeedingYou, characters, tagging). Example: innervoice projects list --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {},
+                "required": [],
+                "type": "object"
+            },
+            "name": "projects list",
+            "readOnly": true
+        },
+        {
+            "description": "Open a saved project (.innervoice) in its own window, as File \u203a Open\u2026 does. If it is open already, returns it. Example: innervoice projects open ~/Documents/Harbor.innervoice --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "path": {
+                        "description": "the .innervoice project",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "path"
+                ],
+                "type": "object"
+            },
+            "name": "projects open",
+            "readOnly": false
+        },
+        {
+            "description": "Start a project from a manuscript (Word, PDF, RTF, text, Markdown, OpenDocument, Pages, EPUB or HTML), as File \u203a New from Manuscript\u2026 does: finds every line and runs the plain rules. The window opens untitled; the person saves it with File \u203a Save. Example: innervoice projects new --manuscript ~/Documents/Harbor.docx --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "manuscript": {
+                        "description": "the manuscript file",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "manuscript"
+                ],
+                "type": "object"
+            },
+            "name": "projects new",
+            "readOnly": false
+        },
+        {
+            "description": "Save a project, as File \u203a Save does. With --as, save it to a new .innervoice file, as File \u203a Save As\u2026 does (needed the first time an untitled project is saved). Example: innervoice projects save --as ~/Documents/Harbor.innervoice --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "as": {
+                        "description": "save to this .innervoice file instead",
+                        "type": "string"
+                    },
+                    "project": {
+                        "description": "the project: its name, path or id from `innervoice projects list` (default: the frontmost)",
+                        "type": "string"
+                    }
+                },
+                "required": [],
+                "type": "object"
+            },
+            "name": "projects save",
+            "readOnly": false
+        },
+        {
+            "description": "List the chapters in book order. Returns `chapters` (number, title, paragraphs, words, lines, linesNeedingYou). Example: innervoice chapters list --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "project": {
+                        "description": "the project: its name, path or id from `innervoice projects list` (default: the frontmost)",
+                        "type": "string"
+                    }
+                },
+                "required": [],
+                "type": "object"
+            },
+            "name": "chapters list",
+            "readOnly": true
+        },
+        {
+            "description": "List lines in book order. Returns `lines` (id, ref like \"Ch 3 \u00b612\", speaker, kind, source, confidence, needsYou, text, tone, toneSource, toneConfidence, toneNeedsYou), `total` and `nextOffset` when there are more. Example: innervoice lines list --chapter 2 --needs-you --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "chapter": {
+                        "description": "only this chapter (from 1, see `innervoice chapters list`)",
+                        "type": "integer"
+                    },
+                    "limit": {
+                        "description": "at most this many (default 50)",
+                        "type": "integer"
+                    },
+                    "needs-you": {
+                        "description": "only red lines: Who's Speaking? and Unsure",
+                        "type": "boolean"
+                    },
+                    "offset": {
+                        "description": "skip this many, for the next page",
+                        "type": "integer"
+                    },
+                    "project": {
+                        "description": "the project: its name, path or id from `innervoice projects list` (default: the frontmost)",
+                        "type": "string"
+                    },
+                    "search": {
+                        "description": "only lines whose text contains this",
+                        "type": "string"
+                    },
+                    "speaker": {
+                        "description": "only this character's lines (a name, alias or id), or \"none\" for Who's Speaking?",
+                        "type": "string"
+                    }
+                },
+                "required": [],
+                "type": "object"
+            },
+            "name": "lines list",
+            "readOnly": true
+        },
+        {
+            "description": "Give lines to a character, as Assign To does in the manuscript (one Edit \u203a Undo step). Or --clear them back to Who's Speaking?; --clear only reports what it would change until --yes. Example: innervoice lines assign 3f2a9c1e 7b0d44e2 --to Mara --json",
+            "destructive": true,
+            "inputSchema": {
+                "properties": {
+                    "clear": {
+                        "description": "make the lines Who's Speaking? again",
+                        "type": "boolean"
+                    },
+                    "ids": {
+                        "description": "line ids from `innervoice lines list` (several: comma-separated)",
+                        "type": "string"
+                    },
+                    "new": {
+                        "description": "make the character named by --to if there is none yet",
+                        "type": "boolean"
+                    },
+                    "project": {
+                        "description": "the project: its name, path or id from `innervoice projects list` (default: the frontmost)",
+                        "type": "string"
+                    },
+                    "to": {
+                        "description": "the character (a name, alias or id)",
+                        "type": "string"
+                    },
+                    "yes": {
+                        "description": "Like the CLI's --yes: with --clear: do it. Assigning to a character needs no --yes.",
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "ids"
+                ],
+                "type": "object"
+            },
+            "name": "lines assign",
+            "readOnly": false
+        },
+        {
+            "description": "Change what kind of line these are: spoken, thought or written (one Edit \u203a Undo step). Example: innervoice lines kind 3f2a9c1e thought --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "ids": {
+                        "description": "line ids from `innervoice lines list` (several: comma-separated)",
+                        "type": "string"
+                    },
+                    "kind": {
+                        "description": "spoken, thought or written. May also come last: `lines kind 3f2a9c1e thought`",
+                        "type": "string"
+                    },
+                    "project": {
+                        "description": "the project: its name, path or id from `innervoice projects list` (default: the frontmost)",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "ids"
+                ],
+                "type": "object"
+            },
+            "name": "lines kind",
+            "readOnly": false
+        },
+        {
+            "description": "Set how lines are said, as Tone does in the line's menu (one Edit \u203a Undo step): neutral, excited, confused, sad, angry, whispered, scared, tender or sarcastic. Tag Speakers never changes a tone set this way. Example: innervoice lines tone 3f2a9c1e angry --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "ids": {
+                        "description": "line ids from `innervoice lines list` (several: comma-separated)",
+                        "type": "string"
+                    },
+                    "project": {
+                        "description": "the project: its name, path or id from `innervoice projects list` (default: the frontmost)",
+                        "type": "string"
+                    },
+                    "tone": {
+                        "description": "the tone. May also come last: `lines tone 3f2a9c1e angry`",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "ids"
+                ],
+                "type": "object"
+            },
+            "name": "lines tone",
+            "readOnly": false
+        },
+        {
+            "description": "Show a line in the manuscript, selected, as clicking it in the Index does. Example: innervoice lines reveal 3f2a9c1e --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "id": {
+                        "description": "the line's id (see `innervoice lines list`)",
+                        "type": "string"
+                    },
+                    "project": {
+                        "description": "the project: its name, path or id from `innervoice projects list` (default: the frontmost)",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "id"
+                ],
+                "type": "object"
+            },
+            "name": "lines reveal",
+            "readOnly": false
+        },
+        {
+            "description": "List the cast, most lines first. Returns `characters` (id, name, aliases, color, lines, words, firstLine, chapters, facts, narrator, showInIndex, voice). Example: innervoice characters list --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "project": {
+                        "description": "the project: its name, path or id from `innervoice projects list` (default: the frontmost)",
+                        "type": "string"
+                    }
+                },
+                "required": [],
+                "type": "object"
+            },
+            "name": "characters list",
+            "readOnly": true
+        },
+        {
+            "description": "Show one character: summary facts with their sources (\"Ch 2 \u00b64\") and Revealed Late flags, notes, voice notes, narrator, and line and word counts. Example: innervoice characters show Mara --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "name": {
+                        "description": "the character: a name, alias or id",
+                        "type": "string"
+                    },
+                    "project": {
+                        "description": "the project: its name, path or id from `innervoice projects list` (default: the frontmost)",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "name"
+                ],
+                "type": "object"
+            },
+            "name": "characters show",
+            "readOnly": true
+        },
+        {
+            "description": "Make two characters one, as Merge does in Cast: every line and fact of FROM moves to TO, and FROM's names become TO's aliases. Only reports what it would change until --yes (Edit \u203a Undo can take it back). Example: innervoice characters merge Mara --into \"Mara Quinn\" --yes --json",
+            "destructive": true,
+            "inputSchema": {
+                "properties": {
+                    "from": {
+                        "description": "the character to merge away (a name, alias or id)",
+                        "type": "string"
+                    },
+                    "into": {
+                        "description": "the character to keep",
+                        "type": "string"
+                    },
+                    "project": {
+                        "description": "the project: its name, path or id from `innervoice projects list` (default: the frontmost)",
+                        "type": "string"
+                    },
+                    "yes": {
+                        "description": "Do it. Without yes it only shows what it would change.",
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "from",
+                    "into"
+                ],
+                "type": "object"
+            },
+            "name": "characters merge",
+            "readOnly": false
+        },
+        {
+            "description": "Rename a character, as editing the name on its Cast page does. To make two characters one, use `characters merge`. Example: innervoice characters rename Tom --to \"Tom Hale\" --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "name": {
+                        "description": "the character: a name, alias or id",
+                        "type": "string"
+                    },
+                    "project": {
+                        "description": "the project: its name, path or id from `innervoice projects list` (default: the frontmost)",
+                        "type": "string"
+                    },
+                    "to": {
+                        "description": "the new name",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "name",
+                    "to"
+                ],
+                "type": "object"
+            },
+            "name": "characters rename",
+            "readOnly": false
+        },
+        {
+            "description": "Change a character's color in the manuscript. Takes auto (the default: blues and greens for men, pinks and purples for women, warm colors when the book doesn't say), #RRGGBB or a palette name (Blue, Pink, Amber\u2026). Reddish colors are refused: red means Who's Speaking? Example: innervoice characters color Mara \"#0EA5E9\" --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "color": {
+                        "description": "auto, #RRGGBB, or a palette name: Blue, Emerald, Indigo, Teal, Sky, Green, Slate, Cyan, Fuchsia, Violet, Lavender, Orchid, Pink, Purple, Lilac, Blush, Amber, Lime, Orange, Brown, Gold, Olive",
+                        "type": "string"
+                    },
+                    "name": {
+                        "description": "the character: a name, alias or id",
+                        "type": "string"
+                    },
+                    "project": {
+                        "description": "the project: its name, path or id from `innervoice projects list` (default: the frontmost)",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "name",
+                    "color"
+                ],
+                "type": "object"
+            },
+            "name": "characters color",
+            "readOnly": false
+        },
+        {
+            "description": "Show or change the book's Casting Style: one-voice (One Voice, or Just Me when narrating), shared (Narrator + Two Voices, or Three Narrators) or full-cast. Changing it keeps every voice and narrator. Returns `castingStyle` and who reads each character (`readers`). Example: innervoice casting style shared --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "project": {
+                        "description": "the project: its name, path or id from `innervoice projects list` (default: the frontmost)",
+                        "type": "string"
+                    },
+                    "style": {
+                        "description": "one-voice, shared or full-cast (leave out to show the current one)",
+                        "type": "string"
+                    }
+                },
+                "required": [],
+                "type": "object"
+            },
+            "name": "casting style",
+            "readOnly": false
+        },
+        {
+            "description": "Set a character's gender: male, female, other, or auto (what the book says). Casting Style sorts by it; colors and casting follow it. Example: innervoice characters gender Quinn other --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "gender": {
+                        "description": "male, female, other or auto",
+                        "type": "string"
+                    },
+                    "name": {
+                        "description": "the character: a name, alias or id",
+                        "type": "string"
+                    },
+                    "project": {
+                        "description": "the project: its name, path or id from `innervoice projects list` (default: the frontmost)",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "name",
+                    "gender"
+                ],
+                "type": "object"
+            },
+            "name": "characters gender",
+            "readOnly": false
+        },
+        {
+            "description": "Mark a character as a main character (yes), not main (no), or neither (auto). In Full Cast, main characters always have a voice of their own. Example: innervoice characters main Mara yes --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "main": {
+                        "description": "yes, no or auto",
+                        "type": "string"
+                    },
+                    "name": {
+                        "description": "the character: a name, alias or id",
+                        "type": "string"
+                    },
+                    "project": {
+                        "description": "the project: its name, path or id from `innervoice projects list` (default: the frontmost)",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "name",
+                    "main"
+                ],
+                "type": "object"
+            },
+            "name": "characters main",
+            "readOnly": false
+        },
+        {
+            "description": "Choose who reads a character under the Casting Style: narrator, men, women, other, own (a voice or narrator of their own), or auto (the style decides). Example: innervoice characters read-by Kade own --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "name": {
+                        "description": "the character: a name, alias or id",
+                        "type": "string"
+                    },
+                    "project": {
+                        "description": "the project: its name, path or id from `innervoice projects list` (default: the frontmost)",
+                        "type": "string"
+                    },
+                    "role": {
+                        "description": "narrator, men, women, other, own or auto",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "name",
+                    "role"
+                ],
+                "type": "object"
+            },
+            "name": "characters read-by",
+            "readOnly": false
+        },
+        {
+            "description": "Set how the narrator shades a character: pitch (-4 to 4 semitones, lower to higher), pace (-2 to 2) and a few words, or --auto to go back to the shade worked out from gender, age and the voice brief. Example: innervoice characters shade Tom --pitch -2 --pace -1 --words gravelly --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "auto": {
+                        "description": "use the automatic shade again",
+                        "type": "boolean"
+                    },
+                    "name": {
+                        "description": "the character: a name, alias or id",
+                        "type": "string"
+                    },
+                    "pace": {
+                        "description": "-2 (slower) to 2 (quicker)",
+                        "type": "integer"
+                    },
+                    "pitch": {
+                        "description": "-4 (much lower) to 4 (much higher)",
+                        "type": "integer"
+                    },
+                    "project": {
+                        "description": "the project: its name, path or id from `innervoice projects list` (default: the frontmost)",
+                        "type": "string"
+                    },
+                    "words": {
+                        "description": "texture for the cue: gravelly, clipped\u2026",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "name"
+                ],
+                "type": "object"
+            },
+            "name": "characters shade",
+            "readOnly": false
+        },
+        {
+            "description": "Start Tag Speakers: the on-device model decides who speaks every line the narrator and the rules haven't settled. Runs in the background; follow it with `innervoice tag status`. Lines the narrator assigned are never changed. Example: innervoice tag start --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "chapter": {
+                        "description": "only this chapter (from 1)",
+                        "type": "integer"
+                    },
+                    "project": {
+                        "description": "the project: its name, path or id from `innervoice projects list` (default: the frontmost)",
+                        "type": "string"
+                    }
+                },
+                "required": [],
+                "type": "object"
+            },
+            "name": "tag start",
+            "readOnly": false
+        },
+        {
+            "description": "Stop Tag Speakers or Build Summaries. What the AI has done so far is kept. Example: innervoice tag stop --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "project": {
+                        "description": "the project: its name, path or id from `innervoice projects list` (default: the frontmost)",
+                        "type": "string"
+                    }
+                },
+                "required": [],
+                "type": "object"
+            },
+            "name": "tag stop",
+            "readOnly": false
+        },
+        {
+            "description": "Show what the AI is doing in a project: job, progress (0 to 1), message, the last run's result or failure, and how many lines still need you. Example: innervoice tag status --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "project": {
+                        "description": "the project: its name, path or id from `innervoice projects list` (default: the frontmost)",
+                        "type": "string"
+                    }
+                },
+                "required": [],
+                "type": "object"
+            },
+            "name": "tag status",
+            "readOnly": true
+        },
+        {
+            "description": "Start Build Summaries: the model reads about each character (most lines first) and adds facts with their sources. Runs in the background; follow it with `innervoice tag status`. Example: innervoice summaries start --character Mara --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "character": {
+                        "description": "only this character (a name, alias or id)",
+                        "type": "string"
+                    },
+                    "project": {
+                        "description": "the project: its name, path or id from `innervoice projects list` (default: the frontmost)",
+                        "type": "string"
+                    }
+                },
+                "required": [],
+                "type": "object"
+            },
+            "name": "summaries start",
+            "readOnly": false
+        },
+        {
+            "description": "List the pronunciation terms. Returns `pronunciations` (id, term, sayItAs, notes, confirmed, occurrences, first, hasSample). Example: innervoice pronunciations list --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "all": {
+                        "description": "include terms dismissed as needing no entry",
+                        "type": "boolean"
+                    },
+                    "limit": {
+                        "description": "at most this many (default 50)",
+                        "type": "integer"
+                    },
+                    "offset": {
+                        "description": "skip this many, for the next page",
+                        "type": "integer"
+                    },
+                    "project": {
+                        "description": "the project: its name, path or id from `innervoice projects list` (default: the frontmost)",
+                        "type": "string"
+                    },
+                    "search": {
+                        "description": "only terms or sayings containing this",
+                        "type": "string"
+                    }
+                },
+                "required": [],
+                "type": "object"
+            },
+            "name": "pronunciations list",
+            "readOnly": true
+        },
+        {
+            "description": "Say how to pronounce a term, as typing in the Pronunciations list does. Adds the term when it isn't there yet. Example: innervoice pronunciations set Kerensa --say-it-as \"keh-REN-sah\" --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "confirmed": {
+                        "description": "checked with the author or rights holder (true or false)",
+                        "type": "boolean"
+                    },
+                    "notes": {
+                        "description": "your notes",
+                        "type": "string"
+                    },
+                    "project": {
+                        "description": "the project: its name, path or id from `innervoice projects list` (default: the frontmost)",
+                        "type": "string"
+                    },
+                    "say-it-as": {
+                        "description": "how to say it, like SHEV-on",
+                        "type": "string"
+                    },
+                    "term": {
+                        "description": "the term (or its id)",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "term"
+                ],
+                "type": "object"
+            },
+            "name": "pronunciations set",
+            "readOnly": false
+        },
+        {
+            "description": "Export a Narrator Script, the tagged manuscript, the cast list or the pronunciation guide, as File \u203a Export\u2026 does, to a file. Example: innervoice export --kind narrator-script --narrator Ana --format pdf --out ~/Desktop/Ana.pdf --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "format": {
+                        "description": "pdf (default) or word; cast and pronunciations also csv",
+                        "type": "string"
+                    },
+                    "kind": {
+                        "description": "narrator-script, manuscript, cast or pronunciations",
+                        "type": "string"
+                    },
+                    "narrator": {
+                        "description": "narrator-script only: this narrator's characters (default every character)",
+                        "type": "string"
+                    },
+                    "no-cues": {
+                        "description": "narrator-script only: leave out the cue line before each line",
+                        "type": "boolean"
+                    },
+                    "no-summaries": {
+                        "description": "narrator-script only: leave out the character summaries",
+                        "type": "boolean"
+                    },
+                    "out": {
+                        "description": "the file to write (.pdf, .docx or .csv is added when missing)",
+                        "type": "string"
+                    },
+                    "project": {
+                        "description": "the project: its name, path or id from `innervoice projects list` (default: the frontmost)",
+                        "type": "string"
+                    },
+                    "replace": {
+                        "description": "replace the file if it exists",
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "kind",
+                    "out"
+                ],
+                "type": "object"
+            },
+            "name": "export",
+            "readOnly": false
+        },
+        {
+            "description": "List the models InnerVoice can use, with advice for this Mac's memory. Returns `models` (id, name, size, quality and speed 1 to 5, fit, note, downloaded, selected, recommended, download) and `apple` (Apple's on-device model). Example: innervoice model list --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {},
+                "required": [],
+                "type": "object"
+            },
+            "name": "model list",
+            "readOnly": true
+        },
+        {
+            "description": "Choose the model Tag Speakers and Build Summaries use, as Use This Model does: a downloaded model's id, \"apple\" for Apple's on-device model, or the path to your own .gguf file. Example: innervoice model select gemma-4-e4b --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "id": {
+                        "description": "a model id from `innervoice model list`, apple, or a .gguf path",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "id"
+                ],
+                "type": "object"
+            },
+            "name": "model select",
+            "readOnly": false
+        },
+        {
+            "description": "Download a model from the list (2.5 to 19 GB from Hugging Face; the only network use besides updates). Only reports the size until --yes. Follow it with `innervoice model list`; when it finishes it becomes the model if none was ready. Example: innervoice model download gemma-4-e4b --yes --json",
+            "destructive": true,
+            "inputSchema": {
+                "properties": {
+                    "id": {
+                        "description": "a model id from `innervoice model list`",
+                        "type": "string"
+                    },
+                    "yes": {
+                        "description": "Like the CLI's --yes: start the download. Without --yes it only shows the size and the fit for this Mac.",
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "id"
+                ],
+                "type": "object"
+            },
+            "name": "model download",
+            "readOnly": false
+        }
+    ]
+}

@@ -106,10 +106,11 @@ public sealed partial class ProjectWindow
         }
     }
 
-    public async Task TagSpeakers()
+    /// `chapters`: only those (from 0); the agent's `tag start --chapter`.
+    public async Task TagSpeakers(IReadOnlyList<int>? chapters = null)
     {
         if (!await EnsureModel() || !await ClaudeAllowed("Tag Speakers", () => CostEstimator.TagSpeakers(Document.Project))) return;
-        await Runner.TagSpeakers();
+        await Runner.TagSpeakers(chapters);
         if (Runner.Review is { } r)
         {
             Runner.Review = null;
@@ -117,10 +118,11 @@ public sealed partial class ProjectWindow
         }
     }
 
-    public async Task BuildSummaries()
+    /// `only`: these characters; the agent's `summaries start --character`.
+    public async Task BuildSummaries(IReadOnlyCollection<Guid>? only = null)
     {
-        if (!await EnsureModel() || !await ClaudeAllowed("Build Summaries", () => CostEstimator.BuildSummaries(Document.Project, Document.Project.Characters.Count))) return;
-        await Runner.BuildSummaries();
+        if (!await EnsureModel() || !await ClaudeAllowed("Build Summaries", () => CostEstimator.BuildSummaries(Document.Project, only?.Count ?? Document.Project.Characters.Count))) return;
+        await Runner.BuildSummaries(only);
     }
 
     /// With Claude chosen: a book that hasn't said yes asks once (the narrator just clicked, so

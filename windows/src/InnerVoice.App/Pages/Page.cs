@@ -32,6 +32,7 @@ public sealed class Workspace
     public event Action? PageChanged;
     public event Action<Guid>? ShowParagraphRequested;
     public event Action<int>? ShowChapterRequested;
+    public event Action<Guid>? SelectLineRequested;
     public event Action? TagRequested;
 
     public void RequestTag() => TagRequested?.Invoke();
@@ -47,6 +48,13 @@ public sealed class Workspace
     {
         Go(PageKind.Manuscript);
         ShowParagraphRequested?.Invoke(paragraphID);
+    }
+
+    /// Shows a line in the manuscript, selected (the agent's `lines reveal`).
+    public void ShowLine(Guid paragraphID, Guid lineID)
+    {
+        Show(paragraphID);
+        SelectLineRequested?.Invoke(lineID);
     }
 
     public void ShowChapter(int chapter)

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The agent interface shared by the app and the `innervoice` CLI: the command list (the
+       Mac's Agent/AgentCommands.swift, without the parts that run inside the app), the CLI's
+       parser, help and output, the MCP server, the named pipe and `innervoice://` links.
+       No packages, so the CLI stays small. -->
+  <PropertyGroup>
+    <RootNamespace>InnerVoice.Agent</RootNamespace>
+    <IsTrimmable>true</IsTrimmable>
+  </PropertyGroup>
+</Project>

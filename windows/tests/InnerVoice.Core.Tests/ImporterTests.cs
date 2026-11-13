@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Text.Json.Nodes;
 using InnerVoice.Core;
 using InnerVoice.Core.Import;
@@ -71,6 +72,64 @@ public class ImporterTests
         var blocks = PdfReader.Paragraphs(lines);
         Assert.Equal(n, blocks.Count);
         Assert.All(blocks, b => Assert.True(b.Text.StartsWith('P') && b.Text.Split("starts").Length == 2));
+    }
+
+    /// A Pages file is a zip with the document's preview PDF inside (the Mac's PagesReader):
+    /// the text comes from that PDF, the same as reading the PDF itself.
+    [Theory]
+    [InlineData("QuickLook/Preview.pdf")]
+    [InlineData("preview.pdf")]
+    public void PagesReadsItsPreview(string inside)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"iv-pages-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var pages = Path.Combine(dir, "Sample Story.pages");
+            using (var zip = System.IO.Compression.ZipFile.Open(pages, System.IO.Compression.ZipArchiveMode.Create))
+            {
+                zip.CreateEntry("Index/Document.iwa");
+                zip.CreateEntryFromFile(Fixtures.PathOf("import/sample.pdf"), inside);
+            }
+            var book = ManuscriptImporter.Read(pages);
+            var pdf = ManuscriptImporter.Read(Fixtures.PathOf("import/sample.pdf"));
+            Assert.Equal("Sample Story", book.Title);
+            Assert.Equal(pdf.Chapters.Select(c => c.Title), book.Chapters.Select(c => c.Title));
+            Assert.Equal(pdf.Chapters.SelectMany(c => c.Paragraphs).Select(p => p.Text), book.Chapters.SelectMany(c => c.Paragraphs).Select(p => p.Text));
+
+            // A Pages package copied off a Mac is a folder: read the same way.
+            var folder = Path.Combine(dir, "Folder.pages");
+            Directory.CreateDirectory(Path.Combine(folder, Path.GetDirectoryName(inside) ?? ""));
+            File.Copy(Fixtures.PathOf("import/sample.pdf"), Path.Combine(folder, inside));
+            Assert.Equal(book.Chapters.Count, ManuscriptImporter.Read(folder).Chapters.Count);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    /// Without a preview (saved with "Include preview" off), or not a zip at all: say to
+    /// export to Word, as the Mac does.
+    [Fact]
+    public void PagesWithoutAPreviewSaysToExportToWord()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"iv-pages-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var bare = Path.Combine(dir, "Bare.pages");
+            using (var zip = System.IO.Compression.ZipFile.Open(bare, System.IO.Compression.ZipArchiveMode.Create))
+                zip.CreateEntry("Index/Document.iwa");
+            var damaged = Path.Combine(dir, "Damaged.pages");
+            File.WriteAllText(damaged, "not a zip");
+            var tiny = Path.Combine(dir, "Tiny.pages");
+            using (var zip = System.IO.Compression.ZipFile.Open(tiny, System.IO.Compression.ZipArchiveMode.Create))
+                using (var w = new StreamWriter(zip.CreateEntry("preview.pdf").Open())) w.Write("%PDF-1.4 broken");
+            foreach (var (path, name) in new[] { (bare, "Bare.pages"), (damaged, "Damaged.pages"), (tiny, "Tiny.pages") })
+            {
+                var e = Assert.Throws<ImportException>(() => ManuscriptImporter.Read(path));
+                Assert.Equal($"Unable to read “{name}”. In Pages, choose File › Export To › Word, then open the Word file.", e.Message);
+            }
+        }
+        finally { Directory.Delete(dir, true); }
     }
 
     [Fact]

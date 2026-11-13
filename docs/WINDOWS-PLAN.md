@@ -17,7 +17,30 @@ that is marked "Dropped" or "Later" is now in scope:
     (any DirectX 12 GPU), with a CPU fallback. Same voice packs and design/clone behavior;
     where a model part won't export, say so and match the Mac as closely as possible.
 - **Also ported:** the agent CLI and MCP (`innervoice`, named pipes), `innervoice://` URLs,
-  and Pages import.
+  and Pages import. Done 2026-11-13 (`windows/README.md` › Agent CLI, MCP and links):
+  - `innervoice.exe` is a console program of its own (`src/InnerVoice.Cli`, in the app's `cli\`
+    folder; the Store package's `innervoice.exe` alias puts it on PATH), because Windows gives a
+    windowed program no console. The command list, parser, help, MCP server, pipe and links live
+    in `src/InnerVoice.Agent`, shared with the app. `innervoice help` matches the Mac's word for
+    word but for "this Mac" → "this PC" and the Apple model (tests compare it with the Mac's).
+  - The pipe is `\\.\pipe\InnerVoice.Agent.<user>`, current user only. It also makes the app
+    single-instance: a second start hands its files and links to the running copy.
+  - Test copies work like the Mac's (`APP_STORE`, `INNERVOICE_DEMO`, `projects demo`, only temp
+    files), with their own pipe named from the folder. Unlike the Mac, Release builds honor
+    `APP_STORE`, because CI tests a Release build and a test must never fall back to the real
+    pipe. `status` gives a test copy's `pid` so a check can stop it by id.
+  - Voice commands (`lines tone`, `open voices`/`pronunciations`, `export --kind
+    pronunciations`) answer the new error code `not_available` (exit 1) until AI voices land
+    (`TODO(voices)` marks each).
+  - Links: the Mac registers `innervoice://` but handles no link yet, so the Windows actions are
+    new: the words after `innervoice://` name a command and the query its options, limited to
+    the ones that only show things (`open`, `lines reveal`, `projects open`). The Mac should get
+    the same (`AgentUrl` is easy to port). Registered by the Store manifest (`windows.protocol`)
+    or, for a copy run from a folder, in `HKCU\Software\Classes\innervoice` at launch.
+  - Pages: `PagesReader` reads the preview PDF inside the `.pages` zip (or package folder),
+    as the Mac does, else says to export to Word.
+  - Needs a Windows PC to confirm: the pipe's security, the CLI starting the app, protocol
+    activation (Store and registry), the `innervoice.exe` alias, and `tools/check-agent-cli.ps1`.
 - **Distribution: the Microsoft Store is the primary channel** (free for individual
   developers; the Store signs the MSIX, so there is no SmartScreen warning, and it handles
   installs and updates). The Mac's GitHub-releases updater is **not** ported: Store copies
@@ -237,12 +260,12 @@ testable job; the golden fixtures in section 4 keep the two versions agreeing.
 |---|---|
 | AI voices: Apple voices, Qwen3-TTS and Orpheus on MLX, ElevenLabs, Voices page, Play, Export Audio, pauses and speed, Series Voices, the tone pass | Superseded by § Parity: ported in part A (Windows Voices, ElevenLabs); Qwen3-TTS and Orpheus on ONNX Runtime are part B |
 | Apple's on-device model (FoundationModels fallback) | Mac only. Without a model, the Windows app still finds dialogue, applies the rules and lets the narrator tag by hand. (Windows' own on-device model only exists on Copilot+ PCs; not worth a second engine.) |
-| Pages import | Pages is a Mac app; the error already tells people to export to Word |
+| Pages import | Ported after all (2026-11-13): the preview PDF inside the file, as on the Mac |
 | `.rtfd` import, `.doc` (Word 97) import | Mac-only formats / no free reader. A `.doc` gets a "Save it as .docx" message. |
 | iCloud settings sync | No equivalent worth adding. Books themselves move as single files (below). |
 | ToolHUD menu hub, ShortcutsLens report | Mac house features |
 | Dock and menu bar choices, menu bar item | No Windows equivalent needed |
-| Agent CLI `innervoice` + MCP, `innervoice://` URLs | Later, if asked for (named pipes and an MSIX protocol activation) |
+| Agent CLI `innervoice` + MCP, `innervoice://` URLs | Ported after all (2026-11-13): named pipe, MSIX protocol activation (see Parity) |
 | Project type question | Superseded: ported in part A (asked once, Book › Project Type…) |
 
 ### Needs a Windows equivalent
@@ -358,7 +381,7 @@ the same type names so diffs stay readable. `NSRegularExpression` patterns move 
 | `AI/VoiceBrief.swift` | 125 | Pure | Port (the casting note is written for the narrator as well) |
 | `AI/ModelCatalog.swift` | 122 | Pure (`ByteCountFormatter` only) | Port the catalog; rewrite `advice(for:memoryGB:)` for RAM + GPU memory |
 | `Import/ChapterDetector.swift` | 124 | Pure | Port |
-| `Import/ManuscriptImporter.swift` | 499 | **Mixed, AppKit** | Plain text and Markdown: pure, port. `DocxReader`, `OdtReader`: `XMLParser` delegates, port the logic onto `XmlReader`. `AttributedReader` (RTF, DOC, HTML through `NSAttributedString` and `NSFont`): rewrite on RtfPipe and AngleSharp, keeping its body-size and heading rules. `Zip.unpack` shells out to `ditto`: use `ZipArchive`. `PagesReader`: dropped. |
+| `Import/ManuscriptImporter.swift` | 499 | **Mixed, AppKit** | Plain text and Markdown: pure, port. `DocxReader`, `OdtReader`: `XMLParser` delegates, port the logic onto `XmlReader`. `AttributedReader` (RTF, DOC, HTML through `NSAttributedString` and `NSFont`): rewrite on RtfPipe and AngleSharp, keeping its body-size and heading rules. `Zip.unpack` shells out to `ditto`: use `ZipArchive`. `PagesReader`: ported (2026-11-13). |
 | `Import/EpubPdfReaders.swift` | 384 | **Mixed, AppKit + PDFKit** | EPUB: `XMLParser` parts port; the `NSAttributedString` HTML fallback becomes AngleSharp. PDF: line extraction (`PDFDocument`, line selections, `NSFont` sizes) is rewritten on PdfPig (group words into lines by baseline; size from the letters). `PDFLine`, `dropRunningLines`, `median`, `pageLefts` and `paragraphs(from:)` are pure and port line for line. PdfPig uses the same bottom-left PDF coordinates as PDFKit, so the per-page margins in `pageLefts` (mirrored margins in printed books) work unchanged. |
 | `ToneRules.swift` | 286 | Pure | Ported with `TonePrompt` (AI voices part A); the tone pass runs inside Tag Speakers |
 | `SpeechScript.swift` | 222 | `NaturalLanguage` | Ported (AI voices part A); a rule-based `SentenceSplitter` replaces NLTokenizer |
