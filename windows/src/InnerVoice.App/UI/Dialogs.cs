@@ -10,10 +10,16 @@ public static class Dialogs
 {
     static Window? Owner(Visual v) => TopLevel.GetTopLevel(v) as Window;
 
-    public static async Task<bool> Confirm(Visual from, string title, string message, string action, bool destructive = true, string cancel = "Cancel")
+    public static async Task<bool> Confirm(Visual from, string title, string message, string action, bool destructive = true, string cancel = "Cancel") =>
+        (await ConfirmWithCheck(from, title, message, action, null, destructive, cancel)).Ok;
+
+    /// A question with a checkbox under it ("Don't show the estimate again").
+    public static async Task<(bool Ok, bool Checked)> ConfirmWithCheck(Visual from, string title, string message, string action, string? checkLabel,
+                                                                       bool destructive = false, string cancel = "Cancel")
     {
         var owner = Owner(from);
         bool result = false;
+        var check = checkLabel is null ? null : new CheckBox { Content = checkLabel };
         var dialog = new Window
         {
             Title = title, Width = 420, SizeToContent = SizeToContent.Height, CanResize = false,
@@ -29,10 +35,12 @@ public static class Dialogs
         dialog.Content = new StackPanel
         {
             Margin = new Thickness(Look.Xl), Spacing = Look.Md,
-            Children = { Ui.Headline(title), Ui.Text(message, 13, wrap: Avalonia.Media.TextWrapping.Wrap), buttons },
+            Children = { Ui.Headline(title), Ui.Text(message, 13, wrap: Avalonia.Media.TextWrapping.Wrap) },
         };
+        if (check is not null) ((StackPanel)dialog.Content).Children.Add(check);
+        ((StackPanel)dialog.Content).Children.Add(buttons);
         if (owner is not null) await dialog.ShowDialog(owner); else dialog.Show();
-        return result;
+        return (result, check?.IsChecked == true);
     }
 
     public static async Task Alert(Visual from, string title, string message)

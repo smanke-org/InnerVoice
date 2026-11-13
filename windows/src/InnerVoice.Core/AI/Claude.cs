@@ -34,8 +34,10 @@ public static class Claude
         "Claude runs in the cloud: the book text you send goes to Anthropic. Anthropic doesn't train on API data unless your organization has opted in. Check your organization's privacy settings in the Claude Console.";
     /// The question each book asks once before anything is sent.
     public const string BookQuestion = "Send this book to Claude?";
-    public const string BookQuestionDetail = Warning +
-        "\n\nInnerVoice sends the book a passage at a time, only when you run an AI feature. To stop, choose Book › Stop Sending This Book to Claude.";
+    /// The question's text: the warning, what this run sends and its estimated cost.
+    public static string BookQuestionDetail(string action, string what, string modelName, string estimate) =>
+        $"{Warning}\n\n{action} sends {what} to {modelName}. {estimate}\n\n" +
+        "InnerVoice sends text only when you run an AI feature. To stop, choose Book › Stop Sending This Book to Claude.";
     /// The model choice is saved as "claude:<model id>".
     public const string SelectionPrefix = "claude:";
     public const string DefaultModelID = "claude-sonnet-5-5";

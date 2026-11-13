@@ -35,6 +35,8 @@ public sealed class AppSettings
     public DateTime? ClaudeConsent { get; set; }
     /// The Claude models the key can use, from Anthropic's model list (no book text is sent).
     public List<InnerVoice.Core.AI.ClaudeModelInfo>? ClaudeModels { get; set; }
+    /// The narrator checked "Don't show the estimate again" before a Claude run.
+    public bool SkipClaudeCostQuestion { get; set; }
     public List<string> RecentProjects { get; set; } = [];
     public double WindowWidth { get; set; } = 1280;
     public double WindowHeight { get; set; } = 820;

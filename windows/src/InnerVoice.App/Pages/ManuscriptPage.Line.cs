@@ -121,6 +121,8 @@ public sealed partial class ManuscriptPage
             menu.Items.Add(kind);
             menu.Items.Add(Item(ids.Count == 1 ? "Mark as Narration" : $"Mark {ids.Count} Lines as Narration", () => Document.RemoveLines(ids)));
             menu.Items.Add(Item("Who's Speaking?", () => Document.Assign(ids, null)));
+            if (Document.Project.ShowsVoices)
+                menu.Items.Add(Item("Delivery Hint…", () => _ = EditDelivery(ids, line.Delivery)));
             if (Document.Project.Character(line.SpeakerID) is { } sp)
             {
                 menu.Items.Add(new Separator());
@@ -153,10 +155,73 @@ public sealed partial class ManuscriptPage
             var pid = paragraph.Id;
             menu.Items.Add(Item("Open Teleprompter Here", () => { Workspace.TeleprompterParagraph = pid; Workspace.Go(PageKind.Teleprompter); }));
         }
+        // "Previously…": the chapter's recap, for every chapter after the first (or one that has one).
+        var recapParagraph = line?.ParagraphID ?? paragraph?.Id;
+        if (recapParagraph is { } rp && Document.Index.Positions.TryGetValue(rp, out var at)
+            && (at.Chapter > 0 || Document.Project.Chapters[at.Chapter].RecapText is not null))
+        {
+            int chapterIndex = at.Chapter;
+            if (menu.Items.Count > 0) menu.Items.Add(new Separator());
+            menu.Items.Add(Item("Chapter Recap…", () => _ = EditRecap(chapterIndex)));
+        }
         if (menu.Items.Count == 0) return;
         var anchor = AnchorAt(new Rect(point, new Size(1, 1)));
         menu.Closed += (_, _) => RemoveAnchor(anchor);
         menu.Open(anchor);
+    }
+
+    /// How ElevenLabs performs the lines beyond their tone, sent as an audio tag (ElevenLabs
+    /// only; other voices ignore it). Book › Claude › Suggest Delivery Hints fills these in.
+    /// TODO(voices): the voices work moves this into the line's voice controls, next to its tone.
+    async Task EditDelivery(List<Guid> ids, string? current)
+    {
+        var text = await Dialogs.Ask(this, "Delivery Hint",
+            "How ElevenLabs performs " + (ids.Count == 1 ? "this line" : $"these {ids.Count} lines") +
+            " beyond its tone, sent as an audio tag (ElevenLabs only; other voices ignore it). Leave it empty to clear it.",
+            "Save", current ?? "", "e.g. barely audible");
+        if (text is null || text == (current ?? "")) return;
+        Document.Change("Delivery Hint", p => InnerVoice.Core.AI.DeliveryPrompt.Set(text, ids, p));
+    }
+
+    /// "Previously…": the chapter's recap, editable. Shown in Narrator Scripts. An edit makes it
+    /// the narrator's own (Write Chapter Recaps leaves it alone); clearing it lets Claude write one.
+    public async Task EditRecap(int chapterIndex)
+    {
+        var chapter = Document.Project.Chapters[chapterIndex];
+        var id = chapter.Id;
+        bool saved = false;
+        var box = new TextBox
+        {
+            Text = chapter.Recap ?? "", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 96,
+            PlaceholderText = "A short recap of the story so far",
+        };
+        var dialog = new Window
+        {
+            Title = "Chapter Recap", Width = 480, SizeToContent = SizeToContent.Height, CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner, ShowInTaskbar = false,
+            FontFamily = Look.UIFamily, Background = Look.Brush(Look.Paper),
+        };
+        var save = new Button { Content = "Save", IsDefault = true };
+        save.Classes.Add("accent");
+        save.Click += (_, _) => { saved = true; dialog.Close(); };
+        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        cancel.Click += (_, _) => dialog.Close();
+        var buttons = Ui.Row(Look.Sm, cancel, save);
+        buttons.HorizontalAlignment = HorizontalAlignment.Right;
+        var panel = new StackPanel
+        {
+            Margin = new Thickness(Look.Xl), Spacing = Look.Md,
+            Children = { Ui.Headline($"Previously… ({chapter.Title})"), box },
+        };
+        if (chapter.RecapText is not null && chapter.RecapEdited != true)
+            panel.Children.Add(Ui.Caption("Written by Claude (Book › Claude › Write Chapter Recaps). Edit it, and it's yours.", TextWrapping.Wrap));
+        panel.Children.Add(Ui.Caption("Shown at the chapter's start in Narrator Scripts.", TextWrapping.Wrap));
+        panel.Children.Add(buttons);
+        dialog.Content = panel;
+        if (TopLevel.GetTopLevel(this) is Window owner) await dialog.ShowDialog(owner); else return;
+        var text = box.Text ?? "";
+        if (!saved || text == (chapter.Recap ?? "")) return;
+        Document.Change("Edit Recap", p => InnerVoice.Core.AI.RecapPrompt.Edit(text, id, p));
     }
 
     void CopySelection()

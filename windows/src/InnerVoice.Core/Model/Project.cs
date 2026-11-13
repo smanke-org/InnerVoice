@@ -100,9 +100,21 @@ public sealed class Chapter : ModelObject
         Paragraphs = paragraphs;
     }
 
+    /// "Previously…": a short recap of the story so far, heard at the chapter's start
+    /// (Chapter Recaps). Optional, like `RecapEdited`, so older projects open unchanged.
+    public string? Recap { get; set; }
+    /// The narrator changed the recap: Write Chapter Recaps leaves it alone.
+    public bool? RecapEdited { get; set; }
+
     [JsonIgnore] public int WordCount => Paragraphs.Sum(p => p.WordCount);
 
-    public Chapter Copy() => new() { Id = Id, Title = Title, Paragraphs = Paragraphs.ConvertAll(p => p.Copy()), Extra = CopyExtra() };
+    /// The recap to show, if there is one.
+    [JsonIgnore] public string? RecapText => string.IsNullOrWhiteSpace(Recap) ? null : Recap.Trim();
+
+    public Chapter Copy() => new()
+    {
+        Id = Id, Title = Title, Paragraphs = Paragraphs.ConvertAll(p => p.Copy()), Recap = Recap, RecapEdited = RecapEdited, Extra = CopyExtra(),
+    };
 }
 
 public enum LineKind { Spoken, Thought, Written }
@@ -149,8 +161,9 @@ public static class ModelTitles
     };
 }
 
-/// One piece of text spoken, thought or written by a character. Tone fields (for AI
-/// voices) aren't modeled here; they stay in `Extra` and round-trip.
+/// One piece of text spoken, thought or written by a character. Tone fields (for AI voices:
+/// `tone`, `toneConfidence`, `toneSource`) aren't modeled here; they stay in `Extra` and
+/// round-trip (`Tones.ToneOf` reads the tone).
 public sealed class Line : ModelObject
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -165,6 +178,11 @@ public sealed class Line : ModelObject
     public bool ContinuesPrevious { get; set; }
     /// The AI model that tagged the line (for its accuracy in Activity).
     public string? AiModel { get; set; }
+    /// How to perform the line beyond its tone ("barely audible", "through gritted teeth"),
+    /// sent to ElevenLabs only, as an audio tag. Optional: older projects open unchanged.
+    public string? Delivery { get; set; }
+    /// Who wrote the delivery hint. The narrator's (User) is never replaced.
+    public ToneSource? DeliverySource { get; set; }
 
     public Line() { }
     public Line(Guid paragraphID, TextSpan range, LineKind kind = LineKind.Spoken, Guid? speakerID = null,
@@ -184,7 +202,8 @@ public sealed class Line : ModelObject
     public Line Copy() => new()
     {
         Id = Id, ParagraphID = ParagraphID, Range = Range, Kind = Kind, SpeakerID = SpeakerID, Confidence = Confidence,
-        Source = Source, ContinuesPrevious = ContinuesPrevious, AiModel = AiModel, Extra = CopyExtra(),
+        Source = Source, ContinuesPrevious = ContinuesPrevious, AiModel = AiModel, Delivery = Delivery, DeliverySource = DeliverySource,
+        Extra = CopyExtra(),
     };
 
     /// True when the parts the Windows app edits are the same.
@@ -497,6 +516,11 @@ public sealed class Project : ModelObject
     /// Shows the Narration Tools pages: always on Windows. A book set to AI voices on the
     /// Mac keeps that setting; the Windows app just doesn't show voices.
     [JsonIgnore] public bool IsAIVoicesProject => Settings.Purpose == ProjectPurpose.AiVoices;
+    /// As on the Mac: voices and the pronunciation guide belong to every project type but
+    /// Narration Tools (null, not asked yet, shows everything). Gates delivery hints and
+    /// suggested spellings until Windows has voices.
+    [JsonIgnore] public bool ShowsVoices => Settings.Purpose != ProjectPurpose.Narration;
+    [JsonIgnore] public bool ShowsPronunciations => Settings.Purpose != ProjectPurpose.Narration;
 
     public Project Copy() => new()
     {

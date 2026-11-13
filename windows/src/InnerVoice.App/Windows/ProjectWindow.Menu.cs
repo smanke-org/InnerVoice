@@ -30,6 +30,9 @@ public sealed partial class ProjectWindow
         recent.Items.Add(new MenuItem { Header = "…" });
         file.Items.Add(recent);
         file.Items.Add(new Separator());
+        // TODO(voices): File › Export Audio… (with "Say chapter recaps": RecapPrompt.SpokenParts)
+        // and File › Export EPUB with Audio… (render each chapter, then ReadAlongEpub.Write) join
+        // this menu with the voices work, as on the Mac.
         file.Items.Add(Item("_Save", "Ctrl+S", () => _ = Save()));
         file.Items.Add(Item("Save _As…", "Ctrl+Shift+S", () => _ = SaveAs()));
         AddFileItems(file);

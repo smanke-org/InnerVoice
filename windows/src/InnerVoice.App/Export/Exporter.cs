@@ -150,6 +150,8 @@ public static class Exporter
                     {
                         lastChapter = pos.Chapter;
                         output.Add(Text(project.Chapters[pos.Chapter].ShownTitle(), H2, Weight.SemiBold, spacing: 8));
+                        if (project.Chapters[pos.Chapter].RecapText is { } recap)
+                            output.Add(Text($"Previously… {recap}", Body, color: gray, spacing: 10));
                     }
                     if (o.IncludeCues && i > 0)
                     {

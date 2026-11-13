@@ -100,6 +100,13 @@ public class ExportTests
             Assert.Contains(Squash(maraName), script);
             Assert.DoesNotContain(Squash(tomName), script);
             Assert.Contains(Squash(maraLine), script);
+            // A chapter's recap ("Previously…") follows its title in the script.
+            var maraChapter = doc.Index.Positions[doc.Project.Lines.First(l => l.SpeakerID == mara).ParagraphID].Chapter;
+            doc.Change("Edit Recap", p => InnerVoice.Core.AI.RecapPrompt.Edit("Mara waited for the boat.", p.Chapters[maraChapter].Id, p));
+            var path2 = Path.Combine(dir, "narrator-recap.pdf");
+            Exporter.Write(mine, doc, path2);
+            Assert.Contains(Squash("Previously… Mara waited for the boat."), PdfText(path2));
+            doc.Undo();
             static List<string> Heads(List<Exporter.Para> paras) =>
                 paras.Where(p => p.Runs.Count == 1 && p.Runs[0].Size == 11 && p.Runs[0].Weight == Exporter.Weight.SemiBold)
                      .Select(p => p.PlainText).ToList();

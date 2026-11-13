@@ -20,6 +20,7 @@ public static partial class ManuscriptImporter
         var title = Path.GetFileNameWithoutExtension(path);
         var author = "";
         List<RawBlock> blocks;
+        List<Chapter>? fromTOC = null;
         switch (ext)
         {
             case "txt" or "text": blocks = PlainTextReader.Read(path, markdown: false); break;
@@ -31,14 +32,16 @@ public static partial class ManuscriptImporter
                 blocks = other.Blocks;
                 if (other.Title is { Length: > 0 } t) title = t;
                 author = other.Author ?? "";
+                fromTOC = other.Chapters;
                 break;
         }
-        var chapters = ChapterDetector.Chapters(blocks, title);
+        var chapters = fromTOC ?? ChapterDetector.Chapters(blocks, title);
         if (chapters.Count == 0) throw new ImportException($"“{name}” has no text in it.");
         return new ImportedBook(title, author, chapters);
     }
 
-    public sealed record OtherResult(List<RawBlock> Blocks, string? Title = null, string? Author = null);
+    /// `Chapters`: from the book's own table of contents (EPUB), used instead of finding them.
+    public sealed record OtherResult(List<RawBlock> Blocks, string? Title = null, string? Author = null, List<Chapter>? Chapters = null);
 
     /// Word, PDF, RTF, OpenDocument, EPUB and HTML (Import/Readers).
     private static partial OtherResult? ReadOther(string path, string ext);

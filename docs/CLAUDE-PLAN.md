@@ -95,7 +95,37 @@ Selection string: `claude:<model id>`.
    - Checks: `ClaudeTests` (fake HttpMessageHandler: nothing sent without all three yeses),
      `PdfLetterSpacingTests`, and `ClaudeAppTests` (the real runner against a fake Anthropic).
      Credential Manager and the real API need a Windows PC and a key.
-   - 3–4 not ported yet.
+   - 3–4 ported 2026-11-12. Windows voices (built-in, ElevenLabs, Qwen3-TTS and Orpheus on
+     ONNX Runtime with DirectML) come in a later step, so everything that needs no audio is
+     ported now, with `TODO(voices)` hooks where a voice engine will be called:
+     - Core: `CostEstimate.cs` (Tag Speakers counts one pass: Windows has no tone pass yet),
+       `RecapPrompt.cs` (+ `SpokenParts` for "Say chapter recaps"), `TextCleanup.cs`,
+       `DeliveryPrompt.cs` (+ `AudioTag` for ElevenLabs), `SpellingPrompt.cs`, `Voices.cs`
+       (`Tone` with audio tags, `ToneSource`; `Tones.ToneOf` reads the tone the Mac keeps in
+       each line's Extra, which still round-trips untouched), `Chapter.Recap` /
+       `RecapEdited`, `Line.Delivery` / `DeliverySource` (same JSON names as the Mac),
+       `Project.ShowsVoices` / `ShowsPronunciations` (as the Mac's). `Import/EpubReader.cs`
+       (TOC chapters, notes left out; reads the zip in place, falls back to the HTML reader
+       for files that aren't well-formed XHTML). `ReadAlongEpub.cs` (EPUB 3 Media Overlays
+       packaging; `ReadAlongSegment` stands in for SpeechScript's segments; regex sentence
+       split and a common-word language guess instead of NLTokenizer/NLLanguageRecognizer).
+     - App: Book › Claude (Cloud) with all four features (`AI/ClaudeFeatures.cs`, a partial
+       of `AIRunner`, so the progress bar and Stop are shared; Delivery Hints and Spellings
+       only in books with voices, as on the Mac); `Windows/ClaudeProposalsWindow.cs`
+       (keep/leave out, recaps/hints/spellings editable, spellings start unchecked); the
+       estimate before every Claude run (`ConfirmClaude` in `ProjectWindow.AI.cs`, "Don't
+       show the estimate again" in AppSettings). Windows has no inspector: recaps and
+       delivery hints are edited from the manuscript's right-click menu (Chapter Recap…,
+       Delivery Hint…). Recaps print under the chapter title in Narrator Scripts.
+     - TODO(voices) hooks: `ReadAlongEpub.cs` (Export EPUB with Audio renders and passes
+       timings; `Segments` → SpeechScript), `RecapPrompt.SpokenParts` (SpeechScript
+       recaps + Export Audio's checkbox), `DeliveryPrompt.AudioTag` (ElevenLabs request),
+       `Voices.cs` (model tone on Line), `TextCleanup.cs` (ToneRules after a cleanup),
+       `ManuscriptPage.Line.cs` `EditDelivery` (move into the line's voice controls),
+       `ProjectWindow.Menu.cs` (Export Audio and Export EPUB with Audio menu items).
+     - Checks: `ClaudeFeatureTests` (Kit ports, delivery and spellings included), `EpubTests`,
+       `ReadAlongEpubTests`, `ClaudeAppTests` (fake Anthropic: all four features through
+       review, refused without the book's yes), Narrator Script recap in `ExportTests`.
 
 ## API notes
 Raw HTTPS (no Swift SDK): POST /v1/messages, `anthropic-version: 2026-10-21`, streaming for
