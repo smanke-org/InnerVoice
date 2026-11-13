@@ -145,7 +145,7 @@ struct SeriesVoicesSheet: View {
             .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
             VStack(alignment: .leading, spacing: Space.xs) {
                 Toggle("Bring their Voice Notes too", isOn: $options.voiceNotes)
-                Text("Qwen3-TTS designs voices from Voice Notes, so this keeps those voices the same. It replaces the Voice Notes of the matched characters here.")
+                Text("Casting and ElevenLabs' Voice Design read what they say about how a character sounds. It replaces the Voice Notes of the matched characters here.")
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     .padding(.leading, 20)
                 if let e = old.settings.voiceEngine, e != document.project.settings.engine {
@@ -237,7 +237,7 @@ struct SeriesVoicesSheet: View {
         }
     }
 
-    /// "214 lines · Warm Storyteller · Qwen3-TTS": the voice on the earlier book's engine.
+    /// "214 lines · Tara · Chatterbox": the voice on the earlier book's engine.
     private func voiceSummary(_ c: BookCharacter, old: Project) -> String {
         let lines = oldIndex.stats[c.id]?.lines ?? 0
         let v = c.voice(for: old.settings.engine) ?? c.voices?.values.first

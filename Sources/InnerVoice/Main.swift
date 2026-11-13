@@ -7,6 +7,7 @@ import AppKit
 enum Main {
     static func main() {
         if let code = AgentCLI.runIfRequested() { exit(code) }
+        VoicePack.pinHubCache()
         // Every test run (agent test copies, snapshots, --selftest), not only the agent's:
         // a snapshot run once reopened the person's real book through window restoration
         // and photographed it instead of the sample.

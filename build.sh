@@ -43,6 +43,8 @@ cp -X "$here/Resources/AppIcon.icns" "$app/Contents/Resources/"
 [[ -d "$here/Resources/Help" ]] && ditto "$here/Resources/Help" "$app/Contents/Resources/Help"
 # The setup sheet's Hear It clips (Casting Style), made by the self-test with APP_MAKE_CASTING_SAMPLES.
 [[ -d "$here/Resources/Samples" ]] && ditto "$here/Resources/Samples" "$app/Contents/Resources/Samples"
+# Chatterbox's stock voices: the clips it clones them from (Apple Lossless, 24 kHz mono).
+[[ -d "$here/Resources/StockVoices" ]] && ditto "$here/Resources/StockVoices" "$app/Contents/Resources/StockVoices"
 # SwiftPM resource bundles (MLX's Metal library, tokenizer defaults) next to the app's
 # resources, where their Bundle.module looks first. Without the metallib MLX can't run.
 for b in "$bindir"/*.bundle; do ditto "$b" "$app/Contents/Resources/${b:t}"; done

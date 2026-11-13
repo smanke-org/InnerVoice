@@ -56,7 +56,7 @@ Everything else (chapters, line kinds, rename, color, merge, summaries, pronunci
 MCP server for Claude Desktop and other clients without a shell (not registered by default):
 `claude mcp add --scope user innervoice -- "/Applications/InnerVoice.app/Contents/MacOS/InnerVoice" mcp`
 
-- `innervoice lines tone <ids> <tone>` sets how lines are said (neutral, excited, confused, sad, angry, whispered, scared, tender, sarcastic). `lines list` shows each line's tone, and `characters list` each character's voice.
+- `innervoice lines tone <ids> <tone>` sets how lines are said (neutral, excited, confused, sad, angry, whispered, scared, tender, sarcastic). `lines list` shows each line's tone, and `characters list` each character's voice on the book's engine (`engine` is apple, chatterbox, orpheus or elevenlabs; Chatterbox stock voices are named Chatterbox, Tara, Leah, Jess, Mia, Zoe, Leo, Dan and Zac, and voices cloned on this Mac by the name they were given). Books made with Qwen3-TTS (retired) open with Chatterbox voices.
 
 ## Links
 

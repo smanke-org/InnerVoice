@@ -113,8 +113,8 @@ struct ProjectTypeSheet: View {
                     engineRow(e)
                 }
             }
-            if !EngineSwitches.shared.usable(.qwen) || !EngineSwitches.shared.usable(.orpheus) {
-                Text("More natural voices (Qwen3-TTS, Orpheus) are a free download in Settings › Voices, and you can switch engines later on the Voices page.")
+            if !EngineSwitches.shared.usable(.chatterbox) || !EngineSwitches.shared.usable(.orpheus) {
+                Text("More natural voices (Chatterbox, Orpheus) are a free download in Settings › Voices, and you can switch engines later on the Voices page.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -141,7 +141,7 @@ struct ProjectTypeSheet: View {
         }
         .onAppear {
             // Start from the best engine that's ready on this Mac.
-            engine = [.qwen, .orpheus, .apple].first { EngineSwitches.shared.usable($0) } ?? .apple
+            engine = [.chatterbox, .orpheus, .apple].first { EngineSwitches.shared.usable($0) } ?? .apple
         }
     }
 
@@ -170,7 +170,7 @@ struct ProjectTypeSheet: View {
     private func engineDetail(_ e: VoiceEngine) -> String {
         switch e {
         case .apple: "Built in, ready now. Can’t act out tones."
-        case .qwen: "16 ready-made voices, or voices designed from each character’s summary."
+        case .chatterbox: "Nine stock voices and the voices you clone, acted in each tone."
         case .orpheus: "Eight natural voices that act out the words."
         case .elevenlabs: "Natural voices in the cloud, from your ElevenLabs account."
         case .mixed: ""
@@ -297,7 +297,7 @@ extension ProjectTypeSheet {
         .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
     }
 
-    /// A short passage of the sample book in each style (Qwen3-TTS), in the app.
+    /// A short passage of the sample book in each style (Chatterbox), in the app.
     static func sample(_ s: CastingStyle) -> URL? {
         Bundle.main.url(forResource: "casting-" + s.rawValue, withExtension: "m4a", subdirectory: "Samples")
     }

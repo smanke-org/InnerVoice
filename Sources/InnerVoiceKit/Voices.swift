@@ -1,8 +1,8 @@
 import Foundation
 import Synchronization
 
-/// How a line is said. Speech engines that can act (Qwen3-TTS, Orpheus) use it; Apple's
-/// voices only change speed, pitch and loudness a little.
+/// How a line is said. Speech engines that can act (Chatterbox, Orpheus, ElevenLabs) use it;
+/// Apple's voices only change speed, pitch and loudness a little.
 public enum Tone: String, Codable, CaseIterable, Identifiable, Sendable {
     case neutral, excited, confused, sad, angry, whispered, scared, tender, sarcastic
 
@@ -84,9 +84,15 @@ public enum ToneSource: String, Codable, Sendable {
     case rule, ai, user
 }
 
-/// A text-to-speech engine. All of them run on the Mac.
+/// A text-to-speech engine. All but ElevenLabs run on the Mac.
+///
+/// Projects made before Chatterbox may say "qwen" (Qwen3-TTS, retired 2026-11-13): it reads as
+/// `.chatterbox`, and `LegacyVoices.migrate` turns that engine's voices into Chatterbox ones
+/// when the project is read. Any other engine this version doesn't know (a project saved by a
+/// newer InnerVoice) reads as `.mixed`, which names no voices: those characters fall back to
+/// the narrator's voice instead of the whole project failing to open.
 public enum VoiceEngine: String, Codable, CaseIterable, Identifiable, Sendable {
-    case apple, qwen, orpheus
+    case apple, chatterbox, orpheus
     /// ElevenLabs, in the cloud: the only engine that sends text off the Mac. Off until the
     /// narrator sets it up, and each book must allow it.
     case elevenlabs
@@ -96,8 +102,20 @@ public enum VoiceEngine: String, Codable, CaseIterable, Identifiable, Sendable {
 
     public var id: String { rawValue }
 
+    /// The raw value older projects use for Qwen3-TTS, the engine Chatterbox replaced.
+    public static let retiredQwen = "qwen"
+
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        if let known = VoiceEngine(rawValue: raw) {
+            self = known
+        } else {
+            self = raw == Self.retiredQwen ? .chatterbox : .mixed
+        }
+    }
+
     /// The engines that make sound (everything but `.mixed`).
-    public static let engines: [VoiceEngine] = [.apple, .qwen, .orpheus, .elevenlabs]
+    public static let engines: [VoiceEngine] = [.apple, .chatterbox, .orpheus, .elevenlabs]
 
     /// Sends the book's text to a company's servers to make the audio.
     public var isCloud: Bool { self == .elevenlabs }
@@ -105,7 +123,7 @@ public enum VoiceEngine: String, Codable, CaseIterable, Identifiable, Sendable {
     public var title: String {
         switch self {
         case .apple: "Apple Voices"
-        case .qwen: "Qwen3-TTS"
+        case .chatterbox: "Chatterbox"
         case .orpheus: "Orpheus"
         case .elevenlabs: "ElevenLabs"
         case .mixed: "Mix Engines"
@@ -119,9 +137,11 @@ public enum VoiceEngine: String, Codable, CaseIterable, Identifiable, Sendable {
 /// A voice on one engine, with the narrator's adjustments.
 public struct VoiceChoice: Codable, Hashable, Sendable {
     public var engine: VoiceEngine
-    /// Apple: the voice identifier. Orpheus: the voice name. Qwen3-TTS: "design".
+    /// Apple: the voice identifier. Orpheus: the voice name. Chatterbox: "stock:<name>" or
+    /// "clone:<id>". ElevenLabs: its voice ID.
     public var voiceID: String
-    /// Qwen3-TTS designs a voice from this description ("A woman in her sixties…").
+    /// A description of the voice ("A woman in her sixties…"). Written by Qwen3-TTS (retired)
+    /// and kept in the file format; no engine speaks from it now.
     public var design: String?
     /// Speed and pitch, 1 is the voice's own.
     public var rate: Double?
@@ -202,7 +222,7 @@ public struct VoiceInfo: Hashable, Identifiable, Sendable {
     public var quality: Int
     /// A short description for the voice list ("Bright, conversational").
     public var detail: String
-    /// Qwen3-TTS: the description the voice is designed from.
+    /// A description of the voice, when there is one (kept in the file format).
     public var design: String?
 
     public var id: String { engine.rawValue + ":" + voiceID }
@@ -230,26 +250,21 @@ public struct VoiceInfo: Hashable, Identifiable, Sendable {
         ("leo", .male, "Steady, relaxed"), ("dan", .male, "Deep, easygoing"), ("zac", .male, "Energetic, youthful"),
     ].map { VoiceInfo(engine: .orpheus, voiceID: $0.0, name: $0.0.capitalized, gender: $0.1, age: .young, accent: "American", quality: 2, detail: $0.2) }
 
-    /// Ready-made Qwen3-TTS voices: a description each, for characters the book says little
-    /// about and for choosing from a list. Any other description works too.
-    public static let qwenPresets: [VoiceInfo] = [
-        ("narrator", "Audiobook Narrator", VoiceGender.neutral, VoiceAge.adult, "American", "Calm, clear, measured", "A calm, clear audiobook narrator with a warm, measured voice."),
-        ("storyteller", "Warm Storyteller", .female, .adult, "American", "Warm, low, unhurried", "A woman in her forties with a warm, low, unhurried voice."),
-        ("bright", "Bright Young Woman", .female, .young, "American", "Bright, clear, lively", "A young woman with a bright, clear, lively voice."),
-        ("soft", "Soft-Spoken", .female, .young, "American", "Soft, gentle, breathy", "A young woman with a soft, gentle, slightly breathy voice."),
-        ("brisk", "Brisk Professional", .female, .adult, "American", "Crisp, confident", "A woman in her thirties with a crisp, confident, brisk voice."),
-        ("dame", "Grand Dame", .female, .older, "British", "Rich, commanding, cultured", "An older woman with a rich, commanding, cultured voice, speaking English with a British accent."),
-        ("grandmother", "Kind Grandmother", .female, .older, "American", "Soft, kind, a little creaky", "An older woman with a soft, kind, slightly creaky voice."),
-        ("lass", "Highland Lass", .female, .young, "Scottish", "Light, musical", "A young woman with a light, musical voice, speaking English with a Scottish accent."),
-        ("girl", "Little Girl", .female, .child, "American", "High, eager", "A young girl with a high, eager voice."),
-        ("baritone", "Easy Baritone", .male, .adult, "American", "Warm, easygoing", "A man in his forties with a warm, easygoing baritone voice."),
-        ("hero", "Young Hero", .male, .young, "American", "Earnest, energetic", "A young man with an earnest, energetic, clear voice."),
-        ("gentleman", "Gentleman", .male, .adult, "British", "Refined, measured", "A man with a refined, measured voice, speaking English with a British accent."),
-        ("elder", "Gravelly Elder", .male, .older, "American", "Deep, gravelly", "An older man with a deep, gravelly voice."),
-        ("sailor", "Weathered Sailor", .male, .older, "Irish", "Rough, booming", "A man in his fifties with a rough, weathered, booming voice, speaking English with an Irish accent."),
-        ("clerk", "Nervous Clerk", .male, .young, "American", "Thin, quick, nervous", "A young man with a thin, quick, nervous voice."),
-        ("boy", "Little Boy", .male, .child, "American", "High, cheerful", "A young boy with a high, cheerful voice."),
-    ].map { VoiceInfo(engine: .qwen, voiceID: "preset:" + $0.0, name: $0.1, gender: $0.2, age: $0.3, accent: $0.4, quality: 2, detail: $0.5, design: $0.6) }
+    /// Chatterbox's stock voices. Chatterbox can't design a voice from a description: it
+    /// clones one from a few seconds of speech. The clips ship with the app
+    /// (Resources/StockVoices): Orpheus's eight voices (Apache 2.0) said one plain passage,
+    /// and Chatterbox said it once in its own default voice. Orpheus's are young adult and
+    /// American: casting shifts a clip's pitch for a child or an older character, as it fakes
+    /// age with pitch for Apple's voices.
+    public static let chatterbox: [VoiceInfo] = [
+        ("chatterbox", "Chatterbox", VoiceGender.female, VoiceAge.adult, 3, "The engine’s own voice; calm, clear"),
+        ("tara", "Tara", .female, .young, 2, "Warm, conversational"), ("leah", "Leah", .female, .young, 2, "Bright, friendly"),
+        ("jess", "Jess", .female, .young, 2, "Lively, expressive"), ("mia", "Mia", .female, .young, 2, "Soft, light"),
+        ("zoe", "Zoe", .female, .young, 2, "Clear, youthful"),
+        ("leo", "Leo", .male, .young, 2, "Steady, relaxed"), ("dan", "Dan", .male, .young, 2, "Deep, easygoing"),
+        ("zac", "Zac", .male, .young, 2, "Energetic, youthful"),
+    ].map { VoiceInfo(engine: .chatterbox, voiceID: ChatterboxVoice.stockPrefix + $0.0, name: $0.1, gender: $0.2, age: $0.3,
+                      accent: "American", quality: $0.4, detail: $0.5) }
 }
 
 /// What the book says a character should sound like, read from the summary and the lines.
@@ -506,7 +521,7 @@ public enum VoiceCasting {
         return s
     }
 
-    /// A description Qwen3-TTS designs a voice from.
+    /// A description of the voice the profile asks for: ElevenLabs' Voice Design starts from it.
     public static func describe(_ p: CastingProfile, name: String) -> String {
         let who: String
         switch (p.gender, p.age) {
@@ -523,7 +538,7 @@ public enum VoiceCasting {
         default: who = "An adult"
         }
         var parts = [who]
-        // Something about the voice itself, so Qwen3-TTS doesn't make a thin one.
+        // Something about the voice itself, so the designed voice isn't a thin one.
         let pitch = p.pitchLean < 0 ? "low-pitched" : p.pitchLean > 0 ? "high-pitched" : nil
         // Timbre words that only repeat the pitch ("low" after "low-pitched") are left out.
         let timbre = p.timbre.filter { pitch == nil || !["low", "deep", "high", "higher", "lower"].contains($0.lowercased()) }
@@ -577,14 +592,16 @@ public enum VoiceCasting {
 
     /// Casts every character with lines who has no voice the narrator chose, and the
     /// narrator if they have none. Main characters choose first. Characters in `keep` keep
-    /// the voice they have, like the narrator's choices. Returns how many characters got
-    /// a voice.
+    /// the voice they have, like the narrator's choices; `keepExisting` keeps every voice
+    /// there is (the narrator's and the roles' too) and only fills what's missing. Returns how
+    /// many characters got a voice.
     @discardableResult
     public static func cast(_ project: inout Project, index: BookIndex, engine: VoiceEngine, voices: [VoiceInfo],
-                            keep: Set<UUID> = []) -> Int {
+                            keep: Set<UUID> = [], keepExisting: Bool = false) -> Int {
+        let keeping = keepExisting || !keep.isEmpty
         func kept(_ c: BookCharacter) -> Bool {
             guard let v = c.voice(for: engine) else { return false }
-            return v.source == .user || keep.contains(c.id)
+            return v.source == .user || keepExisting || keep.contains(c.id)
         }
         let speaking = project.characters.filter { (index.stats[$0.id]?.lines ?? 0) > 0 }
             .sorted { (index.stats[$0.id]?.lines ?? 0) > (index.stats[$1.id]?.lines ?? 0) }
@@ -595,11 +612,8 @@ public enum VoiceCasting {
         }
         // The narrator first: heard most of all, and nobody should share their voice.
         var narratorID: String?
-        if let n = project.settings.narratorVoice(for: engine), n.source == .user || !keep.isEmpty {
+        if let n = project.settings.narratorVoice(for: engine), n.source == .user || keeping {
             narratorID = n.choice.voiceID
-        } else if engine == .qwen, let preset = VoiceInfo.qwenPresets.first {
-            narratorID = preset.voiceID
-            project.settings.setNarratorVoice(CastVoice(choice: preset.choice, confidence: 0.9, source: .auto), for: engine)
         } else if let best = voices.sorted(by: { ($0.quality, $0.gender == .neutral ? 1 : 0) > ($1.quality, $1.gender == .neutral ? 1 : 0) }).first {
             narratorID = best.voiceID
             project.settings.setNarratorVoice(CastVoice(choice: best.choice, confidence: 0.9, source: .auto), for: engine)
@@ -611,15 +625,6 @@ public enum VoiceCasting {
             if kept(project.characters[i]) { continue }
             let p = profile(project.characters[i], project: project, index: index)
             let chapters = index.stats[c.id]?.chapters ?? []
-            if engine == .qwen, !p.timbre.isEmpty || p.accent != nil || VoiceDescription.notes(project.characters[i]) != nil {
-                // The book or the Voice Notes say how they sound: a voice designed from that
-                // (the notes are added when it speaks, so editing them changes the voice).
-                // Characters nothing describes get a distinct ready-made voice below.
-                let choice = VoiceChoice(engine: .qwen, voiceID: "design", design: describe(p, name: c.name), pitch: nil)
-                project.characters[i].setVoice(CastVoice(choice: choice, confidence: confidence(p, sharedOverlap: 0), source: .auto), for: engine)
-                count += 1
-                continue
-            }
             var best: (VoiceInfo, Double, Double)?
             for v in voices {
                 var s = score(v, p)
@@ -632,18 +637,10 @@ public enum VoiceCasting {
                 project.characters[i].setVoice(nil, for: engine)
                 continue
             }
-            var choice = voice.choice
-            // Apple's voices are all adults: a child sounds higher, an older voice lower and slower.
-            if voice.engine == .apple, let a = p.age, a != voice.age {
-                switch a {
-                case .child: choice.pitch = 1.3; choice.rate = 1.05
-                case .young: choice.pitch = 1.08
-                case .older: choice.pitch = 0.88; choice.rate = 0.92
-                case .adult: break
-                }
-            }
-            // Apple voices can't take a description: the brief's pitch and pace nudge them.
-            if voice.engine == .apple, p.pitchLean != 0 || p.paceLean != 0 {
+            var choice = ageAdjusted(voice, for: p.age)
+            // Apple and Chatterbox voices can't take a description: the brief's pitch and pace
+            // nudge them (for Chatterbox, about a semitone and 6% a step).
+            if voice.engine == .apple || voice.engine == .chatterbox, p.pitchLean != 0 || p.paceLean != 0 {
                 choice.pitch = ((choice.pitch ?? 1) * (1 + 0.06 * Double(p.pitchLean)) * 100).rounded() / 100
                 choice.rate = ((choice.rate ?? 1) * (1 + 0.06 * Double(p.paceLean)) * 100).rounded() / 100
             }
@@ -652,9 +649,37 @@ public enum VoiceCasting {
             taken[voice.voiceID, default: []].append(chapters)
             count += 1
         }
-        castRoles(&project, engine: engine, voices: voices, keepAutomatic: !keep.isEmpty)
+        castRoles(&project, engine: engine, voices: voices, keepAutomatic: keeping)
         project.voicesCast = .now
         return count
+    }
+
+    /// A voice made to sound the character's age when it doesn't. Apple's voices are all
+    /// adults: a child sounds higher, an older voice lower and slower. Chatterbox's stock
+    /// voices are young adults: its pitch is a shift of the clip it clones from, so the steps
+    /// stay within what keeps the voice (docs/CASTING-STYLE.md §6: ±2 semitones kept it, −4 began
+    /// to lose it): a child +3 semitones (1.19) and a little quicker, an older voice −2 (0.89)
+    /// and slower. Young and adult characters keep the voice as it is.
+    public static func ageAdjusted(_ voice: VoiceInfo, for age: VoiceAge?) -> VoiceChoice {
+        var choice = voice.choice
+        guard let a = age, a != voice.age else { return choice }
+        switch voice.engine {
+        case .apple:
+            switch a {
+            case .child: choice.pitch = 1.3; choice.rate = 1.05
+            case .young: choice.pitch = 1.08
+            case .older: choice.pitch = 0.88; choice.rate = 0.92
+            case .adult: break
+            }
+        case .chatterbox where !voice.voiceID.hasPrefix(ChatterboxVoice.clonePrefix):
+            switch a {
+            case .child: choice.pitch = 1.19; choice.rate = 1.05
+            case .older: choice.pitch = 0.89; choice.rate = 0.92
+            case .young, .adult: break
+            }
+        default: break
+        }
+        return choice
     }
 
     /// Casting Style: a voice for each shared role the style uses (Men, Women, Other) that

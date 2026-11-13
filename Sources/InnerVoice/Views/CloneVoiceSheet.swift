@@ -18,7 +18,7 @@ struct CloneSample: Identifiable, Equatable {
 /// Clone a Voice (Book › Clone a Voice…, or the Voices page): record or add a sample of a
 /// real person's voice, name it, confirm the right to clone it, and make a voice every
 /// project can use. Two ways:
-/// - On This Mac: Qwen3-TTS speaks from a clip of up to 15 seconds and what it says (found
+/// - On This Mac: Chatterbox speaks from a clip of up to 15 seconds (its words, found
 ///   on this Mac); nothing leaves the Mac; free. Saved in Cloned Voices (`LocalClones`).
 /// - ElevenLabs: the recordings and the name go to ElevenLabs and the voice is kept in the
 ///   narrator's account. Needs ElevenLabs set up, the book's OK, and a paid plan. No book text.
@@ -68,7 +68,7 @@ struct CloneVoiceSheet: View {
     @FocusState private var nameFocused: Bool
 
     private var totalSeconds: Double { samples.reduce(0) { $0 + $1.seconds } }
-    private var qwenReady: Bool { ModelSpeech.isInstalled(.qwen) }
+    private var chatterboxReady: Bool { ModelSpeech.isInstalled(.chatterbox) }
     private var elevenReady: Bool { ElevenLabs.cloningOffered(for: document.project) }
 
     private var cast: [BookCharacter] {
@@ -140,7 +140,7 @@ struct CloneVoiceSheet: View {
             .help("Where the voice is made and kept")
 
             Text(place == .mac
-                 ? "Qwen3-TTS learns the voice from up to 15 seconds of a recording and speaks any line in it. The recording and the voice stay on this Mac, and every InnerVoice project can use it. Free."
+                 ? "Chatterbox learns the voice from up to 15 seconds of a recording and speaks any line in it. The recording and the voice stay on this Mac, and every InnerVoice project can use it. Free."
                  : "ElevenLabs makes a voice from a recording of one person and saves it in your ElevenLabs voices under the name you choose, so every InnerVoice project (and elevenlabs.io) can use it.")
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -233,7 +233,7 @@ struct CloneVoiceSheet: View {
         guard !cloning, !recorder.isRecording, rightsConfirmed, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
         switch place {
         case .mac:
-            return qwenReady && !preparing && clipSeconds >= CloneClip.shortest
+            return chatterboxReady && !preparing && clipSeconds >= CloneClip.shortest
                 && !clipText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .elevenlabs:
             return elevenReady && totalSeconds >= ElevenLabs.cloneMinimumSeconds
@@ -242,7 +242,7 @@ struct CloneVoiceSheet: View {
     }
 
     private var cloneHelp: String {
-        if place == .mac, !qwenReady { return "Download Qwen3-TTS first" }
+        if place == .mac, !chatterboxReady { return "Download Chatterbox first" }
         if place == .elevenlabs, !elevenReady { return "Set up ElevenLabs for this book first" }
         if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Name the voice first" }
         if place == .mac, preparing { return "Finding the words in the recording…" }
@@ -253,19 +253,19 @@ struct CloneVoiceSheet: View {
         return place == .mac ? "Save the voice as “\(name)” on this Mac" : "Send the recordings to ElevenLabs and save the voice as “\(name)”"
     }
 
-    /// On This Mac needs Qwen3-TTS downloaded (about 6 GB, once).
+    /// On This Mac needs Chatterbox downloaded (about 3.2 GB, once).
     @ViewBuilder
     private var macNotice: some View {
-        if !qwenReady, let pack = VoicePack.pack(for: .qwen) {
+        if !chatterboxReady, let pack = VoicePack.pack(for: .chatterbox) {
             VStack(alignment: .leading, spacing: Space.sm) {
-                Label("Cloning on this Mac uses Qwen3-TTS, a free download (\(pack.sizeDescription), once).", systemImage: "arrow.down.circle")
+                Label("Cloning on this Mac uses Chatterbox, a free download (\(pack.sizeDescription), once).", systemImage: "arrow.down.circle")
                     .font(.callout)
                 VoicePackRow(pack: pack)
             }
             .padding(Space.md)
             .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 10))
-        } else if !(document.project.engineInUse == .qwen || document.project.engineInUse == .mixed) {
-            Text("This book speaks with \(document.project.engineInUse.title). Voices cloned on this Mac speak with Qwen3-TTS: to hear one in this book, choose Qwen3-TTS or Mix Engines in the toolbar.")
+        } else if !(document.project.engineInUse == .chatterbox || document.project.engineInUse == .mixed) {
+            Text("This book speaks with \(document.project.engineInUse.title). Voices cloned on this Mac speak with Chatterbox: to hear one in this book, choose Chatterbox or Mix Engines in the toolbar.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -536,11 +536,11 @@ struct CloneVoiceSheet: View {
         // A voice is heard in a book that speaks with its engine, or mixes engines.
         let fits = engine == .mixed || engine == v.engine
         return VStack(alignment: .leading, spacing: Space.lg) {
-            Label(v.engine == .qwen ? "“\(v.name)” is saved on this Mac." : "“\(v.name)” is saved in your ElevenLabs voices.",
+            Label(v.engine == .chatterbox ? "“\(v.name)” is saved on this Mac." : "“\(v.name)” is saved in your ElevenLabs voices.",
                   systemImage: "checkmark.circle.fill")
                 .font(.headline)
-            Text(v.engine == .qwen
-                 ? "It’s listed first among the Qwen3-TTS voices in every project, marked Cloned. Casting never chooses it on its own: it goes only where you put it. Rename or delete it in Settings › Voices."
+            Text(v.engine == .chatterbox
+                 ? "It’s listed first among the Chatterbox voices in every project, marked Cloned. Casting never chooses it on its own: it goes only where you put it. Rename or delete it in Settings › Voices."
                  : "It’s listed first among the ElevenLabs voices in every project, marked Cloned. Casting never chooses it on its own: it goes only where you put it. Rename or delete it in Settings › Voices.")
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

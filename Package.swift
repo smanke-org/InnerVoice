@@ -5,7 +5,7 @@ let package = Package(
     name: "InnerVoice",
     platforms: [.macOS(.v26)],
     dependencies: [
-        // On-device speech models (Qwen3-TTS, Orpheus) on MLX. MIT; pinned. Apple silicon only.
+        // On-device speech models (Chatterbox, Orpheus) on MLX. MIT; pinned. Apple silicon only.
         .package(url: "https://github.com/Blaizzy/mlx-audio-swift.git", revision: "9d66d6f1da37a4a116c1655e321b167b3013a5cb"),
     ],
     targets: [
@@ -20,6 +20,7 @@ let package = Package(
                 "InnerVoiceKit", "llama",
                 .product(name: "MLXAudioTTS", package: "mlx-audio-swift"),
                 .product(name: "MLXAudioCore", package: "mlx-audio-swift"),
+                .product(name: "MLXAudioCodecs", package: "mlx-audio-swift"),
             ],
             // App code runs on the main thread unless you say otherwise.
             swiftSettings: [.defaultIsolation(MainActor.self)],

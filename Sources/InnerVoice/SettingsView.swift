@@ -158,6 +158,31 @@ struct VoicePackRow: View {
     }
 }
 
+/// Qwen3-TTS, the engine Chatterbox replaced, left its models and voice samples behind:
+/// offered for the Trash once, only while they're there. Nothing is removed on its own.
+struct OldVoiceFilesRow: View {
+    private var manager: VoiceModelManager { .shared }
+    @State private var asking = false
+
+    var body: some View {
+        if let old = manager.oldFiles {
+            LabeledContent {
+                Button("Remove Old Voice Files…") { asking = true }
+                    .controlSize(.small)
+                    .help("Move the Qwen3-TTS models and voice samples to the Trash")
+            } label: {
+                Text("Old Voice Files")
+                Text("Qwen3-TTS, which Chatterbox replaced, left \(ByteCountFormatter.string(fromByteCount: old.bytes, countStyle: .file)) of models and voice samples on this Mac. InnerVoice doesn’t use them anymore.")
+            }
+            .confirmationDialog("Move the old Qwen3-TTS files to the Trash?", isPresented: $asking) {
+                Button("Move to Trash") { manager.removeOldFiles() }
+            } message: {
+                Text("Books that used Qwen3-TTS voices already speak with Chatterbox. You can get the files back from the Trash until you empty it.")
+            }
+        }
+    }
+}
+
 /// Turns an engine on or off (the last one that's on stays on).
 struct EngineSwitch: View {
     let engine: VoiceEngine
@@ -212,16 +237,19 @@ struct VoicesSettings: View {
                     EngineSwitch(engine: .apple)
                 }
             }
-            VoicePackRow(pack: .qwen)
+            VoicePackRow(pack: .chatterbox)
             VoicePackRow(pack: .orpheus)
             ElevenLabsRow()
+            OldVoiceFilesRow()
         } header: {
             Text("Engines")
         } footer: {
-            Text("Apple Voices, Qwen3-TTS and Orpheus run on this Mac; downloading them is the only time they use the internet. ElevenLabs is different: it makes its voices in the cloud, so the text it speaks is sent to ElevenLabs, and each book asks first. Choose the engine for each project on its Voices page; turn an engine off to hide it there.")
+            Text("Apple Voices, Chatterbox and Orpheus run on this Mac; downloading them is the only time they use the internet. ElevenLabs is different: it makes its voices in the cloud, so the text it speaks is sent to ElevenLabs, and each book asks first. Choose the engine for each project on its Voices page; turn an engine off to hide it there.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+        // Listing the folders for Old Voice Files happens once per visit, never per redraw.
+        .task { VoiceModelManager.shared.checkOldFiles() }
         LocalClonesSection()
         if ElevenLabs.shared.isSetUp, EngineSwitches.shared.isOn(.elevenlabs) {
             ClonedVoicesSection()
@@ -276,7 +304,7 @@ struct ElevenLabsRow: View {
     }
 }
 
-/// Settings › Voices: voices cloned on this Mac (Qwen3-TTS), to listen to, rename or delete.
+/// Settings › Voices: voices cloned on this Mac (Chatterbox), to listen to, rename or delete.
 struct LocalClonesSection: View {
     @State private var renaming: LocalClones.Clone?
     @State private var newName = ""
@@ -306,7 +334,7 @@ struct LocalClonesSection: View {
         } header: {
             Text("Voices Cloned on This Mac")
         } footer: {
-            Text("Qwen3-TTS speaks these from a short recording kept on this Mac, so every project here can use them. Casting never chooses them on its own.")
+            Text("Chatterbox speaks these from a short recording kept on this Mac, so every project here can use them. Casting never chooses them on its own.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

@@ -566,7 +566,7 @@ struct ShadeEditor: View {
 
     private func note(_ engine: VoiceEngine) -> String {
         switch engine {
-        case .qwen: "Qwen3-TTS shifts the narrator’s voice sample, so it stays the same voice."
+        case .chatterbox: "Chatterbox shifts the clip it copies the narrator’s voice from, so it stays the same voice."
         case .apple: "Apple’s voices change pitch and speed."
         default: "\(engine.title) shifts the finished audio. Keep it within 2 to sound natural."
         }
@@ -642,7 +642,6 @@ struct VoiceChooser: View {
     var onClone: (() -> Void)? = nil
     @Environment(\.undoManager) private var undoManager
     @State private var filter: VoiceGender?
-    @State private var designDraft = ""
     @State private var cloudDesigning = false
     @State private var loadingCloudVoices = false
     @State private var cloudVoicesError: String?
@@ -684,7 +683,7 @@ struct VoiceChooser: View {
             if ElevenLabs.shared.isSetUp, ElevenLabs.shared.voices.isEmpty, engine == .elevenlabs || engine == .mixed { cloudVoicesMissing }
             suggestions
             if let onClone { cloneOffer(onClone) }
-            if engine == .qwen || (engine == .mixed && EngineSwitches.shared.usable(.qwen)) { design }
+            if engine == .chatterbox || (engine == .mixed && EngineSwitches.shared.usable(.chatterbox)) { descriptionNote }
             if let c = character, showsCloudDesign { cloudDesign(c) }
             if !compact { allVoices }
         }
@@ -905,37 +904,19 @@ struct VoiceChooser: View {
         return names
     }
 
-    // MARK: Qwen3-TTS designs
+    // MARK: Descriptions
 
-    private var design: some View {
+    /// Chatterbox can't make a voice from words: say so where a description used to go, and
+    /// point to what can.
+    private var descriptionNote: some View {
         VStack(alignment: .leading, spacing: Space.sm) {
-            Text("Describe a Voice").font(.headline)
+            Text("Voices from a Description").font(.headline)
             Text(character == nil
-                 ? "Or describe any voice and Qwen3-TTS makes it. Say who they are and how they sound."
-                 : "Or describe any voice and Qwen3-TTS makes it. Say who they are and how they sound. \(character!.firstName)’s Voice Notes are added to the description, so what you write there shapes the voice too.")
+                 ? "Chatterbox can’t make a voice from a description: it speaks in its stock voices and in voices you clone. To get a voice from a description, use Design a Voice from Voice Notes with ElevenLabs (Cloud; set it up in Settings › Voices)."
+                 : "Chatterbox can’t make a voice from a description: it speaks in its stock voices and in voices you clone. \(character!.firstName)’s Voice Notes help casting choose a voice (gender, age, pitch and pace), but they don’t change how a Chatterbox voice sounds. To get a voice from \(character!.firstName)’s description, use Design a Voice from Voice Notes with ElevenLabs (Cloud; set it up in Settings › Voices).")
                 .font(.callout)
                 .foregroundStyle(.secondary)
-            TextField("A woman in her sixties with a warm, low voice and a soft Scottish accent.", text: $designDraft, axis: .vertical)
-                .lineLimit(2...5)
-                .textFieldStyle(.roundedBorder)
-                .onAppear { designDraft = voice?.choice.design ?? "" }
-                .onSubmit(saveDesign)
-            HStack {
-                Button("Save Description", action: saveDesign)
-                    .disabled(designDraft.trimmingCharacters(in: .whitespaces).isEmpty || designDraft == voice?.choice.design)
-                if let c = character {
-                    Button("Describe from Summary") {
-                        let p = VoiceCasting.profile(c, project: document.project, index: document.index)
-                        designDraft = VoiceCasting.describe(p, name: c.name)
-                    }
-                    .help("Write the description from what the book says about \(c.firstName)")
-                }
-                Spacer()
-                Button("Play", systemImage: "play.fill") {
-                    audition(VoiceChoice(engine: .qwen, voiceID: "design", design: designDraft))
-                }
-                .disabled(designDraft.isEmpty)
-            }
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -991,7 +972,7 @@ struct VoiceChooser: View {
     private func cloneOffer(_ open: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: Space.sm) {
             Text("Clone a Voice").font(.headline)
-            Text("Make a voice from a recording of a real person, with their consent: on this Mac with Qwen3-TTS (free, nothing leaves the Mac), or with ElevenLabs. Every project can use it.")
+            Text("Make a voice from a recording of a real person, with their consent: on this Mac with Chatterbox (free, nothing leaves the Mac), or with ElevenLabs. Every project can use it.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1060,12 +1041,6 @@ struct VoiceChooser: View {
                 cloudDesignError = error.localizedDescription
             }
         }
-    }
-
-    private func saveDesign() {
-        let text = designDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        choose(VoiceChoice(engine: .qwen, voiceID: "design", design: text))
     }
 
     // MARK: Actions

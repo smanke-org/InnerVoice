@@ -263,7 +263,7 @@ struct BookCommands: Commands {
             Divider()
             Button("Use Voices from Another Project…") { focus?.workspace.showSeriesVoices = true }
                 .disabled(focus == nil)
-            // Every book with voices: on this Mac with Qwen3-TTS, or with ElevenLabs.
+            // Every book with voices: on this Mac with Chatterbox, or with ElevenLabs.
             Button("Clone a Voice…") {
                 guard let w = focus?.workspace else { return }
                 w.cloneVoice(for: w.page == .voices ? w.voiceTarget.characterID : nil)
