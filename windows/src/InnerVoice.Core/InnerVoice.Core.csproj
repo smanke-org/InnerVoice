@@ -11,4 +11,13 @@
     <PackageReference Include="PdfPig" Version="0.1.16" />
     <PackageReference Include="RtfPipe" Version="2.0.7677.4303" />
   </ItemGroup>
+  <!-- The local neural voices (Qwen3-TTS, Orpheus): ONNX Runtime. Windows builds get the
+       DirectML package (GPU through DirectX 12, falling back to the CPU); everything else,
+       including the tests on a Mac, the CPU package. Both ship the same managed API. -->
+  <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('win'))">
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.24.4" />
+  </ItemGroup>
+  <ItemGroup Condition="!$(RuntimeIdentifier.StartsWith('win'))">
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.24.4" />
+  </ItemGroup>
 </Project>

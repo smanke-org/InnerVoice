@@ -13,6 +13,10 @@ public static class VoiceHooks
 {
     static bool installed;
 
+    /// A voice model was downloaded or removed: pages that list engines redraw.
+    public static event Action? EnginesUpdated;
+    public static void EnginesChanged() => EnginesUpdated?.Invoke();
+
     public static void Install()
     {
         if (installed) return;

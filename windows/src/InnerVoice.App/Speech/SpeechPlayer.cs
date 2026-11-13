@@ -182,6 +182,16 @@ public sealed class SpeechPlayer
         }, ct);
     }
 
+    /// Plays a WAV file as it is (Clone a Voice's Play Clip).
+    public void PlayFile(string path)
+    {
+        Stop();
+        float[] audio;
+        try { audio = WavFile.Read(path); } catch (Exception) { return; }
+        output ??= MakeOutput();
+        output.Enqueue(audio);
+    }
+
     public void Stop()
     {
         cts?.Cancel();

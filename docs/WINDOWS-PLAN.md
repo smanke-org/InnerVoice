@@ -29,9 +29,10 @@ that is marked "Dropped" or "Later" is now in scope:
     files), with their own pipe named from the folder. Unlike the Mac, Release builds honor
     `APP_STORE`, because CI tests a Release build and a test must never fall back to the real
     pipe. `status` gives a test copy's `pid` so a check can stop it by id.
-  - Voice commands (`lines tone`, `open voices`/`pronunciations`, `export --kind
-    pronunciations`) answer the new error code `not_available` (exit 1) until AI voices land
-    (`TODO(voices)` marks each).
+  - Voice commands work as on the Mac (2026-11-13): `lines tone` (one undo step), `voice` in
+    `characters list/show`, `open voices`, `casting style` shades from the voices, and `export
+    --kind pronunciations`. Windows has no Pronunciations page, so `open pronunciations` (and any
+    page the project type hides) shows the Manuscript. The `not_available` error code is gone.
   - Links: the Mac registers `innervoice://` but handles no link yet, so the Windows actions are
     new: the words after `innervoice://` name a command and the query its options, limited to
     the ones that only show things (`open`, `lines reveal`, `projects open`). The Mac should get
@@ -53,7 +54,7 @@ that is marked "Dropped" or "Later" is now in scope:
   Settings shows what makes a better experience: a DirectX 12 GPU with 8 GB or more of
   video memory (for example NVIDIA RTX 3060 or AMD RX 6700 XT and up) and 16 GB of RAM
   (32 GB for the larger models) is ideal; integrated graphics or a CPU alone will work,
-  slowly. Measure real speeds on test hardware before shipping these numbers.
+  slowly. Measured on a Mac's CPU only so far (§ Local voices); check on real PCs.
 
 ### AI voices, part A (done 2026-11-13, branch `claude/win-voices-a-7d409e`)
 
@@ -100,21 +101,81 @@ do the reverse for Windows voice IDs (a Mac follow-up: it shows them as missing)
 | `Prepare(ct)` | Optional: load the model ahead of the first line (the Voices page calls it). |
 | `Unload()` | Optional: free memory when the narrator turns the engine off. |
 
-What part B gets for free: the cache (`SpeechRenderer`, keyed by the Mac's `SpeechRequest`
+Part B used all of this as it was (§ Local voices below). What it got for free: the cache (`SpeechRenderer`, keyed by the Mac's `SpeechRequest`
 cache key, in LocalAppData\InnerVoice\Speech, pruned at 1 GB), trimming each voice's
 silence, pauses, playback speed, shading, Export Audio and EPUB with Audio, casting
 (`VoiceCasting.Cast` designs Qwen3-TTS voices from summaries and Voice Notes;
 `VoiceResolver.WithNotes` adds the notes at speaking time), the Voices page (it lists any
-registered engine; Qwen shows Describe a Voice), engine switches and Mix Engines. Part B
-still needs: the ONNX Runtime + DirectML engines (`SpeechAudio.Leveled` is the Mac's -20 dB
-leveling), the voice-pack downloads and the hardware check in Settings › Voices (replace the
-"Qwen3-TTS and Orpheus — Coming later" card), On This PC cloning in Clone a Voice, and
-`Tone.Direction()` / `VocalSound` for the models that act.
+registered engine; Qwen shows Describe a Voice), engine switches and Mix Engines.
 
 Platform split: a `-r win-*` build targets `net10.0-windows10.0.19041.0` (WinRT speech and
 Media Foundation, under `#if WINDOWS`); other builds are `net10.0` (tests on the Mac; on a
 PC, SAPI through System.Speech). Audio out is NAudio's WinMM output; test runs play
 silently unless `INNERVOICE_SPEECH_AUDIBLE` is set.
+
+### Local voices: Qwen3-TTS and Orpheus (part B, 2026-11-13, branch `claude/win-voices-b-490e58`)
+
+Both run through ONNX Runtime 1.24.4: the DirectML package on Windows (any DirectX 12 card,
+`DirectML.dll` 1.15.4 copied per architecture by the app's csproj), falling back to the CPU when
+there's no card or DirectML can't load a model; the CPU package elsewhere (tests on the Mac).
+Code: `InnerVoice.Core/Speech/Neural/` (`QwenTts`, `OrpheusTts`, `NeuralSpeech` = the engines,
+samples and clones, `VoicePacks`, `VoiceHardware`, `BpeTokenizer`, `Mel`, `Sampler`, `Pitch`),
+`App/Speech/VoiceModels.cs` (downloads, hardware warning), `App/Speech/LocalCloning.cs`.
+
+**Models** (existing exports; nothing had to be exported here, so there is no export script):
+
+| Pack | Repository @ pinned commit | What | License |
+|---|---|---|---|
+| Qwen3-TTS (8.8 GB) | `wavekat/Qwen3-TTS-1.7B-VoiceDesign-ONNX` @ 62c7863 | VoiceDesign 1.7B, int4 talker + code predictor, fp32 vocoder, embeddings (.npy), tokenizer | Apache-2.0 (Qwen's weights and WaveKat's export) |
+| | `wavekat/Qwen3-TTS-0.6B-Base-ONNX` @ 177cd39 | Base 0.6B for cloning, int4, with the speaker encoder (ECAPA) and the codec's encoder | Apache-2.0 |
+| Orpheus (2.5 GB) | `onnx-community/orpheus-3b-0.1-ft-ONNX` @ 03791ab | `model_q4` (4-bit weights, fp32 activations) | Apache-2.0 (Canopy Labs); built on Llama 3.2 3B, so Meta's Llama 3.2 Community License terms apply too, as on the Mac |
+| | `onnx-community/snac_24khz-ONNX` @ f317cdf | SNAC 24 kHz decoder, fp32 | MIT |
+
+Every file is pinned by commit and SHA-256 (`VoicePacks.cs`; the vocoder and tokenizer the two
+Qwen models share are downloaded once). Downloads go to `%LOCALAPPDATA%\InnerVoice\Voice
+Models` (`APP_VOICE_MODELS` overrides, as on the Mac) as `.part` files that resume, are checked
+by SHA-256, then moved into place.
+
+**Where it differs from the Mac:**
+- Clone model: Base **0.6B** (the Mac uses Base 1.7B, 8-bit MLX). No usable 1.7B Base ONNX export
+  exists at a reasonable size (arubeh's is 14 GB fp32); exporting one means the 1.7B PyTorch
+  weights, torch, and somewhere to host the result. The design model is the same 1.7B VoiceDesign.
+- Precision: int4 (RTN) talkers and Orpheus q4, versus the Mac's 8-bit. The codec decoder is fp32.
+- The codec's encoder in WaveKat's export takes exactly 10 seconds, so a clip is at most 10 s
+  (`CloneClip.Longest`; the Mac's is 15). Design samples are about 5 s, so they're unaffected.
+- Sampling uses the Mac's parameters (Qwen: temperature 0.9, top-k 50, repetition 1.05, 1200/2400
+  frames; Orpheus: temperature 0.6, top-p 0.8, repetition 1.3 over 20 tokens, 1200 tokens) and the
+  Mac's seeds (SHA-256 of the text and voice), but a different random generator, so the same seed
+  gives a different (equally valid) take than the Mac. Cached audio is per computer anyway.
+- A designed sample whose pitch contradicts its description (a man's voice above 180 Hz, a
+  woman's below 150 Hz; not children) is made again with the next seed, up to three tries. The
+  Mac doesn't do this; measured, 1 seed in 14 gave a 240 Hz "baritone".
+- Orpheus's prompt adds the start-of-audio and start-of-speech tokens the reference engine uses
+  (mlx-audio lets the model write them).
+- The speaker encoder's mel follows the Mac (reflect pad, magnitudes, Slaney filters), not
+  WaveKat's script (librosa power spectrum).
+- Clone a Voice › On This PC finds the words with Windows' desktop speech recognizer (SAPI
+  dictation through System.Speech, on this PC only; WinRT dictation would use Microsoft's online
+  service, so it's never used). Without an English recognizer the narrator types the words.
+
+**Measured** on this Mac's CPU (Apple M5 Max, 18 cores, ONNX Runtime CPU, int4), seconds of
+audio per second: Qwen3-TTS voice sample (VoiceDesign 1.7B) 0.6–1.1×, lines (Base 0.6B clone)
+0.8–1.2×; Orpheus 0.13–0.15×. Peak memory: about 6 GB with both Qwen models loaded, 3.3 GB for
+Orpheus. Models load in 2–4 s. A typical PC processor is slower than an M5 Max; the numbers for
+DirectML on a graphics card, integrated graphics, x64 and ARM64 PCs need measuring on real PCs
+with `windows/tools/VoiceBench` (`--hardware`, then `--bench "<Voice Models>" <out>`).
+
+**Hardware check:** `VoiceHardwareCheck.Detect` reads DXGI (the DirectX 12 card with the most
+dedicated video memory; `D3D12CreateDevice` confirms DirectX 12), memory (`GlobalMemoryStatusEx`)
+and the processor. Good: DirectX 12 card with 8 GB+ and 16 GB memory. Slow: no card, a smaller
+card or less memory: a plain warning before the download and the first time a book uses the
+engine, suggesting Windows Voices or ElevenLabs. Too weak: under 8 GB of memory. DirectML is
+only used for a card with 2 GB or more of its own memory.
+
+**Needs a Windows PC:** DirectML on real cards (speed, and whether every operator runs there:
+the int4 `MatMulNBits` models should, falling back to the CPU if not), the DXGI and memory
+detection, SAPI recognition with real recordings, MP3/M4A reading through Media Foundation,
+microphone recording into a clone, ARM64 (Snapdragon) speed, and listening to the voices.
 
 Original scope, kept for its porting notes:
 
@@ -258,7 +319,7 @@ testable job; the golden fixtures in section 4 keep the two versions agreeing.
 
 | Mac feature | Why |
 |---|---|
-| AI voices: Apple voices, Qwen3-TTS and Orpheus on MLX, ElevenLabs, Voices page, Play, Export Audio, pauses and speed, Series Voices, the tone pass | Superseded by § Parity: ported in part A (Windows Voices, ElevenLabs); Qwen3-TTS and Orpheus on ONNX Runtime are part B |
+| AI voices: Apple voices, Qwen3-TTS and Orpheus on MLX, ElevenLabs, Voices page, Play, Export Audio, pauses and speed, Series Voices, the tone pass | Superseded by § Parity: ported in part A (Windows Voices, ElevenLabs) and part B (Qwen3-TTS and Orpheus on ONNX Runtime) |
 | Apple's on-device model (FoundationModels fallback) | Mac only. Without a model, the Windows app still finds dialogue, applies the rules and lets the narrator tag by hand. (Windows' own on-device model only exists on Copilot+ PCs; not worth a second engine.) |
 | Pages import | Ported after all (2026-11-13): the preview PDF inside the file, as on the Mac |
 | `.rtfd` import, `.doc` (Word 97) import | Mac-only formats / no free reader. A `.doc` gets a "Save it as .docx" message. |
