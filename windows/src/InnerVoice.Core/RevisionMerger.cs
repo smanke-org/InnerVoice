@@ -1,5 +1,5 @@
-// Ported from Sources/InnerVoiceKit/RevisionMerger.swift. The tone rules (AI voices only)
-// aren't run; tone fields of kept lines stay in `Extra` as they were.
+// Ported from Sources/InnerVoiceKit/RevisionMerger.swift. The tone rules run after the
+// speaker rules, as on the Mac.
 
 using System.Text;
 using InnerVoice.Core.Import;
@@ -142,6 +142,7 @@ public static class RevisionMerger
         foreach (var pr in project.Pronunciations)
             if (pr.FirstParagraphID is { } s && !keptIDs.Contains(s)) pr.FirstParagraphID = null;
         RuleAttribution.Apply(project);
+        ToneRules.Apply(project);
 
         var matchedOld = newToOld.Values.ToHashSet();
         var removed = oldParas.Select((p, i) => (p, i))

@@ -1,6 +1,5 @@
 // Ported from Sources/InnerVoiceKit/TextCleanup.swift. A kept line keeps its delivery hint
-// and its tone (still in Extra on Windows).
-// TODO(voices): run ToneRules after a cleanup, as the Mac does, once tones are ported.
+// and its tone; new lines get the tone rules' reading.
 
 using System.Text.Json.Serialization;
 using InnerVoice.Core.AI;
@@ -279,6 +278,7 @@ public static class TextCleanup
             .Select(x => x.l).ToList();
         // New lines (a quote the scan had broken) get the rules' reading; settled ones keep theirs.
         RuleAttribution.Apply(p);
+        ToneRules.Apply(p);
         return applied;
     }
 

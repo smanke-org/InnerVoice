@@ -161,9 +161,7 @@ public static class ModelTitles
     };
 }
 
-/// One piece of text spoken, thought or written by a character. Tone fields (for AI voices:
-/// `tone`, `toneConfidence`, `toneSource`) aren't modeled here; they stay in `Extra` and
-/// round-trip (`Tones.ToneOf` reads the tone).
+/// One piece of text spoken, thought or written by a character.
 public sealed class Line : ModelObject
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -178,6 +176,12 @@ public sealed class Line : ModelObject
     public bool ContinuesPrevious { get; set; }
     /// The AI model that tagged the line (for its accuracy in Activity).
     public string? AiModel { get; set; }
+    /// How the line is said (for character voices). null until the rules or the AI read it;
+    /// optional, like the two below, so projects saved before tones open unchanged.
+    public Tone? Tone { get; set; }
+    /// 0…1, like `Confidence`. Below the project's threshold the tone is Unsure.
+    public double? ToneConfidence { get; set; }
+    public ToneSource? ToneSource { get; set; }
     /// How to perform the line beyond its tone ("barely audible", "through gritted teeth"),
     /// sent to ElevenLabs only, as an audio tag. Optional: older projects open unchanged.
     public string? Delivery { get; set; }
@@ -203,12 +207,15 @@ public sealed class Line : ModelObject
     {
         Id = Id, ParagraphID = ParagraphID, Range = Range, Kind = Kind, SpeakerID = SpeakerID, Confidence = Confidence,
         Source = Source, ContinuesPrevious = ContinuesPrevious, AiModel = AiModel, Delivery = Delivery, DeliverySource = DeliverySource,
-        Extra = CopyExtra(),
+        Tone = Tone, ToneConfidence = ToneConfidence, ToneSource = ToneSource, Extra = CopyExtra(),
     };
 
-    /// True when the parts the Windows app edits are the same.
+    /// True when the speaker parts are the same.
     public bool SameAssignment(Line o) =>
         SpeakerID == o.SpeakerID && Source == o.Source && Confidence == o.Confidence && Kind == o.Kind && Range == o.Range;
+
+    /// True when the tone parts are the same.
+    public bool SameTone(Line o) => Tone == o.Tone && ToneConfidence == o.ToneConfidence && ToneSource == o.ToneSource;
 }
 
 public enum FactKind { Age, Gender, Accent, Voice, Appearance, Personality, History, Relationships, Other }
@@ -241,7 +248,7 @@ public sealed class Fact : ModelObject
     };
 }
 
-/// Someone in the book who has lines. Per-engine voices stay in `Extra`.
+/// Someone in the book who has lines.
 public sealed class BookCharacter : ModelObject
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -274,6 +281,18 @@ public sealed class BookCharacter : ModelObject
     public VoiceRole? Role { get; set; }
     /// How the narrator shades this character, set by the narrator; null: automatic.
     public Shade? Shade { get; set; }
+    /// The voice for each speech engine, keyed by `VoiceEngine` raw value, so switching
+    /// engines keeps the casting done for each.
+    public Dictionary<string, CastVoice>? Voices { get; set; }
+
+    public CastVoice? Voice(VoiceEngine engine) => Voices is { } v && v.TryGetValue(engine.Raw(), out var cv) ? cv : null;
+
+    public void SetVoice(CastVoice? voice, VoiceEngine engine)
+    {
+        var all = Voices ?? [];
+        if (voice is null) all.Remove(engine.Raw()); else all[engine.Raw()] = voice;
+        Voices = all.Count == 0 ? null : all;
+    }
 
     public BookCharacter() { }
     public BookCharacter(string name, string colorHex) { Name = name; ColorHex = colorHex; }
@@ -341,7 +360,7 @@ public sealed class BookCharacter : ModelObject
         Facts = Facts.ConvertAll(f => f.Copy()), Notes = Notes, VoiceNotes = VoiceNotes, NarratorID = NarratorID,
         ShowInIndex = ShowInIndex, Pinned = Pinned, VoiceNotesFromBook = VoiceNotesFromBook,
         VoiceBriefGenerated = VoiceBriefGenerated, Gender = Gender, IsMain = IsMain, Role = Role, Shade = Shade?.Copy(),
-        Extra = CopyExtra(),
+        Voices = CastVoice.CopyMap(Voices), Extra = CopyExtra(),
     };
 }
 
@@ -397,7 +416,7 @@ public sealed class Retake : ModelObject
 
 public enum ColorStyle { Highlight, Outline, Underline }
 
-/// What a project is for. The Windows app only has Narration Tools; it never changes this.
+/// What a project is for: narration tools, or producing the audiobook with AI voices.
 public enum ProjectPurpose { Narration, AiVoices }
 
 public sealed class ProjectSettings : ModelObject
@@ -431,6 +450,40 @@ public sealed class ProjectSettings : ModelObject
     /// Show Claude's changes in a list to keep or undo after each Tag Speakers run.
     /// null: on (the default); false: keep them straight away like a local model's.
     [JsonPropertyName("reviewCloudAI")] public bool? ReviewCloudAI { get; set; }
+    /// The speech engine the project's voices use. null is the system's voices.
+    public VoiceEngine? VoiceEngine { get; set; }
+    /// The voice that reads narration, per engine (like `BookCharacter.Voices`).
+    public Dictionary<string, CastVoice>? NarratorVoices { get; set; }
+    /// When the narrator allowed this book's text to be sent to a cloud voice engine
+    /// (ElevenLabs). null: never sent.
+    public AppleDate? CloudVoicesAllowed { get; set; }
+    /// The voice for each shared role (men, women, other), per engine: role → engine → voice.
+    public Dictionary<string, Dictionary<string, CastVoice>>? RoleVoices { get; set; }
+
+    [JsonIgnore] public VoiceEngine Engine => VoiceEngine ?? Core.VoiceEngine.Apple;
+
+    public CastVoice? NarratorVoice(VoiceEngine engine) => NarratorVoices is { } v && v.TryGetValue(engine.Raw(), out var cv) ? cv : null;
+
+    public void SetNarratorVoice(CastVoice? voice, VoiceEngine engine)
+    {
+        var all = NarratorVoices ?? [];
+        if (voice is null) all.Remove(engine.Raw()); else all[engine.Raw()] = voice;
+        NarratorVoices = all.Count == 0 ? null : all;
+    }
+
+    static string RoleKey(VoiceRole r) => JsonNamingPolicy.CamelCase.ConvertName(r.ToString());
+
+    public CastVoice? RoleVoice(VoiceRole role, VoiceEngine engine) =>
+        RoleVoices is { } all && all.TryGetValue(RoleKey(role), out var one) && one.TryGetValue(engine.Raw(), out var v) ? v : null;
+
+    public void SetRoleVoice(CastVoice? voice, VoiceRole role, VoiceEngine engine)
+    {
+        var all = RoleVoices ?? [];
+        var one = all.TryGetValue(RoleKey(role), out var o) ? o : [];
+        if (voice is null) one.Remove(engine.Raw()); else one[engine.Raw()] = voice;
+        if (one.Count == 0) all.Remove(RoleKey(role)); else all[RoleKey(role)] = one;
+        RoleVoices = all.Count == 0 ? null : all;
+    }
 
     /// Claude's changes are listed for review unless the narrator turned it off.
     [JsonIgnore] public bool ReviewsCloudAI => ReviewCloudAI ?? true;
@@ -440,7 +493,9 @@ public sealed class ProjectSettings : ModelObject
         Style = Style, UnsureBelow = UnsureBelow, ShowInitials = ShowInitials, PovCharacterID = PovCharacterID,
         ColorNarration = ColorNarration, Purpose = Purpose, StepsDone = StepsDone is null ? null : [.. StepsDone],
         CastingStyle = CastingStyle, NarrationRole = NarrationRole, MinorVoices = MinorVoices, ShadeStrength = ShadeStrength,
-        NarratorGender = NarratorGender, CloudTextAllowed = CloudTextAllowed, ReviewCloudAI = ReviewCloudAI, Extra = CopyExtra(),
+        NarratorGender = NarratorGender, CloudTextAllowed = CloudTextAllowed, ReviewCloudAI = ReviewCloudAI,
+        VoiceEngine = VoiceEngine, NarratorVoices = CastVoice.CopyMap(NarratorVoices), CloudVoicesAllowed = CloudVoicesAllowed,
+        RoleVoices = RoleVoices?.ToDictionary(kv => kv.Key, kv => CastVoice.CopyMap(kv.Value)!), Extra = CopyExtra(),
     };
 }
 
@@ -497,6 +552,9 @@ public sealed class Project : ModelObject
     public AppleDate? SummariesBuilt { get; set; }
     public AppleDate? LastTagged { get; set; }
     public List<RevisionRecord> Revisions { get; set; } = [];
+    /// When Tag Speakers last read the lines' tones, and when voices were last cast.
+    public AppleDate? TonesTagged { get; set; }
+    public AppleDate? VoicesCast { get; set; }
 
     [JsonIgnore] public bool IsEmpty => Chapters.Count == 0;
     [JsonIgnore] public int WordCount => Chapters.Sum(c => c.WordCount);
@@ -510,16 +568,29 @@ public sealed class Project : ModelObject
 
     [JsonIgnore] public int LinesNeedingYou => Lines.Count(NeedsYou);
 
+    /// A line's tone needs the narrator when the rules or the AI guessed it unsure.
+    public bool ToneNeedsYou(Line line) =>
+        line.Tone is not null && line.ToneSource != Core.ToneSource.User && (line.ToneConfidence ?? 0) < Settings.UnsureBelow;
+
+    /// A character's voice needs the narrator when casting was unsure of it, or found none.
+    public bool VoiceNeedsYou(BookCharacter character, VoiceEngine? engine = null)
+    {
+        if (VoicesCast is null) return false;
+        if (character.Voice(engine ?? Settings.Engine) is not { } v) return true;
+        return v.Source != VoiceSource.User && v.Confidence < Settings.UnsureBelow;
+    }
+
     /// Lines without any assignment yet (what Tag Speakers still has to do).
     [JsonIgnore] public int UntaggedCount => Lines.Count(l => l.Source == AssignmentSource.None);
 
-    /// Shows the Narration Tools pages: always on Windows. A book set to AI voices on the
-    /// Mac keeps that setting; the Windows app just doesn't show voices.
+    /// Produce with AI Voices.
     [JsonIgnore] public bool IsAIVoicesProject => Settings.Purpose == ProjectPurpose.AiVoices;
-    /// As on the Mac: voices and the pronunciation guide belong to every project type but
-    /// Narration Tools (null, not asked yet, shows everything). Gates delivery hints and
-    /// suggested spellings until Windows has voices.
+    /// As on the Mac (`Views/ProjectType.swift`): voices, Play, Export Audio and the
+    /// pronunciation guide belong to every project type but Narration Tools; the narration
+    /// tools (Index, Teleprompter, narrators, Narrator Scripts) to every type but Produce with
+    /// AI Voices. null (not asked yet) shows everything.
     [JsonIgnore] public bool ShowsVoices => Settings.Purpose != ProjectPurpose.Narration;
+    [JsonIgnore] public bool ShowsNarrationTools => Settings.Purpose != ProjectPurpose.AiVoices;
     [JsonIgnore] public bool ShowsPronunciations => Settings.Purpose != ProjectPurpose.Narration;
 
     public Project Copy() => new()
@@ -529,7 +600,8 @@ public sealed class Project : ModelObject
         Characters = Characters.ConvertAll(c => c.Copy()), Narrators = Narrators.ConvertAll(n => n.Copy()),
         Pronunciations = Pronunciations.ConvertAll(p => p.Copy()), Recorded = [.. Recorded],
         Retakes = Retakes.ConvertAll(r => r.Copy()), Settings = Settings.Copy(), SummariesBuilt = SummariesBuilt,
-        LastTagged = LastTagged, Revisions = Revisions.ConvertAll(r => r.Copy()), Extra = CopyExtra(),
+        LastTagged = LastTagged, Revisions = Revisions.ConvertAll(r => r.Copy()), TonesTagged = TonesTagged, VoicesCast = VoicesCast,
+        Extra = CopyExtra(),
     };
 }
 

@@ -86,14 +86,15 @@ public class ClaudeFeatureTests
         var paraID = p.Chapters[0].Paragraphs[1].Id;
         var pageID = p.Chapters[0].Paragraphs[2].Id;
         // The narrator assigned the first line; the second is the AI's, with a tone and a hint
-        // from the Mac (kept in Extra on Windows).
+        // from the Mac.
         var here = p.Lines.Where(l => l.ParagraphID == paraID).ToList();
         Assert.Equal(2, here.Count);
         here[0].SpeakerID = tom.Id;
         here[0].Source = AssignmentSource.User;
         here[1].SpeakerID = tom.Id;
         here[1].Source = AssignmentSource.Ai;
-        here[1].Extra = new() { ["tone"] = JsonSerializer.SerializeToElement("scared") };
+        here[1].Tone = Tone.Scared;
+        here[1].ToneSource = ToneSource.Ai;
         here[1].Delivery = "out of breath";
         var ids = here.Select(l => l.Id).ToList();
         var fixes = new[]
@@ -111,7 +112,6 @@ public class ClaudeFeatureTests
         Assert.Contains("Go now, the boat leaves,", Texts(p));
         Assert.Contains("Hurry.", Texts(p));
         Assert.True(lines[0].Source == AssignmentSource.User && lines[0].SpeakerID == tom.Id);
-        Assert.Equal("scared", lines[1].Extra!["tone"].GetString());
         Assert.Equal("out of breath", lines[1].Delivery);
         Assert.Equal(Tone.Scared, Tones.ToneOf(lines[1]));
         var paragraphs = p.Chapters.SelectMany(c => c.Paragraphs).ToDictionary(x => x.Id);
@@ -198,7 +198,7 @@ public class ClaudeFeatureTests
 
     // MARK: Delivery Hints
 
-    static void SetTone(Line l, string tone) => (l.Extra ??= [])["tone"] = JsonSerializer.SerializeToElement(tone);
+    static void SetTone(Line l, string tone) => l.Tone = Tones.Parse(tone);
 
     [Fact]
     public void DeliveryChunksMarkLinesAndProposalsSkipTheNarratorsHints()

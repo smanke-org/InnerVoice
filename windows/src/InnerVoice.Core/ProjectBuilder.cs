@@ -1,5 +1,4 @@
-// Ported from Sources/InnerVoiceKit/ProjectBuilder.swift. The tone rules (AI voices only)
-// aren't run.
+// Ported from Sources/InnerVoiceKit/ProjectBuilder.swift.
 
 using System.Text.RegularExpressions;
 using InnerVoice.Core.Import;
@@ -17,11 +16,10 @@ public static class ProjectBuilder
             Author = book.Author,
             SourceFileName = fileName,
             Chapters = book.Chapters,
-            // Made on Windows: Narration Tools.
-            Settings = new ProjectSettings { Purpose = ProjectPurpose.Narration },
         };
         project.Lines = DialogueFinder.FindAll(book.Chapters);
         RuleAttribution.Apply(project);
+        ToneRules.Apply(project);
         return project;
     }
 }

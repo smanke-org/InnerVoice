@@ -2,9 +2,9 @@
 // Sources/InnerVoiceKit/CastingStyle.swift: how a book's parts are shared. Just Me (the
 // narrator reads everyone, shading each character), Three Narrators (narration, men, women,
 // and an Other group), or Full Cast (a narrator per main character). The style only decides
-// who reads each character: no assignment is lost when it changes. Windows has no AI voices,
-// so the Mac's voice titles and shared voices aren't here; the rules give the same answers
-// (golden-checked against the Mac's Fixtures/casting-style.json).
+// who reads each character: no assignment is lost when it changes. In a book with AI voices
+// the same styles share voices (One Voice, Narrator + Two Voices, Full Cast); the rules give
+// the same answers (golden-checked against the Mac's Fixtures/casting-style.json).
 
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -35,6 +35,36 @@ public static class CastingStyleNames
         CastingStyle.OneVoice => "Just Me",
         CastingStyle.Shared => "Three Narrators",
         _ => "Full Cast",
+    };
+
+    /// The name in each project type: AI voices share voices, Narration Tools shares people.
+    public static string Title(this CastingStyle s, ProjectPurpose? purpose) => (s, purpose) switch
+    {
+        (CastingStyle.OneVoice, ProjectPurpose.Narration) => "Just Me",
+        (CastingStyle.OneVoice, _) => "One Voice",
+        (CastingStyle.Shared, ProjectPurpose.Narration) => "Three Narrators",
+        (CastingStyle.Shared, _) => "Narrator + Two Voices",
+        _ => "Full Cast",
+    };
+
+    /// The voice's name in lists and menus: "Men’s Voice", "Other Voice".
+    public static string VoiceTitle(this VoiceRole r) => r switch
+    {
+        VoiceRole.Narrator => "Narrator’s Voice",
+        VoiceRole.Men => "Men’s Voice",
+        VoiceRole.Women => "Women’s Voice",
+        VoiceRole.Other => "Other Voice",
+        _ => "Own Voice",
+    };
+
+    /// The same in a caption: "Men’s voice".
+    public static string VoiceCaption(this VoiceRole r) => r switch
+    {
+        VoiceRole.Narrator => "Narrator’s voice",
+        VoiceRole.Men => "Men’s voice",
+        VoiceRole.Women => "Women’s voice",
+        VoiceRole.Other => "Other voice",
+        _ => "Own voice",
     };
 
     public static string Title(this VoiceRole r) => r switch
@@ -226,7 +256,14 @@ public sealed class ShadeProfile
 /// Who reads each character. Pure, like the Mac's CastingStyleRules.
 public static class CastingStyleRules
 {
-    static readonly VoiceRole[] SharedRoles = [VoiceRole.Men, VoiceRole.Women, VoiceRole.Other];
+    /// The roles one shared voice reads (they have a voice in `RoleVoices`).
+    public static readonly VoiceRole[] SharedRoles = [VoiceRole.Men, VoiceRole.Women, VoiceRole.Other];
+
+    /// The shared roles the style reads characters in, so each needs a voice: all three in
+    /// Narrator + Two Voices, and in Full Cast when minor characters go by gender.
+    public static IReadOnlyList<VoiceRole> SharedRolesNeeded(ProjectSettings s) =>
+        s.CastingStyle == CastingStyle.Shared || (s.CastingStyle == CastingStyle.FullCast && s.MinorVoices == MinorVoices.ByGender)
+            ? SharedRoles : [];
 
     /// Which role reads a character. `gender`: the narrator's choice, else the book's; null
     /// if unknown. `anyMainMarked`: whether anyone is marked main (Full Cast).

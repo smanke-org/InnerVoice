@@ -138,3 +138,47 @@ public sealed class VoiceBrief
         return true;
     }
 }
+
+/// Voice Notes as a description for the voice models that take one (Qwen3-TTS at speaking
+/// time, ElevenLabs' Voice Design): the narrator's own notes, then the brief, then "From the
+/// book", without headings or Contrast lines, capped at a whole line.
+public static class VoiceDescription
+{
+    /// The notes as one paragraph, or null when they say nothing.
+    public static string? Notes(BookCharacter c, int limit = 600)
+    {
+        var own = GeneratedNotes.NarratorsOwn(c);
+        var brief = c.VoiceBriefGenerated is { } b && c.VoiceNotes.Contains(b, StringComparison.Ordinal) ? b : null;
+        var book = c.VoiceNotesFromBook is { } f && c.VoiceNotes.Contains(f, StringComparison.Ordinal) ? f : null;
+        // Generated blocks the narrator edited are part of `own` already.
+        var pieces = new List<string>();
+        foreach (var text in new[] { own, brief ?? "", book ?? "" })
+            foreach (var raw in text.Split('\n', '\r'))
+            {
+                var line = raw.Trim().Trim('-', '•', '*', ' ');
+                if (!line.Any(char.IsLetter)) continue;
+                if (line == VoiceNotesFromBook.Heading || line == VoiceBrief.Heading) continue;
+                // Who they contrast with means nothing to a voice model; how they differ does.
+                if (line.ToLowerInvariant().StartsWith("contrast:", StringComparison.Ordinal)) continue;
+                if (!".!?".Contains(line[^1])) line += ".";
+                if (pieces.Any(p => string.Equals(p, line, StringComparison.OrdinalIgnoreCase))) continue;
+                pieces.Add(line);
+            }
+        var output = "";
+        foreach (var p in pieces)
+        {
+            var next = output.Length == 0 ? p : output + " " + p;
+            if (next.Length > limit) break;
+            output = next;
+        }
+        return output.Length == 0 ? null : output;
+    }
+
+    /// A voice description with the character's notes added, within `limit` characters.
+    public static string Design(string @base, BookCharacter c, int limit = 700)
+    {
+        var b = @base.Trim();
+        if (Notes(c, Math.Max(0, limit - b.Length - 12)) is not { } n) return b;
+        return b.Length == 0 ? n : b + " Voice notes: " + n;
+    }
+}

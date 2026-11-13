@@ -31,13 +31,16 @@ public class RoundTripTests
     {
         // A misspelled property name would put a known field in Extra and drop it from the model.
         var p = ProjectJson.Decode(MacContents().ProjectJson);
-        Assert.Equal(["tonesTagged", "voicesCast"], p.Extra!.Keys.Order().ToArray());
-        // Casting Style's shared AI voices (roleVoices) are the Mac's alone; the rest is modeled.
-        Assert.Equal(["cloudVoicesAllowed", "narratorVoices", "roleVoices", "voiceEngine"], p.Settings.Extra!.Keys.Order().ToArray());
-        foreach (var l in p.Lines)
-            Assert.All(l.Extra?.Keys.ToList() ?? [], k => Assert.Contains(k, new[] { "tone", "toneConfidence", "toneSource" }));
-        foreach (var c in p.Characters)
-            Assert.All(c.Extra?.Keys.ToList() ?? [], k => Assert.Equal("voices", k));
+        Assert.Null(p.Extra);
+        // Voices, tones and the book's cloud consent are modeled now (the AI voices work).
+        Assert.Null(p.Settings.Extra);
+        Assert.NotNull(p.Settings.VoiceEngine);
+        Assert.NotNull(p.Settings.NarratorVoices);
+        Assert.NotNull(p.TonesTagged);
+        foreach (var l in p.Lines) Assert.Null(l.Extra);
+        Assert.Contains(p.Lines, l => l.Tone is not null && l.ToneSource is not null);
+        foreach (var c in p.Characters) Assert.Null(c.Extra);
+        Assert.Contains(p.Characters, c => c.Voices is { Count: > 0 });
         foreach (var ch in p.Chapters)
         {
             Assert.Null(ch.Extra);
