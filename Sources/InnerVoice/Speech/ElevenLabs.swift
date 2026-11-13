@@ -141,6 +141,12 @@ final class ElevenLabs {
         var limit: Int
     }
 
+    /// The plan's credits right now, for Cloud Usage. Sends no text from the book.
+    func account() async throws -> Account {
+        guard let key = apiKey else { throw SpeechError.engineUnavailable(.elevenlabs) }
+        return try await check(key: key)
+    }
+
     /// Checks a key and returns the plan's credits. Sends no text from the book.
     func check(key: String) async throws -> Account {
         var req = URLRequest(url: Self.host.appending(path: "v1/user/subscription"))
@@ -414,6 +420,10 @@ final class ElevenLabs {
             let (data, response) = try await send(req)
             try Self.throwIfFailed(response, data)
             ActivityStore.shared.record(ActivityKey.elevenLabsCharacters, count: piece.count)
+            var usage = CloudUsageRecord(day: CloudUsageRecord.day(), book: request.usageBook ?? "", service: .elevenlabs, model: Self.model)
+            usage.characters = piece.count
+            usage.requests = 1
+            CloudUsageStore.shared.add(usage)
             pieces.append(data)
         }
         if pieces.isEmpty { return try ModelSpeech.buffer([Float](repeating: 0, count: Int(SpeechAudio.format.sampleRate * 0.2))) }

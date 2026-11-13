@@ -203,7 +203,7 @@ final class ClaudeFeatures {
                 self.model = nil
             }
             do {
-                let model = try ClaudeTextModel(modelID: modelID, bookAllowed: document.project.settings.cloudTextAllowed != nil)
+                let model = try ClaudeTextModel(modelID: modelID, bookAllowed: document.project.settings.cloudTextAllowed != nil, book: document.project.usageKey)
                 self.model = model
                 var cleanup: [CleanupFix] = []
                 var recaps: [RecapProposal] = []

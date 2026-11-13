@@ -41,6 +41,7 @@ struct VoiceResolver {
         }
         characters = map
         cloudAllowed = project.settings.cloudVoicesAllowed != nil
+        usageBook = project.usageKey
         self.usable = usable
         writtenByNarrator = UserDefaults.standard.object(forKey: "voices.writtenByNarrator") as? Bool ?? true
         // The narrator's voice: one the narrator chose; else, in a first-person book, the
@@ -94,6 +95,7 @@ struct VoiceResolver {
 
     /// The book allows its text to go to ElevenLabs.
     var cloudAllowed = false
+    var usageBook = ""
 
     /// Whether letters, signs and other written text are read by the narrator
     /// (Settings › Voices) rather than the character who wrote them.
@@ -137,7 +139,8 @@ struct VoiceResolver {
                              kind: segment.lineID == nil ? nil : segment.kind, sound: segment.sound, cloudAllowed: cloudAllowed,
                              shade: shade(for: segment, choice: choice),
                              // Delivery hints are ElevenLabs' audio tags: never sent to another engine.
-                             delivery: choice.engine == .elevenlabs && segment.lineID != nil ? segment.delivery : nil)
+                             delivery: choice.engine == .elevenlabs && segment.lineID != nil ? segment.delivery : nil,
+                             usageBook: usageBook)
     }
 }
 

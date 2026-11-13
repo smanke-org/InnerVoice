@@ -170,9 +170,9 @@ final class ModelManager {
 
     /// Loads the chosen model (once) and returns it.
     /// `bookAllowed`: the book's `cloudTextAllowed`; Claude sends nothing without it.
-    func model(bookAllowed: Bool = false) async throws -> TextModel {
+    func model(bookAllowed: Bool = false, book: String? = nil) async throws -> TextModel {
         if selection.hasPrefix("claude:") {
-            return try ClaudeTextModel(modelID: String(selection.dropFirst(7)), bookAllowed: bookAllowed)
+            return try ClaudeTextModel(modelID: String(selection.dropFirst(7)), bookAllowed: bookAllowed, book: book)
         }
         if selection == "apple" {
             let a = AppleTextModel.availability

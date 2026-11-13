@@ -161,16 +161,19 @@ nonisolated final class ClaudeTextModel: TextModel, @unchecked Sendable {
     /// Claude takes far more than a local model; bigger passages give it more context.
     let passageWords = 2500
     private let key: String
+    private let book: String
     private let session: URLSession
     private let lock = NSLock()
     private var tasks: [URLSessionTask] = []
 
     /// Throws unless Claude is set up AND this book allows it.
-    @MainActor init(modelID: String, bookAllowed: Bool) throws {
+    /// `book`: the book's `usageKey`, for Cloud Usage.
+    @MainActor init(modelID: String, bookAllowed: Bool, book: String? = nil) throws {
         let account = ClaudeAccount.shared
         guard let key = account.apiKey, account.consented != nil else { throw ClaudeError.notSetUp }
         guard bookAllowed else { throw ClaudeError.bookNotAllowed }
         self.modelID = modelID
+        self.book = book ?? ""
         self.key = key
         displayName = account.name(of: modelID)
         session = account.session
@@ -201,6 +204,7 @@ nonisolated final class ClaudeTextModel: TextModel, @unchecked Sendable {
         let (data, response) = try await send(request)
         try ClaudeAccount.throwIfFailed(response, data)
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw ClaudeError.badReply }
+        recordUsage(json, response: response)
         if json["stop_reason"] as? String == "refusal" { throw ClaudeError.refused }
         let blocks = json["content"] as? [[String: Any]] ?? []
         return blocks.filter { $0["type"] as? String == "text" }.compactMap { $0["text"] as? String }.joined()
@@ -215,6 +219,23 @@ nonisolated final class ClaudeTextModel: TextModel, @unchecked Sendable {
             }
             lock.withLock { tasks.append(task) }
             task.resume()
+        }
+    }
+
+    /// Counts what the request used for Cloud Usage (numbers only).
+    private func recordUsage(_ json: [String: Any], response: URLResponse) {
+        guard let usage = json["usage"] as? [String: Any] else { return }
+        var r = CloudUsageRecord(day: CloudUsageRecord.day(), book: book, service: .claude, model: modelID)
+        r.inputTokens = usage["input_tokens"] as? Int ?? 0
+        r.outputTokens = usage["output_tokens"] as? Int ?? 0
+        r.cacheReadTokens = usage["cache_read_input_tokens"] as? Int ?? 0
+        r.cacheWriteTokens = usage["cache_creation_input_tokens"] as? Int ?? 0
+        r.requests = 1
+        let left = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "anthropic-ratelimit-tokens-remaining").flatMap(Int.init)
+        let model = modelID
+        Task { @MainActor in
+            CloudUsageStore.shared.add(r)
+            if let left { CloudUsageStore.shared.noteClaudeLimit(model: model, tokensLeft: left) }
         }
     }
 

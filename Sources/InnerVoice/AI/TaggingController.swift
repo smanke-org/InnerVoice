@@ -95,7 +95,7 @@ final class TaggingController {
                 self.registerUndo(changed: changed, document: document, undoManager: undoManager, charactersBefore: charactersBefore)
             }
             do {
-                let model = try await ModelManager.shared.model(bookAllowed: document.project.settings.cloudTextAllowed != nil)
+                let model = try await ModelManager.shared.model(bookAllowed: document.project.settings.cloudTextAllowed != nil, book: document.project.usageKey)
                 self.model = model
                 // Chapters by ID, not position: the narrator keeps working during a run, and
                 // Delete Text or a revised manuscript can remove or merge chapters, so a saved
@@ -326,7 +326,7 @@ final class TaggingController {
                 }
             }
             do {
-                let model = try await ModelManager.shared.model(bookAllowed: document.project.settings.cloudTextAllowed != nil)
+                let model = try await ModelManager.shared.model(bookAllowed: document.project.settings.cloudTextAllowed != nil, book: document.project.usageKey)
                 self.model = model
                 // Most-heard characters first; tiny walk-ons are skipped unless asked for.
                 let index = document.index

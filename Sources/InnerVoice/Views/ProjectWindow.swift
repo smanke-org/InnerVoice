@@ -194,6 +194,11 @@ struct ProjectWindow: View {
                 }
             }
         }
+        if CloudInUse.any(document.project) {
+            ToolbarItem {
+                CloudUsageButton(document: document)
+            }
+        }
         ToolbarItem {
             HelpButton(topic: workspace.page.helpTopic)
                 .help("InnerVoice Help for \(workspace.page.title)")

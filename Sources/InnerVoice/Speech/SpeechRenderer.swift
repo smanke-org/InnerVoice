@@ -18,6 +18,8 @@ struct SpeechRequest: Hashable, Sendable {
     /// The line's delivery hint. ElevenLabs only: `VoiceResolver` sets it for ElevenLabs
     /// voices alone, and no other engine reads it.
     var delivery: String? = nil
+    /// The book's `usageKey`, for Cloud Usage. Not part of the cache key.
+    var usageBook: String? = nil
 
     /// The file name of the rendered audio in the cache. Version 1 of the rendering.
     var cacheKey: String {

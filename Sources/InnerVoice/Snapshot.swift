@@ -111,6 +111,35 @@ enum Snapshot {
                 ReadingStyle.setFontSize(ReadingStyle.standardSize)
                 reading("reading.marginNames", MarginNames.initials.rawValue)
                 document.updateSettings("", undoManager: nil) { $0.style = .highlight }
+                if wants("cloud-usage") {
+                    let model = ModelManager.shared.selection
+                    ModelManager.shared.selection = "claude:claude-sonnet-5-5"
+                    let key = document.project.usageKey
+                    var made: [CloudUsageRecord] = []
+                    for (n, d) in ["2026-11-08", "2026-11-09", "2026-11-11", "2026-11-12"].enumerated() {
+                        var r = CloudUsageRecord(day: d, book: key, service: .claude, model: "claude-sonnet-5-5")
+                        r.inputTokens = 42_000 + n * 9_000; r.outputTokens = 6_000 + n * 1_500; r.cacheReadTokens = 30_000; r.requests = 18 + n
+                        made.append(r)
+                        if n % 2 == 1 {
+                            var o = CloudUsageRecord(day: d, book: key, service: .claude, model: "claude-opus-5-5")
+                            o.inputTokens = 25_000; o.outputTokens = 4_000; o.requests = 9
+                            made.append(o)
+                        }
+                    }
+                    CloudUsageStore.shared.replaceForTesting(made)
+                    let host = NSHostingView(rootView: CloudUsageView(project: document.project).fixedSize())
+                    let w = NSWindow(contentRect: NSRect(origin: .zero, size: host.fittingSize), styleMask: [.borderless], backing: .buffered, defer: false)
+                    w.contentView = host
+                    w.appearance = window()?.appearance ?? NSApp.effectiveAppearance
+                    w.orderFront(nil)
+                    try? await Task.sleep(for: .seconds(1))
+                    w.setContentSize(host.fittingSize)
+                    try? await Task.sleep(for: .seconds(0.3))
+                    capture(w, "\(dir)/cloud-usage-\(mode).png")
+                    w.orderOut(nil)
+                    CloudUsageStore.shared.replaceForTesting([])
+                    ModelManager.shared.selection = model
+                }
                 if wants("assign-popover"), let red {
                     workspace.page = .manuscript
                     workspace.pendingAssign = red.id

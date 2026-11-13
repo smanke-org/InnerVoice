@@ -1199,3 +1199,31 @@ private let appleVoices = [
 private extension Line {
     func with(id: UUID) -> Line { var l = self; l.id = id; return l }
 }
+
+/// Cloud Usage folds requests by day, book and model, totals per model for one book or all,
+/// and prices Claude tokens (cache reads at a tenth, writes at 1.25×).
+@Test func cloudUsageTotalsAndCost() {
+    var list: [CloudUsageRecord] = []
+    func claude(_ day: String, _ book: String, _ model: String, _ input: Int, _ output: Int) -> CloudUsageRecord {
+        var r = CloudUsageRecord(day: day, book: book, service: .claude, model: model)
+        r.inputTokens = input; r.outputTokens = output; r.requests = 1
+        return r
+    }
+    CloudUsage.merge(claude("2026-11-12", "A", "claude-sonnet-5-5", 1_000_000, 100_000), into: &list)
+    CloudUsage.merge(claude("2026-11-12", "A", "claude-sonnet-5-5", 1_000_000, 0), into: &list)
+    CloudUsage.merge(claude("2026-11-12", "B", "claude-opus-5-5", 500_000, 0), into: &list)
+    var el = CloudUsageRecord(day: "2026-11-11", book: "A", service: .elevenlabs, model: "eleven_v4")
+    el.characters = 1200
+    CloudUsage.merge(el, into: &list)
+    #expect(list.count == 3)
+    let a = CloudUsage.totals(list, book: "A")
+    #expect(a.count == 2)
+    let sonnet = a.first { $0.model == "claude-sonnet-5-5" }!
+    #expect(sonnet.requests == 2)
+    #expect(abs((sonnet.cost ?? 0) - 5.0) < 0.0001) // 2M in × $2 + 0.1M out × $10
+    #expect(a.first { $0.service == .elevenlabs }?.cost == nil)
+    #expect(CloudUsage.totals(list, book: nil).count == 3)
+    var cached = CloudUsageRecord(day: "d", book: "A", service: .claude, model: "claude-haiku-5-5")
+    cached.cacheReadTokens = 1_000_000; cached.cacheWriteTokens = 1_000_000
+    #expect(abs((cached.cost ?? 0) - 0.135) < 0.0001)
+}
