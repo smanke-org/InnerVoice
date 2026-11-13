@@ -95,7 +95,7 @@ enum VoiceCatalog {
         switch engine {
         case .apple: appleVoices()
         case .orpheus: VoiceInfo.orpheus
-        case .chatterbox: LocalClones.shared.voices + VoiceInfo.chatterbox
+        case .pocket: LocalClones.shared.voices + VoiceInfo.pocket
         case .elevenlabs: ElevenLabs.shared.voices
         // Every engine that's on and ready, best first within each.
         case .mixed: VoiceEngine.engines.filter { EngineSwitches.shared.usable($0) && (!$0.isCloud || project?.settings.cloudVoicesAllowed != nil) }
@@ -111,8 +111,8 @@ enum VoiceCatalog {
                 AVSpeechSynthesisVoice(identifier: choice.voiceID).map(info).map { v in appleByID[choice.voiceID] = v; return v }
             }
         case .orpheus: VoiceInfo.orpheus.first { $0.voiceID == choice.voiceID }
-        case .chatterbox: LocalClones.shared.clone(for: choice.voiceID).map(LocalClones.info)
-            ?? VoiceInfo.chatterbox.first { $0.voiceID == choice.voiceID }
+        case .pocket: LocalClones.shared.clone(for: choice.voiceID).map(LocalClones.info)
+            ?? VoiceInfo.pocket.first { $0.voiceID == choice.voiceID }
         case .elevenlabs: ElevenLabs.shared.voices.first { $0.voiceID == choice.voiceID }
         case .mixed: nil
         }

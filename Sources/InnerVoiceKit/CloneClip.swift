@@ -1,8 +1,9 @@
 import Foundation
 
-/// The part of a recording a voice cloned on this Mac learns from. Chatterbox clones best
-/// from about 5 to 15 seconds of one person speaking, so a longer recording is cut at a
-/// pause between words. The words it says are kept with it, for the narrator to check.
+/// The part of a recording a voice cloned on this Mac learns from. Pocket TTS clones well
+/// from about 5 to 15 seconds of one person speaking (Kyutai's own voice clips are 10 s),
+/// so a longer recording is cut at a pause between words. The words it says are kept with
+/// it, for the narrator to check.
 public enum CloneClip {
     /// The longest clip the clone model is given.
     public static let longest: Double = 15

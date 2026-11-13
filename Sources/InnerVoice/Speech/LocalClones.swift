@@ -4,7 +4,7 @@ import Observation
 import Speech
 
 /// Voices cloned on this Mac: a short clip of one real person's voice and exactly what it
-/// says, from which Chatterbox speaks every line. Nothing leaves the Mac. Kept in
+/// says, from which Pocket TTS speaks every line. Nothing leaves the Mac. Kept in
 /// Application Support/Inner Voice/Cloned Voices, so every project can use them; casting
 /// never gives one out (a real person's voice goes only where the narrator puts it).
 @Observable
@@ -25,8 +25,8 @@ final class LocalClones {
     }
 
     /// `VoiceChoice.voiceID` for a clone: "clone:" and its id.
-    nonisolated static let prefix = ChatterboxVoice.clonePrefix
-    nonisolated static func isClone(_ choice: VoiceChoice) -> Bool { choice.engine == .chatterbox && choice.voiceID.hasPrefix(prefix) }
+    nonisolated static let prefix = PocketVoice.clonePrefix
+    nonisolated static func isClone(_ choice: VoiceChoice) -> Bool { choice.engine == .pocket && choice.voiceID.hasPrefix(prefix) }
 
     /// A clone's clip and what it says.
     struct Sample: Sendable {
@@ -59,13 +59,13 @@ final class LocalClones {
         if let data = try? JSONEncoder().encode(clones) { try? data.write(to: Self.listFile, options: .atomic) }
     }
 
-    /// The clones as voices for the Chatterbox lists, newest first.
+    /// The clones as voices for the Pocket TTS lists, newest first.
     var voices: [VoiceInfo] {
         clones.sorted { $0.created > $1.created }.map(Self.info)
     }
 
     static func info(_ c: Clone) -> VoiceInfo {
-        VoiceInfo(engine: .chatterbox, voiceID: c.voiceID, name: c.name, gender: c.gender, age: .adult, accent: "",
+        VoiceInfo(engine: .pocket, voiceID: c.voiceID, name: c.name, gender: c.gender, age: .adult, accent: "",
                   quality: 3, detail: "Cloned on this Mac")
     }
 

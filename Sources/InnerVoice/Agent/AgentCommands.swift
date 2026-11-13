@@ -280,7 +280,7 @@ enum AgentCommands {
     // MARK: Characters
 
     private static var characters: [AgentCommand] { [
-        AgentCommand(name: "characters list", summary: "List the cast, most lines first. Returns `characters` (id, name, aliases, color, lines, words, firstLine, chapters, facts, narrator, showInIndex, voice: engine apple, chatterbox, orpheus or elevenlabs, name, source, confidence, needsYou).",
+        AgentCommand(name: "characters list", summary: "List the cast, most lines first. Returns `characters` (id, name, aliases, color, lines, words, firstLine, chapters, facts, narrator, showInIndex, voice: engine apple, pocket, orpheus or elevenlabs, name, source, confidence, needsYou).",
                      params: [projectParam],
                      example: "innervoice characters list --json", readOnly: true) { args in
             let (entry, document) = try project(args)

@@ -164,7 +164,7 @@ public enum ShadeStrength: String, Codable, CaseIterable, Identifiable, Sendable
 }
 
 /// How one voice changes for a character: pitch and pace steps, plus a few words of texture.
-/// A pitch step is a semitone for AI voices (Chatterbox shifts the clip it clones from; with
+/// A pitch step is a semitone for AI voices (Pocket TTS shifts the clip it clones from; with
 /// Qwen3-TTS that kept the narrator's voice within ±2–3). Narration Tools shows it as a cue.
 public struct Shade: Codable, Hashable, Sendable {
     public static let pitchRange = -4...4

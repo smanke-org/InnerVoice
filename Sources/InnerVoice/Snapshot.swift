@@ -239,8 +239,8 @@ enum Snapshot {
                     document.tagging.debugPhase("Writing voice briefs")
                 }
                 document.tagging.debugSummaries(nil)
-                await shot("ai-bar-loading") { workspace.page = .pronunciations; SpeechModelActivity.begin(.chatterbox) }
-                SpeechModelActivity.end(.chatterbox)
+                await shot("ai-bar-loading") { workspace.page = .pronunciations; SpeechModelActivity.begin(.pocket) }
+                SpeechModelActivity.end(.pocket)
                 await shot("cast-analyzing") {
                     workspace.castPath = []; workspace.page = .cast
                     document.tagging.debugSummaries("Tom Hale", number: 2, count: 4, character: 0.5, overall: 0.375)
@@ -312,7 +312,7 @@ enum Snapshot {
                     workspace.castPath = []
                 }
                 if let main = document.project.characters.max(by: { (document.index.stats[$0.id]?.lines ?? 0) < (document.index.stats[$1.id]?.lines ?? 0) }) {
-                    for engine in [VoiceEngine.orpheus, .chatterbox, .mixed] {
+                    for engine in [VoiceEngine.orpheus, .pocket, .mixed] {
                         await shot("voices-\(engine.rawValue)", settle: 1.2) {
                             document.setVoiceEngine(engine, undoManager: nil)
                             workspace.voiceTarget = .character(main.id)
@@ -373,7 +373,7 @@ enum Snapshot {
                                    CloneSample(url: tmp.appending(path: "rec.m4a"), seconds: 31, recorded: true)]
                     let allowance = ElevenLabs.CloneAllowance(canClone: true, slotsUsed: 3, slotLimit: 10, tier: "creator")
                     let made = VoiceInfo(engine: .elevenlabs, voiceID: "clone1", name: "Ellen, warm and low", gender: .neutral, age: .adult, accent: "American", quality: 3, detail: "Cloned")
-                    let madeHere = VoiceInfo(engine: .chatterbox, voiceID: LocalClones.prefix + "x", name: "Ellen, warm and low", gender: .female, accent: "", quality: 3, detail: "Cloned on this Mac")
+                    let madeHere = VoiceInfo(engine: .pocket, voiceID: LocalClones.prefix + "x", name: "Ellen, warm and low", gender: .female, accent: "", quality: 3, detail: "Cloned on this Mac")
                     let words = "The train was late again, so I walked. It was the kind of autumn morning that makes you forgive the whole year."
                     let shots: [(String, VoiceInfo?, CloneVoiceSheet.Place)] = [("clone-voice", nil, .elevenlabs), ("clone-voice-done", made, .elevenlabs),
                                                                                 ("clone-voice-mac", nil, .mac), ("clone-voice-mac-done", madeHere, .mac)]
@@ -495,16 +495,16 @@ enum Snapshot {
                     let picks = ["Mara": "tara", "Tom": "dan", "Edda": "jess", "Pip": "zac"]
                     for i in earlier.characters.indices {
                         let name = picks[earlier.characters[i].firstName] ?? "leo"
-                        let v = VoiceInfo.chatterbox.first { $0.voiceID == ChatterboxVoice.stockPrefix + name }!
-                        earlier.characters[i].setVoice(CastVoice(choice: v.choice, confidence: 1, source: .user), for: .chatterbox)
+                        let v = VoiceInfo.pocket.first { $0.voiceID == PocketVoice.stockPrefix + name }!
+                        earlier.characters[i].setVoice(CastVoice(choice: v.choice, confidence: 1, source: .user), for: .pocket)
                     }
                     // In this book Tom is just "Tom", and Pip isn't in the earlier one.
                     if let t = earlier.characters.firstIndex(where: { $0.name.hasPrefix("Tom") }) { earlier.characters[t].name = "Tom"; earlier.characters[t].aliases = [] }
                     earlier.characters.removeAll { $0.name.hasPrefix("Pip") }
                     earlier.characters.append(BookCharacter(name: "Old Quinn", colorHex: "#7A8B99"))
-                    earlier.characters[earlier.characters.count - 1].setVoice(CastVoice(choice: VoiceInfo.chatterbox[4].choice, confidence: 1, source: .user), for: .chatterbox)
-                    earlier.settings.voiceEngine = .chatterbox
-                    earlier.settings.setNarratorVoice(CastVoice(choice: VoiceInfo.chatterbox[0].choice, confidence: 1, source: .user), for: .chatterbox)
+                    earlier.characters[earlier.characters.count - 1].setVoice(CastVoice(choice: VoiceInfo.pocket[4].choice, confidence: 1, source: .user), for: .pocket)
+                    earlier.settings.voiceEngine = .pocket
+                    earlier.settings.setNarratorVoice(CastVoice(choice: VoiceInfo.pocket[0].choice, confidence: 1, source: .user), for: .pocket)
                     workspace.seriesSource = earlier
                     workspace.showSeriesVoices = true
                 }

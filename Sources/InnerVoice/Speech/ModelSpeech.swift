@@ -8,16 +8,16 @@ import MLXAudioTTS
 import NaturalLanguage
 import Observation
 
-/// Chatterbox and Orpheus, on Apple's MLX (Apple silicon only).
+/// Pocket TTS and Orpheus, on Apple's MLX (Apple silicon only).
 ///
 /// Orpheus has eight fixed voices and acts from the words; the speech tag's sighs, laughs
 /// and gasps are added as its sound tags.
 ///
-/// Chatterbox (Resemble AI, MIT) clones every voice from a short clip: a stock voice's clip
-/// ships with the app (`ChatterboxClips`), and a voice cloned on this Mac uses the
-/// narrator's recording. The tone sets its emotion exaggeration
-/// (`ChatterboxDelivery`). A shade, or casting's age pitch, shifts the clip before cloning,
-/// so the voice stays the same person.
+/// Pocket TTS (Kyutai, CC BY 4.0) clones every voice from a short clip: a stock voice's clip
+/// ships with the app (`PocketClips`), and a voice cloned on this Mac uses the narrator's
+/// recording. The tone sets its sampling temperature, and a pitch, speed and loudness
+/// around it (`PocketDelivery`). A shade, or casting's age pitch, shifts the clip before
+/// cloning, so the voice stays the same person.
 enum ModelSpeech {
     @MainActor
     static func isInstalled(_ engine: VoiceEngine) -> Bool { VoiceModelManager.shared.isInstalled(engine) }
@@ -42,16 +42,18 @@ enum ModelSpeech {
                 if n > 0 { r.sound = nil }
                 samples += try await MLXSpeech.shared.orpheus(text: OrpheusText.make(r), voice: request.choice.voiceID,
                                                               seed: seed(piece + request.choice.voiceID))
-            case .chatterbox:
-                // A shade (Casting Style) and casting's age pitch shift the clip; the clone keeps the voice.
-                let semitones = (request.shade?.pitch ?? 0) + ChatterboxVoice.semitones(pitch: request.choice.pitch)
-                let reference = try ChatterboxClips.reference(for: request.choice, semitones: semitones)
-                let delivery = ChatterboxDelivery.for(request.tone, narration: request.kind == nil)
+            case .pocket:
+                // A shade (Casting Style), casting's age pitch and the tone shift the clip; the
+                // clone keeps the voice. (The tone's speed is stretched by `SpeechRenderer`.)
+                let delivery = PocketDelivery.for(request.tone, narration: request.kind == nil)
+                let semitones = (request.shade?.pitch ?? 0) + PocketVoice.semitones(pitch: request.choice.pitch) + delivery.semitones
+                let reference = try PocketClips.reference(for: request.choice, semitones: semitones)
                 if n == 0 { volume *= Float(delivery.volume) }
-                let said = try await MLXSpeech.shared.chatterbox(text: piece, reference: reference, delivery: delivery,
-                                                                 seed: seed(piece + request.choice.voiceID))
-                // A short line can run on into made-up speech after a pause: cut it there.
-                samples += ChatterboxRunOn.trim(said, sampleRate: SpeechAudio.format.sampleRate, text: piece)
+                let said = try await MLXSpeech.shared.pocket(text: piece, reference: reference, delivery: delivery,
+                                                             seed: seed(piece + request.choice.voiceID))
+                // No run-on cut: Pocket TTS stops when the line is said (short lines tested
+                // 2026-11-13, at the even and the angry temperature; self-test `pocketVoices`).
+                samples += said
             }
         }
         return try buffer(level(samples), volume: volume)
@@ -122,7 +124,7 @@ enum ModelSpeech {
     /// Loads the engine's models ahead of the first line (they take several seconds).
     static func prepare(_ engine: VoiceEngine) {
         Task { @MainActor in
-            let wanted = engine == .mixed ? [VoiceEngine.chatterbox, .orpheus] : [engine]
+            let wanted = engine == .mixed ? [VoiceEngine.pocket, .orpheus] : [engine]
             let ready = wanted.filter { $0 != .apple && EngineSwitches.shared.usable($0) }
             guard !ready.isEmpty else { return }
             await MLXSpeech.shared.preload(ready)
@@ -157,13 +159,14 @@ enum OrpheusText {
     }
 }
 
-/// The clips Chatterbox clones its voices from: a stock voice's clip from the app
+/// The clips Pocket TTS clones its voices from: a stock voice's clip from the app
 /// (Resources/StockVoices), a cloned voice's recording, each shifted by a shade's semitones
-/// when asked (made once, kept in memory). Every voice has a clip: the Chatterbox model
-/// InnerVoice downloads has no built-in voice of its own.
+/// when asked (made once, kept in memory). Every voice has a clip, Alba included (Pocket
+/// TTS's own voices also come as ready-made embeddings, but a clip can be shaded).
 @MainActor
-enum ChatterboxClips {
-    /// What every stock clip says: plain, unhurried and long enough to carry the voice.
+enum PocketClips {
+    /// What the Orpheus-made stock clips say: plain, unhurried and long enough to carry the
+    /// voice. (Alba's clip is her own recording.)
     static let passage = "I have lived in this town for a long time, and I know every road that leads out of it. "
         + "In the spring the river runs high, and the whole valley smells of rain."
 
@@ -185,7 +188,7 @@ enum ChatterboxClips {
         if LocalClones.isClone(choice) {
             clip = try LocalClones.shared.sample(for: choice.voiceID).audio
         } else {
-            let name = ChatterboxVoice.stockName(choice.voiceID) ?? choice.voiceID
+            let name = PocketVoice.stockName(choice.voiceID) ?? choice.voiceID
             guard let url = stockClipURL(name), let b = SpeechRenderer.read(url), let data = b.floatChannelData else {
                 throw SpeechError.voiceMissing(VoiceCatalog.info(for: choice)?.name ?? name.capitalized)
             }
@@ -205,7 +208,7 @@ actor MLXSpeech {
     static let shared = MLXSpeech()
 
     private var orpheusModel: LlamaTTSModel?
-    private var chatterboxModel: ChatterboxModel?
+    private var pocketModel: PocketTTSModel?
     private var busy = false
     private var waiters: [CheckedContinuation<Void, Never>] = []
 
@@ -221,7 +224,7 @@ actor MLXSpeech {
     func unload() async {
         await acquire(); defer { release() }
         orpheusModel = nil
-        chatterboxModel = nil
+        pocketModel = nil
         Memory.clearCache()
     }
 
@@ -232,13 +235,14 @@ actor MLXSpeech {
         return m
     }
 
-    /// Macs with room for both keep Chatterbox and Orpheus loaded together (about 7 GB), so a
-    /// project that mixes engines doesn't reload a model between lines. Others keep one.
-    private let keepBoth = ProcessInfo.processInfo.physicalMemory >= 32 * 1_073_741_824
+    /// Pocket TTS is small (about 1 GB while it speaks), so Macs with 16 GB or more keep it
+    /// loaded beside Orpheus (about 4 GB), and a project that mixes engines doesn't reload a
+    /// model between lines. Smaller Macs keep one.
+    private let keepBoth = ProcessInfo.processInfo.physicalMemory >= 16 * 1_073_741_824
 
     private func loadOrpheus() async throws -> LlamaTTSModel {
         if let m = orpheusModel { return m }
-        if !keepBoth { chatterboxModel = nil }
+        if !keepBoth { pocketModel = nil }
         await SpeechModelActivity.begin(.orpheus)
         defer { Task { await SpeechModelActivity.end(.orpheus) } }
         let m = try await Self.load(VoicePack.orpheus.repos[0], as: LlamaTTSModel.self)
@@ -246,19 +250,17 @@ actor MLXSpeech {
         return m
     }
 
-    private func loadChatterbox() async throws -> ChatterboxModel {
-        if let m = chatterboxModel { return m }
+    private func loadPocket() async throws -> PocketTTSModel {
+        if let m = pocketModel { return m }
         if !keepBoth { orpheusModel = nil }
-        await SpeechModelActivity.begin(.chatterbox)
-        defer { Task { await SpeechModelActivity.end(.chatterbox) } }
+        await SpeechModelActivity.begin(.pocket)
+        defer { Task { await SpeechModelActivity.end(.pocket) } }
         Memory.cacheLimit = 512 * 1024 * 1024
-        // Loaded from its folder, never fetched: the speech tokenizer it clones with comes from
-        // mlx-audio's default cache, which `VoicePack.pinHubCache` points at the same folder.
-        let m = try await ChatterboxModel.fromModelDirectory(VoicePack.directory(VoicePack.chatterboxRepo), hfToken: nil)
-        if m.s3Tokenizer == nil {
-            m.s3Tokenizer = try S3TokenizerV2.fromModelDirectory(VoicePack.directory(VoicePack.chatterboxTokenizerRepo))
-        }
-        chatterboxModel = m
+        // Loaded from its folder, never fetched: the weights, the Mimi codec and the text
+        // tokenizer (tokenizer.json) all come with the pack. The config also names a
+        // tokenizer at an hf:// address; mlx-audio skips those and reads the local file.
+        let m = try await PocketTTSModel.fromModelDirectory(VoicePack.directory(VoicePack.pocketRepo))
+        pocketModel = m
         return m
     }
 
@@ -267,7 +269,7 @@ actor MLXSpeech {
         await acquire(); defer { release() }
         switch engine {
         case .orpheus: orpheusModel = nil
-        case .chatterbox: chatterboxModel = nil
+        case .pocket: pocketModel = nil
         case .apple, .mixed, .elevenlabs: break
         }
         Memory.clearCache()
@@ -279,7 +281,7 @@ actor MLXSpeech {
             do {
                 switch engine {
                 case .orpheus: _ = try await loadOrpheus()
-                case .chatterbox: _ = try await loadChatterbox()
+                case .pocket: _ = try await loadPocket()
                 case .apple, .mixed, .elevenlabs: break
                 }
             } catch {
@@ -299,33 +301,19 @@ actor MLXSpeech {
         return audio.asArray(Float.self)
     }
 
-    /// One piece of text in a voice cloned from `reference` (24 kHz mono), said the way
-    /// `delivery` asks. nil: the voice in `defaultVoice`, which only the stock-clip maker
-    /// sets (the model InnerVoice downloads has none).
-    func chatterbox(text: String, reference: [Float]?, delivery: ChatterboxDelivery, seed: UInt64,
-                    defaultVoice: URL? = nil) async throws -> [Float] {
+    /// One piece of text in a voice cloned from `reference` (24 kHz mono), at the tone's
+    /// temperature (`delivery`; its pitch, speed and loudness are applied around the model).
+    func pocket(text: String, reference: [Float], delivery: PocketDelivery, seed: UInt64) async throws -> [Float] {
         await acquire(); defer { release() }
         try Task.checkCancellation()
-        let model = try await loadChatterbox()
-        if let defaultVoice {
-            // Chatterbox's default voice (the conds.safetensors Resemble ships with Chatterbox
-            // Turbo): for making the "Chatterbox" stock clip once, never at speaking time.
-            let w = try MLX.loadArrays(url: defaultVoice)
-            if let spk = w["t3.speaker_emb"], let x = w["gen.embedding"] {
-                model.defaultConditioning = DefaultConditioning(
-                    speakerEmb: spk, condPromptSpeechTokens: w["t3.cond_prompt_speech_tokens"] ?? MLXArray.zeros([1, 0]).asType(.int32),
-                    emotionAdv: w["t3.emotion_adv"] ?? MLXArray(Float(0.5)).reshaped([1, 1, 1]), xVector: x,
-                    promptToken: w["gen.prompt_token"] ?? MLXArray.zeros([1, 0]).asType(.int32),
-                    promptTokenLen: w["gen.prompt_token_len"] ?? MLXArray([Int32(0)]),
-                    promptFeat: w["gen.prompt_feat"] ?? MLXArray.zeros([1, 0, 80]), promptFeatLen: MLXArray([Int32(0)]))
-            }
-        }
-        model.emotionAdvOverride = Float(delivery.exaggeration)
-        model.cfgWeightOverride = Float(delivery.cfgWeight)
+        let model = try await loadPocket()
         var p = model.defaultGenerationParameters
+        p.temperature = Float(delivery.temperature)
         p.seed = seed
+        // Pocket TTS draws its noise from MLX's global generator: seeded, the same line in
+        // the same voice comes out the same.
         MLXRandom.seed(seed)
-        let ref = reference.map { MLXArray($0).materialized() }
+        let ref = MLXArray(reference).materialized()
         let audio = try await model.generate(text: text, voice: nil, refAudio: ref, refText: nil, language: nil, generationParameters: p)
         return audio.asArray(Float.self)
     }

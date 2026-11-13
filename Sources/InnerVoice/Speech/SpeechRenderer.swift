@@ -54,7 +54,7 @@ struct RenderedAudio: @unchecked Sendable {
     let buffer: AVAudioPCMBuffer
 }
 
-/// Audio in the app's one format: 24 kHz mono, 32-bit float (what Chatterbox and Orpheus
+/// Audio in the app's one format: 24 kHz mono, 32-bit float (what Pocket TTS and Orpheus
 /// make; Apple's voices are converted).
 nonisolated enum SpeechAudio {
     static let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 24_000, channels: 1, interleaved: false)!
@@ -136,18 +136,20 @@ final class SpeechRenderer {
         var buffer: AVAudioPCMBuffer
         switch request.choice.engine {
         case .apple: buffer = try await AppleSpeech.render(request)
-        case .chatterbox, .orpheus: buffer = try await ModelSpeech.render(request)
+        case .pocket, .orpheus: buffer = try await ModelSpeech.render(request)
         case .elevenlabs: buffer = try await ElevenLabs.shared.render(request, allowed: request.cloudAllowed)
         case .mixed: throw SpeechError.engineUnavailable(.mixed)
         }
-        // Shading: Apple's voices did it themselves; Chatterbox shifted the clip it cloned
-        // from, so only the pace is left (with casting's speed for the character's age);
-        // Orpheus and ElevenLabs shift the finished audio.
+        // Shading: Apple's voices did it themselves; Pocket TTS shifted the clip it cloned
+        // from, so only the pace is left (with casting's speed for the character's age, and
+        // the tone's: Pocket TTS has no speed of its own); Orpheus and ElevenLabs shift the
+        // finished audio.
         let s = request.shade ?? Shade()
         switch request.choice.engine {
         case .apple, .mixed: break
-        case .chatterbox:
-            let rate = (request.choice.rate ?? 1) * ShadeAudio.paceRate(s.pace)
+        case .pocket:
+            let tone = PocketDelivery.for(request.tone, narration: request.kind == nil)
+            let rate = (request.choice.rate ?? 1) * ShadeAudio.paceRate(s.pace) * tone.rate
             if abs(rate - 1) > 0.001 { buffer = try ShadeAudio.apply(buffer, semitones: 0, rate: rate) }
         case .orpheus, .elevenlabs:
             if s.pitch != 0 || s.pace != 0 { buffer = try ShadeAudio.apply(buffer, semitones: s.pitch, pace: s.pace) }

@@ -47,6 +47,15 @@ private struct AboutView: View {
                     if !copyright.isEmpty { Text(copyright).font(.caption).foregroundStyle(.secondary) }
                 }
             }
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text("Acknowledgments").font(.headline)
+                ForEach(Credits.all, id: \.text) { credit in
+                    HStack(alignment: .firstTextBaseline, spacing: Space.xs) {
+                        Text(credit.text).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Link("License", destination: credit.license).font(.caption)
+                    }
+                }
+            }
             Text("Recent releases").font(.headline)
             Group {
                 if let entries, !entries.isEmpty {
@@ -74,4 +83,25 @@ private struct AboutView: View {
         .task { entries = await ReleaseNotes.fetch(newAfter: AppInfo.version, through: AppInfo.version,
                                                   count: AboutWindow.releaseCount) }
     }
+}
+
+/// Work by others that ships with InnerVoice or that it downloads, credited as their
+/// licenses ask (Creative Commons Attribution needs the creator, the license, a link and
+/// any changes). Shown in About and in Help › Voices & Listening.
+enum Credits {
+    struct Credit {
+        var text: String
+        var license: URL
+    }
+
+    static let ccBY4 = URL(string: "https://creativecommons.org/licenses/by/4.0/")!
+
+    static let all: [Credit] = [
+        Credit(text: "Pocket TTS voices: the Pocket TTS model and its Mimi codec by Kyutai (kyutai.org), CC BY 4.0, in mlx-community’s MLX conversion (mlx-community/pocket-tts).",
+               license: ccBY4),
+        Credit(text: "The stock voice Alba: a clip by Alba MacKenna from Kyutai’s voice collection (kyutai/tts-voices), CC BY 4.0, converted to 24 kHz mono.",
+               license: ccBY4),
+        Credit(text: "The other eight stock voices were spoken by Orpheus TTS by Canopy Labs, Apache 2.0.",
+               license: URL(string: "https://www.apache.org/licenses/LICENSE-2.0")!),
+    ]
 }

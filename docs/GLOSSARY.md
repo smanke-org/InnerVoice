@@ -29,11 +29,11 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | Context | On Review, how many paragraphs show before and after each line's paragraph (This paragraph only up to 5 paragraphs around) | surrounding text, excerpt |
 | Tone | How a line is said: neutral, excited, confused, sad, angry, whispered, scared, tender or sarcastic | emotion, mood, style |
 | Voice | The speech voice a character (or the narrator) is read in, on one engine | TTS voice, speaker voice |
-| Engine | Where voices come from: Apple Voices, Chatterbox or Orpheus on the Mac, or ElevenLabs (Cloud) | provider, backend |
-| Voice pack | The downloaded models for Chatterbox or Orpheus, in Settings › Voices | model files, weights |
-| Stock voice | One of Chatterbox's nine named voices (Chatterbox, Tara, Leah, Jess, Mia, Zoe, Leo, Dan, Zac), each cloned from a short clip that comes with the app | preset, ready-made voice |
+| Engine | Where voices come from: Apple Voices, Pocket TTS or Orpheus on the Mac, or ElevenLabs (Cloud) | provider, backend |
+| Voice pack | The downloaded models for Pocket TTS or Orpheus, in Settings › Voices | model files, weights |
+| Stock voice | One of Pocket TTS's nine named voices (Alba, Tara, Leah, Jess, Mia, Zoe, Leo, Dan, Zac), each cloned from a short clip that comes with the app | preset, ready-made voice |
 | Voice description | The words ElevenLabs designs a character's voice from (Design a Voice from Voice Notes); the voices on the Mac can't take one | prompt, voice prompt |
-| Old Voice Files | Settings › Voices: the models and samples Qwen3-TTS (the engine Chatterbox replaced) left on the Mac, offered for the Trash | legacy models |
+| Old Voice Files | Settings › Voices: the models and samples Qwen3-TTS (the engine Pocket TTS replaced) left on the Mac, offered for the Trash | legacy models |
 | Mix Engines | A project casting voices from every engine that's on, not one engine | mixed mode, hybrid |
 | Same as Narrator | A character whose lines are read in the narrator's voice | narrator voice, default voice |
 | Project type | What a project is for: Narration Tools or Produce with AI Voices; decides which pages and commands show | mode, workflow |
@@ -57,7 +57,7 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | Playback speed | How fast Play plays (0.75× to 2×), pauses included; Export Audio is always 1× | rate, tempo |
 | From the book | The part of a character's Voice Notes Build Summary writes (age, gender, accent, voice, manner); the narrator's once edited | AI notes, auto notes |
 | Design a Voice from Voice Notes | ElevenLabs designs a new voice from a character's description and Voice Notes (Cloud; uses credits and a voice slot) | generate voice |
-| Clone a Voice | Book › Clone a Voice…: a voice made from recordings of a real person, saved under a name the narrator chooses. Two ways: On This Mac (Chatterbox, free, nothing leaves the Mac) or ElevenLabs (Cloud; paid plan, one voice slot) | voice copy, voice twin, custom voice |
+| Clone a Voice | Book › Clone a Voice…: a voice made from recordings of a real person, saved under a name the narrator chooses. Two ways: On This Mac (Pocket TTS, free, nothing leaves the Mac) or ElevenLabs (Cloud; paid plan, one voice slot) | voice copy, voice twin, custom voice |
 | Cloned voice | A voice made by Clone a Voice (or at elevenlabs.io); marked Cloned, listed first, never chosen by casting | clone (as a noun in UI), copy |
 | The Clip | On This Mac: the first 15 seconds of speech a cloned voice is learned from, with the words it says | sample, reference |
 | Use Voices from Another Project | Copy voices (and optionally Voice Notes, narrator voice, engine) from an earlier book in a series, after matching its characters to this book's | import cast, series voices, voice transfer |

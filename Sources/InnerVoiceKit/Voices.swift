@@ -1,7 +1,7 @@
 import Foundation
 import Synchronization
 
-/// How a line is said. Speech engines that can act (Chatterbox, Orpheus, ElevenLabs) use it;
+/// How a line is said. Speech engines that can act (Pocket TTS, Orpheus, ElevenLabs) use it;
 /// Apple's voices only change speed, pitch and loudness a little.
 public enum Tone: String, Codable, CaseIterable, Identifiable, Sendable {
     case neutral, excited, confused, sad, angry, whispered, scared, tender, sarcastic
@@ -86,13 +86,13 @@ public enum ToneSource: String, Codable, Sendable {
 
 /// A text-to-speech engine. All but ElevenLabs run on the Mac.
 ///
-/// Projects made before Chatterbox may say "qwen" (Qwen3-TTS, retired 2026-11-13): it reads as
-/// `.chatterbox`, and `LegacyVoices.migrate` turns that engine's voices into Chatterbox ones
+/// Projects made before Pocket TTS may say "qwen" (Qwen3-TTS, retired 2026-11-13): it reads as
+/// `.pocket`, and `LegacyVoices.migrate` turns that engine's voices into Pocket TTS ones
 /// when the project is read. Any other engine this version doesn't know (a project saved by a
 /// newer InnerVoice) reads as `.mixed`, which names no voices: those characters fall back to
 /// the narrator's voice instead of the whole project failing to open.
 public enum VoiceEngine: String, Codable, CaseIterable, Identifiable, Sendable {
-    case apple, chatterbox, orpheus
+    case apple, pocket, orpheus
     /// ElevenLabs, in the cloud: the only engine that sends text off the Mac. Off until the
     /// narrator sets it up, and each book must allow it.
     case elevenlabs
@@ -102,20 +102,23 @@ public enum VoiceEngine: String, Codable, CaseIterable, Identifiable, Sendable {
 
     public var id: String { rawValue }
 
-    /// The raw value older projects use for Qwen3-TTS, the engine Chatterbox replaced.
+    /// The raw value older projects use for Qwen3-TTS, the engine Pocket TTS replaced.
     public static let retiredQwen = "qwen"
+    /// A test build briefly saved its on-device engine as "chatterbox" (never released): it
+    /// reads as Pocket TTS too.
+    static let unreleasedTestEngine = "chatterbox"
 
     public init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
         if let known = VoiceEngine(rawValue: raw) {
             self = known
         } else {
-            self = raw == Self.retiredQwen ? .chatterbox : .mixed
+            self = raw == Self.retiredQwen || raw == Self.unreleasedTestEngine ? .pocket : .mixed
         }
     }
 
     /// The engines that make sound (everything but `.mixed`).
-    public static let engines: [VoiceEngine] = [.apple, .chatterbox, .orpheus, .elevenlabs]
+    public static let engines: [VoiceEngine] = [.apple, .pocket, .orpheus, .elevenlabs]
 
     /// Sends the book's text to a company's servers to make the audio.
     public var isCloud: Bool { self == .elevenlabs }
@@ -123,7 +126,7 @@ public enum VoiceEngine: String, Codable, CaseIterable, Identifiable, Sendable {
     public var title: String {
         switch self {
         case .apple: "Apple Voices"
-        case .chatterbox: "Chatterbox"
+        case .pocket: "Pocket TTS"
         case .orpheus: "Orpheus"
         case .elevenlabs: "ElevenLabs"
         case .mixed: "Mix Engines"
@@ -137,7 +140,7 @@ public enum VoiceEngine: String, Codable, CaseIterable, Identifiable, Sendable {
 /// A voice on one engine, with the narrator's adjustments.
 public struct VoiceChoice: Codable, Hashable, Sendable {
     public var engine: VoiceEngine
-    /// Apple: the voice identifier. Orpheus: the voice name. Chatterbox: "stock:<name>" or
+    /// Apple: the voice identifier. Orpheus: the voice name. Pocket TTS: "stock:<name>" or
     /// "clone:<id>". ElevenLabs: its voice ID.
     public var voiceID: String
     /// A description of the voice ("A woman in her sixties…"). Written by Qwen3-TTS (retired)
@@ -250,20 +253,21 @@ public struct VoiceInfo: Hashable, Identifiable, Sendable {
         ("leo", .male, "Steady, relaxed"), ("dan", .male, "Deep, easygoing"), ("zac", .male, "Energetic, youthful"),
     ].map { VoiceInfo(engine: .orpheus, voiceID: $0.0, name: $0.0.capitalized, gender: $0.1, age: .young, accent: "American", quality: 2, detail: $0.2) }
 
-    /// Chatterbox's stock voices. Chatterbox can't design a voice from a description: it
+    /// Pocket TTS's stock voices. Pocket TTS can't design a voice from a description: it
     /// clones one from a few seconds of speech. The clips ship with the app
     /// (Resources/StockVoices): Orpheus's eight voices (Apache 2.0) said one plain passage,
-    /// and Chatterbox said it once in its own default voice. Orpheus's are young adult and
+    /// and Alba is Pocket TTS's own default voice (Alba MacKenna, CC BY 4.0, from Kyutai's
+    /// voice collection; credited in About and Help). Orpheus's are young adult and
     /// American: casting shifts a clip's pitch for a child or an older character, as it fakes
     /// age with pitch for Apple's voices.
-    public static let chatterbox: [VoiceInfo] = [
-        ("chatterbox", "Chatterbox", VoiceGender.female, VoiceAge.adult, 3, "The engine’s own voice; calm, clear"),
+    public static let pocket: [VoiceInfo] = [
+        ("alba", "Alba", VoiceGender.female, VoiceAge.adult, 3, "The engine’s own voice; natural, easygoing"),
         ("tara", "Tara", .female, .young, 2, "Warm, conversational"), ("leah", "Leah", .female, .young, 2, "Bright, friendly"),
         ("jess", "Jess", .female, .young, 2, "Lively, expressive"), ("mia", "Mia", .female, .young, 2, "Soft, light"),
         ("zoe", "Zoe", .female, .young, 2, "Clear, youthful"),
         ("leo", "Leo", .male, .young, 2, "Steady, relaxed"), ("dan", "Dan", .male, .young, 2, "Deep, easygoing"),
         ("zac", "Zac", .male, .young, 2, "Energetic, youthful"),
-    ].map { VoiceInfo(engine: .chatterbox, voiceID: ChatterboxVoice.stockPrefix + $0.0, name: $0.1, gender: $0.2, age: $0.3,
+    ].map { VoiceInfo(engine: .pocket, voiceID: PocketVoice.stockPrefix + $0.0, name: $0.1, gender: $0.2, age: $0.3,
                       accent: "American", quality: $0.4, detail: $0.5) }
 }
 
@@ -638,9 +642,9 @@ public enum VoiceCasting {
                 continue
             }
             var choice = ageAdjusted(voice, for: p.age)
-            // Apple and Chatterbox voices can't take a description: the brief's pitch and pace
-            // nudge them (for Chatterbox, about a semitone and 6% a step).
-            if voice.engine == .apple || voice.engine == .chatterbox, p.pitchLean != 0 || p.paceLean != 0 {
+            // Apple and Pocket TTS voices can't take a description: the brief's pitch and pace
+            // nudge them (for Pocket TTS, about a semitone and 6% a step).
+            if voice.engine == .apple || voice.engine == .pocket, p.pitchLean != 0 || p.paceLean != 0 {
                 choice.pitch = ((choice.pitch ?? 1) * (1 + 0.06 * Double(p.pitchLean)) * 100).rounded() / 100
                 choice.rate = ((choice.rate ?? 1) * (1 + 0.06 * Double(p.paceLean)) * 100).rounded() / 100
             }
@@ -655,7 +659,7 @@ public enum VoiceCasting {
     }
 
     /// A voice made to sound the character's age when it doesn't. Apple's voices are all
-    /// adults: a child sounds higher, an older voice lower and slower. Chatterbox's stock
+    /// adults: a child sounds higher, an older voice lower and slower. Pocket TTS's stock
     /// voices are young adults: its pitch is a shift of the clip it clones from, so the steps
     /// stay within what keeps the voice (docs/CASTING-STYLE.md §6: ±2 semitones kept it, −4 began
     /// to lose it): a child +3 semitones (1.19) and a little quicker, an older voice −2 (0.89)
@@ -671,7 +675,7 @@ public enum VoiceCasting {
             case .older: choice.pitch = 0.88; choice.rate = 0.92
             case .adult: break
             }
-        case .chatterbox where !voice.voiceID.hasPrefix(ChatterboxVoice.clonePrefix):
+        case .pocket where !voice.voiceID.hasPrefix(PocketVoice.clonePrefix):
             switch a {
             case .child: choice.pitch = 1.19; choice.rate = 1.05
             case .older: choice.pitch = 0.89; choice.rate = 0.92

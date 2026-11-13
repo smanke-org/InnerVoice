@@ -784,18 +784,18 @@ private let appleVoices = [
     #expect(VoiceInfo.orpheus.first { $0.voiceID == p.characters[i].voice(for: .orpheus)?.choice.voiceID }?.gender == .female)
 }
 
-@Test func chatterboxCastsStockVoicesByGenderAndAge() {
+@Test func pocketCastsStockVoicesByGenderAndAge() {
     var p = castingProject()
-    VoiceCasting.cast(&p, index: BookIndex(p), engine: .chatterbox, voices: VoiceInfo.chatterbox)
+    VoiceCasting.cast(&p, index: BookIndex(p), engine: .pocket, voices: VoiceInfo.pocket)
     // Edda is about 60: a woman's stock voice, made lower and slower (stock voices are young).
-    let edda = p.characters.first { $0.name == "Edda Voss" }!.voice(for: .chatterbox)?.choice
-    #expect(VoiceInfo.chatterbox.first { $0.voiceID == edda?.voiceID }?.gender == .female)
+    let edda = p.characters.first { $0.name == "Edda Voss" }!.voice(for: .pocket)?.choice
+    #expect(VoiceInfo.pocket.first { $0.voiceID == edda?.voiceID }?.gender == .female)
     #expect(edda?.pitch == 0.89 && edda?.rate == 0.92)
-    #expect(ChatterboxVoice.semitones(pitch: edda?.pitch) == -2)
+    #expect(PocketVoice.semitones(pitch: edda?.pitch) == -2)
     // Nothing is designed from a description any more.
-    #expect(p.characters.allSatisfy { $0.voice(for: .chatterbox)?.choice.design == nil })
+    #expect(p.characters.allSatisfy { $0.voice(for: .pocket)?.choice.design == nil })
     // The narrator gets the engine's own voice, the best there is.
-    #expect(p.settings.narratorVoice(for: .chatterbox)?.choice.voiceID == ChatterboxVoice.builtInID)
+    #expect(p.settings.narratorVoice(for: .pocket)?.choice.voiceID == PocketVoice.builtInID)
 }
 
 @Test func speechScriptSplitsNarrationAndAppliesPronunciations() {
@@ -815,28 +815,28 @@ private let appleVoices = [
 }
 
 
-@Test func chatterboxGivesThinCharactersDistinctStockVoices() {
+@Test func pocketGivesThinCharactersDistinctStockVoices() {
     var p = ProjectBuilder.make(from: book([
         "“Where is it?” asked Ann.", "“Gone,” said Bea.", "“Look again,” said Ann.", "“I did,” said Bea.",
     ]), fileName: "t.txt")
     let index = BookIndex(p)
-    VoiceCasting.cast(&p, index: index, engine: .chatterbox, voices: VoiceInfo.chatterbox)
+    VoiceCasting.cast(&p, index: index, engine: .pocket, voices: VoiceInfo.pocket)
     let speaking = p.characters.filter { (index.stats[$0.id]?.lines ?? 0) > 0 }
-    let ids = speaking.compactMap { $0.voice(for: .chatterbox)?.choice.voiceID }
+    let ids = speaking.compactMap { $0.voice(for: .pocket)?.choice.voiceID }
     #expect(ids.count == speaking.count)
-    #expect(ids.allSatisfy { $0.hasPrefix(ChatterboxVoice.stockPrefix) })
+    #expect(ids.allSatisfy { $0.hasPrefix(PocketVoice.stockPrefix) })
     #expect(Set(ids).count == ids.count)
     // Nobody shares the narrator's voice.
-    #expect(!ids.contains(p.settings.narratorVoice(for: .chatterbox)?.choice.voiceID ?? ""))
+    #expect(!ids.contains(p.settings.narratorVoice(for: .pocket)?.choice.voiceID ?? ""))
 }
 
 @Test func mixedCastingUsesRealEngines() {
     var p = ProjectBuilder.make(from: book(["“Where is it?” asked Ann.", "“Gone,” said Bea.", "“Hush,” said Cal."]), fileName: "t.txt")
     let index = BookIndex(p)
-    VoiceCasting.cast(&p, index: index, engine: .mixed, voices: VoiceInfo.chatterbox + VoiceInfo.orpheus)
+    VoiceCasting.cast(&p, index: index, engine: .mixed, voices: VoiceInfo.pocket + VoiceInfo.orpheus)
     let choices = p.characters.compactMap { $0.voice(for: .mixed)?.choice }
     #expect(!choices.isEmpty)
-    #expect(choices.allSatisfy { $0.engine == .chatterbox || $0.engine == .orpheus })
+    #expect(choices.allSatisfy { $0.engine == .pocket || $0.engine == .orpheus })
     #expect(p.settings.narratorVoice(for: .mixed).map { $0.choice.engine != .mixed } == true)
 }
 
@@ -962,13 +962,13 @@ private let appleVoices = [
     let edda = BookCharacter(name: "Doctor Edda Voss", colorHex: "#333333")
     let nobody = BookCharacter(name: "Silent Sam", colorHex: "#444444")
     old.characters = [mara, tom, edda, nobody]
-    let tara = VoiceChoice(engine: .chatterbox, voiceID: "stock:tara")
-    old.characters[0].setVoice(CastVoice(choice: tara, confidence: 0.6, source: .auto), for: .chatterbox)
+    let tara = VoiceChoice(engine: .pocket, voiceID: "stock:tara")
+    old.characters[0].setVoice(CastVoice(choice: tara, confidence: 0.6, source: .auto), for: .pocket)
     old.characters[0].setVoice(CastVoice(choice: VoiceChoice(engine: .apple, voiceID: "karen"), confidence: 0.6, source: .auto), for: .apple)
     old.characters[1].setVoice(CastVoice(choice: VoiceChoice(engine: .orpheus, voiceID: "leo"), confidence: 1, source: .user), for: .orpheus)
     old.characters[2].setVoice(CastVoice(choice: VoiceChoice(engine: .orpheus, voiceID: "zac"), confidence: 1, source: .user), for: .orpheus)
-    old.settings.voiceEngine = .chatterbox
-    old.settings.setNarratorVoice(CastVoice(choice: VoiceInfo.chatterbox[0].choice, confidence: 1, source: .auto), for: .chatterbox)
+    old.settings.voiceEngine = .pocket
+    old.settings.setNarratorVoice(CastVoice(choice: VoiceInfo.pocket[0].choice, confidence: 1, source: .auto), for: .pocket)
 
     // This book: Mara goes by "Miss Quinn" as her name now, Tom keeps his, Edda is just "Edda".
     var new = Project.empty
@@ -988,11 +988,11 @@ private let appleVoices = [
     let n = SeriesVoices.apply(chosen, from: old, to: &new, options: .init())
     #expect(n == 2)
     let q = new.characters[0]
-    #expect(q.voice(for: .chatterbox)?.choice == tara && q.voice(for: .chatterbox)?.source == .user && q.voice(for: .apple)?.choice.voiceID == "karen")
+    #expect(q.voice(for: .pocket)?.choice == tara && q.voice(for: .pocket)?.source == .user && q.voice(for: .apple)?.choice.voiceID == "karen")
     #expect(q.voiceNotes == "Warm, clipped.")
     #expect(new.characters[1].voices == nil)
     #expect(new.characters[2].voice(for: .orpheus)?.choice.voiceID == "zac")
-    #expect(new.settings.voiceEngine == .chatterbox && new.settings.narratorVoice(for: .chatterbox)?.source == .user)
+    #expect(new.settings.voiceEngine == .pocket && new.settings.narratorVoice(for: .pocket)?.source == .user)
 
     // Casting keeps carried-over voices.
     VoiceCasting.cast(&new, index: BookIndex(new), engine: .orpheus, voices: VoiceInfo.orpheus)

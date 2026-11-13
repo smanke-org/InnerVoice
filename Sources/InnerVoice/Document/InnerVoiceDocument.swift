@@ -37,7 +37,7 @@ nonisolated final class InnerVoiceDocument: ReferenceFileDocument {
         shadeCache = s
         return s
     }
-    /// The project was read with Qwen3-TTS voices and they became Chatterbox voices.
+    /// The project was read with Qwen3-TTS voices and they became Pocket TTS voices.
     var migratedVoices = false
 
     /// Marks the window's document edited once after a voice migration, so the next save
@@ -88,7 +88,7 @@ nonisolated final class InnerVoiceDocument: ReferenceFileDocument {
             throw CocoaError(.fileReadCorruptFile)
         }
         var p = try Self.decoder.decode(Project.self, from: contents.projectJSON)
-        // A project from before Chatterbox: its Qwen3-TTS voices become Chatterbox voices as
+        // A project from before Pocket TTS: its Qwen3-TTS voices become Pocket TTS voices as
         // it's read (no undo step: there's nothing to go back to). The window marks the
         // project edited so the change is saved (`markMigrationEdited`).
         migratedVoices = LegacyVoices.migrate(&p)

@@ -2,9 +2,9 @@ import Foundation
 import Testing
 @testable import InnerVoiceKit
 
-/// Chatterbox replaced Qwen3-TTS (2026-11-13): old books switch on read, the tone dials,
-/// and decoding engine values this version doesn't know.
-@Suite struct ChatterboxTests {
+/// Pocket TTS replaced Qwen3-TTS (2026-11-13): old books switch on read, the tones, and
+/// decoding engine values this version doesn't know.
+@Suite struct PocketTTSTests {
     static func book(_ paragraphs: [String]) -> ImportedBook {
         ImportedBook(title: "Test", chapters: [Chapter(title: "Chapter 1", paragraphs: paragraphs.map { Paragraph(text: $0) })])
     }
@@ -58,15 +58,15 @@ import Testing
 
     static func character(_ p: Project, _ name: String) -> BookCharacter { p.characters.first { $0.name == name }! }
 
-    @Test func oldEngineReadsAsChatterbox() throws {
+    @Test func oldEngineReadsAsPocketTTS() throws {
         let p = try Self.oldProject()
-        #expect(p.settings.voiceEngine == .chatterbox)
+        #expect(p.settings.voiceEngine == .pocket)
         // The voices still sit under "qwen" until migrated.
         #expect(LegacyVoices.needsMigration(p))
-        #expect(Self.character(p, "Mara Quinn").voices?["qwen"]?.choice.engine == .chatterbox)
+        #expect(Self.character(p, "Mara Quinn").voices?["qwen"]?.choice.engine == .pocket)
     }
 
-    @Test func oldBooksSwitchToChatterbox() throws {
+    @Test func oldBooksSwitchToPocketTTS() throws {
         var p = try Self.oldProject()
         #expect(LegacyVoices.migrate(&p))
         #expect(!LegacyVoices.needsMigration(p))
@@ -74,42 +74,43 @@ import Testing
 
         // Ready-made → nearest stock voice (Kind Grandmother → Mia, an older woman: lower and
         // slower), the narrator's own speed and pitch kept on top, still the narrator's choice.
-        let edda = try #require(Self.character(p, "Edda Voss").voice(for: .chatterbox))
+        let edda = try #require(Self.character(p, "Edda Voss").voice(for: .pocket))
         #expect(edda.choice.voiceID == "stock:mia" && edda.source == .user)
         #expect(edda.choice.pitch == 0.85 && edda.choice.rate == 0.92)
         #expect(edda.choice.design == nil)
 
         // Designed → the stock voice casting picks for that character, a woman's for Mara.
-        let mara = try #require(Self.character(p, "Mara Quinn").voice(for: .chatterbox))
+        let mara = try #require(Self.character(p, "Mara Quinn").voice(for: .pocket))
         #expect(mara.choice.voiceID.hasPrefix("stock:") && mara.source == .auto)
-        #expect(VoiceInfo.chatterbox.first { $0.voiceID == mara.choice.voiceID }?.gender == .female)
+        #expect(VoiceInfo.pocket.first { $0.voiceID == mara.choice.voiceID }?.gender == .female)
 
         // A designed voice the narrator chose stays theirs; the Orpheus voice doesn't move.
         let tom = Self.character(p, "Tom Hale")
-        let tomVoice = try #require(tom.voice(for: .chatterbox))
+        let tomVoice = try #require(tom.voice(for: .pocket))
         #expect(tomVoice.source == .user)
-        #expect(VoiceInfo.chatterbox.first { $0.voiceID == tomVoice.choice.voiceID }?.gender == .male)
+        #expect(VoiceInfo.pocket.first { $0.voiceID == tomVoice.choice.voiceID }?.gender == .male)
         #expect(tom.voice(for: .orpheus)?.choice.voiceID == "leo" && tom.voice(for: .orpheus)?.source == .user)
 
-        // A clone keeps its recording, now spoken by Chatterbox.
-        let pip = try #require(Self.character(p, "Pip").voice(for: .chatterbox))
-        #expect(pip.choice == VoiceChoice(engine: .chatterbox, voiceID: "clone:ABC") && pip.source == .user)
+        // A clone keeps its recording, now spoken by Pocket TTS.
+        let pip = try #require(Self.character(p, "Pip").voice(for: .pocket))
+        #expect(pip.choice == VoiceChoice(engine: .pocket, voiceID: "clone:ABC") && pip.source == .user)
 
-        // The narrator's ready-made voice → the engine's own voice, still the narrator's choice.
-        let narrator = try #require(p.settings.narratorVoice(for: .chatterbox))
-        #expect(narrator.choice.voiceID == ChatterboxVoice.builtInID && narrator.source == .user)
+        // The narrator's ready-made voice → the engine's own voice (Alba), still the narrator's choice.
+        let narrator = try #require(p.settings.narratorVoice(for: .pocket))
+        #expect(narrator.choice.voiceID == PocketVoice.builtInID && narrator.source == .user)
+        #expect(PocketVoice.builtInID == "stock:alba")
         #expect(p.settings.narratorVoices?["qwen"] == nil)
 
         // Roles: ready-made → stock; designed (the narrator's) → a stock voice of that gender, still theirs.
-        #expect(p.settings.roleVoice(.men, for: .chatterbox)?.choice.voiceID == "stock:dan")
-        let women = try #require(p.settings.roleVoice(.women, for: .chatterbox))
-        #expect(women.source == .user && VoiceInfo.chatterbox.first { $0.voiceID == women.choice.voiceID }?.gender == .female)
+        #expect(p.settings.roleVoice(.men, for: .pocket)?.choice.voiceID == "stock:dan")
+        let women = try #require(p.settings.roleVoice(.women, for: .pocket))
+        #expect(women.source == .user && VoiceInfo.pocket.first { $0.voiceID == women.choice.voiceID }?.gender == .female)
 
         // Nobody without a voice got one, and the date casting last ran is kept.
         #expect(Self.character(p, "Edda Voss").voices?.count == 1)
         #expect(p.voicesCast == Date(timeIntervalSinceReferenceDate: 700_000_000))
         #expect(p.characters.filter { $0.name != "Edda Voss" && $0.name != "Mara Quinn" && $0.name != "Tom Hale" && $0.name != "Pip" }
-            .allSatisfy { $0.voice(for: .chatterbox) == nil })
+            .allSatisfy { $0.voice(for: .pocket) == nil })
 
         // Saved and read again, nothing changes and nothing is left to migrate.
         var again = try JSONDecoder().decode(Project.self, from: JSONEncoder().encode(p))
@@ -135,13 +136,13 @@ import Testing
         ]
         #expect(LegacyVoices.presets.count == 16)
         for (preset, gender) in genders {
-            let mapped = LegacyVoices.mapped(CastVoice(choice: VoiceChoice(engine: .chatterbox, voiceID: "preset:" + preset), confidence: 1, source: .auto))
-            let info = VoiceInfo.chatterbox.first { $0.voiceID == mapped?.choice.voiceID }
+            let mapped = LegacyVoices.mapped(CastVoice(choice: VoiceChoice(engine: .pocket, voiceID: "preset:" + preset), confidence: 1, source: .auto))
+            let info = VoiceInfo.pocket.first { $0.voiceID == mapped?.choice.voiceID }
             #expect(info?.gender == gender, "\(preset)")
         }
         // Children sound higher and a little quicker.
-        let girl = LegacyVoices.mapped(CastVoice(choice: VoiceChoice(engine: .chatterbox, voiceID: "preset:girl"), confidence: 1, source: .auto))
-        #expect(ChatterboxVoice.semitones(pitch: girl?.choice.pitch) == 3 && girl?.choice.rate == 1.05)
+        let girl = LegacyVoices.mapped(CastVoice(choice: VoiceChoice(engine: .pocket, voiceID: "preset:girl"), confidence: 1, source: .auto))
+        #expect(PocketVoice.semitones(pitch: girl?.choice.pitch) == 3 && girl?.choice.rate == 1.05)
     }
 
     @Test func unknownEnginesDoNotStopAProjectOpening() throws {
@@ -150,61 +151,41 @@ import Testing
         // `.mixed` names no voices, so the player falls back to the narrator.
         #expect(choice.engine == .mixed)
         #expect(try JSONDecoder().decode([VoiceEngine].self, from: Data(#"["apple","chatterbox","orpheus","elevenlabs","mixed","qwen"]"#.utf8))
-                == [.apple, .chatterbox, .orpheus, .elevenlabs, .mixed, .chatterbox])
-        #expect(String(decoding: try JSONEncoder().encode(VoiceEngine.chatterbox), as: UTF8.self) == #""chatterbox""#)
+                == [.apple, .pocket, .orpheus, .elevenlabs, .mixed, .pocket])
+        // Saved as "pocket"; the unreleased test build's "chatterbox" reads as Pocket TTS.
+        #expect(String(decoding: try JSONEncoder().encode(VoiceEngine.pocket), as: UTF8.self) == #""pocket""#)
     }
 
-    @Test func tonesSetChatterboxsDials() {
-        let all = Tone.allCases.map { ($0, ChatterboxDelivery.for($0)) }
-        // Within what the model takes steadily.
-        #expect(all.allSatisfy { (0.25...0.8).contains($0.1.exaggeration) && (0.3...0.5).contains($0.1.cfgWeight) })
+    @Test func tonesSetPocketTTSTemperaturePaceAndPitch() {
+        let all = Tone.allCases.map { ($0, PocketDelivery.for($0)) }
+        // Within what the model says clearly, and small enough steps to keep the voice.
+        #expect(all.allSatisfy { (0.5...0.95).contains($0.1.temperature) && abs($0.1.semitones) <= 1 && (0.9...1.1).contains($0.1.rate) })
         // Neutral and all narration are the model's own default, an even read.
-        #expect(ChatterboxDelivery.for(.neutral) == ChatterboxDelivery(exaggeration: 0.5, cfgWeight: 0.5, volume: 1))
-        #expect(Tone.allCases.allSatisfy { ChatterboxDelivery.for($0, narration: true) == .even })
-        // Intense tones above an even read, quiet ones below; intense ones slowed with a lower weight.
-        func e(_ t: Tone) -> Double { ChatterboxDelivery.for(t).exaggeration }
-        #expect(e(.angry) > e(.excited) && e(.excited) > e(.scared) && e(.scared) > e(.sarcastic) && e(.sarcastic) > e(.confused))
-        #expect(e(.confused) > e(.neutral) && e(.neutral) > e(.tender) && e(.tender) > e(.sad) && e(.sad) > e(.whispered))
-        #expect(ChatterboxDelivery.for(.angry).cfgWeight < ChatterboxDelivery.for(.neutral).cfgWeight)
-        // Chatterbox can't whisper: a whispered line is said softly, and only it is quieter.
-        #expect(ChatterboxDelivery.for(.whispered).volume < 1)
-        #expect(all.filter { $0.1.volume < 1 }.map(\.0) == [.whispered])
+        #expect(PocketDelivery.for(.neutral) == PocketDelivery(temperature: 0.7))
+        #expect(PocketDelivery.even.temperature == PocketDelivery.defaultTemperature)
+        #expect(Tone.allCases.allSatisfy { PocketDelivery.for($0, narration: true) == .even })
+        // Intense tones read more freely than an even read, quiet ones more steadily.
+        func t(_ x: Tone) -> Double { PocketDelivery.for(x).temperature }
+        #expect(t(.angry) > t(.excited) && t(.excited) > t(.scared) && t(.scared) > t(.sarcastic) && t(.sarcastic) > t(.neutral))
+        #expect(t(.neutral) > t(.tender) && t(.tender) > t(.sad) && t(.sad) == t(.whispered))
+        // Quick when worked up, slow when sad; higher when excited or scared, lower when sad.
+        func r(_ x: Tone) -> Double { PocketDelivery.for(x).rate }
+        #expect(r(.excited) > 1 && r(.angry) > 1 && r(.scared) > 1 && r(.sad) < r(.tender) && r(.tender) < 1)
+        #expect(PocketDelivery.for(.excited).semitones == 1 && PocketDelivery.for(.sad).semitones == -1)
+        // Pocket TTS can't whisper: a whispered line is said softly, the quietest of all.
+        #expect(all.allSatisfy { $0.1.volume >= PocketDelivery.for(.whispered).volume })
+        #expect(PocketDelivery.for(.whispered).volume < PocketDelivery.for(.sad).volume && PocketDelivery.for(.sad).volume < 1)
     }
 
     @Test func pitchBecomesWholeSemitonesOfTheClip() {
-        #expect(ChatterboxVoice.semitones(pitch: nil) == 0)
-        #expect(ChatterboxVoice.semitones(pitch: 1) == 0)
-        #expect(ChatterboxVoice.semitones(pitch: 1.19) == 3)
-        #expect(ChatterboxVoice.semitones(pitch: 0.89) == -2)
-        #expect(ChatterboxVoice.semitones(pitch: 3) == 4)
-        #expect(ChatterboxVoice.stockName("stock:tara") == "tara" && ChatterboxVoice.stockName("clone:x") == nil)
+        #expect(PocketVoice.semitones(pitch: nil) == 0)
+        #expect(PocketVoice.semitones(pitch: 1) == 0)
+        #expect(PocketVoice.semitones(pitch: 1.19) == 3)
+        #expect(PocketVoice.semitones(pitch: 0.89) == -2)
+        #expect(PocketVoice.semitones(pitch: 3) == 4)
+        #expect(PocketVoice.stockName("stock:tara") == "tara" && PocketVoice.stockName("clone:x") == nil)
         // Clones are never made older or younger by casting: they're a real person's voice.
-        let clone = VoiceInfo(engine: .chatterbox, voiceID: "clone:x", name: "Me", gender: .female, age: .adult, accent: "")
+        let clone = VoiceInfo(engine: .pocket, voiceID: "clone:x", name: "Me", gender: .female, age: .adult, accent: "")
         #expect(VoiceCasting.ageAdjusted(clone, for: .child) == clone.choice)
-    }
-}
-
-@Suite struct ChatterboxRunOnTests {
-    static let rate = 24_000.0
-    static func tone(_ seconds: Double) -> [Float] { (0..<Int(rate * seconds)).map { Float(sin(Double($0) * 0.05) * 0.3) } }
-    static func quiet(_ seconds: Double) -> [Float] { [Float](repeating: 0, count: Int(rate * seconds)) }
-
-    @Test func aRunOnAfterAShortLineIsCut() {
-        // "The path was underwater": 2 s said, a pause, 1.5 s made up.
-        let audio = Self.tone(2) + Self.quiet(0.7) + Self.tone(1.5)
-        let out = ChatterboxRunOn.trim(audio, sampleRate: Self.rate, text: "The path was underwater")
-        #expect(abs(Double(out.count) / Self.rate - 2.1) < 0.05)
-    }
-
-    @Test func aCommaPauseInALongLineIsKept() {
-        // 58 characters (about 4 s): the pause after 2.8 s is the comma.
-        let audio = Self.tone(2.8) + Self.quiet(0.5) + Self.tone(1)
-        let out = ChatterboxRunOn.trim(audio, sampleRate: Self.rate, text: "I told you the tide would turn before morning, and it did.")
-        #expect(out.count == audio.count)
-    }
-
-    @Test func shortPausesAndTrailingSilenceStay() {
-        let audio = Self.tone(2) + Self.quiet(0.2) + Self.tone(1) + Self.quiet(1)
-        #expect(ChatterboxRunOn.trim(audio, sampleRate: Self.rate, text: "Short.") == audio)
     }
 }

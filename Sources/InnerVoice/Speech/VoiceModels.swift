@@ -4,7 +4,7 @@ import InnerVoiceKit
 import MLXAudioCore
 import Observation
 
-/// The speech models Chatterbox and Orpheus need, downloaded from Hugging Face into
+/// The speech models Pocket TTS and Orpheus need, downloaded from Hugging Face into
 /// Application Support. Downloading is the only time they touch the network; the book's
 /// text never leaves the Mac.
 nonisolated struct VoicePack: Sendable {
@@ -22,30 +22,29 @@ nonisolated struct VoicePack: Sendable {
         bytes: 3_620_000_000,
         summary: "Eight natural American voices that act out the words, with sighs, laughs and gasps from the speech tags.")
 
-    static let chatterbox = VoicePack(
-        engine: .chatterbox,
-        repos: [VoicePack.chatterboxRepo, VoicePack.chatterboxTokenizerRepo],
-        bytes: 3_192_000_000,
-        summary: "Nine stock voices and the voices you clone on this Mac, kept the same on every line and acted in each tone. Uses about 4 GB of memory while it speaks.")
+    static let pocket = VoicePack(
+        engine: .pocket,
+        repos: [VoicePack.pocketRepo],
+        bytes: 240_000_000,
+        summary: "Kyutai's small, fast model: nine stock voices and the voices you clone on this Mac, kept the same on every line. Uses about 1 GB of memory while it speaks.")
 
-    /// Chatterbox (Resemble AI, MIT): clones a voice from a short clip and speaks the lines.
-    static let chatterboxRepo = "mlx-community/Chatterbox-TTS-fp16"
-    /// The speech tokenizer Chatterbox reads a clip with (part of Chatterbox's design; it
-    /// comes from CosyVoice 2).
-    static let chatterboxTokenizerRepo = "mlx-community/S3TokenizerV2"
+    /// Pocket TTS (Kyutai, CC BY 4.0; mlx-community's MLX copy of kyutai/pocket-tts): one
+    /// download holds the speech model, its Mimi audio codec (Kyutai) and its text
+    /// tokenizer. It clones a voice from a short clip and speaks the lines.
+    static let pocketRepo = "mlx-community/pocket-tts"
 
     static func pack(for engine: VoiceEngine) -> VoicePack? {
         switch engine {
         case .apple, .mixed, .elevenlabs: nil
         case .orpheus: orpheus
-        case .chatterbox: chatterbox
+        case .pocket: pocket
         }
     }
 
-    /// mlx-audio loads Chatterbox's speech tokenizer from its default Hugging Face cache, which
-    /// is ~/.cache/huggingface unless `HF_HUB_CACHE` says otherwise: point it at the voice
-    /// models, so it finds the copy downloaded with the pack and never fetches one elsewhere.
-    /// Called at launch, before anything reads the default cache.
+    /// Parts of mlx-audio read files from its default Hugging Face cache, which is
+    /// ~/.cache/huggingface unless `HF_HUB_CACHE` says otherwise: point it at the voice
+    /// models, so anything it looks up there is the copy downloaded with a pack and nothing is
+    /// fetched elsewhere. Called at launch, before anything reads the default cache.
     static func pinHubCache() {
         let base = ProcessInfo.processInfo.environment["APP_VOICE_MODELS"].map { URL(fileURLWithPath: $0) }
             ?? URL.applicationSupportDirectory.appending(path: "Inner Voice/Voice Models")
@@ -212,7 +211,7 @@ final class VoiceModelManager {
             let hub = VoicePack.folder.appending(path: "models--" + repo.replacingOccurrences(of: "/", with: "--"))
             trash(hub)
         }
-        if pack.engine == .chatterbox { ChatterboxClips.forget() }
+        if pack.engine == .pocket { PocketClips.forget() }
         revision += 1
     }
 

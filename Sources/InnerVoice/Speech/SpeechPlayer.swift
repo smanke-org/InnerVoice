@@ -83,7 +83,7 @@ struct VoiceResolver {
         return shades[id]
     }
 
-    // Voice Notes don't reach the on-device engines when they speak: Chatterbox, Orpheus and
+    // Voice Notes don't reach the on-device engines when they speak: Pocket TTS, Orpheus and
     // Apple's voices can't take a description. ElevenLabs gets the notes once, when it
     // designs a voice from them (Voice Design, on the narrator's click).
 
@@ -107,13 +107,13 @@ struct VoiceResolver {
     }
 
     /// A voice when nothing is cast yet: the best Apple voice, Orpheus's first, or
-    /// Chatterbox's own voice.
+    /// Pocket TTS's own voice.
     @MainActor
     static func fallback(_ engine: VoiceEngine) -> VoiceChoice? {
         switch engine {
         case .apple: VoiceCatalog.appleVoices().first.map { VoiceChoice(engine: .apple, voiceID: $0.voiceID) }
         case .orpheus: VoiceChoice(engine: .orpheus, voiceID: "tara")
-        case .chatterbox: VoiceInfo.chatterbox.first?.choice
+        case .pocket: VoiceInfo.pocket.first?.choice
         case .elevenlabs: ElevenLabs.shared.voices.first?.choice
         case .mixed: EngineSwitches.shared.enabled.first.flatMap { $0 == .mixed ? nil : fallback($0) }
         }
@@ -151,7 +151,7 @@ final class SpeechPlayer {
     private(set) var isPlaying = false
     /// "Making Mara’s voice…" while the first audio is being made.
     private(set) var preparing = false
-    /// The engine making the first audio (for "Getting Chatterbox ready…").
+    /// The engine making the first audio (for "Getting Pocket TTS ready…").
     private(set) var preparingEngine: VoiceEngine?
     var failure: String?
 

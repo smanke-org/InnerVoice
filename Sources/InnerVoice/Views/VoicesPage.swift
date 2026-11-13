@@ -566,7 +566,7 @@ struct ShadeEditor: View {
 
     private func note(_ engine: VoiceEngine) -> String {
         switch engine {
-        case .chatterbox: "Chatterbox shifts the clip it copies the narrator’s voice from, so it stays the same voice."
+        case .pocket: "Pocket TTS shifts the clip it copies the narrator’s voice from, so it stays the same voice."
         case .apple: "Apple’s voices change pitch and speed."
         default: "\(engine.title) shifts the finished audio. Keep it within 2 to sound natural."
         }
@@ -683,7 +683,7 @@ struct VoiceChooser: View {
             if ElevenLabs.shared.isSetUp, ElevenLabs.shared.voices.isEmpty, engine == .elevenlabs || engine == .mixed { cloudVoicesMissing }
             suggestions
             if let onClone { cloneOffer(onClone) }
-            if engine == .chatterbox || (engine == .mixed && EngineSwitches.shared.usable(.chatterbox)) { descriptionNote }
+            if engine == .pocket || (engine == .mixed && EngineSwitches.shared.usable(.pocket)) { descriptionNote }
             if let c = character, showsCloudDesign { cloudDesign(c) }
             if !compact { allVoices }
         }
@@ -906,14 +906,14 @@ struct VoiceChooser: View {
 
     // MARK: Descriptions
 
-    /// Chatterbox can't make a voice from words: say so where a description used to go, and
+    /// Pocket TTS can't make a voice from words: say so where a description used to go, and
     /// point to what can.
     private var descriptionNote: some View {
         VStack(alignment: .leading, spacing: Space.sm) {
             Text("Voices from a Description").font(.headline)
             Text(character == nil
-                 ? "Chatterbox can’t make a voice from a description: it speaks in its stock voices and in voices you clone. To get a voice from a description, use Design a Voice from Voice Notes with ElevenLabs (Cloud; set it up in Settings › Voices)."
-                 : "Chatterbox can’t make a voice from a description: it speaks in its stock voices and in voices you clone. \(character!.firstName)’s Voice Notes help casting choose a voice (gender, age, pitch and pace), but they don’t change how a Chatterbox voice sounds. To get a voice from \(character!.firstName)’s description, use Design a Voice from Voice Notes with ElevenLabs (Cloud; set it up in Settings › Voices).")
+                 ? "Pocket TTS can’t make a voice from a description: it speaks in its stock voices and in voices you clone. To get a voice from a description, use Design a Voice from Voice Notes with ElevenLabs (Cloud; set it up in Settings › Voices)."
+                 : "Pocket TTS can’t make a voice from a description: it speaks in its stock voices and in voices you clone. \(character!.firstName)’s Voice Notes help casting choose a voice (gender, age, pitch and pace), but they don’t change how a Pocket TTS voice sounds. To get a voice from \(character!.firstName)’s description, use Design a Voice from Voice Notes with ElevenLabs (Cloud; set it up in Settings › Voices).")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -972,7 +972,7 @@ struct VoiceChooser: View {
     private func cloneOffer(_ open: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: Space.sm) {
             Text("Clone a Voice").font(.headline)
-            Text("Make a voice from a recording of a real person, with their consent: on this Mac with Chatterbox (free, nothing leaves the Mac), or with ElevenLabs. Every project can use it.")
+            Text("Make a voice from a recording of a real person, with their consent: on this Mac with Pocket TTS (free, nothing leaves the Mac), or with ElevenLabs. Every project can use it.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

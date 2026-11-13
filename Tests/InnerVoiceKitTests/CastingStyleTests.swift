@@ -51,11 +51,11 @@ import Testing
         p.settings.narrationRole = .women
         p.settings.minorVoices = .byGender
         p.settings.shadeStrength = .strong
-        p.settings.setRoleVoice(CastVoice(choice: VoiceChoice(engine: .chatterbox, voiceID: "stock:dan"), confidence: 0.9, source: .auto), .men, for: .chatterbox)
+        p.settings.setRoleVoice(CastVoice(choice: VoiceChoice(engine: .pocket, voiceID: "stock:dan"), confidence: 0.9, source: .auto), .men, for: .pocket)
         let back = try JSONDecoder().decode(Project.self, from: JSONEncoder().encode(p))
         #expect(back == p)
-        #expect(back.settings.roleVoice(.men, for: .chatterbox)?.choice.voiceID == "stock:dan")
-        #expect(back.settings.roleVoice(.women, for: .chatterbox) == nil)
+        #expect(back.settings.roleVoice(.men, for: .pocket)?.choice.voiceID == "stock:dan")
+        #expect(back.settings.roleVoice(.women, for: .pocket) == nil)
     }
 
     @Test func clearingTheLastRoleVoiceLeavesNothingBehind() {
@@ -129,7 +129,7 @@ import Testing
     @Test func changingStylesKeepsEveryVoiceAndAssignment() throws {
         var p = Project(title: "T")
         var c = Self.character("Kade", gender: .male)
-        c.setVoice(CastVoice(choice: VoiceChoice(engine: .chatterbox, voiceID: "stock:zac"), confidence: 1, source: .user), for: .chatterbox)
+        c.setVoice(CastVoice(choice: VoiceChoice(engine: .pocket, voiceID: "stock:zac"), confidence: 1, source: .user), for: .pocket)
         c.narratorID = UUID()
         p.characters = [c]
         let before = p.characters

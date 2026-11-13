@@ -237,7 +237,7 @@ struct SeriesVoicesSheet: View {
         }
     }
 
-    /// "214 lines · Tara · Chatterbox": the voice on the earlier book's engine.
+    /// "214 lines · Tara · Pocket TTS": the voice on the earlier book's engine.
     private func voiceSummary(_ c: BookCharacter, old: Project) -> String {
         let lines = oldIndex.stats[c.id]?.lines ?? 0
         let v = c.voice(for: old.settings.engine) ?? c.voices?.values.first

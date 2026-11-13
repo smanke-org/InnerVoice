@@ -1,7 +1,7 @@
 @preconcurrency import AVFoundation
 import InnerVoiceKit
 
-/// Shading one voice for a character (Casting Style, docs/CASTING-STYLE.md §6). Chatterbox
+/// Shading one voice for a character (Casting Style, docs/CASTING-STYLE.md §6). Pocket TTS
 /// shifts the clip before cloning (as Qwen3-TTS did: exact, and ±2 semitones kept the
 /// narrator's voice); Orpheus and ElevenLabs shift the finished audio; Apple's voices take
 /// pitch and rate.

@@ -153,8 +153,8 @@ import Testing
             p.characters[i].facts = [Fact(kind: .age, text: "About sixty", sourceParagraphID: p.chapters[0].paragraphs[8].id,
                                           quote: "sixty if he was a day", fromAI: true)]
             p.characters[i].voiceNotes = "Gravel, Highland burr."
-            p.characters[i].setVoice(CastVoice(choice: VoiceChoice(engine: .chatterbox, voiceID: "stock:dan", pitch: 0.89),
-                                               confidence: 0.8, source: .user), for: .chatterbox)
+            p.characters[i].setVoice(CastVoice(choice: VoiceChoice(engine: .pocket, voiceID: "stock:dan", pitch: 0.89),
+                                               confidence: 0.8, source: .user), for: .pocket)
             p.characters[i].pinned = true
             // Casting Style (docs/CASTING-STYLE.md): the narrator's gender, main mark, role
             // and shade.
@@ -167,10 +167,10 @@ import Testing
         p.settings.narrationRole = .narrator
         p.settings.minorVoices = .byGender
         p.settings.shadeStrength = .subtle
-        p.settings.setRoleVoice(CastVoice(choice: VoiceChoice(engine: .chatterbox, voiceID: "stock:leo"), confidence: 0.9, source: .auto),
-                                .men, for: .chatterbox)
+        p.settings.setRoleVoice(CastVoice(choice: VoiceChoice(engine: .pocket, voiceID: "stock:leo"), confidence: 0.9, source: .auto),
+                                .men, for: .pocket)
         p.lines[0].aiModel = "gemma-4-e2b"
-        p.settings.voiceEngine = .chatterbox
+        p.settings.voiceEngine = .pocket
         p.settings.purpose = .aiVoices
         p.settings.cloudVoicesAllowed = Date(timeIntervalSinceReferenceDate: 800_000_000.25)
         p.settings.stepsDone = ["manuscript"]
@@ -565,13 +565,13 @@ import Testing
         let contents = try ProjectArchive.read(data)
         var p = try JSONDecoder().decode(Project.self, from: contents.projectJSON)
         #expect(p.settings.purpose == .aiVoices)
-        // Saved with Qwen3-TTS: the engine reads as Chatterbox, and opening it (migrate)
+        // Saved with Qwen3-TTS: the engine reads as Pocket TTS, and opening it (migrate)
         // turns the designed voice, the narrator's own choice, into a stock voice that stays his.
-        #expect(p.settings.voiceEngine == .chatterbox)
+        #expect(p.settings.voiceEngine == .pocket)
         #expect(p.characters.contains { $0.voices?[VoiceEngine.retiredQwen]?.choice.voiceID == "design" })
         #expect(LegacyVoices.migrate(&p))
         #expect(!LegacyVoices.needsMigration(p))
-        #expect(p.characters.contains { $0.voice(for: .chatterbox).map { $0.source == .user && $0.choice.voiceID.hasPrefix("stock:") } == true })
+        #expect(p.characters.contains { $0.voice(for: .pocket).map { $0.source == .user && $0.choice.voiceID.hasPrefix("stock:") } == true })
         #expect(p.lines.contains { $0.tone != nil })
         #expect(contents.audio["Kerensa.m4a"] != nil)
         print("WindowsFixtures: read the Windows-saved project, \(p.lines.count) lines")
