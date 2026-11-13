@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- `innervoice`, the command line for agents and scripts (the Mac's app binary run with a
+       command). A console program of its own, because the app is a windowed program and
+       Windows gives those no console. Published into the app's cli\ folder; the Store
+       package puts it on PATH as innervoice.exe. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>innervoice</AssemblyName>
+    <RootNamespace>InnerVoice.Cli</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <PublishTrimmed Condition="'$(PublishSingleFile)' == 'true'">true</PublishTrimmed>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\InnerVoice.Agent\InnerVoice.Agent.csproj" />
+  </ItemGroup>
+</Project>

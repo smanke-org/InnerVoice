@@ -1,6 +1,8 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/InnerVoice.Agent/InnerVoice.Agent.csproj" />
     <Project Path="src/InnerVoice.App/InnerVoice.App.csproj" />
+    <Project Path="src/InnerVoice.Cli/InnerVoice.Cli.csproj" />
     <Project Path="src/InnerVoice.Core/InnerVoice.Core.csproj" />
   </Folder>
   <Folder Name="/tests/">

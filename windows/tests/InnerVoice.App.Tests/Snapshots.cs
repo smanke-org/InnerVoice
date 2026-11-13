@@ -19,7 +19,14 @@ namespace InnerVoice.App.Tests;
 public static class TestApp
 {
     [ModuleInitializer]
-    public static void Init() => Environment.SetEnvironmentVariable("INNERVOICE_TEST", "1");
+    public static void Init()
+    {
+        Environment.SetEnvironmentVariable("INNERVOICE_TEST", "1");
+        // An agent test copy of its own (AgentAppTests): its own pipe and folder, so nothing
+        // here can reach the person's running InnerVoice or their settings.
+        Environment.SetEnvironmentVariable("APP_AGENT_PIPE", null);
+        Environment.SetEnvironmentVariable("APP_STORE", Path.Combine(Path.GetTempPath(), $"iv-apptests-{Guid.NewGuid():N}"));
+    }
 
     public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>()
         .UseSkia()

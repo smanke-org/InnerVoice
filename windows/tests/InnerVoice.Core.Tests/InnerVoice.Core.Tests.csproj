@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\InnerVoice.Core\InnerVoice.Core.csproj" />
+    <ProjectReference Include="..\..\src\InnerVoice.Agent\InnerVoice.Agent.csproj" />
   </ItemGroup>
 
 </Project>

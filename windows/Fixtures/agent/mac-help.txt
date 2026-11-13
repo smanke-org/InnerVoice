@@ -1,0 +1,39 @@
+innervoice: drive InnerVoice from the shell. Every command takes --json,
+and --project <name or path> where it works on one project (default: the frontmost).
+
+  status               Show the version, the open projects (the frontmost first), the model and whether it is ready, and what the AI is doing in each project.
+  open                 Show a page in a project's window: manuscript, cast, voices, index, pronunciations, record, retakes, review or revisions.
+  projects list        List the open projects, the frontmost first.
+  projects open        Open a saved project (.innervoice) in its own window, as File › Open… does.
+  projects new         Start a project from a manuscript (Word, PDF, RTF, text, Markdown, OpenDocument, Pages, EPUB or HTML), as File › New from Manuscript… does: finds every line and runs the plain rules.
+  projects save        Save a project, as File › Save does.
+  chapters list        List the chapters in book order.
+  lines list           List lines in book order.
+  lines assign         Give lines to a character, as Assign To does in the manuscript (one Edit › Undo step).
+  lines kind           Change what kind of line these are: spoken, thought or written (one Edit › Undo step).
+  lines tone           Set how lines are said, as Tone does in the line's menu (one Edit › Undo step): neutral, excited, confused, sad, angry, whispered, scared, tender or sarcastic.
+  lines reveal         Show a line in the manuscript, selected, as clicking it in the Index does.
+  characters list      List the cast, most lines first.
+  characters show      Show one character: summary facts with their sources ("Ch 2 ¶4") and Revealed Late flags, notes, voice notes, narrator, and line and word counts.
+  characters merge     Make two characters one, as Merge does in Cast: every line and fact of FROM moves to TO, and FROM's names become TO's aliases.
+  characters rename    Rename a character, as editing the name on its Cast page does.
+  characters color     Change a character's color in the manuscript.
+  casting style        Show or change the book's Casting Style: one-voice (One Voice, or Just Me when narrating), shared (Narrator + Two Voices, or Three Narrators) or full-cast.
+  characters gender    Set a character's gender: male, female, other, or auto (what the book says).
+  characters main      Mark a character as a main character (yes), not main (no), or neither (auto).
+  characters read-by   Choose who reads a character under the Casting Style: narrator, men, women, other, own (a voice or narrator of their own), or auto (the style decides).
+  characters shade     Set how the narrator shades a character: pitch (-4 to 4 semitones, lower to higher), pace (-2 to 2) and a few words, or --auto to go back to the shade worked out from gender, age and the voice brief.
+  tag start            Start Tag Speakers: the on-device model decides who speaks every line the narrator and the rules haven't settled.
+  tag stop             Stop Tag Speakers or Build Summaries.
+  tag status           Show what the AI is doing in a project: job, progress (0 to 1), message, the last run's result or failure, and how many lines still need you.
+  summaries start      Start Build Summaries: the model reads about each character (most lines first) and adds facts with their sources.
+  pronunciations list  List the pronunciation terms.
+  pronunciations set   Say how to pronounce a term, as typing in the Pronunciations list does.
+  export               Export a Narrator Script, the tagged manuscript, the cast list or the pronunciation guide, as File › Export… does, to a file.
+  model list           List the models InnerVoice can use, with advice for this Mac's memory.
+  model select         Choose the model Tag Speakers and Build Summaries use, as Use This Model does: a downloaded model's id, "apple" for Apple's on-device model, or the path to your own .gguf file.
+  model download       Download a model from the list (2.5 to 19 GB from Hugging Face; the only network use besides updates).
+
+More: innervoice help <command>, innervoice help --json (every command as a schema).
+MCP server for Claude Desktop and other clients: innervoice mcp.
+Exit codes: 0 ok, 1 error, 2 usage, 3 not found, 4 app not running.

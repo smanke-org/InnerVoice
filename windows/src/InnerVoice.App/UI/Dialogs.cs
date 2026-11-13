@@ -94,7 +94,7 @@ public static class Dialogs
     public static readonly FilePickerFileType Projects = new("InnerVoice Projects") { Patterns = ["*.innervoice"] };
     public static readonly FilePickerFileType Manuscripts = new("Manuscripts")
     {
-        Patterns = ["*.docx", "*.pdf", "*.rtf", "*.txt", "*.text", "*.md", "*.markdown", "*.odt", "*.epub", "*.html", "*.htm", "*.xhtml"],
+        Patterns = ["*.docx", "*.pdf", "*.rtf", "*.txt", "*.text", "*.md", "*.markdown", "*.odt", "*.pages", "*.epub", "*.html", "*.htm", "*.xhtml"],
     };
 
     public static async Task<string?> OpenFile(Visual from, string title, params FilePickerFileType[] types)

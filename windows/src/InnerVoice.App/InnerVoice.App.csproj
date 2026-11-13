@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\InnerVoice.Core\InnerVoice.Core.csproj" />
+    <ProjectReference Include="..\InnerVoice.Agent\InnerVoice.Agent.csproj" />
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 
@@ -31,4 +32,10 @@
   <ItemGroup Condition="'$(RuntimeIdentifier)' != '' And Exists('..\..\native\$(RuntimeIdentifier)')">
     <None Include="..\..\native\$(RuntimeIdentifier)\*.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Link="%(Filename)%(Extension)" Visible="false" />
   </ItemGroup>
+
+  <!-- The `innervoice` CLI (src/InnerVoice.Cli) goes into the app's cli\ folder: one small
+       self-contained file, since a windowed program gets no console on Windows. -->
+  <Target Name="PublishAgentCli" AfterTargets="Publish" Condition="'$(RuntimeIdentifier)' != ''">
+    <Exec Command="&quot;$(DOTNET_HOST_PATH)&quot; publish &quot;$(MSBuildThisFileDirectory)../InnerVoice.Cli/InnerVoice.Cli.csproj&quot; -c $(Configuration) -r $(RuntimeIdentifier) --self-contained -p:PublishSingleFile=true -o &quot;$(PublishDir)cli&quot;" />
+  </Target>
 </Project>

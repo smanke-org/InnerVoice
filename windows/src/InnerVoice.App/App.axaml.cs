@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
+using InnerVoice.App.Agent;
 using InnerVoice.App.Document;
 using InnerVoice.App.UI;
 using InnerVoice.App.Windows;
@@ -17,7 +18,16 @@ public partial class App : Application
     public static string Version => typeof(App).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "0.1.0";
 
     readonly List<ProjectWindow> projects = [];
+    /// The project windows, the one used most recently last (the agent's frontmost).
+    readonly List<ProjectWindow> recent = [];
     StartWindow? start;
+    bool background;
+
+    public IReadOnlyList<ProjectWindow> Projects => projects;
+    public Window? StartWindow => start;
+
+    /// The project window used last: the one agent commands work on by default.
+    public ProjectWindow? FrontProject => recent.LastOrDefault();
     IClassicDesktopStyleApplicationLifetime? desktop;
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
@@ -29,9 +39,22 @@ public partial class App : Application
         {
             desktop = d;
             d.ShutdownMode = ShutdownMode.OnLastWindowClose;
-            d.Exit += (_, _) => InnerVoice.App.AI.ModelManager.Shared.UnloadNow();
-            var files = (d.Args ?? []).Where(a => !a.StartsWith("--")).ToList();
-            foreach (var f in files) OpenPath(f);
+            d.Exit += (_, _) => { InnerVoice.App.AI.ModelManager.Shared.UnloadNow(); AgentServer.Stop(); };
+            var args = d.Args ?? [];
+            // Started by the CLI (`innervoice …`): open without taking the focus, as the Mac's `open -g`.
+            background = args.Contains("--agent");
+            if (AgentServer.ShouldListen)
+            {
+                AgentServer.Start();
+                ProtocolRegistration.RegisterIfNeeded();
+                if (AgentServer.OpensDemo) OpenSample();
+            }
+            var items = args.Where(a => !a.StartsWith("--")).ToList();
+            foreach (var item in items)
+            {
+                if (InnerVoice.Agent.AgentUrl.IsLink(item)) _ = AgentRouter.OpenLink(item);
+                else OpenPath(item);
+            }
             if (projects.Count == 0) ShowStart();
         }
         base.OnFrameworkInitializationCompleted();
@@ -50,9 +73,10 @@ public partial class App : Application
         {
             start = new StartWindow();
             start.Closed += (_, _) => start = null;
+            if (background) start.ShowActivated = false;
         }
         start.Show();
-        start.Activate();
+        if (!background) start.Activate();
     }
 
     void CloseStart()
@@ -65,6 +89,9 @@ public partial class App : Application
     {
         var w = new ProjectWindow(document);
         projects.Add(w);
+        recent.Add(w);
+        w.Activated += (_, _) => { recent.Remove(w); recent.Add(w); };
+        if (background) w.ShowActivated = false;
         w.Show();
         CloseStart();
         return w;
@@ -73,6 +100,7 @@ public partial class App : Application
     public void WindowClosed(ProjectWindow w)
     {
         projects.Remove(w);
+        recent.Remove(w);
         if (projects.Count == 0) ShowStart();
     }
 
@@ -142,12 +170,37 @@ public partial class App : Application
         _ = document.RecolorAutomaticAsync();
     }
 
+    /// Brings InnerVoice to the front: the frontmost project, or the Start window.
+    public void BringToFront()
+    {
+        background = false;
+        if (FrontProject is { } w)
+        {
+            if (w.WindowState == WindowState.Minimized) w.WindowState = WindowState.Normal;
+            w.Activate();
+        }
+        else ShowStart();
+    }
+
+    /// Opens a saved project for the agent: the open window when it's open already, else a
+    /// new one. Throws when it can't be read. Test copies leave Open Recent alone.
+    public (ProjectWindow Window, bool Opened) OpenProject(string path)
+    {
+        var open = projects.FirstOrDefault(p => p.Document.FilePath is { } fp && string.Equals(Path.GetFullPath(fp), Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase));
+        if (open is not null) return (open, false);
+        var doc = ProjectDocument.Open(path);
+        if (!AppPaths.IsTestRun) AppSettings.AddRecent(path);
+        var w = Show(doc);
+        _ = doc.RecolorAutomaticAsync();
+        return (w, true);
+    }
+
     /// The made-up sample story, tagged by the rules, not saved anywhere.
-    public void OpenSample()
+    public ProjectWindow OpenSample()
     {
         var blocks = PlainTextReader.Blocks(SampleStory.Markdown, markdown: true);
         var chapters = ChapterDetector.Chapters(blocks, SampleStory.Title);
         var project = ProjectBuilder.Make(new ImportedBook(SampleStory.Title, SampleStory.Author, chapters), "Sample Story.md");
-        Show(ProjectDocument.Unsaved(project));
+        return Show(ProjectDocument.Unsaved(project));
     }
 }

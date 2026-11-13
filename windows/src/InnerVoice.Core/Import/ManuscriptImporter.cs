@@ -8,14 +8,14 @@ public sealed class ImportException(string message) : Exception(message);
 public static partial class ManuscriptImporter
 {
     public static readonly string[] FileExtensions =
-        ["docx", "pdf", "rtf", "txt", "text", "md", "markdown", "odt", "epub", "html", "htm", "xhtml"];
+        ["docx", "pdf", "rtf", "txt", "text", "md", "markdown", "odt", "pages", "epub", "html", "htm", "xhtml"];
 
     public static string Unsupported(string name) =>
         $"InnerVoice can't open “{name}”. Save it as Word, PDF, RTF, plain text, Markdown, OpenDocument, EPUB or HTML, then try again.";
 
     public static ImportedBook Read(string path)
     {
-        var name = Path.GetFileName(path);
+        var name = Path.GetFileName(path.TrimEnd('/', '\\'));
         var ext = Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
         var title = Path.GetFileNameWithoutExtension(path);
         var author = "";
@@ -26,7 +26,7 @@ public static partial class ManuscriptImporter
             case "txt" or "text": blocks = PlainTextReader.Read(path, markdown: false); break;
             case "md" or "markdown": blocks = PlainTextReader.Read(path, markdown: true); break;
             case "doc": throw new ImportException($"InnerVoice can't open “{name}”, an older Word file. In Word, choose File › Save As › Word Document (.docx), then open that.");
-            case "pages": throw new ImportException($"Unable to read “{name}”. In Pages, choose File › Export To › Word, then open the Word file.");
+            case "pages": blocks = PagesReader.Read(path); break;
             default:
                 var other = ReadOther(path, ext) ?? throw new ImportException(Unsupported(name));
                 blocks = other.Blocks;
