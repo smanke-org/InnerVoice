@@ -40,10 +40,58 @@ public sealed class VoiceModels
     /// The hardware, read once (off the UI thread).
     async Task<VoiceHardware> Detected()
     {
-        detecting ??= Task.Run(() => AppPaths.IsTestRun && Environment.GetEnvironmentVariable("INNERVOICE_TEST_HARDWARE") is { } fake ? Fake(fake) : VoiceHardwareCheck.Detect());
+        // Unit tests use made-up hardware (or none); a real run and an agent test copy (APP_STORE)
+        // ask the graphics card, which only reads.
+        detecting ??= Task.Run(() =>
+            Environment.GetEnvironmentVariable("INNERVOICE_TEST_HARDWARE") is { } fake && AppPaths.IsTestRun ? Fake(fake)
+            : Environment.GetEnvironmentVariable("INNERVOICE_TEST") is { Length: > 0 } ? VoiceHardwareCheck.Detect(gpu: null)
+            : VoiceHardwareCheck.Detect(ProbeGpu()));
         var hw = await detecting;
         if (!HardwareKnown) Use(hw);
         return Hardware;
+    }
+
+    public const string ProbeArgument = "--voice-hardware";
+
+    /// The graphics card couldn't be checked (the probe crashed, hung or said nothing useful):
+    /// the voices run on the processor, and Settings says so.
+    public bool GpuUnknown { get; private set; }
+
+    /// Asks a copy of this app (`InnerVoice.exe --voice-hardware`) for the graphics card, so a
+    /// driver or DXGI call that crashes takes only that copy down. Windows only; null: none.
+    GpuInfo? ProbeGpu()
+    {
+        if (!OperatingSystem.IsWindows()) return null;
+        try
+        {
+            var exe = Environment.ProcessPath ?? throw new InvalidOperationException("no process path");
+            var start = new System.Diagnostics.ProcessStartInfo(exe)
+            {
+                UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true,
+            };
+            // Run as `dotnet InnerVoice.dll` (a debug run): the same, through dotnet.
+            if (Path.GetFileNameWithoutExtension(exe).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
+                start.ArgumentList.Add(typeof(VoiceModels).Assembly.Location);
+            start.ArgumentList.Add(ProbeArgument);
+            using var probe = System.Diagnostics.Process.Start(start) ?? throw new InvalidOperationException("didn't start");
+            var output = probe.StandardOutput.ReadToEndAsync();
+            _ = probe.StandardError.ReadToEndAsync();
+            if (!probe.WaitForExit(20_000))
+            {
+                try { probe.Kill(entireProcessTree: true); } catch (Exception) { }
+                throw new TimeoutException("the graphics card check didn't finish");
+            }
+            if (probe.ExitCode != 0) throw new InvalidOperationException($"the graphics card check stopped (exit {probe.ExitCode})");
+            var line = output.Result.Split('\n').Select(l => l.Trim()).LastOrDefault(l => l.Length > 0);
+            if (line == "none") return null;
+            return VoiceHardwareCheck.ParseGpu(line) ?? throw new InvalidOperationException($"unexpected answer: {line}");
+        }
+        catch (Exception e)
+        {
+            GpuUnknown = true;
+            SpeechLog.Write($"voice hardware: {e.Message}; using the processor");
+            return null;
+        }
     }
 
     /// Tests: "gpu:12,ram:32" or "cpu,ram:8".
@@ -60,7 +108,7 @@ public sealed class VoiceModels
         NeuralModels.Shared.MemoryGB = hw.MemoryGB;
         // DirectML only on a real DirectX 12 card with some memory of its own; integrated
         // graphics share the PC's memory and are often no faster than the processor.
-        Onnx.PreferGpu = hw.HasGpu && hw.GpuMemoryGB >= 2;
+        Onnx.PreferGpu = VoiceHardwareCheck.UsesGpu(hw);
         Onnx.GpuDevice = hw.GpuIndex;
         Changed?.Invoke();
     }

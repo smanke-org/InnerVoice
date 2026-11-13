@@ -405,8 +405,10 @@ public sealed partial class SettingsWindow
         if (!models.HardwareKnown) col.Children.Add(Ui.Caption("Checking the graphics card and memory…"));
         else
         {
-            col.Children.Add(Ui.Text(hw.HasGpu
+            col.Children.Add(Ui.Text(VoiceHardwareCheck.UsesGpu(hw)
                 ? $"Graphics card: {hw.GpuName}, {hw.GpuMemoryGB:0.#} GB of video memory (DirectX 12)."
+                : hw.HasGpu ? $"Graphics card: {hw.GpuName}, with {hw.GpuMemoryGB:0.#} GB of video memory of its own, so the voice models run on the processor."
+                : models.GpuUnknown ? "Graphics card: InnerVoice couldn’t check it, so the voice models run on the processor."
                 : "Graphics card: none that runs DirectX 12 with memory of its own, so the voice models run on the processor.", 12, wrap: TextWrapping.Wrap));
             col.Children.Add(Ui.Text($"Memory: {hw.MemoryGB} GB. Processor: {hw.CpuName} ({hw.CpuThreads} threads, {hw.Architecture}).", 12, wrap: TextWrapping.Wrap));
         }
