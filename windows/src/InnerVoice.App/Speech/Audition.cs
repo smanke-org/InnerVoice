@@ -43,4 +43,21 @@ public static class Audition
         resolver.Characters.Clear();
         SpeechPlayer.Shared.Play([seg], resolver);
     }
+
+    /// A Pronunciations entry said in the book's narrator voice, the way a line would be
+    /// (the Mac's `PlayCommand.hear`): the sentence where it's first used, with every entry
+    /// applied, or the word alone.
+    public static void Hear(Pronunciation p, ProjectDocument document)
+    {
+        var project = document.Project;
+        var index = document.Index;
+        var seg = new SpeechSegment
+        {
+            Id = "pronunciation", ParagraphID = Guid.NewGuid(), LineID = null,
+            Text = SpeechScript.PronunciationSample(p, project, index), Tone = Tone.Neutral, PauseAfter = 0, Pause = PauseKind.None,
+        };
+        var resolver = new VoiceResolver(project, null, index, writtenByNarrator: AppSettings.Current.WrittenByNarrator);
+        resolver.Characters.Clear();
+        SpeechPlayer.Shared.Play([seg], resolver);
+    }
 }

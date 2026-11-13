@@ -87,6 +87,46 @@ public static class PronunciationFinder
     /// Swift's `String.capitalized`: first letter of each word upper, the rest lower.
     static string Capitalized(string w) => w.Length == 0 ? w : char.ToUpperInvariant(w[0]) + w[1..].ToLowerInvariant();
 
+    /// The word Fix Pronunciation… offers (the Mac's `pronunciationWord`): a selection of up
+    /// to three words, else the word at `position`, without a possessive ending ('s, ’s) or
+    /// punctuation around it, since one entry covers those. null when there's no word.
+    public static string? WordToFix(string text, int position, TextSpan? selection = null)
+    {
+        var range = selection is { Length: > 0 } sel ? sel : WordAt(text, position);
+        if (range.Length <= 0 || range.Location < 0 || range.End > text.Length) return null;
+        var w = Trim(text.Substring(range.Location, range.Length));
+        foreach (var end in new[] { "'s", "’s" })
+            if (w.ToLowerInvariant().EndsWith(end, StringComparison.Ordinal)) w = w[..^2];
+        if (w.Length == 0 || w.Length > 60 || w.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length > 3 || !w.Any(char.IsLetter)) return null;
+        return w;
+    }
+
+    static string Trim(string s)
+    {
+        int a = 0, b = s.Length;
+        while (a < b && (char.IsWhiteSpace(s[a]) || char.IsPunctuation(s[a]))) a++;
+        while (b > a && (char.IsWhiteSpace(s[b - 1]) || char.IsPunctuation(s[b - 1]))) b--;
+        return s[a..b];
+    }
+
+    /// The word around `position`, like double-clicking it: letters and digits, with
+    /// apostrophes inside ("Barnaby's"); a hyphen ends it.
+    static TextSpan WordAt(string text, int position)
+    {
+        bool InWord(int i) => i >= 0 && i < text.Length && (char.IsLetterOrDigit(text[i])
+            || (text[i] is '\'' or '’' && i > 0 && i + 1 < text.Length && char.IsLetterOrDigit(text[i - 1]) && char.IsLetterOrDigit(text[i + 1])));
+        int pos = Math.Clamp(position, 0, text.Length);
+        if (!InWord(pos))
+        {
+            if (!InWord(pos - 1)) return new TextSpan(pos, 0);
+            pos--;
+        }
+        int start = pos, end = pos + 1;
+        while (InWord(start - 1)) start--;
+        while (InWord(end)) end++;
+        return new TextSpan(start, end - start);
+    }
+
     /// Adds new candidates to the project's list, keeping the narrator's entries and dismissals.
     public static void Refresh(Project project, Func<string, bool> isKnownWord)
     {

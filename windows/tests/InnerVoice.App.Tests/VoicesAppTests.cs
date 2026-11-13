@@ -151,6 +151,63 @@ public class VoicesAppTests
     }
 
     [AvaloniaFact]
+    public async Task FixPronunciationTeachesTheVoices()
+    {
+        var fake = Setup();
+        try
+        {
+            var doc = AiBook();
+            var w = new ProjectWindow(doc) { Width = 1280, Height = 820 };
+            w.Show();
+            Pump();
+            var manuscript = (ManuscriptPage)w.FindPage(PageKind.Manuscript);
+            var para = doc.Project.Chapters.SelectMany(c => c.Paragraphs).First(p => p.Text.Contains("Mara") && p.Style == ParagraphStyle.Body);
+            int before = doc.Project.Pronunciations.Count;
+            manuscript.FixPronunciation("Mara", para.Id);
+            Pump();
+            Assert.Equal(PageKind.Pronunciations, w.Workspace.Page);
+            Assert.Equal("Fix Pronunciation", doc.UndoName);
+            var entry = doc.Project.Pronunciations.Single(p => p.Term == "Mara");
+            Assert.True(entry.AddedByUser);
+            Assert.Equal(1, entry.Occurrences);
+            Assert.Equal(para.Id, entry.FirstParagraphID);
+            var page = Assert.IsType<PronunciationsPage>(w.FindPage(PageKind.Pronunciations));
+            Assert.Equal([entry.Id], page.Selected);
+            // The narrator's own entries come first.
+            Assert.Equal(entry.Id, page.Listed[0].Id);
+
+            // A plural finds the same entry, and a dismissed one comes back.
+            doc.Change("Dismiss Terms", p => p.Pronunciations.First(x => x.Id == entry.Id).Dismissed = true);
+            w.Workspace.Go(PageKind.Manuscript);
+            manuscript.FixPronunciation("Maras", para.Id);
+            Pump();
+            Assert.Equal(before + 1, doc.Project.Pronunciations.Count);
+            Assert.False(doc.Project.Pronunciations.Single(p => p.Term == "Mara").Dismissed);
+            Assert.Equal(PageKind.Pronunciations, w.Workspace.Page);
+
+            // Say It As and Match Case are undoable edits; the play button says the first sentence
+            // with the spelling, in the narrator's voice.
+            doc.Change("Edit Pronunciation", p => { var x = p.Pronunciations.First(x => x.Id == entry.Id); x.SayItAs = "MAH-ruh"; x.MatchCase = true; });
+            Pump();
+            Assert.Contains("1 of", page.Subtitle);
+            Audition.Hear(doc.Project.Pronunciations.First(p => p.Id == entry.Id), doc);
+            await WaitForPlayer();
+            Assert.Null(SpeechPlayer.Shared.Failure);
+            Assert.Contains("MAH-ruh", fake.Rendered.Last().Text);
+            Assert.DoesNotContain("Mara", fake.Rendered.Last().Text);
+            doc.Undo();
+            Assert.False(doc.Project.Pronunciations.First(p => p.Id == entry.Id).MatchCase);
+
+            // Narration Tools has no Pronunciations page: the window leaves it.
+            doc.SetPurpose(ProjectPurpose.Narration);
+            Pump();
+            Assert.Equal(PageKind.Manuscript, w.Workspace.Page);
+            w.Close();
+        }
+        finally { Restore(); }
+    }
+
+    [AvaloniaFact]
     public async Task PlayLineAndPlayFromHere()
     {
         var fake = Setup();

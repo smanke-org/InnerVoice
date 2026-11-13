@@ -359,18 +359,59 @@ public static class SpeechScript
         return s[a..b];
     }
 
-    public static List<(string Term, string Say)> Sayings(Project project) => project.Pronunciations
-        .Where(p => !p.Dismissed && p.SayItAs.Trim().Length > 0)
-        .Select(p => (p.Term, p.SayItAs))
+    /// One Pronunciations entry, ready to swap into speech.
+    public sealed record Saying(string Term, string Say, bool MatchCase = false);
+
+    public static List<Saying> Sayings(Project project) => project.Pronunciations
+        .Where(p => !p.Dismissed && p.SayItAs.Trim().Length > 0 && p.Term.Trim().Length > 0)
+        .Select(p => new Saying(p.Term.Trim(), p.SayItAs.Trim(), p.MatchCase))
         .OrderByDescending(x => x.Term.Length)
         .ToList();
 
-    /// "Kerensa" → "keh-REN-sa" from the pronunciation guide, whole words only.
-    public static string Apply(IEnumerable<(string Term, string Say)> sayings, string text)
+    /// What a Pronunciations entry's play button says (the Mac's `PlayCommand.hear`): the
+    /// sentence where the term is first used (40 words at most, else the term alone), with
+    /// every entry applied, this one too even before it's in `Sayings`.
+    public static string PronunciationSample(Pronunciation p, Project project, BookIndex index)
+    {
+        var text = p.Term;
+        if (p.FirstParagraphID is { } pid && project.Paragraph(pid, index) is { } para && p.Term.Length > 0)
+        {
+            var ns = para.Text;
+            int hit = ns.IndexOf(p.Term, p.MatchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase);
+            if (hit >= 0)
+            {
+                int before = hit > 0 ? ns.LastIndexOf('.', hit - 1) : -1;
+                int start = before < 0 ? 0 : before + 1;
+                int afterHit = hit + p.Term.Length;
+                int after = afterHit < ns.Length ? ns.IndexOf('.', afterHit) : -1;
+                int end = after < 0 ? ns.Length : after + 1;
+                var sentence = ns[start..end].Trim();
+                if (Words.Count(sentence) <= 40) text = sentence;
+            }
+        }
+        var sayings = Sayings(project);
+        var term = p.Term.Trim();
+        if (term.Length > 0 && !sayings.Any(s => s.Term == term) && p.SayItAs.Trim().Length > 0)
+            sayings.Insert(0, new Saying(term, p.SayItAs.Trim(), p.MatchCase));
+        return Apply(sayings, text);
+    }
+
+    /// "Kerensa" → "keh-REN-sa" from the pronunciation guide, whole words only. One entry also
+    /// covers the plural ("Kerensas", "-es" after s, x, z, ch, sh) and possessives with either
+    /// apostrophe ("Kerensa's", "Kerensa’s", "Kerensas’"): the ending is kept after the spelling.
+    /// Capitals don't matter unless the entry says Match Case.
+    public static string Apply(IEnumerable<Saying> sayings, string text)
     {
         var output = text;
-        foreach (var (term, say) in sayings)
-            output = Regex.Replace(output, @"\b" + Regex.Escape(term) + @"\b", say.Replace("$", "$$"), RegexOptions.CultureInvariant);
+        foreach (var s in sayings)
+        {
+            if (s.Term.Length == 0) continue;
+            var lower = s.Term.ToLowerInvariant();
+            var plural = new[] { "s", "x", "z", "ch", "sh" }.Any(e => lower.EndsWith(e, StringComparison.Ordinal)) ? "es" : "s";
+            var pattern = @"(?<![\p{L}\p{N}])" + Regex.Escape(s.Term) + "(" + plural + @")?(?![\p{L}\p{N}])";
+            var options = RegexOptions.CultureInvariant | (s.MatchCase ? RegexOptions.None : RegexOptions.IgnoreCase);
+            output = Regex.Replace(output, pattern, s.Say.Replace("$", "$$") + "${1}", options);
+        }
         return output;
     }
 }

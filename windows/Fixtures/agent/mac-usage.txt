@@ -258,12 +258,13 @@ Example: innervoice pronunciations list --json
 === pronunciations set
 Say how to pronounce a term, as typing in the Pronunciations list does. Adds the term when it isn't there yet.
 
-  innervoice pronunciations set <term> [--say-it-as <string>] [--notes <string>] [--confirmed] [--project <string>]
+  innervoice pronunciations set <term> [--say-it-as <string>] [--notes <string>] [--confirmed] [--match-case] [--project <string>]
 
   term          the term (or its id)
   --say-it-as   how to say it, like SHEV-on
   --notes       your notes
   --confirmed   checked with the author or rights holder (true or false)
+  --match-case  only when the capitals match (true or false)
   --project     the project: its name, path or id from `innervoice projects list` (default: the frontmost)
 
 Example: innervoice pronunciations set Kerensa --say-it-as "keh-REN-sah" --json

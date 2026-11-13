@@ -18,6 +18,7 @@ public sealed partial class ProjectWindow
         yield return PageKind.Review;
         yield return PageKind.Cast;
         if (project.ShowsVoices) yield return PageKind.Voices;
+        if (project.ShowsPronunciations) yield return PageKind.Pronunciations;
         if (project.ShowsNarrationTools) yield return PageKind.Index;
         if (project.ShowsNarrationTools) yield return PageKind.Teleprompter;
         if (Document.Project.Revisions.Count > 0) yield return PageKind.Revisions;
@@ -29,6 +30,7 @@ public sealed partial class ProjectWindow
         PageKind.Index => new IndexPage(Document, Workspace),
         PageKind.Revisions => new RevisionsPage(Document, Workspace),
         PageKind.Voices => new VoicesPage(Document, Workspace),
+        PageKind.Pronunciations => new PronunciationsPage(Document, Workspace),
         _ => new ManuscriptPage(Document, Workspace),
     };
 

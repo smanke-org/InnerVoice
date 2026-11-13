@@ -72,6 +72,8 @@ public sealed partial class ProjectWindow
             view.Items.Add(kind is PageKind.Index or PageKind.Teleprompter ? Typed(item, p => p.ShowsNarrationTools) : item);
         }
         view.Items.Add(Typed(Item("Voi_ces", "Ctrl+5", () => { if (Document.Project.ShowsVoices) Workspace.Go(PageKind.Voices); }), p => p.ShowsVoices));
+        // Ctrl+6: the Mac's ⌘4 (Windows keeps Ctrl+4 and Ctrl+5 for the Teleprompter and Voices).
+        view.Items.Add(Typed(Item("_Pronunciations", "Ctrl+6", () => { if (Document.Project.ShowsPronunciations) Workspace.Go(PageKind.Pronunciations); }), p => p.ShowsPronunciations));
         view.Items.Add(Item("Re_view", null, () => Workspace.Go(PageKind.Review)));
         view.Items.Add(new Separator());
         foreach (var style in new[] { ColorStyle.Highlight, ColorStyle.Outline, ColorStyle.Underline })

@@ -449,6 +449,41 @@ struct ManuscriptTextView: NSViewRepresentable {
             layout.entries(in: range).compactMap { line($0)?.id }
         }
 
+        /// The word to fix: a selection of up to three words, else the word clicked, without a
+        /// possessive or plural ending (one entry covers those).
+        func pronunciationWord(at char: Int, selection: NSRange) -> String? {
+            guard let tv = textView else { return nil }
+            let ns = tv.string as NSString
+            let range = selection.length > 0 ? selection
+                : tv.selectionRange(forProposedRange: NSRange(location: min(char, max(ns.length - 1, 0)), length: 0), granularity: .selectByWord)
+            guard range.length > 0, NSMaxRange(range) <= ns.length else { return nil }
+            var w = ns.substring(with: range).trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+            for end in ["'s", "’s"] where w.lowercased().hasSuffix(end) { w = String(w.dropLast(2)) }
+            guard !w.isEmpty, w.count <= 60, w.split(separator: " ").count <= 3, w.contains(where: \.isLetter) else { return nil }
+            return w
+        }
+
+        /// Open Pronunciations on the word's entry, adding one when the guide doesn't have it.
+        func fixPronunciation(_ word: String, at char: Int, undo: UndoManager?) {
+            let existing = project.pronunciations.first { $0.term.compare(word, options: .caseInsensitive) == .orderedSame }
+                ?? project.pronunciations.first { word.lowercased().hasSuffix("s") && $0.term.compare(String(word.dropLast()), options: .caseInsensitive) == .orderedSame }
+            let id: UUID
+            if let existing {
+                id = existing.id
+                if existing.dismissed {
+                    document.change("Fix Pronunciation", undoManager: undo) { p in
+                        if let i = p.pronunciations.firstIndex(where: { $0.id == id }) { p.pronunciations[i].dismissed = false }
+                    }
+                }
+            } else {
+                let entry = Pronunciation(term: word, occurrences: 1, firstParagraphID: layout.paragraph(at: char), addedByUser: true)
+                id = entry.id
+                document.change("Fix Pronunciation", undoManager: undo) { $0.pronunciations.append(entry) }
+            }
+            parent.workspace.focusPronunciation = id
+            parent.workspace.page = .pronunciations
+        }
+
         func menu(for char: Int, selection: NSRange) -> NSMenu {
             let menu = NSMenu()
             var ids = selection.length > 0 ? lines(in: selection) : []
@@ -502,6 +537,12 @@ struct ManuscriptTextView: NSViewRepresentable {
                                                     speaker: nil, undoManager: undo)
                     self.parent.workspace.selectedLines = [id]
                     DispatchQueue.main.async { self.requestAssign(id) }
+                })
+            }
+            if project.showsPronunciations, let word = pronunciationWord(at: char, selection: selection) {
+                menu.addItem(.separator())
+                menu.addItem(ClosureMenuItem(title: "Fix Pronunciation of “\(word)”…") { [weak self] in
+                    self?.fixPronunciation(word, at: char, undo: undo)
                 })
             }
             if menu.items.count > 0 { menu.addItem(.separator()) }

@@ -31,8 +31,8 @@ that is marked "Dropped" or "Later" is now in scope:
     pipe. `status` gives a test copy's `pid` so a check can stop it by id.
   - Voice commands work as on the Mac (2026-11-13): `lines tone` (one undo step), `voice` in
     `characters list/show`, `open voices`, `casting style` shades from the voices, and `export
-    --kind pronunciations`. Windows has no Pronunciations page, so `open pronunciations` (and any
-    page the project type hides) shows the Manuscript. The `not_available` error code is gone.
+    --kind pronunciations`. Any page the project type hides shows the Manuscript instead. The
+    `not_available` error code is gone. Pronunciations has its own page since 2026-11-13.
   - Links: the Mac registers `innervoice://` but handles no link yet, so the Windows actions are
     new: the words after `innervoice://` name a command and the query its options, limited to
     the ones that only show things (`open`, `lines reveal`, `projects open`). The Mac should get

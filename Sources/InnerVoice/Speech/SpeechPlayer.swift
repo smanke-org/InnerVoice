@@ -358,4 +358,34 @@ enum PlayCommand {
         resolver.characters = [:]
         SpeechPlayer.shared.play([seg], resolver: resolver)
     }
+
+    /// A Pronunciations entry said in the book's narrator voice, the way a line would be:
+    /// the sentence where it's first used (with every entry applied), or the word alone.
+    static func hear(_ p: Pronunciation, document: InnerVoiceDocument) {
+        let project = document.project
+        let index = document.index
+        var text = p.term
+        if let pid = p.firstParagraphID, let para = project.paragraph(pid, index: index) {
+            let ns = para.text as NSString
+            let hit = ns.range(of: p.term, options: p.matchCase ? [] : [.caseInsensitive])
+            if hit.location != NSNotFound {
+                var sentence = ns.range(of: ".", options: .backwards, range: NSRange(location: 0, length: hit.location))
+                let start = sentence.location == NSNotFound ? 0 : sentence.location + 1
+                sentence = ns.range(of: ".", range: NSRange(location: NSMaxRange(hit), length: ns.length - NSMaxRange(hit)))
+                let end = sentence.location == NSNotFound ? ns.length : NSMaxRange(sentence)
+                let s = ns.substring(with: NSRange(location: start, length: end - start)).trimmingCharacters(in: .whitespacesAndNewlines)
+                if Words.count(s) <= 40 { text = s }
+            }
+        }
+        var sayings = SpeechScript.sayings(project)
+        if !sayings.contains(where: { $0.term == p.term }), !p.sayItAs.isEmpty {
+            sayings.insert(.init(p.term, p.sayItAs, matchCase: p.matchCase), at: 0)
+        }
+        var seg = SpeechSegment(id: "pronunciation", paragraphID: UUID(), lineID: nil, speakerID: nil,
+                                text: SpeechScript.apply(sayings, to: text), tone: .neutral, kind: nil, pauseAfter: 0)
+        seg.pause = .none
+        var resolver = VoiceResolver(project: project, engine: nil, index: index)
+        resolver.characters = [:]
+        SpeechPlayer.shared.play([seg], resolver: resolver)
+    }
 }

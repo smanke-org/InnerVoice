@@ -314,10 +314,23 @@ public struct Pronunciation: Codable, Identifiable, Hashable, Sendable {
     /// Found automatically; hidden once the narrator says it needs no entry.
     public var dismissed: Bool
     public var addedByUser: Bool
+    /// Only swap the term when its capitals match ("Will" the name, not "will"). Stored as nil
+    /// when off, so older files (and Windows) read it unchanged.
+    var matchCaseStored: Bool?
+    public var matchCase: Bool {
+        get { matchCaseStored ?? false }
+        set { matchCaseStored = newValue ? true : nil }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, term, sayItAs, notes, confirmed, audioFile, occurrences, firstParagraphID, dismissed, addedByUser
+        case matchCaseStored = "matchCase"
+    }
 
     public init(id: UUID = UUID(), term: String, sayItAs: String = "", notes: String = "", confirmed: Bool = false,
                 audioFile: String? = nil, occurrences: Int = 0, firstParagraphID: UUID? = nil,
-                dismissed: Bool = false, addedByUser: Bool = false) {
+                dismissed: Bool = false, addedByUser: Bool = false, matchCase: Bool = false) {
+        self.matchCaseStored = matchCase ? true : nil
         self.id = id
         self.term = term
         self.sayItAs = sayItAs

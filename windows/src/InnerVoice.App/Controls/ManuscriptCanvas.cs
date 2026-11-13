@@ -400,6 +400,14 @@ public sealed class ManuscriptCanvas : Control
         return (b, hit.TextPosition, hit.IsInside);
     }
 
+    /// The paragraph and the character in it at `p` (Fix Pronunciation's clicked word).
+    public (Paragraph Paragraph, int Position)? TextPositionAt(Point p)
+    {
+        var (b, pos, inside) = HitTest(p);
+        if (b?.Paragraph is null || pos < 0 || !inside) return null;
+        return (b.Paragraph, Math.Clamp(pos, 0, b.Text.Length));
+    }
+
     public Line? LineAt(Point p)
     {
         var (b, pos, inside) = HitTest(p);

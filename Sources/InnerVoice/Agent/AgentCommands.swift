@@ -514,14 +514,15 @@ enum AgentCommands {
                               .init(name: "say-it-as", help: "how to say it, like SHEV-on"),
                               .init(name: "notes", help: "your notes"),
                               .init(name: "confirmed", kind: .boolean, help: "checked with the author or rights holder (true or false)"),
+                              .init(name: "match-case", kind: .boolean, help: "only when the capitals match (true or false)"),
                               projectParam],
                      example: "innervoice pronunciations set Kerensa --say-it-as \"keh-REN-sah\" --json") { args in
             let (entry, document) = try project(args)
             let term = try args.required("term").trimmingCharacters(in: .whitespacesAndNewlines)
             guard !term.isEmpty else { throw AgentError.usage("the term can't be empty") }
-            let sayItAs = args.string("say-it-as"), notes = args.string("notes"), confirmed = try args.bool("confirmed")
-            guard sayItAs != nil || notes != nil || confirmed != nil else {
-                throw AgentError.usage("give --say-it-as, --notes or --confirmed. Example: innervoice pronunciations set Kerensa --say-it-as \"keh-REN-sah\"")
+            let sayItAs = args.string("say-it-as"), notes = args.string("notes"), confirmed = try args.bool("confirmed"), matchCase = try args.bool("match-case")
+            guard sayItAs != nil || notes != nil || confirmed != nil || matchCase != nil else {
+                throw AgentError.usage("give --say-it-as, --notes, --confirmed or --match-case. Example: innervoice pronunciations set Kerensa --say-it-as \"keh-REN-sah\"")
             }
             let existing = document.project.pronunciations.first { $0.term.caseInsensitiveCompare(term) == .orderedSame }
                 // An id only when it looks like one (8 characters), so a new term like "Bead" never hits an id.
@@ -530,6 +531,7 @@ enum AgentCommands {
                 if let sayItAs { p.sayItAs = sayItAs; p.dismissed = false }
                 if let notes { p.notes = notes }
                 if let confirmed { p.confirmed = confirmed }
+                if let matchCase { p.matchCase = matchCase }
             }
             if let existing {
                 document.change("Edit Pronunciation", undoManager: entry.undoManager) { p in
@@ -812,7 +814,7 @@ enum AgentCommands {
     }
 
     private static func pronunciationJSON(_ p: Pronunciation, _ document: InnerVoiceDocument) -> JSONObject {
-        ["id": short(p.id), "term": p.term, "sayItAs": p.sayItAs, "notes": p.notes, "confirmed": p.confirmed,
+        ["id": short(p.id), "term": p.term, "sayItAs": p.sayItAs, "notes": p.notes, "confirmed": p.confirmed, "matchCase": p.matchCase,
          "occurrences": p.occurrences, "first": p.firstParagraphID.map { document.index.reference($0) } ?? NSNull(),
          "hasSample": p.audioFile != nil, "dismissed": p.dismissed]
     }

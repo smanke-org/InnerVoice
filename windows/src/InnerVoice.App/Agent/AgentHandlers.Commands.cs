@@ -51,10 +51,7 @@ public static partial class AgentHandlers
                 "cast" => PageKind.Cast,
                 "voices" => PageKind.Voices,
                 "index" => PageKind.Index,
-                // The Windows app keeps pronunciations in the project (the agent's `pronunciations`
-                // commands, the guide in File › Export…) but has no page for them: the Mac's window
-                // shows the Manuscript for a page the project doesn't show.
-                "pronunciations" => null,
+                "pronunciations" => PageKind.Pronunciations,
                 "record" or "teleprompter" => PageKind.Teleprompter,
                 "review" => PageKind.Review,
                 "revisions" => PageKind.Revisions,
@@ -549,8 +546,9 @@ public static partial class AgentHandlers
             var sayItAs = args.String("say-it-as");
             var notes = args.String("notes");
             var confirmed = args.Bool("confirmed");
-            if (sayItAs is null && notes is null && confirmed is null)
-                throw AgentError.Usage("give --say-it-as, --notes or --confirmed. Example: innervoice pronunciations set Kerensa --say-it-as \"keh-REN-sah\"");
+            var matchCase = args.Bool("match-case");
+            if (sayItAs is null && notes is null && confirmed is null && matchCase is null)
+                throw AgentError.Usage("give --say-it-as, --notes, --confirmed or --match-case. Example: innervoice pronunciations set Kerensa --say-it-as \"keh-REN-sah\"");
             var existing = d.Project.Pronunciations.FirstOrDefault(p => string.Equals(p.Term, term, StringComparison.OrdinalIgnoreCase))
                 // An id only when it looks like one (8 characters), so a new term like "Bead" never hits an id.
                 ?? (term.Length == 8 ? UniquePrefix(term, d.Project.Pronunciations, p => p.Id) : null);
@@ -559,13 +557,15 @@ public static partial class AgentHandlers
                 if (sayItAs is not null) { p.SayItAs = sayItAs; p.Dismissed = false; }
                 if (notes is not null) p.Notes = notes;
                 if (confirmed is { } c) p.Confirmed = c;
+                if (matchCase is { } m) p.MatchCase = m;
             }
             if (existing is not null)
             {
                 var before = existing.Copy();
                 d.Change("Edit Pronunciation", p => { if (p.Pronunciations.FirstOrDefault(x => x.Id == existing.Id) is { } x) Apply(x); });
                 var now = d.Project.Pronunciations.FirstOrDefault(p => p.Id == existing.Id) ?? existing;
-                bool changed = before.SayItAs != now.SayItAs || before.Notes != now.Notes || before.Confirmed != now.Confirmed || before.Dismissed != now.Dismissed;
+                bool changed = before.SayItAs != now.SayItAs || before.Notes != now.Notes || before.Confirmed != now.Confirmed || before.Dismissed != now.Dismissed
+                    || before.MatchCase != now.MatchCase;
                 return new JObject { ["project"] = Name(w), ["added"] = false, ["changed"] = changed, ["pronunciation"] = PronunciationJSON(now, d) };
             }
             var added = new Pronunciation { Term = term, AddedByUser = true };

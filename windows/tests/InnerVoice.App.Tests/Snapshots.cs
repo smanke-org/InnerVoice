@@ -84,6 +84,16 @@ public class Snapshots
             (w.FindPage(PageKind.Cast) as CastPage)?.ShowCharacter(doc.Project.Characters[0].Id);
             Pump();
             w.CaptureRenderedFrame()?.Save(Path.Combine(dir, $"Character-{name}.png"), (int?)null);
+            // Pronunciations (a book made with AI voices), with the terms Find Terms lists and one spelling.
+            doc.Change("Find Terms", p =>
+            {
+                p.Settings.Purpose = ProjectPurpose.AiVoices;
+                PronunciationFinder.Refresh(p, _ => false);
+                if (p.Pronunciations.FirstOrDefault(x => x.Term == "Kerensa") is { } k) { k.SayItAs = "keh-REN-sa"; k.Notes = "Cornish"; k.Confirmed = true; }
+            });
+            w.Workspace.Go(PageKind.Pronunciations);
+            Pump();
+            w.CaptureRenderedFrame()?.Save(Path.Combine(dir, $"Pronunciations-{name}.png"), (int?)null);
             w.Close();
         }
         var settings = InnerVoice.App.Windows.SettingsWindow.Show(null, "AI");

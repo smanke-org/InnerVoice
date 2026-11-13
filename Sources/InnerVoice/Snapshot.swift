@@ -255,7 +255,7 @@ enum Snapshot {
                     document.tagging.debugSummaries(nil)
                 }
                 await shot("index") { workspace.page = .index }
-                await shot("pronunciations") { workspace.page = .pronunciations }
+                await shot("pronunciations", settle: 1.5) { workspace.page = .pronunciations }
                 await shot("teleprompter") {
                     workspace.page = .teleprompter
                     workspace.teleprompterParagraph = document.project.chapters.first?.paragraphs.dropFirst(1).first?.id

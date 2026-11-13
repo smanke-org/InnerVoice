@@ -165,10 +165,16 @@ public sealed partial class ManuscriptPage
             menu.Items.Add(new Separator());
             menu.Items.Add(Item("Delete Text…", () => _ = DeleteSelection(), "Delete"));
         }
-        if (menu.Items.Count == 0 && paragraph is not null)
+        if (menu.Items.Count == 0 && paragraph is not null && Document.Project.ShowsNarrationTools)
         {
             var pid = paragraph.Id;
             menu.Items.Add(Item("Open Teleprompter Here", () => { Workspace.TeleprompterParagraph = pid; Workspace.Go(PageKind.Teleprompter); }));
+        }
+        // Teach the AI voices a word: the one clicked, or a selection of up to three words.
+        if (Document.Project.ShowsPronunciations && PronunciationWord(point, selection) is { } fix)
+        {
+            if (menu.Items.Count > 0) menu.Items.Add(new Separator());
+            menu.Items.Add(Item($"Fix Pronunciation of “{fix.Word}”…", () => FixPronunciation(fix.Word, fix.Paragraph)));
         }
         // "Previously…": the chapter's recap, for every chapter after the first (or one that has one).
         var recapParagraph = line?.ParagraphID ?? paragraph?.Id;

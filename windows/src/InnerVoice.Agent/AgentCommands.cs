@@ -231,6 +231,7 @@ public static class AgentCommands
                 new Param("say-it-as", Help: "how to say it, like SHEV-on"),
                 new Param("notes", Help: "your notes"),
                 new Param("confirmed", ParamKind.Boolean, Help: "checked with the author or rights holder (true or false)"),
+                new Param("match-case", ParamKind.Boolean, Help: "only when the capitals match (true or false)"),
                 ProjectParam,
             ],
         },

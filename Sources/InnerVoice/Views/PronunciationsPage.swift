@@ -28,15 +28,19 @@ struct PronunciationsPage: View {
                 ContentUnavailableView {
                     Label("No Pronunciations", systemImage: "character.bubble")
                 } description: {
-                    Text("InnerVoice lists names, places and made-up words it finds. Add your own with Add Term.")
+                    Text("When an AI voice says a word wrong, add it here with a spelling of how it should sound. Every voice uses it from then on. InnerVoice also lists names, places and made-up words it finds.")
                 } actions: {
                     Button("Add Term") { add() }
                     Button("Find Terms") { refresh() }
                 }
             } else {
-                table
+                table.safeAreaInset(edge: .top, spacing: 0) {
+                    VStack(spacing: 0) { explainer; Divider() }.background(.bar)
+                }
             }
         }
+        .onAppear(perform: takeFocus)
+        .onChange(of: workspace.focusPronunciation) { takeFocus() }
         .navigationTitle("Pronunciations")
         .pageSubtitle("\(document.project.pronunciations.filter { !$0.sayItAs.isEmpty }.count) of \(document.project.pronunciations.filter { !$0.dismissed }.count) done")
         .searchable(text: $search, placement: .toolbar, prompt: "Find a term")
@@ -59,6 +63,32 @@ struct PronunciationsPage: View {
         }
     }
 
+    /// What this page is for: the AI voices read the page as written, and this is how to correct them.
+    private var explainer: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Space.sm) {
+            Image(systemName: "character.bubble").foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Teach the AI voices how to say hard words")
+                    .font(.callout.weight(.semibold))
+                Text("AI voices guess at names and unusual words from their spelling. Type how a word should sound in Say It As, with capitals for the stressed part (BAR-nuh-bee), and every voice says it that way from then on. One entry also covers plurals and possessives, like Barnaby's. Click the play button to hear it in the narrator's voice.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, Space.lg)
+        .padding(.vertical, Space.sm)
+    }
+
+    private func takeFocus() {
+        guard let id = workspace.focusPronunciation else { return }
+        workspace.focusPronunciation = nil
+        search = ""
+        showDismissed = showDismissed || document.project.pronunciations.first { $0.id == id }?.dismissed == true
+        selection = [id]
+    }
+
     private var table: some View {
         Table(rows, selection: $selection) {
             TableColumn("Term") { p in
@@ -77,9 +107,19 @@ struct PronunciationsPage: View {
             }
             .width(min: 120, ideal: 160)
             TableColumn("Say It As") { p in
-                DraftTextField("e.g. SHEV-on", text: binding(p, \.sayItAs)).textFieldStyle(.plain)
+                HStack(spacing: Space.xs) {
+                    DraftTextField("e.g. BAR-nuh-bee", text: binding(p, \.sayItAs)).textFieldStyle(.plain)
+                    if document.project.showsVoices {
+                        Button { PlayCommand.hear(p, document: document) } label: {
+                            Image(systemName: "play.circle").foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help(p.sayItAs.isEmpty ? "Hear how the narrator's voice says it now" : "Hear it in the narrator's voice, with this spelling")
+                        .accessibilityLabel("Hear it")
+                    }
+                }
             }
-            .width(min: 120, ideal: 170)
+            .width(min: 140, ideal: 190)
             TableColumn("Notes") { p in
                 DraftTextField("Origin, stress, source", text: binding(p, \.notes)).textFieldStyle(.plain).foregroundStyle(.secondary)
             }
@@ -88,6 +128,15 @@ struct PronunciationsPage: View {
                 Text(p.occurrences > 0 ? "\(p.occurrences)" : "—").monospacedDigit().foregroundStyle(.secondary)
             }
             .width(48)
+            TableColumn("Match Case") { p in
+                Toggle("Match Case", isOn: Binding(get: { p.matchCase }, set: { v in
+                    update(p.id, "Match Case") { $0.matchCase = v }
+                }))
+                    .labelsHidden()
+                    .toggleStyle(.checkbox)
+                    .help("Only when the capitals match, so \"Will\" the name doesn't change \"will\"")
+            }
+            .width(80)
             TableColumn("Confirmed") { p in
                 Toggle("Confirmed", isOn: Binding(get: { p.confirmed }, set: { v in
                     if v, !p.confirmed { ActivityStore.shared.record(ActivityKey.pronunciations) }

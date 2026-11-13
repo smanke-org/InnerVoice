@@ -234,7 +234,7 @@ public static partial class AgentHandlers
 
     static JObject PronunciationJSON(Pronunciation p, ProjectDocument d) => new()
     {
-        ["id"] = Short(p.Id), ["term"] = p.Term, ["sayItAs"] = p.SayItAs, ["notes"] = p.Notes, ["confirmed"] = p.Confirmed,
+        ["id"] = Short(p.Id), ["term"] = p.Term, ["sayItAs"] = p.SayItAs, ["notes"] = p.Notes, ["confirmed"] = p.Confirmed, ["matchCase"] = p.MatchCase,
         ["occurrences"] = p.Occurrences, ["first"] = p.FirstParagraphID is { } id ? d.Index.Reference(id) : null,
         ["hasSample"] = p.AudioFile is not null, ["dismissed"] = p.Dismissed,
     };

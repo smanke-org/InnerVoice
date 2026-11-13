@@ -645,6 +645,10 @@
                         "description": "checked with the author or rights holder (true or false)",
                         "type": "boolean"
                     },
+                    "match-case": {
+                        "description": "only when the capitals match (true or false)",
+                        "type": "boolean"
+                    },
                     "notes": {
                         "description": "your notes",
                         "type": "string"

@@ -393,12 +393,20 @@ public sealed class Pronunciation : ModelObject
     /// Found automatically; hidden once the narrator says it needs no entry.
     public bool Dismissed { get; set; }
     public bool AddedByUser { get; set; }
+    /// Only swap the term when its capitals match ("Will" the name, not "will"). Stored as
+    /// null when off, like the Mac, so older files read it unchanged.
+    [JsonPropertyName("matchCase")] public bool? MatchCaseStored { get; set; }
+    [JsonIgnore] public bool MatchCase
+    {
+        get => MatchCaseStored ?? false;
+        set => MatchCaseStored = value ? true : null;
+    }
 
     public Pronunciation Copy() => new()
     {
         Id = Id, Term = Term, SayItAs = SayItAs, Notes = Notes, Confirmed = Confirmed, AudioFile = AudioFile,
         Occurrences = Occurrences, FirstParagraphID = FirstParagraphID, Dismissed = Dismissed, AddedByUser = AddedByUser,
-        Extra = CopyExtra(),
+        MatchCaseStored = MatchCaseStored, Extra = CopyExtra(),
     };
 }
 
@@ -543,8 +551,9 @@ public sealed class Project : ModelObject
     public List<Line> Lines { get; set; } = [];
     public List<BookCharacter> Characters { get; set; } = [];
     public List<Narrator> Narrators { get; set; } = [];
-    /// Pronunciations, recorded marks and retakes from older versions and the Mac: kept in the
-    /// file and carried through revisions, but nothing in the Windows app shows or edits them.
+    /// How the AI voices say hard words (the Pronunciations page, for books made with AI voices).
+    /// Recorded marks and retakes from older versions and the Mac: kept in the file and carried
+    /// through revisions, but nothing in the Windows app shows or edits them.
     public List<Pronunciation> Pronunciations { get; set; } = [];
     public HashSet<Guid> Recorded { get; set; } = [];
     public List<Retake> Retakes { get; set; } = [];

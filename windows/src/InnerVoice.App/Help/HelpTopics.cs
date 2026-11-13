@@ -38,6 +38,7 @@ public enum HelpTopic
     CastAndSummaries,
     Voices,
     Index,
+    Pronunciations,
     NarratorsAndScripts,
     Teleprompter,
     RevisedManuscripts,
@@ -62,6 +63,7 @@ public static class HelpContent
         HelpTopic.CastAndSummaries => "Cast & Summaries",
         HelpTopic.Voices => "Voices & Listening",
         HelpTopic.Index => "Index",
+        HelpTopic.Pronunciations => "Pronunciations",
         HelpTopic.NarratorsAndScripts => "Narrators & Scripts",
         HelpTopic.Teleprompter => "Teleprompter",
         HelpTopic.RevisedManuscripts => "Revised Manuscripts",
@@ -102,7 +104,7 @@ public static class HelpContent
                 "Teleprompter: read the book in the booth with the teleprompter. This step is done when you say so: right-click it and choose Mark Done."),
             T("Click any step to go to its page. To skip a step, right-click it and choose Mark Done; right-click it again and choose Bring Back. View › Show/Hide Steps hides the bar or brings it back, and so does Steps bar in Settings › General."),
             H("The project window"),
-            T("The sidebar has the book's pages, then its chapters and the main characters. Ctrl+1 to Ctrl+5 go straight to Manuscript, Cast, Index, Teleprompter and Voices; Review is in the sidebar and the View menu."),
+            T("The sidebar has the book's pages, then its chapters and the main characters. Ctrl+1 to Ctrl+6 go straight to Manuscript, Cast, Index, Teleprompter, Voices and Pronunciations; Review is in the sidebar and the View menu."),
             Keys(
                 ("Manuscript", "Read the colored book and fix lines"),
                 ("Review", "Every line that needs you"),
@@ -304,6 +306,20 @@ public static class HelpContent
             Tip("Ctrl+F finds text anywhere in the manuscript; F3 goes to the next match and Shift+F3 to the one before."),
         ],
 
+        HelpTopic.Pronunciations =>
+        [
+            T("AI voices guess how to say a word from its spelling, and names and made-up words often come out wrong. Pronunciations is where you correct them: what you type in Say It As is swapped in for the word before any voice speaks it, so every voice says it your way from then on. Audio you already exported doesn't change until you export again."),
+            T("InnerVoice also lists the names, places and unusual words it found, with how often each one appears. To fix a word while you read, right-click it in the Manuscript and choose Fix Pronunciation. It's part of Produce with AI Voices projects; a narrator says names in their own voice."),
+            T("One entry covers the word's plural and possessive too: an entry for Barnaby also fixes Barnaby's, Barnaby’s and the Barnabys. Capitals don't matter unless you check Match Case."),
+            Keys(
+                ("Say It As", "How to say it, in your own spelling, with capitals for the stressed part: \"BAR-nuh-bee\""),
+                ("Play button", "Hear it in the narrator's voice, in the sentence where it first appears"),
+                ("Match Case", "Only fix it when the capitals match, so Will the name doesn't change will"),
+                ("Note", "Anything else: where it comes from, what the author said"),
+                ("Confirmed", "Mark it once the author has confirmed it"),
+                ("Suggest Spellings", "Cloud: Claude suggests a Say It As for each term without one. Only the terms and the sentence each first appears in are sent; you check each spelling you want to use")),
+        ],
+
         HelpTopic.NarratorsAndScripts =>
         [
             T("For a production with more than one narrator, choose Book › Narrators… (or click Narrators… in Cast) and add them. Then cast each character to one of them on the character's page."),
@@ -412,7 +428,8 @@ public static class HelpContent
                 ("Ctrl+2", "Cast"),
                 ("Ctrl+3", "Index"),
                 ("Ctrl+4", "Teleprompter"),
-                ("Ctrl+5", "Voices")),
+                ("Ctrl+5", "Voices"),
+                ("Ctrl+6", "Pronunciations")),
             H("Listening"),
             Keys(
                 ("Ctrl+Space", "Play Line: the selected lines in their characters' voices"),

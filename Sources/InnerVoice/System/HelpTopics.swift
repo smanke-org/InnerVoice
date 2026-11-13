@@ -301,9 +301,13 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
         ]
 
         case .pronunciations: [
-            .text("Pronunciations lists the names, places and unusual words the AI found, with how often and where each one appears. What you type in Say It As is how the AI voices say the word. It's part of Produce with AI Voices projects; a narrator says names in their own voice."),
+            .text("AI voices guess how to say a word from its spelling, and names and made-up words often come out wrong. Pronunciations is where you correct them: what you type in Say It As is swapped in for the word before any voice speaks it, so every voice says it your way from then on. Audio you already exported doesn't change until you export again."),
+            .text("InnerVoice also lists the names, places and unusual words it found, with how often each one appears. To fix a word while you read, right-click it in the Manuscript and choose Fix Pronunciation. It's part of Produce with AI Voices projects; a narrator says names in their own voice."),
+            .text("One entry covers the word's plural and possessive too: an entry for Barnaby also fixes Barnaby's, Barnaby’s and the Barnabys. Capitals don't matter unless you check Match Case."),
             .keys([
-                ("Say It As", "How to say it, in your own spelling: \"SHEV-on\""),
+                ("Say It As", "How to say it, in your own spelling, with capitals for the stressed part: \"BAR-nuh-bee\""),
+                ("Play button", "Hear it in the narrator's voice, in the sentence where it first appears"),
+                ("Match Case", "Only fix it when the capitals match, so Will the name doesn't change will"),
                 ("Note", "Anything else: where it comes from, what the author said"),
                 ("Confirmed", "Mark it once the author has confirmed it"),
                 ("Suggest Spellings", "Cloud: Claude suggests a Say It As for each term without one. Only the terms and the sentence each first appears in are sent; you check each spelling you want to use"),

@@ -259,6 +259,8 @@ final class Workspace {
     var page: Page = .manuscript
     var selectedLines: [UUID] = []
     var reveal: Reveal?
+    /// A Pronunciations entry to select when that page shows (Fix Pronunciation…).
+    var focusPronunciation: UUID?
     /// Character opened in the Cast page.
     var castPath: [UUID] = []
     /// The engine to switch to once the narrator allows this book's text to go to

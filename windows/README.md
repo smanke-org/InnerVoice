@@ -91,10 +91,10 @@ way on both.
   `innervoice <link>` follows one from the command line.
 - **MCP:** `claude mcp add --scope user innervoice -- innervoice mcp`.
 - **Voices:** `lines tone`, tones in `lines list`, each character's `voice` (on the engine in use),
-  `casting style` shades and `export --kind pronunciations` work as on the Mac. The Windows app
-  has no Pronunciations page, so `open pronunciations` shows the Manuscript, as `open` does for
-  any page the project type doesn't show (Narration Tools hides Voices; Produce with AI Voices
-  hides Index and the Teleprompter).
+  `casting style` shades, `pronunciations set --match-case` and `export --kind pronunciations`
+  work as on the Mac. `open` shows the Manuscript for any page the project type doesn't show
+  (Narration Tools hides Voices and Pronunciations; Produce with AI Voices hides Index and the
+  Teleprompter).
 - **Test copies:** `APP_STORE=<folder>` makes a test copy: its own pipe (named from the folder),
   its settings and models in that folder, and it only opens or saves projects in the temporary
   folder. `INNERVOICE_DEMO=1` opens the sample book at launch; `projects demo` opens another.

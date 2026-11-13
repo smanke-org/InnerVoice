@@ -236,6 +236,10 @@ public class AgentAppTests
             var again = Ok("pronunciations", "set", "kerensa", "--confirmed");
             Assert.Equal(false, again["added"]);
             Assert.Equal(true, ((JObject)again["pronunciation"]!)["confirmed"]);
+            Assert.Equal(false, ((JObject)again["pronunciation"]!)["matchCase"]);
+            var cased = Ok("pronunciations", "set", "Kerensa", "--match-case");
+            Assert.Equal(true, cased["changed"]);
+            Assert.Equal(true, ((JObject)cased["pronunciation"]!)["matchCase"]);
             Assert.Contains(List(Ok("pronunciations", "list", "--search", "keren"), "pronunciations"), p => (string)p["term"]! == "Kerensa");
             Assert.Equal("usage", ErrorCode(2, "pronunciations", "set", "Kerensa"));
 
@@ -246,11 +250,11 @@ public class AgentAppTests
             Assert.Equal(name, Ok("open", "--character", name)["character"]);
             Assert.Equal("voices", Ok("open", "voices")["page"]);
             Assert.Equal(PageKind.Voices, App.Current.FrontProject!.Workspace.Page);
-            // No Pronunciations page on Windows: the Manuscript, as for a page the project type hides.
-            Assert.Equal("manuscript", Ok("open", "pronunciations")["page"]);
-            Assert.Equal(PageKind.Manuscript, App.Current.FrontProject!.Workspace.Page);
+            Assert.Equal("pronunciations", Ok("open", "pronunciations")["page"]);
+            Assert.Equal(PageKind.Pronunciations, App.Current.FrontProject!.Workspace.Page);
             doc.Change("Project Type", p => p.Settings.Purpose = Core.ProjectPurpose.Narration);
             Assert.Equal("manuscript", Ok("open", "voices")["page"]);
+            Assert.Equal("manuscript", Ok("open", "pronunciations")["page"]);
             Assert.Equal(PageKind.Manuscript, App.Current.FrontProject!.Workspace.Page);
             Assert.Equal("record", Ok("open", "teleprompter")["page"]);
             doc.Change("Project Type", p => p.Settings.Purpose = Core.ProjectPurpose.AiVoices);

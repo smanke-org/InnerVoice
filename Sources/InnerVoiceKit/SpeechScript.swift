@@ -288,19 +288,39 @@ public enum SpeechScript {
         s.trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "“”\"‘’'«»—–-,")))
     }
 
-    static func sayings(_ project: Project) -> [(String, String)] {
-        project.pronunciations
-            .filter { !$0.dismissed && !$0.sayItAs.trimmingCharacters(in: .whitespaces).isEmpty }
-            .map { ($0.term, $0.sayItAs) }
-            .sorted { $0.0.count > $1.0.count }
+    /// One Pronunciations entry, ready to swap into speech.
+    public struct Saying: Sendable {
+        public var term: String
+        public var say: String
+        public var matchCase: Bool
+        public init(_ term: String, _ say: String, matchCase: Bool = false) {
+            self.term = term; self.say = say; self.matchCase = matchCase
+        }
     }
 
-    /// "Kerensa" → "keh-REN-sa" from the pronunciation guide, whole words only.
-    public static func apply(_ sayings: [(String, String)], to text: String) -> String {
+    public static func sayings(_ project: Project) -> [Saying] {
+        project.pronunciations
+            .filter { !$0.dismissed && !$0.sayItAs.trimmingCharacters(in: .whitespaces).isEmpty
+                && !$0.term.trimmingCharacters(in: .whitespaces).isEmpty }
+            .map { Saying($0.term.trimmingCharacters(in: .whitespaces), $0.sayItAs.trimmingCharacters(in: .whitespaces),
+                          matchCase: $0.matchCase) }
+            .sorted { $0.term.count > $1.term.count }
+    }
+
+    /// "Kerensa" → "keh-REN-sa" from the pronunciation guide, whole words only. One entry also
+    /// covers the plural ("Kerensas", "-es" after s, x, z, ch, sh) and possessives with either
+    /// apostrophe ("Kerensa's", "Kerensa’s", "Kerensas’"): the ending is kept after the spelling.
+    /// Capitals don't matter unless the entry says Match Case.
+    public static func apply(_ sayings: [Saying], to text: String) -> String {
         var out = text
-        for (term, say) in sayings {
-            let pattern = "\\b" + NSRegularExpression.escapedPattern(for: term) + "\\b"
-            out = out.replacingOccurrences(of: pattern, with: NSRegularExpression.escapedTemplate(for: say), options: .regularExpression)
+        for s in sayings {
+            let lower = s.term.lowercased()
+            let plural = ["s", "x", "z", "ch", "sh"].contains(where: lower.hasSuffix) ? "es" : "s"
+            let pattern = "(?<![\\p{L}\\p{N}])" + NSRegularExpression.escapedPattern(for: s.term)
+                + "(" + plural + ")?(?![\\p{L}\\p{N}])"
+            guard let re = try? NSRegularExpression(pattern: pattern, options: s.matchCase ? [] : [.caseInsensitive]) else { continue }
+            out = re.stringByReplacingMatches(in: out, range: NSRange(out.startIndex..., in: out),
+                                              withTemplate: NSRegularExpression.escapedTemplate(for: s.say) + "$1")
         }
         return out
     }

@@ -29,6 +29,7 @@ public sealed partial class SettingsWindow
             ("Guesses you changed", t => $"{t.GetValueOrDefault(ActivityKey.GuessesChanged):N0}"),
             ("Lines you assigned", t => $"{t.GetValueOrDefault(ActivityKey.LinesByHand):N0}"),
             ("Summary facts found", t => $"{t.GetValueOrDefault(ActivityKey.Facts):N0}"),
+            ("Pronunciations confirmed", t => $"{t.GetValueOrDefault(ActivityKey.Pronunciations):N0}"),
             ("Lines carried to a revision", t => $"{t.GetValueOrDefault(ActivityKey.LinesCarriedOver):N0}"),
         };
         for (int r = 0; r <= rows.Length; r++) grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));

@@ -72,9 +72,10 @@ public static class ActivityKey
     public const string LinesByHand = "linesByHand";
     public const string GuessesKept = "guessesKept", GuessesChanged = "guessesChanged";
     public const string Facts = "facts";
-    /// No longer counted or shown (pronunciations, recording and retakes left the app); kept so
-    /// older counts still load and the keys stay the Mac's.
+    /// Terms marked Confirmed on the Pronunciations page, like the Mac.
     public const string Pronunciations = "pronunciations";
+    /// No longer counted or shown (recording and retakes left the app); kept so older counts
+    /// still load and the keys stay the Mac's.
     public const string ParagraphsRecorded = "paragraphsRecorded", RetakesMarked = "retakesMarked", RetakesCleared = "retakesCleared";
     public const string LinesCarriedOver = "linesCarriedOver";
     /// Voices: tones the AI read and the narrator kept or changed, audio played and exported,

@@ -3,7 +3,7 @@ using InnerVoice.App.Document;
 
 namespace InnerVoice.App.Pages;
 
-public enum PageKind { Manuscript, Cast, Index, Teleprompter, Review, Revisions, Voices }
+public enum PageKind { Manuscript, Cast, Index, Teleprompter, Review, Revisions, Voices, Pronunciations }
 
 public static class PageKinds
 {
@@ -15,6 +15,7 @@ public static class PageKinds
         PageKind.Teleprompter => "Teleprompter",
         PageKind.Review => "Review",
         PageKind.Voices => "Voices",
+        PageKind.Pronunciations => "Pronunciations",
         _ => "Revisions",
     };
 
@@ -29,6 +30,8 @@ public sealed class Workspace
     /// The paragraph the Teleprompter shows (null: where the narrator left off in this book).
     public Guid? TeleprompterParagraph { get; set; }
     public Guid? SelectedCharacter { get; set; }
+    /// A Pronunciations entry to select when that page shows (Fix Pronunciation…).
+    public Guid? FocusPronunciation { get; set; }
     public event Action? PageChanged;
     public event Action<Guid>? ShowParagraphRequested;
     public event Action<int>? ShowChapterRequested;
