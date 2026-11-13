@@ -109,12 +109,19 @@ public sealed class ClaudeTextModel : ITextModel
 {
     readonly AnthropicClient client;
     readonly string modelID;
+    readonly string book;
+    readonly Action<CloudUsageRecord, long?>? onUsage;
 
-    public ClaudeTextModel(string? apiKey, bool consented, bool bookAllowed, string modelID, string displayName, HttpClient? http = null)
+    /// `book`: the book's usage key; `onUsage` gets what each request used (numbers only) and
+    /// the per-minute tokens left from Anthropic's rate-limit header, for Cloud Usage.
+    public ClaudeTextModel(string? apiKey, bool consented, bool bookAllowed, string modelID, string displayName, HttpClient? http = null,
+                           string book = "", Action<CloudUsageRecord, long?>? onUsage = null)
     {
         if (string.IsNullOrWhiteSpace(apiKey) || !consented) throw new ClaudeException(ClaudeException.NotSetUp);
         if (!bookAllowed) throw new ClaudeException(ClaudeException.BookNotAllowed);
         this.modelID = modelID;
+        this.book = book;
+        this.onUsage = onUsage;
         DisplayName = displayName;
         client = Claude.Client(apiKey, http);
     }
@@ -146,12 +153,31 @@ public sealed class ClaudeTextModel : ITextModel
             request = request with { System = new List<TextBlockParam> { new() { Text = system, CacheControl = new CacheControlEphemeral() } } };
         try
         {
-            var reply = await client.Messages.Create(request, ct);
+            var raw = await client.WithRawResponse.Messages.Create(request, ct);
+            var reply = await raw.Deserialize(ct);
+            RecordUsage(reply.Usage, raw.Headers);
             ct.ThrowIfCancellationRequested();
             if (reply.StopReason == "refusal") throw new ClaudeException(ClaudeException.Refused);
             progress?.Invoke(1);
             return string.Concat(reply.Content.Select(b => b.Value).OfType<TextBlock>().Select(t => t.Text));
         }
         catch (Exception e) when (ClaudeException.From(e) is { } friendly && !ReferenceEquals(friendly, e)) { throw friendly; }
+    }
+
+    /// Counts what the request used for Cloud Usage (numbers only).
+    void RecordUsage(Usage? usage, IEnumerable<KeyValuePair<string, IEnumerable<string>>> headers)
+    {
+        if (onUsage is null || usage is null) return;
+        var r = new CloudUsageRecord(CloudUsageRecord.DayOf(), book, CloudService.Claude, modelID)
+        {
+            InputTokens = usage.InputTokens,
+            OutputTokens = usage.OutputTokens,
+            CacheReadTokens = usage.CacheReadInputTokens ?? 0,
+            CacheWriteTokens = usage.CacheCreationInputTokens ?? 0,
+            Requests = 1,
+        };
+        var value = headers.FirstOrDefault(h => string.Equals(h.Key, "anthropic-ratelimit-tokens-remaining", StringComparison.OrdinalIgnoreCase)).Value?.FirstOrDefault();
+        long? left = long.TryParse(value, out var n) ? n : null;
+        onUsage(r, left);
     }
 }

@@ -84,8 +84,9 @@ public sealed class ClaudeAccount
     }
 
     /// Claude for this book, or why not. `bookAllowed` is the book's `cloudTextAllowed`.
-    public ClaudeTextModel Model(string modelID, bool bookAllowed) =>
-        new(ApiKey, Consented, bookAllowed, modelID, NameOf(modelID), Http);
+    public ClaudeTextModel Model(string modelID, bool bookAllowed, string book = "") =>
+        new(ApiKey, Consented, bookAllowed, modelID, NameOf(modelID), Http, book,
+            (record, left) => Dispatcher.UIThread.Post(() => CloudUsageStore.Shared.Add(record, left)));
 
     void Notify() => Dispatcher.UIThread.Post(() => Changed?.Invoke());
 }

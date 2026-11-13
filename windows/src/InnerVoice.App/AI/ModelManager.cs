@@ -133,9 +133,9 @@ public sealed class ModelManager
 
     /// Loads the chosen model (once) and returns it. `bookAllowed`: the book's
     /// `cloudTextAllowed`; Claude sends nothing without it.
-    public async Task<ITextModel> Model(bool bookAllowed = false)
+    public async Task<ITextModel> Model(bool bookAllowed = false, string book = "")
     {
-        if (SelectionIsClaude) return ClaudeAccount.Shared.Model(Selection[Claude.SelectionPrefix.Length..], bookAllowed);
+        if (SelectionIsClaude) return ClaudeAccount.Shared.Model(Selection[Claude.SelectionPrefix.Length..], bookAllowed, book);
         if (!LlamaLibrary.IsAvailable) throw new ModelException("The AI engine (llama.cpp) is missing from this copy of InnerVoice. Reinstall InnerVoice.");
         string? path = null;
         if (CatalogModel is { } m)

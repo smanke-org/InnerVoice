@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using InnerVoice.App.AI;
 using InnerVoice.App.Document;
 using InnerVoice.App.Pages;
 using Page = InnerVoice.App.Pages.Page;
@@ -37,11 +38,14 @@ public sealed partial class ProjectWindow : Window
         Icon = Look.WindowIcon;
         UpdateTitle();
 
-        var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(Look.Xl, Look.Md) };
+        var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), Margin = new Thickness(Look.Xl, Look.Md) };
         header.Children.Add(Ui.Column(0, title, subtitle));
         Grid.SetColumn(toolbarHost, 1);
         toolbarHost.VerticalAlignment = VerticalAlignment.Center;
         header.Children.Add(toolbarHost);
+        var usage = CloudUsageButton();
+        Grid.SetColumn(usage, 2);
+        header.Children.Add(usage);
         var headerBorder = new Border { Child = header, BorderBrush = Look.Brush(Look.Separator), BorderThickness = new Thickness(0, 0, 0, 1) };
 
         var main = new DockPanel();
@@ -83,6 +87,8 @@ public sealed partial class ProjectWindow : Window
         AppSettings.Changed += RefreshAll;
         ActualThemeVariantChanged += (_, _) => RefreshAll();
         Closing += OnClosing;
+        ModelManager.Shared.Changed += RefreshCloudUsageButton;
+        Closed += (_, _) => ModelManager.Shared.Changed -= RefreshCloudUsageButton;
         Opened += async (_, _) =>
         {
             ShowPage();
@@ -149,6 +155,7 @@ public sealed partial class ProjectWindow : Window
         title.Text = current.Kind.Title();
         subtitle.Text = current.Subtitle;
         toolbarHost.Content = current.Toolbar;
+        RefreshCloudUsageButton();
         BuildSidebar();
         RefreshSteps();
     }

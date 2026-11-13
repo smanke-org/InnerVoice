@@ -196,6 +196,56 @@ public class ClaudeAppTests
         }
     }
 
+    [AvaloniaFact]
+    public void CloudUsageShowsOnlyWithACloudModelAndTotalsPerModel()
+    {
+        Environment.SetEnvironmentVariable("INNERVOICE_MODEL", null);
+        var doc = ProjectDocument.Unsaved(TestApp.Sample());
+        var w = new ProjectWindow(doc) { Width = 1280, Height = 820 };
+        w.Show();
+        for (int i = 0; i < 3; i++) Dispatcher.UIThread.RunJobs();
+        Assert.False(w.CloudUsageButtonShown); // a downloaded model (or none), no ElevenLabs
+        Environment.SetEnvironmentVariable("INNERVOICE_MODEL", Claude.SelectionPrefix + "claude-sonnet-5-5");
+        try
+        {
+            ModelManager.Shared.Selection = Claude.SelectionPrefix + "claude-sonnet-5-5"; // raises Changed
+            for (int i = 0; i < 3; i++) Dispatcher.UIThread.RunJobs();
+            Assert.True(w.CloudUsageButtonShown);
+            var key = doc.Project.UsageKey();
+            CloudUsageRecord Rec(string day, string book, string model, long input, long output, int requests) =>
+                new(day, book, CloudService.Claude, model) { InputTokens = input, OutputTokens = output, CacheReadTokens = input / 3, Requests = requests };
+            CloudUsageStore.Shared.ReplaceForTesting(
+            [
+                Rec("2026-11-09", key, "claude-sonnet-5-5", 180_000, 21_000, 30),
+                Rec("2026-11-10", key, "claude-sonnet-5-5", 240_000, 26_000, 41),
+                Rec("2026-11-11", key, "claude-haiku-5-5", 90_000, 9_000, 18),
+                Rec("2026-11-12", key, "claude-sonnet-5-5", 320_000, 35_000, 52),
+                Rec("2026-11-12", key, "claude-haiku-5-5", 60_000, 7_000, 12),
+                Rec("2026-11-12", "Other|1", "claude-opus-5-5", 500_000, 50_000, 60),
+            ]);
+            CloudUsageStore.Shared.Add(new CloudUsageRecord("2026-11-12", key, CloudService.Claude, "claude-sonnet-5-5") { InputTokens = 1, Requests = 1 }, 45_000);
+            var thisBook = CloudUsage.Totals(CloudUsageStore.Shared.Records, key);
+            Assert.Equal(["claude-haiku-5-5", "claude-sonnet-5-5"], thisBook.Select(t => t.Model));
+            Assert.Equal(124, thisBook[1].Requests);
+            Assert.Equal(45_000, CloudUsageStore.Shared.ClaudeTokensLeft("claude-sonnet-5-5"));
+            Assert.Equal(3, CloudUsage.Totals(CloudUsageStore.Shared.Records, null).Count);
+            foreach (var (variant, name) in new[] { (Avalonia.Styling.ThemeVariant.Light, "light"), (Avalonia.Styling.ThemeVariant.Dark, "dark") })
+            {
+                Avalonia.Application.Current!.RequestedThemeVariant = variant;
+                var host = new Avalonia.Controls.Window { Width = 480, Height = 760, Content = w.CloudUsagePopover(), Background = InnerVoice.App.UI.Look.Brush(InnerVoice.App.UI.Look.Paper) };
+                Snap(host, $"CloudUsage-{name}.png");
+            }
+            Avalonia.Application.Current!.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Light;
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("INNERVOICE_MODEL", null);
+            ModelManager.Shared.Selection = "";
+            CloudUsageStore.Shared.ReplaceForTesting([]);
+            w.Close();
+        }
+    }
+
     static void Snap(Avalonia.Controls.Window window, string file)
     {
         window.Show();
@@ -233,9 +283,11 @@ public class ClaudeAppTests
             Assert.True(ModelManager.Shared.IsReady);
             Assert.Equal("Claude Haiku 5.5", ModelManager.Shared.SelectionName);
 
+            CloudUsageStore.Shared.ReplaceForTesting([]);
             var doc = ProjectDocument.Unsaved(TestApp.Sample().Also(p => p.LastTagged = null));
             var w = new ProjectWindow(doc) { Width = 1280, Height = 820 };
             w.Show();
+            Assert.True(w.CloudUsageButtonShown); // Claude is the chosen model
             // The window asks first; a test run never says yes, so nothing runs.
             await w.TagSpeakers();
             Assert.Empty(fake.Sent);
@@ -254,6 +306,12 @@ public class ClaudeAppTests
             Assert.Null(w.Runner.Failure);
             Assert.NotEmpty(fake.Sent);
             Assert.All(fake.Sent, s => Assert.Equal("https://api.anthropic.com/v1/messages", s.Uri.ToString()));
+            // Cloud Usage counted every request for this book (numbers only).
+            for (int i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
+            var used = Assert.Single(CloudUsage.Totals(CloudUsageStore.Shared.Records, doc.Project.UsageKey()));
+            Assert.Equal(("claude-haiku-5-5", (long)fake.Sent.Count), (used.Model, used.Requests));
+            Assert.Equal(100L * fake.Sent.Count, used.InputTokens);
+            Assert.NotNull(used.Cost);
             var mara = doc.Project.Characters.First(c => c.Name.StartsWith("Mara"));
             var review = w.Runner.Review;
             Assert.NotNull(review);

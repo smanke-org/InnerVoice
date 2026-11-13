@@ -60,7 +60,7 @@ public sealed partial class AIRunner(ProjectDocument document)
         var charactersBefore = document.Project.Characters.Select(c => c.Id).ToHashSet();
         try
         {
-            var model = await ModelManager.Shared.Model(bookAllowed: document.Project.Settings.CloudTextAllowed is not null);
+            var model = await ModelManager.Shared.Model(bookAllowed: document.Project.Settings.CloudTextAllowed is not null, book: document.Project.UsageKey());
             var targets = chapters ?? Enumerable.Range(0, document.Project.Chapters.Count).ToList();
             // Lines the AI gave up on ("?") get another try: the rules first, then the AI.
             document.ApplyQuietly(p =>
@@ -200,7 +200,7 @@ public sealed partial class AIRunner(ProjectDocument document)
         int added = 0, notesWritten = 0, briefsWritten = 0;
         try
         {
-            var model = await ModelManager.Shared.Model(bookAllowed: document.Project.Settings.CloudTextAllowed is not null);
+            var model = await ModelManager.Shared.Model(bookAllowed: document.Project.Settings.CloudTextAllowed is not null, book: document.Project.UsageKey());
             var index = document.Index;
             var cast = document.Project.Characters.OrderByDescending(c => index.StatsFor(c.Id)?.Lines ?? 0).ToList();
             if (only is not null) cast = cast.Where(c => only.Contains(c.Id)).ToList();

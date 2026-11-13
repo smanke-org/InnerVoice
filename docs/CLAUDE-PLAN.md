@@ -126,6 +126,19 @@ Selection string: `claude:<model id>`.
      - Checks: `ClaudeFeatureTests` (Kit ports, delivery and spellings included), `EpubTests`,
        `ReadAlongEpubTests`, `ClaudeAppTests` (fake Anthropic: all four features through
        review, refused without the book's yes), Narrator Script recap in `ExportTests`.
+   - Cloud Usage (Mac 67acb22) ported 2026-11-12: `CloudUsage.cs` in Core (records, totals,
+     by day, list-price cost, `UsageKey` matching the Mac's, `ElevenLabsCredits` reading
+     `/v1/user/subscription`); `ClaudeTextModel` reports each request's `usage` and the
+     `anthropic-ratelimit-tokens-remaining` header (via the SDK's `WithRawResponse`);
+     `Services/CloudUsageStore.cs` (`%LOCALAPPDATA%\InnerVoice\Cloud Usage.json`, numbers
+     only; memory in test runs); the toolbar's Cloud Usage button and popover
+     (`Windows/CloudUsageView.cs`, `ProjectWindow.CloudUsage.cs`), charts with ScottPlot.Avalonia
+     5.1.59 (MIT; built for Avalonia 12), one shared legend above them. TODO(voices): the
+     ElevenLabs engine records characters with `CloudUsageRecord.ElevenLabs`, provides
+     `CloudInUse.ElevenLabsKey` (and the engine-in-use check), and Cloud Usage then reads
+     the plan's credits. Checks: `CloudUsageTests` (Kit test + fake HTTP for the Claude
+     usage and the ElevenLabs credits), `ClaudeAppTests` (usage counted per request, button
+     shown only with a cloud model, light/dark snapshots).
 
 ## API notes
 Raw HTTPS (no Swift SDK): POST /v1/messages, `anthropic-version: 2026-10-21`, streaming for

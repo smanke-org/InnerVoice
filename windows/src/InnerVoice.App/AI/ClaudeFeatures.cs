@@ -108,7 +108,7 @@ public sealed partial class AIRunner
         var ct = cts.Token;
         try
         {
-            var model = ClaudeAccount.Shared.Model(FeatureModelID, document.Project.Settings.CloudTextAllowed is not null);
+            var model = ClaudeAccount.Shared.Model(FeatureModelID, document.Project.Settings.CloudTextAllowed is not null, document.Project.UsageKey());
             var fixes = new List<CleanupFix>();
             var recaps = new List<RecapProposal>();
             var hints = new List<DeliveryProposal>();
