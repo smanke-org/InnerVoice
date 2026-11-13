@@ -93,6 +93,15 @@ public sealed partial class VoicesPage : Page
     {
         VoiceCastingRun.CastIfNeeded(Document);
         if (VoiceEngineRegistry.Get(Engine) is { } e) _ = e.Prepare(CancellationToken.None);
+        // ElevenLabs' voices, the first time they're needed.
+        if (ElevenLabsEngine.Shared.IsSetUp && Engine is VoiceEngine.Elevenlabs or VoiceEngine.Mixed && VoiceEngineRegistry.VoicesOf(VoiceEngine.Elevenlabs).Count == 0)
+            _ = RefreshCloudVoices();
+    }
+
+    async Task RefreshCloudVoices()
+    {
+        try { await ElevenLabsEngine.Shared.RefreshVoices(); } catch { }
+        Refresh(false);
     }
 
     public void Show(VoiceTarget target)

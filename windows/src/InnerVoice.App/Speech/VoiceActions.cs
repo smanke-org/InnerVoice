@@ -24,6 +24,7 @@ public static class VoiceSetup
         SpeechRenderer.Shared = new SpeechRenderer(CacheFolder);
         VoiceEngineRegistry.Register(new WindowsVoices());
         ElevenLabsEngine.Register();
+        VoiceHooks.Install();
         LoadSwitches();
         PauseSettings.Current = AppPaths.IsTestRun ? PauseSettings.Standard : AppSettings.Current.Pauses ?? PauseSettings.Standard;
     }

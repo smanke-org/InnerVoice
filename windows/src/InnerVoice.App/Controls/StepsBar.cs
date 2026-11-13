@@ -35,7 +35,10 @@ public sealed class StepsBar : Border
         if (p.ShowsVoices)
         {
             var engine = Speech.VoiceSetup.EngineInUse(p);
-            voicesNeeded = p.Characters.Count(c => (document.Index.StatsFor(c.Id)?.Lines ?? 0) > 0 && p.VoiceNeedsYou(c, engine));
+            // Only voices of their own: characters the narrator or a shared voice reads need none.
+            var readers = p.Settings.CastingStyle is null ? [] : CastingStyleRules.Readers(p, document.Index);
+            voicesNeeded = p.Characters.Count(c => (document.Index.StatsFor(c.Id)?.Lines ?? 0) > 0
+                && readers.GetValueOrDefault(c.Id, VoiceRole.Own) == VoiceRole.Own && p.VoiceNeedsYou(c, engine));
         }
         var steps = new GuidedSteps(p, speaking, narration: !p.ShowsVoices, voicesNeeded: voicesNeeded);
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Look.Xs, Margin = new Thickness(Look.Md, Look.Sm) };
