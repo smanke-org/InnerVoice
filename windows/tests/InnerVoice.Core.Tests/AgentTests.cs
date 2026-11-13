@@ -262,6 +262,10 @@ public class AgentTests
         }
         Assert.Equal("{\"ok\":true,\"result\":{\"echo\":{\"command\":\"status\",\"args\":{\"é\":\"ünïcode\"}}}}", reply);
 
+        // Another InnerVoice can't serve the same pipe: it stops listening at once.
+        var second = AgentPipe.Listen(_ => Task.FromResult("{\"ok\":true,\"result\":\"second\"}"), stop.Token, name);
+        Assert.Same(second, await Task.WhenAny(second, Task.Delay(TimeSpan.FromSeconds(5))));
+
         // A second copy of the app hands over its files and links.
         Assert.True(await Task.Run(() => AgentPipe.Forward(["innervoice://open/cast"], name)));
         lock (heard) Assert.Contains("{\"activate\":[\"innervoice://open/cast\"]}", heard);

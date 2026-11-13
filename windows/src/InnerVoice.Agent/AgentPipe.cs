@@ -53,13 +53,17 @@ public static class AgentPipe
     public static async Task Listen(Func<string, Task<string>> handle, CancellationToken stop, string? name = null)
     {
         name ??= Name;
+        // The first instance must be the first on the system: another InnerVoice serving the
+        // same pipe would get half the requests.
+        var first = PipeOptions.FirstPipeInstance;
         while (!stop.IsCancellationRequested)
         {
             NamedPipeServerStream server;
             try
             {
                 server = new NamedPipeServerStream(name, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances,
-                    PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+                    PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly | first);
+                first = PipeOptions.None;
             }
             catch (Exception e)
             {

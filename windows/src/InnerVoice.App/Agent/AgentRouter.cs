@@ -84,8 +84,15 @@ public static class AgentServer
     static CancellationTokenSource? stop;
 
     /// The person's own copy and agent test copies (APP_STORE) listen; unit tests and snapshot
-    /// runs don't, unless a test starts it.
-    public static bool ShouldListen => AgentPipe.IsTestRun || !AppPaths.IsTestRun;
+    /// runs don't, unless a test starts it. Nor does a Debug build that isn't a test copy: it
+    /// would hand itself to the person's running InnerVoice, or answer in its place.
+    public static bool ShouldListen => AgentPipe.IsTestRun || (!AppPaths.IsTestRun && !IsDebugBuild);
+
+#if DEBUG
+    const bool IsDebugBuild = true;
+#else
+    const bool IsDebugBuild = false;
+#endif
 
     /// INNERVOICE_DEMO=1 on a test copy opens the sample book at launch.
     public static bool OpensDemo => AgentPipe.IsTestRun && Environment.GetEnvironmentVariable("INNERVOICE_DEMO") == "1";
@@ -99,13 +106,18 @@ public static class AgentServer
         var token = stop.Token;
         ListeningOn = name ?? AgentPipe.Name;
         var pipe = ListeningOn;
-        _ = Task.Run(() => AgentPipe.Listen(request => Dispatcher.UIThread.InvokeAsync(() => AgentRouter.Handle(request)), token, pipe));
+        listening = Task.Run(() => AgentPipe.Listen(request => Dispatcher.UIThread.InvokeAsync(() => AgentRouter.Handle(request)), token, pipe));
     }
 
+    /// Stops listening, and waits (briefly) until the pipe is free for the next listener.
     public static void Stop()
     {
         stop?.Cancel();
+        listening?.Wait(TimeSpan.FromSeconds(2));
         stop = null;
+        listening = null;
         ListeningOn = null;
     }
+
+    static Task? listening;
 }

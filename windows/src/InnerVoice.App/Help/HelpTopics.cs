@@ -41,6 +41,7 @@ public enum HelpTopic
     Teleprompter,
     RevisedManuscripts,
     ChoosingModel,
+    CommandLine,
     KeyboardShortcuts,
     Settings,
     Updates,
@@ -63,6 +64,7 @@ public static class HelpContent
         HelpTopic.Teleprompter => "Teleprompter",
         HelpTopic.RevisedManuscripts => "Revised Manuscripts",
         HelpTopic.ChoosingModel => "Choosing a Model",
+        HelpTopic.CommandLine => "Command Line & Links",
         HelpTopic.KeyboardShortcuts => "Keyboard Shortcuts",
         HelpTopic.Settings => "Settings",
         _ => "Updates",
@@ -117,9 +119,11 @@ public static class HelpContent
 
         HelpTopic.OpeningManuscript =>
         [
-            T("InnerVoice opens Word (.docx), PDF, RTF, plain text, Markdown, OpenDocument (.odt), EPUB and HTML. It splits the manuscript into chapters at headings such as \"Chapter 1\", \"CHAPTER ONE\", \"Prologue\" and \"Part II\", and at Word heading styles."),
-            H("Older Word files and Pages"),
-            T("An older Word .doc file: open it in Word, choose File › Save As, and save it as a Word Document (.docx). A Pages file from a Mac: in Pages, choose File › Export To › Word, and open the Word file instead."),
+            T("InnerVoice opens Word (.docx), PDF, RTF, plain text, Markdown, OpenDocument (.odt), Pages, EPUB and HTML. It splits the manuscript into chapters at headings such as \"Chapter 1\", \"CHAPTER ONE\", \"Prologue\" and \"Part II\", and at Word heading styles."),
+            H("Pages"),
+            T("A Pages file from a Mac opens when it was saved with a preview (Pages does this unless \"Include preview in document\" is turned off): InnerVoice reads the text from that preview, so italics and heading styles may not come through. If InnerVoice can't read it, open it in Pages on a Mac, choose File › Export To › Word, and open the Word file instead."),
+            H("Older Word files"),
+            T("An older Word .doc file: open it in Word, choose File › Save As, and save it as a Word Document (.docx)."),
             H("Google Docs"),
             T("Download the document as Word first: in Google Docs, choose File › Download › Microsoft Word (.docx), then open that file in InnerVoice."),
             H("PDF"),
@@ -302,6 +306,20 @@ public static class HelpContent
             Tip("With a downloaded model, your manuscript never leaves this PC. The model download is the only time the AI goes online."),
         ],
 
+        HelpTopic.CommandLine =>
+        [
+            T("AI assistants such as Claude Code, and your own scripts, can work in InnerVoice with the innervoice command: see the open projects, chapters, lines and cast, assign lines, fix line kinds, rename, recolor and merge characters, run Tag Speakers and Build Summaries, set pronunciations, choose the model, and export Narrator Scripts, the tagged manuscript or the cast list. Changes show in the project's window at once, and Edit › Undo takes them back."),
+            Keys(("innervoice help", "Every command, with an example"),
+                 ("innervoice status", "The open projects, the model, and what the AI is doing"),
+                 ("innervoice lines list --needs-you", "The lines that need you, with their ids"),
+                 ("innervoice lines assign <id> --to Mara", "Give a line to a character"),
+                 ("innervoice mcp", "A server for Claude Desktop and other apps that use MCP")),
+            T("The Microsoft Store version puts innervoice on your PATH. A copy you run from a folder keeps it in its cli folder: add that folder to PATH, or type the full path. If InnerVoice isn't open, the command opens it in the background. Add --json to get JSON for scripts."),
+            T("Merging characters, clearing lines back to Who's Speaking? and downloading a model only say what they would do until you add --yes. Tones and voices aren't in InnerVoice for Windows yet; those commands say so."),
+            H("Links"),
+            T("An innervoice:// link opens InnerVoice and shows something, in the open project or the one you name: innervoice://open/cast?character=Mara opens Mara on the Cast page, innervoice://open/review the Review page, innervoice://lines/reveal/3f2a9c1e a line in the manuscript, and innervoice://projects/open?path=C:\\Books\\Harbor.innervoice a project. Links only show things: they never change your book, save, export, run the AI or download anything."),
+            Tip("Everything happens on this PC: the command and links talk only to InnerVoice, never to the internet."),
+        ],
         HelpTopic.KeyboardShortcuts =>
         [
             H("Projects"),
