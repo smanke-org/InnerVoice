@@ -51,7 +51,8 @@ public sealed partial class VoicesPage : Page
         var series = Ui.Button("Use Voices from Another Project…", () => { if (TopLevel.GetTopLevel(this) is Window w) _ = Windows.SeriesVoicesWindow.Show(w, Document); },
             tip: "Give characters the voices they had in an earlier book in the series. You match the characters first.");
         playButton = Ui.Button("Play", TogglePlay, tip: "Hear the voice of the one selected");
-        toolbar = Ui.Row(Look.Sm, engineBox, castAgain, series, playButton);
+        var help = Ui.Button("?", () => Help.HelpWindow.Show(Help.HelpTopic.Voices), tip: "Help: Voices & Listening");
+        toolbar = Ui.Row(Look.Sm, engineBox, castAgain, series, playButton, help);
         search.TextChanged += (_, _) => BuildList();
         SpeechPlayer.Shared.Changed += UpdatePlayButton;
         DetachedFromVisualTree += (_, _) => SpeechPlayer.Shared.Changed -= UpdatePlayButton;

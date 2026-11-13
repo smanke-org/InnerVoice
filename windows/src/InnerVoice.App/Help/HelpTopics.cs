@@ -1,8 +1,9 @@
 namespace InnerVoice.App.Help;
 
-// The pages of Help, ported from the Mac's System/HelpTopics.swift with only what the
-// Windows app has (Narration Tools: no voices, Play, Export Audio or pronunciations). Words follow
-// docs/GLOSSARY.md. When a feature or shortcut changes, change its page here too.
+// The pages of Help, ported from the Mac's System/HelpTopics.swift with what the Windows app
+// has (Narration Tools, and AI voices with Windows Voices and ElevenLabs; Qwen3-TTS and Orpheus
+// come later). Words follow docs/GLOSSARY.md. When a feature or shortcut changes, change its
+// page here too.
 
 /// One block of a Help page.
 public abstract record HelpBlock
@@ -36,6 +37,7 @@ public enum HelpTopic
     FixingLines,
     Colors,
     CastAndSummaries,
+    Voices,
     Index,
     NarratorsAndScripts,
     Teleprompter,
@@ -58,6 +60,7 @@ public static class HelpContent
         HelpTopic.FixingLines => "Fixing Lines",
         HelpTopic.Colors => "Colors",
         HelpTopic.CastAndSummaries => "Cast & Summaries",
+        HelpTopic.Voices => "Voices & Listening",
         HelpTopic.Index => "Index",
         HelpTopic.NarratorsAndScripts => "Narrators & Scripts",
         HelpTopic.Teleprompter => "Teleprompter",
@@ -98,21 +101,27 @@ public static class HelpContent
                 "Teleprompter: read the book in the booth with the teleprompter. This step is done when you say so: right-click it and choose Mark Done."),
             T("Click any step to go to its page. To skip a step, right-click it and choose Mark Done; right-click it again and choose Bring Back. View › Show/Hide Steps hides the bar or brings it back, and so does Steps bar in Settings › General."),
             H("The project window"),
-            T("The sidebar has the book's pages, then its chapters and the main characters. Ctrl+1 to Ctrl+4 go straight to Manuscript, Cast, Index and Teleprompter; Review is in the sidebar and the View menu."),
+            T("The sidebar has the book's pages, then its chapters and the main characters. Ctrl+1 to Ctrl+5 go straight to Manuscript, Cast, Index, Teleprompter and Voices; Review is in the sidebar and the View menu."),
             Keys(
                 ("Manuscript", "Read the colored book and fix lines"),
                 ("Review", "Every line that needs you"),
                 ("Cast", "Every character, with a summary, line counts and narrator"),
                 ("Index", "Each character's lines by chapter, with links"),
                 ("Teleprompter", "The teleprompter for the booth"),
+                ("Voices", "A voice for the narrator and every character, to hear the book read aloud"),
                 ("Revisions", "What changed, after File › Import Revised Manuscript…")),
             H("Saving"),
             T("A project is one .innervoice file. Save it once with File › Save (Ctrl+S); from then on InnerVoice saves by itself every 30 seconds while it has changes. File › Save As… (Ctrl+Shift+S) saves a copy under a new name or in another folder."),
             H("A book on your PC and your Mac"),
             T("The same .innervoice file opens in InnerVoice on a Mac, so you can tag a book on one computer and read it in the booth on the other. Keep it in OneDrive, Dropbox or any synced folder, or carry it on a USB stick."),
             T("There's no merging: the last save wins. If the file changed on another computer since you opened it, saving asks before replacing it."),
-            T("A book set up for AI voices on the Mac opens here with the Narration Tools pages. Its voices are kept, and they're all there again when you open the book on the Mac."),
-            Tip("Your manuscript stays on this PC. The only thing InnerVoice downloads is the AI model you choose, once. The one exception is Claude, which you have to set up and allow for each book: see Choosing a Model."),
+            T("Voices cast on one computer are kept on the other. A Mac book's Apple voices speak here as the closest Windows voice, named \"(Mac voice)\" on the Voices page; choose another to replace one. Qwen3-TTS and Orpheus voices are kept for when those engines come to Windows."),
+            H("What is this project for?"),
+            T("A new project asks once, and Book › Project Type… changes it later; nothing is lost when you do."),
+            Keys(
+                ("Narration Tools", "You'll narrate the book yourself: who's speaking on every line, character summaries, the Index, the Teleprompter and Narrator Scripts."),
+                ("Produce with AI Voices", "You'll make the audiobook with AI voices: give every character a voice and a tone, hear a table read, and export the audio. The Steps bar ends with Voices and Listen.")),
+            Tip("Your manuscript stays on this PC. The only things InnerVoice downloads are the AI model you choose, once. The exceptions are Claude and ElevenLabs, which you have to set up and allow for each book: see Choosing a Model and Voices & Listening."),
         ],
 
         HelpTopic.OpeningManuscript =>
@@ -223,6 +232,55 @@ public static class HelpContent
             T("What you type in these fields is saved when you pause, press Enter or click elsewhere, so typing stays quick on a long book. A burst of typing is one step to undo (Ctrl+Z)."),
         ],
 
+        HelpTopic.Voices =>
+        [
+            T("InnerVoice can read the book aloud with a different voice for each character, so you can hear a scene, check who says what, or make the audiobook itself. Windows Voices run on your PC and send nothing anywhere. ElevenLabs, if you set it up, runs in the cloud (see below). Voices are part of every project type but Narration Tools (Book › Project Type…)."),
+            H("Voices for the cast"),
+            T("After Tag Speakers and Build Summaries, InnerVoice casts a voice for each character from what the book says about them: gender, age and accent from the summary, or a title like Mrs. or a \"she said\" when the summary is quiet. Main characters choose first, and two characters who share a scene get different voices. The narrator gets the best voice of all."),
+            T("Open the Voices page (Ctrl+5) to hear and change them. Click a character, then Play any voice: it says one of that character's own lines. Click Use to give them that voice, or Confirm to keep the one casting picked. Speed and pitch make a Windows voice older, younger or more distinct. Cast Voices Again chooses every voice again; voices you chose stay."),
+            T("The Narrator is always first. The narrator's voice reads the narration, every line nobody is cast for, and letters, signs and other written text (Settings › Voices can give written text to the character who wrote it). Give a minor character Same as Narrator and their lines are read in the narrator's voice. In a first-person book the narration uses the voice of the character who tells the story, unless you choose a separate narrator voice."),
+            T("A red dot means casting wasn't sure, usually because the book hasn't said whether the character is a woman or a man. Choose the gender on the Cast page, or listen and Confirm."),
+            H("Casting Style"),
+            T("Choose how the book shares its voices at the top of the Voices page: One Voice (the narrator's voice plays everyone, a little lower for men and higher for women; adjust each character's Shade, or give them a voice of their own), Narrator + Two Voices (a narrator, one voice for every man, one for every woman, and one for anyone else), or Full Cast (a voice per character). Changing it keeps every voice."),
+            H("How each line is said"),
+            T("Every line also gets a tone: neutral, excited, confused, sad, angry, whispered, scared, tender or sarcastic. \"She snapped\" is angry and \"he whispered\" is a whisper; Tag Speakers asks the AI about the rest, with the paragraphs around each line. Change a tone by right-clicking a line and choosing Tone; Tag Speakers never changes a tone you set."),
+            T("ElevenLabs acts each tone, and a delivery hint (\"barely audible\", from Delivery Hint… on the same menu) goes with it. Windows Voices can't act: a tone only changes their speed, pitch and loudness a little."),
+            H("Listening"),
+            Keys(
+                ("Ctrl+Space", "Play the selected lines in their characters' voices"),
+                ("Ctrl+Shift+Space", "Play from Here: a table read to the end of the book"),
+                ("Ctrl+Shift+.", "Stop playing")),
+            T("Play from Here follows along in the manuscript. Settings › Voices decides whether narration is read too (a full table read) or only the dialogue, and whether the manuscript follows along."),
+            H("Pauses and speed"),
+            T("Settings › Voices › Pauses sets each gap in seconds: between sentences, between a line and the narration around it, between paragraphs, after a chapter title, at a scene break and between chapters. Tight, Natural and Relaxed are starting points. With sentence pauses on, each sentence is spoken on its own so that gap is exact; turn it off to let each voice pace its own sentences."),
+            T("Click Try It to hear a passage from the front book; move a slider and the next pause changes, with nothing to remake. Playback speed (0.5× to 2×) speeds up Play, pauses included, without changing the voices' pitch. Export Audio always saves at normal speed, with your pauses."),
+            H("Exporting audio"),
+            T("File › Export Audio… saves all the voices or one character's lines as M4A or WAV files, one file per chapter or all in one. Check the chapters to include: Select All checks or clears every one, and Shift-click checks a run of chapters. When chapters have recaps, Say chapter recaps reads each one (\"Previously…\") after the chapter's title. Separate per voice saves a track for each voice, lined up so they play together. Each file is finished on this PC and then moved into the folder you chose, so exporting into OneDrive or Dropbox works too."),
+            T("M4A needs Windows' Media Foundation, which every edition has except Windows N without the Media Feature Pack; there, export WAV."),
+            H("EPUB with Audio"),
+            T("File › Export EPUB with Audio… saves the book as an EPUB with the voices built in. Open it in a reading app that plays read-along books (EPUB 3 Media Overlays), such as Thorium Reader, and click Play: each sentence is highlighted as it's read. Apps that don't play them show the book as ordinary text. Check the chapters to include, as in Export Audio."),
+            Tip("Reading the whole book takes as long as Export Audio does. Lines already played or exported come from the audio cache, so they're quick."),
+            H("Engines"),
+            T("Choose the engine for each project from the menu at the top of the Voices page. Each engine keeps its own casting, so switching back and forth loses nothing."),
+            Keys(
+                ("Windows Voices", "Come with Windows and work right away. They can't act, so a tone only changes speed and pitch a little. Add more voices in Windows Settings › Time & language › Speech (Get More Voices… in Settings › Voices), then click Reload."),
+                ("ElevenLabs (Cloud)", "Natural voices from your ElevenLabs account, made on ElevenLabs' servers with its eleven_v4 model, which acts each tone and any delivery hint. Unlike Windows Voices it sends text off your PC: every line an ElevenLabs voice speaks goes to ElevenLabs, and uses your plan's credits."),
+                ("Qwen3-TTS and Orpheus", "The Mac's voice models come to Windows later. Books cast with them keep their voices.")),
+            T("Choose Mix Engines (when two or more engines are on) for every voice from every engine in one list; each character can sound like a different engine. Don't use an engine? Turn it off in Settings › Voices; a project set to it uses an engine that's on, and keeps its casting."),
+            H("ElevenLabs and your manuscript"),
+            T("ElevenLabs is, with Claude, the only part of InnerVoice that sends your book anywhere. Set it up in Settings › Voices: create an API key at elevenlabs.io, paste it, check it, and tick that you understand your text goes to ElevenLabs. The key is kept in Windows Credential Manager."),
+            T("Then each book asks before its text is sent for the first time, when you choose ElevenLabs (or include it in Mix Engines) on its Voices page. A table read or an exported book sends the whole manuscript, so allow it only for books you have the right to share. Stop Sending This Book on the Voices page (or the Book menu) ends it for that book, and Disconnect in Settings › Voices forgets the key. The Cloud Usage button shows the characters sent and your plan's credits."),
+            H("Voice Notes and the AI voices"),
+            T("With ElevenLabs, click Design Voice under Design a Voice from Voice Notes on a character's Voices page. You see exactly what will be sent; ElevenLabs designs a voice from it, adds it to your ElevenLabs voices, and gives it to the character. It uses credits and one of your plan's voice slots, so it only happens when you click. Windows Voices can't take a description: casting reads the notes for gender, age, pitch and pace instead."),
+            H("Books in a series"),
+            T("Give the characters the voices they had in an earlier book: on the Voices page, click Use Voices from Another Project… (or choose Book › Use Voices from Another Project…), and pick the earlier book's project. Nothing changes yet."),
+            T("Each character with a voice in the earlier book is listed, main characters first, next to who InnerVoice thinks they are in this book; a ? means only the first name matches, so check it. Choose anyone from the menu, or Not in this book. Use These Voices gives the matched characters every voice they had, on every engine, as your own choices, so casting never changes them; one Undo takes it all back. The narrator's voice, their Voice Notes and the earlier book's engine can come along too. ElevenLabs voices still need this book's own permission."),
+            H("Clone a voice"),
+            T("You can make a voice from recordings of a real person, such as yourself or an actor who has agreed to it, with ElevenLabs. Choose Book › Clone a Voice… (or click Clone a Voice… on the Voices page). Name the voice, choose who in this book it's for, then record with your PC's microphone or add recordings (WAV, MP3 or M4A). One to two minutes of one person speaking clearly works best; at least 10 seconds is needed. Tick that you have the right and the consent of the person to clone their voice, then click Clone Voice."),
+            T("The recordings and the name go to ElevenLabs; no text from your book is sent. The voice is saved in your ElevenLabs account and listed first among the ElevenLabs voices, marked Cloned. Casting never chooses a cloned voice on its own. Cloning needs a paid ElevenLabs plan, and each cloned voice takes one of your plan's voice slots. Rename or delete cloned voices in Settings › Voices. Cloning on this PC, with Qwen3-TTS, comes later."),
+            Tip("Made audio is kept in a cache, so a line plays at once the second time. Settings › Voices shows its size and can clear it."),
+        ],
+
         HelpTopic.Index =>
         [
             T("Index lists each character's lines by chapter. Click a line to go to it in the manuscript."),
@@ -324,7 +382,13 @@ public static class HelpContent
                 ("Ctrl+1", "Manuscript"),
                 ("Ctrl+2", "Cast"),
                 ("Ctrl+3", "Index"),
-                ("Ctrl+4", "Teleprompter")),
+                ("Ctrl+4", "Teleprompter"),
+                ("Ctrl+5", "Voices")),
+            H("Listening"),
+            Keys(
+                ("Ctrl+Space", "Play Line: the selected lines in their characters' voices"),
+                ("Ctrl+Shift+Space", "Play from Here: a table read to the end of the book"),
+                ("Ctrl+Shift+.", "Stop Playing")),
             H("Manuscript"),
             Keys(
                 ("Enter", "Assign To for the selected line"),
@@ -352,6 +416,7 @@ public static class HelpContent
             Keys(
                 ("General", "Appearance (System, Light or Dark), the reading text size, typeface and line spacing, what the margin shows, and the Steps bar"),
                 ("AI", "The model"),
+                ("Voices", "The voice engines, ElevenLabs (Cloud), cloned voices, pauses and playback speed, table reads, written text, and the saved audio"),
                 ("Teleprompter", "The key that moves on and the Teleprompter's text size"),
                 ("Activity", "What InnerVoice has done for you, in numbers")),
             H("Activity"),

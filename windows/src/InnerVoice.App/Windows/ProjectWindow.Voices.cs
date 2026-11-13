@@ -38,7 +38,7 @@ public sealed partial class ProjectWindow
         book.Items.Add(Typed(Item("C_lone a Voice…", null, () => CloneVoice(null)), p => p.ShowsVoices));
         book.Items.Add(Typed(Item("_Play Line", "Ctrl+Space", PlayLine), p => p.ShowsVoices));
         book.Items.Add(Typed(Item("Play from _Here", "Ctrl+Shift+Space", PlayFromHere), p => p.ShowsVoices));
-        book.Items.Add(Typed(Item("_Stop Playing", "Ctrl+OemPeriod", SpeechPlayer.Shared.Stop), p => p.ShowsVoices));
+        book.Items.Add(Typed(Item("_Stop Playing", "Ctrl+Shift+OemPeriod", SpeechPlayer.Shared.Stop), p => p.ShowsVoices));
         book.Items.Add(Typed(Item("Cast _Voices Again", null, () => { if (Document.Project.ShowsVoices) Document.CastVoicesAgain(); }), p => p.ShowsVoices));
         book.Items.Add(Typed(Item("Stop Sending This Book to ElevenLabs", null, () => Document.SetCloudVoicesAllowed(false)),
             p => p.ShowsVoices && p.Settings.CloudVoicesAllowed is not null));
