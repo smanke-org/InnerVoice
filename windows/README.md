@@ -1,7 +1,8 @@
 # InnerVoice for Windows
 
 The Narration Tools from InnerVoice for Mac, on Windows: open a manuscript, see who speaks
-every line, fix it, build character summaries with a local AI model, keep an index and
+every line, fix it, build character summaries with a local AI model (or Claude, in the cloud,
+once the narrator sets it up and allows the book), keep an index and
 narrator scripts, and read from the teleprompter in the booth (record in your own audio app).
 Projects (`.innervoice`) open on both Windows and the Mac. There are no AI voices on Windows.
 

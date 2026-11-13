@@ -406,13 +406,22 @@ public sealed class ProjectSettings : ModelObject
     public ShadeStrength? ShadeStrength { get; set; }
     /// Just Me: the narrator's own gender; null is not said.
     public CharacterGender? NarratorGender { get; set; }
+    /// When the narrator allowed this book's text to be sent to Claude (Anthropic's cloud
+    /// model) for the AI features. null: never sent.
+    public AppleDate? CloudTextAllowed { get; set; }
+    /// Show Claude's changes in a list to keep or undo after each Tag Speakers run.
+    /// null: on (the default); false: keep them straight away like a local model's.
+    [JsonPropertyName("reviewCloudAI")] public bool? ReviewCloudAI { get; set; }
+
+    /// Claude's changes are listed for review unless the narrator turned it off.
+    [JsonIgnore] public bool ReviewsCloudAI => ReviewCloudAI ?? true;
 
     public ProjectSettings Copy() => new()
     {
         Style = Style, UnsureBelow = UnsureBelow, ShowInitials = ShowInitials, PovCharacterID = PovCharacterID,
         ColorNarration = ColorNarration, Purpose = Purpose, StepsDone = StepsDone is null ? null : [.. StepsDone],
         CastingStyle = CastingStyle, NarrationRole = NarrationRole, MinorVoices = MinorVoices, ShadeStrength = ShadeStrength,
-        NarratorGender = NarratorGender, Extra = CopyExtra(),
+        NarratorGender = NarratorGender, CloudTextAllowed = CloudTextAllowed, ReviewCloudAI = ReviewCloudAI, Extra = CopyExtra(),
     };
 }
 

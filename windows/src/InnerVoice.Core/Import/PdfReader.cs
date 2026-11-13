@@ -50,6 +50,7 @@ public static class PdfReader
                     throw new ImportException($"“{name}” has no text, only pictures of pages. Export it with text, or run it through a text recognition app first.");
                 throw new ImportException($"“{name}” has no text in it.");
             }
+            lines = JoinSplitLines(lines);
             lines = DropRunningLines(lines, document.NumberOfPages, heights);
             return Paragraphs(lines);
         }
@@ -74,16 +75,11 @@ public static class PdfReader
             var italic = new List<TextSpan>();
             bool bold = true;
             double size = 0;
-            Word? prev = null;
-            foreach (var w in row)
+            var spaces = Spaces(row);
+            for (int i = 0; i < row.Count; i++)
             {
-                if (prev is not null)
-                {
-                    // A gap wider than a fraction of the font size is a space.
-                    double gap = w.BoundingBox.Left - prev.BoundingBox.Right;
-                    double em = prev.Letters.Count > 0 ? prev.Letters[^1].PointSize : 10;
-                    if (gap > em * 0.12) text.Append(' ');
-                }
+                var w = row[i];
+                if (i > 0 && spaces[i - 1]) text.Append(' ');
                 int start = text.Length;
                 var t = Ligatures(w.Text.Replace("\u00AD", ""));
                 text.Append(t);
@@ -92,7 +88,6 @@ public static class PdfReader
                 if (!(lower.Contains("bold") || lower.Contains("black") || lower.Contains("heavy"))) bold = false;
                 if (lower.Contains("italic") || lower.Contains("oblique")) italic.Add(new TextSpan(start, t.Length));
                 size = Math.Max(size, w.Letters.Count > 0 ? w.Letters.Max(l => l.PointSize) : 0);
-                prev = w;
             }
             var s = text.ToString().Trim();
             if (s.Length == 0) continue;
@@ -101,6 +96,99 @@ public static class PdfReader
             yield return new PdfLine(s, new Rect(left, bottom, right - left, top - bottom), index, size,
                 ManuscriptImporter.MergeRanges(italic, s.Length), bold);
         }
+    }
+
+    /// A justified line squeezed out with wide letter spacing comes out as letters with gaps
+    /// between them ("c o n c e r n e d .") and can come out as several pieces on one baseline;
+    /// each piece started a paragraph of its own (it sits mid-line, like an indent). Puts the
+    /// letters back together, then joins pieces on the same baseline into one line.
+    /// (The Mac's PDFReader.joinSplitLines.)
+    public static List<PdfLine> JoinSplitLines(List<PdfLine> lines)
+    {
+        var output = new List<PdfLine>();
+        foreach (var original in lines)
+        {
+            var line = original;
+            var closed = CloseLetterSpacing(line.Text);
+            // Italic offsets no longer match; a spaced-out line is rarely italic.
+            if (closed != line.Text) line = line with { Text = closed, Italic = [] };
+            if (output.Count > 0 && output[^1] is var prev && prev.Page == line.Page)
+            {
+                double overlap = Math.Min(prev.Rect.MaxY, line.Rect.MaxY) - Math.Max(prev.Rect.MinY, line.Rect.MinY);
+                bool sameBaseline = overlap > Math.Min(prev.Rect.Height, line.Rect.Height) * 0.6;
+                if (sameBaseline && line.Rect.MinX >= prev.Rect.MaxX - 2)
+                {
+                    int offset = prev.Text.Length + 1;
+                    double minX = Math.Min(prev.Rect.MinX, line.Rect.MinX), minY = Math.Min(prev.Rect.MinY, line.Rect.MinY);
+                    double maxX = Math.Max(prev.Rect.MaxX, line.Rect.MaxX), maxY = Math.Max(prev.Rect.MaxY, line.Rect.MaxY);
+                    output[^1] = prev with
+                    {
+                        Text = prev.Text + " " + line.Text,
+                        Italic = [.. prev.Italic, .. line.Italic.Select(r => new TextSpan(r.Location + offset, r.Length))],
+                        Rect = new Rect(minX, minY, maxX - minX, maxY - minY),
+                        FontSize = Math.Max(prev.FontSize, line.FontSize),
+                        Bold = prev.Bold && line.Bold,
+                    };
+                    continue;
+                }
+            }
+            output.Add(line);
+        }
+        return output;
+    }
+
+    /// "or c o n c e r n e d ." → "or concerned.": three or more single characters in a row,
+    /// each followed by one space, are one spaced-out word.
+    public static string CloseLetterSpacing(string text)
+    {
+        var tokens = text.Split(' ');
+        if (tokens.Length < 3) return text;
+        var result = new List<string>();
+        var run = new List<string>();
+        void Flush()
+        {
+            if (run.Count >= 3) result.Add(string.Concat(run)); else result.AddRange(run);
+            run.Clear();
+        }
+        foreach (var t in tokens)
+        {
+            if (new System.Globalization.StringInfo(t).LengthInTextElements == 1) run.Add(t);
+            else { Flush(); result.Add(t); }
+        }
+        Flush();
+        return string.Join(' ', result);
+    }
+
+    /// Whether a space goes after each word of a row (one fewer than words). A gap wider than
+    /// a fraction of the font size is a space, except inside a letter-spaced stretch (a
+    /// justified line squeezed out letter by letter, which comes out one letter per word):
+    /// there only gaps clearly wider than the letter spacing are spaces between words.
+    static bool[] Spaces(List<Word> row)
+    {
+        var gaps = new double[Math.Max(0, row.Count - 1)];
+        var spaces = new bool[gaps.Length];
+        for (int i = 0; i < gaps.Length; i++)
+        {
+            gaps[i] = row[i + 1].BoundingBox.Left - row[i].BoundingBox.Right;
+            double em = row[i].Letters.Count > 0 ? row[i].Letters[^1].PointSize : 10;
+            spaces[i] = gaps[i] > em * 0.12;
+        }
+        static bool Single(Word w) => new System.Globalization.StringInfo(w.Text).LengthInTextElements == 1;
+        int start = 0;
+        while (start < row.Count)
+        {
+            // A run of single letters, each set apart from the next.
+            int end = start;
+            while (end + 1 < row.Count && Single(row[end]) && Single(row[end + 1]) && spaces[end]) end++;
+            if (end - start + 1 >= 3)
+            {
+                var inRun = gaps[start..end].Order().ToArray();
+                double letterGap = inRun[inRun.Length / 2];
+                for (int i = start; i < end; i++) spaces[i] = gaps[i] > letterGap * 1.6;
+            }
+            start = end + 1;
+        }
+        return spaces;
     }
 
     /// PDFKit spells out typographic ligatures ("ﬁ" → "fi"); so does this.

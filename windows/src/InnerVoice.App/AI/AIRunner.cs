@@ -19,6 +19,11 @@ public sealed class AIRunner(ProjectDocument document)
     public Status? Current { get; private set; }
     public string? Finished { get; set; }
     public string? Failure { get; set; }
+    /// Claude's changes from the last Tag Speakers run, waiting for the narrator to keep or
+    /// undo them (Project Settings › Review Claude's changes). null: nothing to review.
+    public PendingReview? Review { get; set; }
+
+    public sealed record PendingReview(List<AIReviewItem> Items, Dictionary<Guid, Line> Before, HashSet<Guid> AddedCharacters, string Model);
     public bool IsRunning => Current is not null;
     public event Action? Changed;
 
@@ -46,6 +51,7 @@ public sealed class AIRunner(ProjectDocument document)
     {
         if (IsRunning) return;
         Failure = null;
+        Review = null;
         Finished = null;
         Set(new Status(Job.Tagging, 0, "Loading the model…"));
         cts = new CancellationTokenSource();
@@ -54,7 +60,7 @@ public sealed class AIRunner(ProjectDocument document)
         var charactersBefore = document.Project.Characters.Select(c => c.Id).ToHashSet();
         try
         {
-            var model = await ModelManager.Shared.Model();
+            var model = await ModelManager.Shared.Model(bookAllowed: document.Project.Settings.CloudTextAllowed is not null);
             var targets = chapters ?? Enumerable.Range(0, document.Project.Chapters.Count).ToList();
             // Lines the AI gave up on ("?") get another try: the rules first, then the AI.
             document.ApplyQuietly(p =>
@@ -116,6 +122,15 @@ public sealed class AIRunner(ProjectDocument document)
             document.ApplyQuietly(p => p.LastTagged = AppleDate.Now);
             int needs = document.Project.LinesNeedingYou;
             _ = document.RecolorAutomaticAsync();
+            if (model.IsCloud && document.Project.Settings.ReviewsCloudAI)
+            {
+                var items = AIReview.Items(changed, document.Project);
+                if (items.Count > 0)
+                {
+                    var added = document.Project.Characters.Where(x => !charactersBefore.Contains(x.Id)).Select(x => x.Id).ToHashSet();
+                    Review = new PendingReview(items, new Dictionary<Guid, Line>(changed), added, model.DisplayName);
+                }
+            }
             Finished = $"Tagged {changed.Count:N0} lines" + (newCharacters == 0 ? "" : $" and found {newCharacters} new characters") +
                        (needs > 0 ? $". {needs:N0} need you." : ".");
         }
@@ -185,7 +200,7 @@ public sealed class AIRunner(ProjectDocument document)
         int added = 0, notesWritten = 0, briefsWritten = 0;
         try
         {
-            var model = await ModelManager.Shared.Model();
+            var model = await ModelManager.Shared.Model(bookAllowed: document.Project.Settings.CloudTextAllowed is not null);
             var index = document.Index;
             var cast = document.Project.Characters.OrderByDescending(c => index.StatsFor(c.Id)?.Lines ?? 0).ToList();
             if (only is not null) cast = cast.Where(c => only.Contains(c.Id)).ToList();

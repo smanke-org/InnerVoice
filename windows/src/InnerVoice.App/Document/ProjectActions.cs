@@ -169,6 +169,10 @@ public static class ProjectActions
 
     public static void UpdateSettings(this ProjectDocument d, string name, Action<ProjectSettings> body) => d.Change(name, p => body(p.Settings));
 
+    /// Lets this book's text go to Claude for the AI features (the narrator said yes), or stops it.
+    public static void SetCloudTextAllowed(this ProjectDocument d, bool allowed) =>
+        d.UpdateSettings(allowed ? "Allow Claude" : "Stop Sending to Claude", s => s.CloudTextAllowed = allowed ? AppleDate.Now : null);
+
     /// The speaker and summary text used as a voice cue (Teleprompter, scripts).
     public static string VoiceCue(BookCharacter c)
     {

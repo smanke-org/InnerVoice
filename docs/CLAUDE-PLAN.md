@@ -33,6 +33,26 @@ Selection string: `claude:<model id>`.
 4. EPUB: table of contents → chapters, footnotes left out of narration; EPUB 3 export with
    Media Overlays (text highlights as the audio plays).
 5. Windows port of 1–4 (C# Anthropic SDK).
+   - 1–2 ported 2026-11-12 (with autosave and the PDF letter-spacing fix from the same Mac
+     commit). `windows/src/InnerVoice.Core/AI/Claude.cs` (`ClaudeTextModel`, official `Anthropic`
+     NuGet 13.8.0; the model can't be made without key + consent + the book's yes),
+     `AIReview.cs` (speakers only: Windows has no tones), `ProjectSettings.CloudTextAllowed` /
+     `ReviewCloudAI` (same JSON names as the Mac). App: `AI/ClaudeAccount.cs` (key in Windows
+     Credential Manager, target `InnerVoice/anthropic`; in memory for test runs and on a Mac),
+     `Windows/SettingsWindow.Claude.cs` (row + Set Up dialog), `Windows/AIReviewWindow.cs`.
+   - Windows has no Project Settings window: the per-book toggle is Book › Review Claude's
+     Changes (shown once Claude is chosen or the book said yes), next to Book › Stop Sending
+     This Book to Claude.
+   - The SDK sends the key as `Authorization: Bearer` (its documented behavior), always to
+     api.anthropic.com (`BaseUrl` is set, so `ANTHROPIC_BASE_URL` can't redirect book text).
+   - Windows has no Export Audio, so the cloud-safe audio export doesn't apply there.
+   - The Windows PDF reader (PdfPig) gets one word per letter on a letter-spaced line; its row
+     builder now spaces such a run by the gaps between letters, then `CloseLetterSpacing` and
+     `JoinSplitLines` run as on the Mac.
+   - Checks: `ClaudeTests` (fake HttpMessageHandler: nothing sent without all three yeses),
+     `PdfLetterSpacingTests`, and `ClaudeAppTests` (the real runner against a fake Anthropic).
+     Credential Manager and the real API need a Windows PC and a key.
+   - 3–4 not ported yet.
 
 ## API notes
 Raw HTTPS (no Swift SDK): POST /v1/messages, `anthropic-version: 2026-10-21`, streaming for

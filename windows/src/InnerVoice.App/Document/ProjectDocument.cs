@@ -131,16 +131,30 @@ public sealed class ProjectDocument
 
     // MARK: Saving
 
-    /// Saves a couple of seconds after the last change, like the Mac's autosave in place.
+    /// How often a project with a file and unsaved changes saves itself (the Mac's AutoSave).
+    /// `INNERVOICE_AUTOSAVE_SECONDS` (checks only) shortens it and lets a test run autosave.
+    static readonly double? AutosaveOverride =
+        double.TryParse(Environment.GetEnvironmentVariable("INNERVOICE_AUTOSAVE_SECONDS"), System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out var s) && s > 0 ? s : null;
+    public static TimeSpan AutosaveInterval => TimeSpan.FromSeconds(AutosaveOverride ?? 30);
+
+    /// Saves within 30 seconds of the first unsaved change, then again every 30 seconds while
+    /// changes keep coming (a long Tag Speakers run included). Untitled projects wait for the
+    /// narrator's first save, with a name and a place. Test runs never save on their own.
     void ScheduleAutosave()
     {
-        if (FilePath is null || IsReadOnly) return;
-        autosave?.Cancel();
+        if (FilePath is null || IsReadOnly || autosave is not null) return;
+        if (AppPaths.IsTestRun && AutosaveOverride is null) return;
         var cts = autosave = new CancellationTokenSource();
-        _ = Task.Delay(TimeSpan.FromSeconds(2), cts.Token).ContinueWith(t =>
+        _ = Task.Delay(AutosaveInterval, cts.Token).ContinueWith(t =>
         {
             if (t.IsCanceled) return;
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (!cts.IsCancellationRequested) TrySave(out _); });
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                if (cts.IsCancellationRequested) return;
+                autosave = null;
+                if (IsDirty && FilePath is not null && !IsReadOnly) TrySave(out _);
+            });
         }, TaskScheduler.Default);
     }
 
@@ -206,6 +220,7 @@ public sealed class ProjectDocument
     public void FlushAutosave()
     {
         autosave?.Cancel();
+        autosave = null;
         if (IsDirty && FilePath is not null && !IsReadOnly) TrySave(out _);
     }
 }

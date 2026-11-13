@@ -3,7 +3,10 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using InnerVoice.App.AI;
+using InnerVoice.App.Document;
 using InnerVoice.App.UI;
+using InnerVoice.Core;
+using InnerVoice.Core.AI;
 
 namespace InnerVoice.App.Windows;
 
@@ -28,25 +31,61 @@ public sealed partial class ProjectWindow
         book.Items.Add(Item("Sto_p", "Ctrl+OemPeriod", () => runner?.Stop()));
         book.Items.Add(new Separator());
         book.Items.Add(Item("Choose a _Model…", null, () => SettingsWindow.Show(this, "AI")));
+        // Claude, per book: shown once Claude is chosen or the book has said yes.
+        var review = Item("Review Claude's Changes", null, () =>
+        {
+            bool on = !Document.Project.Settings.ReviewsCloudAI;
+            Document.UpdateSettings("Review Claude's Changes", s => s.ReviewCloudAI = on ? null : false);
+        });
+        review.ToggleType = MenuItemToggleType.CheckBox;
+        ToolTip.SetTip(review, "After Tag Speakers runs with Claude, list every line it changed so you can keep or undo each one");
+        var stop = Item("Stop Sending This Book to Claude", null, () => Document.SetCloudTextAllowed(false));
+        book.SubmenuOpened += (_, _) =>
+        {
+            bool claude = ModelManager.Shared.SelectionIsClaude || Document.Project.Settings.CloudTextAllowed is not null;
+            review.IsVisible = claude;
+            review.IsChecked = Document.Project.Settings.ReviewsCloudAI;
+            stop.IsVisible = Document.Project.Settings.CloudTextAllowed is not null;
+            stop.IsEnabled = !Runner.IsRunning;
+        };
+        book.Items.Add(review);
+        book.Items.Add(stop);
     }
 
     public async Task TagSpeakers()
     {
-        if (!await EnsureModel()) return;
+        if (!await EnsureModel() || !await ClaudeAllowed()) return;
         await Runner.TagSpeakers();
+        if (Runner.Review is { } r)
+        {
+            Runner.Review = null;
+            await AIReviewWindow.Show(this, Document, r);
+        }
     }
 
     public async Task BuildSummaries()
     {
-        if (!await EnsureModel()) return;
+        if (!await EnsureModel() || !await ClaudeAllowed()) return;
         await Runner.BuildSummaries();
+    }
+
+    /// With Claude chosen, a book that hasn't said yes asks once (the narrator just clicked,
+    /// so a question is expected). Any other model: always true. Test runs never send.
+    async Task<bool> ClaudeAllowed()
+    {
+        if (!ModelManager.Shared.SelectionIsClaude || Document.Project.Settings.CloudTextAllowed is not null) return true;
+        if (AppPaths.IsTestRun) return false;
+        if (!await Dialogs.Confirm(this, Claude.BookQuestion, Claude.BookQuestionDetail, "Send to Claude", destructive: false, cancel: "Don't Send"))
+            return false;
+        Document.SetCloudTextAllowed(true);
+        return true;
     }
 
     /// No model yet: say so and open Settings › AI.
     async Task<bool> EnsureModel()
     {
         if (ModelManager.Shared.IsReady) return true;
-        if (await Dialogs.Confirm(this, "Choose a Model First", "Tag Speakers and Build Summaries need an AI model on this PC. Settings › AI lists the ones that suit it, with one marked Best for this PC.", "Choose a Model", destructive: false))
+        if (await Dialogs.Confirm(this, "Choose a Model First", "Tag Speakers and Build Summaries need an AI model. Settings › AI lists the ones that suit this PC, with one marked Best for this PC, and Claude, which runs in the cloud.", "Choose a Model", destructive: false))
             SettingsWindow.Show(this, "AI");
         return false;
     }

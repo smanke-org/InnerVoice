@@ -30,6 +30,11 @@ public sealed class AppSettings
     public int ReviewContext { get; set; } = 2;
     public string? ModelID { get; set; }
     public string? ModelsFolder { get; set; }
+    /// When the narrator agreed that book text sent to Claude goes to Anthropic (Set Up Claude).
+    /// The key itself is in Windows Credential Manager, never here.
+    public DateTime? ClaudeConsent { get; set; }
+    /// The Claude models the key can use, from Anthropic's model list (no book text is sent).
+    public List<InnerVoice.Core.AI.ClaudeModelInfo>? ClaudeModels { get; set; }
     public List<string> RecentProjects { get; set; } = [];
     public double WindowWidth { get; set; } = 1280;
     public double WindowHeight { get; set; } = 820;

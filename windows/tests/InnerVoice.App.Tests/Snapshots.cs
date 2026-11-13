@@ -324,6 +324,7 @@ public class Books
 }
 
 /// Set INNERVOICE_TEST_MODEL to a GGUF file to tag the sample book and build summaries for real.
+[Collection("Model choice")]
 public class RealModel
 {
     [AvaloniaFact]

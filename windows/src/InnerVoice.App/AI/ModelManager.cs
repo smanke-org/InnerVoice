@@ -4,13 +4,14 @@ using InnerVoice.Core.AI;
 
 namespace InnerVoice.App.AI;
 
-/// A model ready to answer prompts. One at a time: the engine has one context.
-public sealed class TextModel(LlamaEngine engine, string displayName)
+/// A llama.cpp model ready to answer prompts. One at a time: the engine has one context.
+public sealed class TextModel(LlamaEngine engine, string displayName) : ITextModel
 {
     static readonly SemaphoreSlim Gate = new(1, 1);
     public string DisplayName { get; } = displayName;
     /// Words per passage the model takes in comfortably.
     public int PassageWords => 900;
+    public bool IsCloud => false;
 
     public async Task<string> Complete(IEnumerable<ChatMessage> messages, string? grammar, int maxTokens, Action<double>? progress = null,
                                        CancellationToken ct = default)
@@ -36,7 +37,8 @@ public sealed class TextModel(LlamaEngine engine, string displayName)
     }
 }
 
-/// Downloads, lists and loads models. The choice is saved as "catalog:<id>" or "file:<path>".
+/// Downloads, lists and loads models. The choice is saved as "catalog:<id>", "file:<path>"
+/// or "claude:<model id>" (cloud).
 public sealed class ModelManager
 {
     public static ModelManager Shared { get; } = new();
@@ -112,11 +114,15 @@ public sealed class ModelManager
 
     public CatalogModel? CatalogModel => Selection.StartsWith("catalog:") ? ModelCatalog.Model(Selection["catalog:".Length..]) : null;
 
+    public bool SelectionIsClaude => Selection.StartsWith(Claude.SelectionPrefix);
+
     public string SelectionName =>
+        SelectionIsClaude ? ClaudeAccount.Shared.NameOf(Selection[Claude.SelectionPrefix.Length..]) :
         CatalogModel?.Name ?? (Selection.StartsWith("file:") ? Path.GetFileNameWithoutExtension(Selection["file:".Length..]) : "No model");
 
     /// True when Tag Speakers can run without asking the narrator to pick a model.
     public bool IsReady =>
+        SelectionIsClaude ? ClaudeAccount.Shared.IsSetUp :
         CatalogModel is { } m ? Downloaded.Contains(m.Id) : Selection.StartsWith("file:") && File.Exists(Selection["file:".Length..]);
 
     public bool SelectionRunsOnGpu => CatalogModel is { } m ? ModelCatalog.FitsGpu(m, Hardware) : Hardware.HasGpu;
@@ -125,9 +131,11 @@ public sealed class ModelManager
 
     public sealed class ModelException(string message) : Exception(message);
 
-    /// Loads the chosen model (once) and returns it.
-    public async Task<TextModel> Model()
+    /// Loads the chosen model (once) and returns it. `bookAllowed`: the book's
+    /// `cloudTextAllowed`; Claude sends nothing without it.
+    public async Task<ITextModel> Model(bool bookAllowed = false)
     {
+        if (SelectionIsClaude) return ClaudeAccount.Shared.Model(Selection[Claude.SelectionPrefix.Length..], bookAllowed);
         if (!LlamaLibrary.IsAvailable) throw new ModelException("The AI engine (llama.cpp) is missing from this copy of InnerVoice. Reinstall InnerVoice.");
         string? path = null;
         if (CatalogModel is { } m)

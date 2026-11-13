@@ -41,7 +41,8 @@ public sealed partial class SettingsWindow : Window
         Build();
         ModelManager.Shared.Changed += Build;
         AppSettings.Changed += Build;
-        Closed += (_, _) => { ModelManager.Shared.Changed -= Build; AppSettings.Changed -= Build; };
+        ClaudeAccount.Shared.Changed += Build;
+        Closed += (_, _) => { ModelManager.Shared.Changed -= Build; AppSettings.Changed -= Build; ClaudeAccount.Shared.Changed -= Build; };
     }
 
     void Select(string tab)
@@ -122,13 +123,14 @@ public sealed partial class SettingsWindow : Window
         var mm = ModelManager.Shared;
         var hw = mm.Hardware;
         var pane = Pane();
-        pane.Children.Add(Ui.Text("The model reads the book on this PC to find who speaks each line and what the book says about each character. Your manuscript never leaves the PC; the model download is the only time InnerVoice goes online for the AI.", 13, wrap: TextWrapping.Wrap));
+        pane.Children.Add(Ui.Text("The model reads the book to find who speaks each line and what the book says about each character. The downloaded models run on this PC: with them your manuscript never leaves it, and the download is the only time InnerVoice goes online for the AI. Claude runs in the cloud, and each book asks before anything is sent.", 13, wrap: TextWrapping.Wrap));
         pane.Children.Add(Ui.Caption(hw.HasGpu
             ? $"This PC: {hw.MemoryGB} GB of memory and a graphics card ({hw.GpuName}) with {hw.GpuGB:0} GB. Models that fit the card run fastest."
             : $"This PC: {hw.MemoryGB} GB of memory and no graphics card the AI can use, so models run on the processor. Smaller models finish much sooner.", TextWrapping.Wrap));
         if (!LlamaLibrary.IsAvailable)
             pane.Children.Add(Ui.Text("The AI engine is missing from this copy of InnerVoice. Reinstall InnerVoice to use Tag Speakers and Build Summaries.", 13, brush: Look.Brush(Look.Attention), wrap: TextWrapping.Wrap));
         foreach (var m in ModelCatalog.All.OrderBy(m => m.Bytes)) pane.Children.Add(ModelRow(m, hw));
+        pane.Children.Add(ClaudeRow());
         var other = Ui.Row(Look.Sm,
             Ui.Button("Use a GGUF File…", async () =>
             {

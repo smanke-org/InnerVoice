@@ -107,12 +107,12 @@ public static class HelpContent
                 ("Teleprompter", "The teleprompter for the booth"),
                 ("Revisions", "What changed, after File › Import Revised Manuscript…")),
             H("Saving"),
-            T("A project is one .innervoice file. Save it once with File › Save (Ctrl+S); from then on InnerVoice saves by itself a couple of seconds after each change. File › Save As… (Ctrl+Shift+S) saves a copy under a new name or in another folder."),
+            T("A project is one .innervoice file. Save it once with File › Save (Ctrl+S); from then on InnerVoice saves by itself every 30 seconds while it has changes. File › Save As… (Ctrl+Shift+S) saves a copy under a new name or in another folder."),
             H("A book on your PC and your Mac"),
             T("The same .innervoice file opens in InnerVoice on a Mac, so you can tag a book on one computer and read it in the booth on the other. Keep it in OneDrive, Dropbox or any synced folder, or carry it on a USB stick."),
             T("There's no merging: the last save wins. If the file changed on another computer since you opened it, saving asks before replacing it."),
             T("A book set up for AI voices on the Mac opens here with the Narration Tools pages. Its voices are kept, and they're all there again when you open the book on the Mac."),
-            Tip("Your manuscript stays on this PC. The only thing InnerVoice downloads is the AI model you choose, once."),
+            Tip("Your manuscript stays on this PC. The only thing InnerVoice downloads is the AI model you choose, once. The one exception is Claude, which you have to set up and allow for each book: see Choosing a Model."),
         ],
 
         HelpTopic.OpeningManuscript =>
@@ -123,7 +123,7 @@ public static class HelpContent
             H("Google Docs"),
             T("Download the document as Word first: in Google Docs, choose File › Download › Microsoft Word (.docx), then open that file in InnerVoice."),
             H("PDF"),
-            T("Running headers, footers and page numbers are left out, and paragraphs split across pages are joined again. A scanned PDF has pictures of pages and no text: export it with text from the app that made it, or run it through a text recognition (OCR) app first."),
+            T("Running headers, footers and page numbers are left out, and paragraphs split across pages are joined again. Lines that a book spreads out to fill the width (with wide gaps between the letters) are read as ordinary words in their paragraph. A scanned PDF has pictures of pages and no text: export it with text from the app that made it, or run it through a text recognition (OCR) app first."),
             Tip("InnerVoice keeps its own copy of the manuscript in the project, so moving or changing the original file doesn't change your project. To bring in a new draft, see Revised Manuscripts."),
         ],
 
@@ -135,7 +135,7 @@ public static class HelpContent
             T("Lines you assigned yourself are never changed by Tag Speakers. Stop (Ctrl+.) keeps everything done so far, and Tag Speakers carries on from there next time. Edit › Undo Tag Speakers (Ctrl+Z) takes the whole run back."),
             T("Tag Speakers needs a model on this PC. If there isn't one yet, it offers to open Settings › AI. Without one, you can still assign every line yourself."),
             H("Privacy"),
-            T("The AI runs on your PC. Your manuscript, your cast and your notes never leave it, and InnerVoice works offline. The only thing downloaded is the model you choose, once."),
+            T("A downloaded model runs on your PC: your manuscript, your cast and your notes never leave it, and InnerVoice works offline. The only thing downloaded is the model you choose, once. Claude is the exception: it runs in the cloud, and only books you allow are sent to it (see Choosing a Model)."),
             Tip("When it's done, a banner says how many lines need you. Click Review to see them, or press Ctrl+Down to go to the next one in the manuscript."),
         ],
 
@@ -175,7 +175,7 @@ public static class HelpContent
             T("Drag across an ISBN, a copyright page, or an ad for another book and press Delete (or right-click and choose Delete Text…). It goes from the project and from every script and export; the manuscript file you imported never changes. Select a chapter's heading and all of its text to delete the whole chapter. Front matter often comes in as a chapter heading: delete a heading on its own and its text joins the chapter before (the book's first text stays, under Opening). Ctrl+Z brings it back."),
             H("Lines to review in each chapter"),
             T("In the sidebar, \"2 to review\" beside a chapter means two of its lines still need you to confirm who says them. The numbers beside the cast are how many lines each character speaks."),
-            Tip("Once a project has been saved, it saves itself a couple of seconds after each change, so you can keep working without stopping to save."),
+            Tip("Once you've saved a project with a name, it saves itself every 30 seconds while it has changes, so you can keep working without stopping to save. A new project waits for your first File › Save."),
             H("Review the guesses"),
             T("When the AI or the rules aren't sure, they still make a best guess: the margin shows the name with a question mark (\"Cyrus?\") and the line stays red until you check it. Review in the sidebar lists every line that needs you, in book order, each with the paragraph around it. Click Confirm to keep the guess, Assign… to pick someone else, or Show to see it in the manuscript. A settled line leaves the list."),
             Tip("Ctrl+Down and Ctrl+Up (Book › Next Line That Needs You and Previous Line That Needs You) jump to the next and previous line that needs you and open Assign To: Enter confirms the best guess."),
@@ -261,7 +261,7 @@ public static class HelpContent
 
         HelpTopic.ChoosingModel =>
         [
-            T("The model is the AI that reads your book. It runs on your PC and is downloaded once. Settings › AI (or Book › Choose a Model…) lists the models, each with a note on how well it fits this PC."),
+            T("The model is the AI that reads your book. Most run on your PC and are downloaded once; Claude runs in the cloud. Settings › AI (or Book › Choose a Model…) lists the models, each with a note on how well it fits this PC."),
             H("Memory and graphics card"),
             T("The advice comes from your PC's memory and its graphics card. A model that fits in the graphics card's memory runs fastest; one that doesn't runs partly or fully on the processor, which is much slower. On a PC without a graphics card the AI can use, the smaller models finish much sooner. A model too big for your memory makes everything slow."),
             Keys(
@@ -275,7 +275,16 @@ public static class HelpContent
                 ("Delete…", "Free the disk space it takes; you can download it again later"),
                 ("Use a GGUF File…", "Use a model file you already have"),
                 ("Change Models Folder…", "Keep models somewhere else, like a drive with more room; they take several gigabytes")),
-            Tip("Your manuscript never leaves this PC. The model download is the only time the AI goes online."),
+            H("Claude (cloud)"),
+            T("Claude is Anthropic's AI, offered after the downloaded models and marked Cloud. It is the most accurate choice and needs no download, but it runs on Anthropic's computers: each passage of the book is sent to Anthropic while Tag Speakers or Build Summaries runs, and Anthropic charges for what you use."),
+            Keys(
+                ("Set Up…", "Read the cloud warning, paste an API key from the Claude Console and agree; the key is kept in Windows Credential Manager"),
+                ("Model menu", "Pick Claude Fable, Opus, Sonnet or Haiku; new models appear on their own"),
+                ("Use Claude", "Tag and summarize with Claude from now on"),
+                ("Disconnect", "Forget the key; nothing more is sent")),
+            T("Each book asks once before anything is sent: \"Send this book to Claude?\" Until you say yes, nothing from that book leaves your PC. To take the yes back, choose Book › Stop Sending This Book to Claude. Anthropic doesn't train on API data unless your organization has opted in; the setup window links to how to check."),
+            T("After Tag Speakers runs with Claude, Review Claude's Changes lists every line it gave a new speaker. Everything starts checked; uncheck what you don't want and click Undo Unchecked, and those lines go back to how they were, in one Undo step. Keep All keeps everything. Lines you assigned yourself are never changed. To keep Claude's changes straight away instead, turn off Book › Review Claude's Changes for that book."),
+            Tip("With a downloaded model, your manuscript never leaves this PC. The model download is the only time the AI goes online."),
         ],
 
         HelpTopic.KeyboardShortcuts =>

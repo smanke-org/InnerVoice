@@ -10,7 +10,7 @@ public static class Dialogs
 {
     static Window? Owner(Visual v) => TopLevel.GetTopLevel(v) as Window;
 
-    public static async Task<bool> Confirm(Visual from, string title, string message, string action, bool destructive = true)
+    public static async Task<bool> Confirm(Visual from, string title, string message, string action, bool destructive = true, string cancel = "Cancel")
     {
         var owner = Owner(from);
         bool result = false;
@@ -21,10 +21,10 @@ public static class Dialogs
         };
         var ok = new Button { Content = action, IsDefault = !destructive };
         ok.Classes.Add(destructive ? "danger" : "accent");
-        var cancel = new Button { Content = "Cancel", IsCancel = true, IsDefault = destructive };
+        var no = new Button { Content = cancel, IsCancel = true, IsDefault = destructive };
         ok.Click += (_, _) => { result = true; dialog.Close(); };
-        cancel.Click += (_, _) => dialog.Close();
-        var buttons = Ui.Row(Look.Sm, cancel, ok);
+        no.Click += (_, _) => dialog.Close();
+        var buttons = Ui.Row(Look.Sm, no, ok);
         buttons.HorizontalAlignment = HorizontalAlignment.Right;
         dialog.Content = new StackPanel
         {
