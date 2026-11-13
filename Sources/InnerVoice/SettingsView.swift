@@ -397,8 +397,9 @@ struct ClonedVoicesSection: View {
     }
 }
 
-/// "Cloud", wherever ElevenLabs is named: the one place the book's text leaves the Mac.
+/// "Cloud", wherever ElevenLabs or Claude is named: the only places the book's text leaves the Mac.
 struct CloudBadge: View {
+    var service = "ElevenLabs"
     var body: some View {
         Label("Cloud", systemImage: "cloud")
             .font(.caption2.weight(.semibold))
@@ -407,7 +408,7 @@ struct CloudBadge: View {
             .padding(.vertical, 2)
             .foregroundStyle(.orange)
             .background(.orange.opacity(0.12), in: Capsule())
-            .help("Uses the internet: text is sent to ElevenLabs")
+            .help("Uses the internet: text is sent to \(service)")
     }
 }
 

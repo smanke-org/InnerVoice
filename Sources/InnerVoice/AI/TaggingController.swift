@@ -40,6 +40,16 @@ final class TaggingController {
     }
     /// The last run's result, shown in a banner until dismissed.
     var finished: String?
+    /// Claude's changes from the last Tag Speakers run, waiting for the narrator to keep or
+    /// undo them (Project Settings › Review Claude's changes). nil: nothing to review.
+    var review: PendingReview?
+
+    struct PendingReview {
+        var items: [AIReviewItem]
+        var before: [UUID: Line]
+        var addedCharacters: Set<UUID>
+        var model: String
+    }
     var failure: String?
 
     @ObservationIgnored private weak var document: InnerVoiceDocument?
@@ -55,11 +65,27 @@ final class TaggingController {
         task?.cancel()
     }
 
+    /// With Claude chosen, a book that hasn't said yes asks once (the narrator just clicked,
+    /// so a question is expected). Any other model: always true.
+    private static func claudeAllowed(_ document: InnerVoiceDocument, undoManager: UndoManager?) -> Bool {
+        guard ModelManager.shared.selection.hasPrefix("claude:"), document.project.settings.cloudTextAllowed == nil else { return true }
+        guard !SystemHooks.isTestRun else { return false }
+        let alert = NSAlert()
+        alert.messageText = "Send this book to Claude?"
+        alert.informativeText = ClaudeAccount.warning + "\n\nInnerVoice sends the book a passage at a time, only when you run an AI feature. To stop, choose Book › Stop Sending This Book to Claude."
+        alert.addButton(withTitle: "Don't Send")
+        alert.addButton(withTitle: "Send to Claude")
+        guard alert.runModal() == .alertSecondButtonReturn else { return false }
+        document.setCloudTextAllowed(true, undoManager: undoManager)
+        return true
+    }
+
     // MARK: Tag Speakers
 
     /// Tags every line the narrator and the rules haven't settled. With `chapters`, only those.
     func tagSpeakers(undoManager: UndoManager?, chapters: [Int]? = nil) {
         guard let document, !isRunning else { return }
+        guard Self.claudeAllowed(document, undoManager: undoManager) else { return }
         failure = nil
         finished = nil
         status = Status(job: .tagging, progress: 0, message: "Loading the model…")
@@ -74,7 +100,7 @@ final class TaggingController {
                 self.registerUndo(changed: changed, document: document, undoManager: undoManager, charactersBefore: charactersBefore)
             }
             do {
-                let model = try await ModelManager.shared.model()
+                let model = try await ModelManager.shared.model(bookAllowed: document.project.settings.cloudTextAllowed != nil)
                 self.model = model
                 // Chapters by ID, not position: the narrator keeps working during a run, and
                 // Delete Text or a revised manuscript can remove or merge chapters, so a saved
@@ -170,6 +196,12 @@ final class TaggingController {
                 // "she said" after a new character's lines picks their color family.
                 document.recolorAutomatic()
                 VoiceCastingRun.castIfNeeded(document: document)
+                if model is ClaudeTextModel, document.project.settings.reviewsCloudAI {
+                    let items = AIReview.items(before: changed, project: document.project)
+                    if !items.isEmpty {
+                        self.review = PendingReview(items: items, before: changed, addedCharacters: Set(newCharacters), model: model.displayName)
+                    }
+                }
                 self.finished = "Tagged \(changed.count.formatted()) lines" + (newCharacters.isEmpty ? "" : " and found \(newCharacters.count) new characters")
                     + (needs > 0 ? ". \(needs.formatted()) need you." : ".")
             } catch is CancellationError {
@@ -277,6 +309,7 @@ final class TaggingController {
 
     func buildSummaries(undoManager: UndoManager?, only: [UUID]? = nil) {
         guard let document, !isRunning else { return }
+        guard Self.claudeAllowed(document, undoManager: undoManager) else { return }
         failure = nil
         finished = nil
         status = Status(job: .summaries, progress: 0, message: "Loading the model…")
@@ -297,7 +330,7 @@ final class TaggingController {
                 }
             }
             do {
-                let model = try await ModelManager.shared.model()
+                let model = try await ModelManager.shared.model(bookAllowed: document.project.settings.cloudTextAllowed != nil)
                 self.model = model
                 // Most-heard characters first; tiny walk-ons are skipped unless asked for.
                 let index = document.index

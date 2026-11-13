@@ -17,7 +17,7 @@ struct ModelPicker: View {
                     .foregroundStyle(.tint)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("This Mac has \(mem) GB of memory.").font(.headline)
-                    Text("Your manuscript never leaves this Mac. Only the model itself is downloaded, once, from Hugging Face.")
+                    Text("With these models your manuscript never leaves this Mac. Only the model itself is downloaded, once, from Hugging Face. Claude is different: it runs in the cloud, and each book asks first.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -32,6 +32,7 @@ struct ModelPicker: View {
             VStack(spacing: Space.sm) {
                 ForEach(visible) { m in ModelRow(model: m, manager: manager) }
                 AppleModelRow(manager: manager)
+                ClaudeModelRow(manager: manager)
             }
             HStack {
                 if sorted.count != visible.count || showAll {

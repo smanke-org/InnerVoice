@@ -466,6 +466,24 @@ struct ProjectSettingsSheet: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            VStack(alignment: .leading, spacing: Space.sm) {
+                HStack(spacing: Space.sm) {
+                    Text("Claude").font(.headline)
+                    CloudBadge(service: "Anthropic")
+                }
+                Toggle("Review Claude’s changes before keeping them", isOn: Binding(
+                    get: { document.project.settings.reviewsCloudAI },
+                    set: { on in document.updateSettings("Review Claude’s Changes", undoManager: undoManager) { $0.reviewCloudAI = on ? nil : false } }
+                ))
+                Text("After Tag Speakers runs with Claude, a list shows every line it changed, so you can keep or undo each one. Turn this off to keep Claude’s changes straight away, as with a model on your Mac.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if document.project.settings.cloudTextAllowed != nil {
+                    Button("Stop Sending This Book to Claude") { document.setCloudTextAllowed(false, undoManager: undoManager) }
+                        .controlSize(.small)
+                }
+            }
             HStack {
                 HelpButton(topic: .gettingStarted)
                 Spacer()

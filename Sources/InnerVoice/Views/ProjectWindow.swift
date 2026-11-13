@@ -62,6 +62,9 @@ struct ProjectWindow: View {
         .sheet(isPresented: $workspace.showCloneVoice) {
             CloneVoiceSheet(document: document, isPresented: $workspace.showCloneVoice, initialTarget: workspace.cloneFor)
         }
+        .sheet(isPresented: Binding(get: { document.tagging.review != nil }, set: { if !$0 { document.tagging.review = nil } })) {
+            if let review = document.tagging.review { AIReviewSheet(document: document, review: review) }
+        }
         .sheet(isPresented: $workspace.showBookStats) {
             BookStatsSheet(document: document, isPresented: $workspace.showBookStats)
         }

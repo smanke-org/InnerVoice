@@ -255,8 +255,58 @@ enum PDFReader {
             if document.pageCount > 0 { throw ImportError.scannedPDF(url.lastPathComponent) }
             throw ImportError.noText(url.lastPathComponent)
         }
+        lines = joinSplitLines(lines)
         lines = dropRunningLines(lines, pageCount: document.pageCount, pageHeights: pageHeights)
         return paragraphs(from: lines)
+    }
+
+    /// A justified line squeezed out with wide letter spacing comes out of PDFKit as several
+    /// pieces on one baseline, each with spaces between its letters ("c o n c e r n e d .").
+    /// Each piece started a paragraph of its own (it sits mid-line, like an indent). Puts the
+    /// letters back together, then joins pieces on the same baseline into one line.
+    static func joinSplitLines(_ lines: [PDFLine]) -> [PDFLine] {
+        var out: [PDFLine] = []
+        for var line in lines {
+            let closed = closeLetterSpacing(line.text)
+            if closed != line.text {
+                line.text = closed
+                line.italic = [] // offsets no longer match; a spaced-out line is rarely italic
+            }
+            if var prev = out.last, prev.page == line.page {
+                let overlap = min(prev.rect.maxY, line.rect.maxY) - max(prev.rect.minY, line.rect.minY)
+                let sameBaseline = overlap > min(prev.rect.height, line.rect.height) * 0.6
+                if sameBaseline, line.rect.minX >= prev.rect.maxX - 2 {
+                    let offset = (prev.text as NSString).length + 1
+                    prev.text += " " + line.text
+                    prev.italic += line.italic.map { TextSpan(location: $0.location + offset, length: $0.length) }
+                    prev.rect = prev.rect.union(line.rect)
+                    prev.fontSize = max(prev.fontSize, line.fontSize)
+                    prev.bold = prev.bold && line.bold
+                    out[out.count - 1] = prev
+                    continue
+                }
+            }
+            out.append(line)
+        }
+        return out
+    }
+
+    /// "or c o n c e r n e d ." → "or concerned.": three or more single characters in a row,
+    /// each followed by one space, are one spaced-out word.
+    static func closeLetterSpacing(_ text: String) -> String {
+        let tokens = text.split(separator: " ", omittingEmptySubsequences: false).map(String.init)
+        guard tokens.count >= 3 else { return text }
+        var result: [String] = []
+        var run: [String] = []
+        func flush() {
+            if run.count >= 3 { result.append(run.joined()) } else { result += run }
+            run = []
+        }
+        for t in tokens {
+            if t.count == 1 { run.append(t) } else { flush(); result.append(t) }
+        }
+        flush()
+        return result.joined(separator: " ")
     }
 
     /// Removes page numbers and lines that repeat near the top or bottom of many pages.

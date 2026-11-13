@@ -97,7 +97,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
                 ("Review", "Lines, tones and voices that need you (⌘6)"),
                 ("Voices", "A voice for each character and the narrator (⌘7)"),
             ]),
-            .tip("Your manuscript stays on this Mac. The only downloads are the AI models themselves. The one exception is ElevenLabs voices, which you have to set up and allow for each book: see Voices & Listening."),
+            .tip("Your manuscript stays on this Mac. The only downloads are the AI models themselves. The two exceptions are ElevenLabs voices and Claude, which you have to set up and allow for each book: see Voices & Listening and Choosing a Model."),
             .tip("Quitting asks first. Turn off \"Ask before quitting\" in Settings › General, or tick \"Don't ask again\" when it asks."),
         ]
 
@@ -108,7 +108,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
             .heading("Pages"),
             .text("InnerVoice reads the preview Pages saves inside the document. If a Pages file says it can't be read, open it in Pages, choose File › Export To › Word, and open the Word file instead."),
             .heading("PDF"),
-            .text("Running headers, footers and page numbers are left out, and paragraphs split across pages are joined again. A scanned PDF has pictures of pages and no text: export it with text from the app that made it, or run it through TextLens first."),
+            .text("Running headers, footers and page numbers are left out, and paragraphs split across pages are joined again. Lines that a book spreads out to fill the width (with wide gaps between the letters) are read as ordinary words in their paragraph. A scanned PDF has pictures of pages and no text: export it with text from the app that made it, or run it through TextLens first."),
             .tip("InnerVoice keeps its own copy of the manuscript in the project, so moving or changing the original file doesn't change your project. To bring in a new draft, see Revised Manuscripts."),
         ]
 
@@ -151,7 +151,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
             .text("Select an ISBN, a copyright page, or an ad for another book and press Delete (or right-click and choose Delete Text). It goes from the project and from every script and export; the manuscript file you imported never changes. Select a chapter's heading and all of its text to delete the whole chapter, or right-click a chapter in the sidebar and choose Delete Chapter. Front matter often comes in as a chapter heading: delete a heading on its own and its text joins the chapter before (the book's first text stays, under Opening). ⌘Z brings it back."),
             .heading("Lines to review in each chapter"),
             .text("In the sidebar, \"2 to review\" beside a chapter means two of its lines still need you to confirm who says them. A checkmark means every line in the chapter has a speaker. The numbers beside the cast are how many lines each character speaks."),
-            .tip("Projects with changes save themselves 30 seconds after you change something, so you can keep working without stopping to save."),
+            .tip("Once you've saved a project with a name, it saves itself every 30 seconds while it has changes, so you can keep working without stopping to save. A new project waits for your first File › Save."),
             .heading("Review the guesses"),
             .text("When the AI or the rules aren't sure, they still make a best guess: the margin shows the name with a question mark (\"Cyrus?\") and the line stays red until you check it. Review in the sidebar (⌘6) lists every line that needs you, Unsure Guesses first. Return confirms the guess, typing or 1–9 picks someone else, 0 makes it narration, and ↓ ↑ move between lines. A settled line leaves the list and the next one comes up."),
             .text("Each card shows the line's whole paragraph, headed with its chapter's title and paragraph number (\"Chapter 6 · ¶26\"). Lines in the same paragraph that need you share one card, with a row for each: its best guess, its words, and Confirm, Assign… and Show. Click a row to make it the line the keys act on. The lines under review are red; the paragraphs around them are smaller and dimmer, keep their speakers' colors, and start with who speaks in them."),
@@ -218,7 +218,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
             .text("Settings › Voices › Pauses sets each gap in seconds: between sentences, between a line and the narration around it, between paragraphs, after a chapter title, at a scene break and between chapters. Tight, Natural and Relaxed are starting points. With \"Set the pause between sentences\" on, each sentence is spoken on its own so that gap is exact; turn it off to let each voice pace its own sentences."),
             .text("Click Try It to hear a passage from the front book over and over; move a slider and the next pause changes, with nothing to remake. Playback speed (0.75× to 2×) speeds up Play, pauses included, without changing the voices' pitch. Export Audio always saves at normal speed, with your pauses."),
             .heading("Exporting audio"),
-            .text("File › Export Audio… saves all the voices or one character's lines as M4A or WAV files, one file per chapter or all in one. Under Chapters, check the chapters to include: Select All checks or clears every one, and ⇧-click checks a run of chapters. The window remembers your choice until you close the book."),
+            .text("File › Export Audio… saves all the voices or one character's lines as M4A or WAV files, one file per chapter or all in one. Under Chapters, check the chapters to include: Select All checks or clears every one, and ⇧-click checks a run of chapters. The window remembers your choice until you close the book. Each file is finished on this Mac and then moved into the folder you chose, so exporting into OneDrive, iCloud Drive or Dropbox works too."),
             .heading("Engines"),
             .text("Choose the engine for each project from the menu at the top of the Voices page. Each engine keeps its own casting, so switching back and forth loses nothing."),
             .keys([
@@ -318,7 +318,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
         ]
 
         case .choosingModel: [
-            .text("The model is the AI that reads your book. It runs on your Mac and is downloaded once. Settings › AI lists the models, with the one that fits your Mac best first and a note on each about why it fits or not."),
+            .text("The model is the AI that reads your book. Most run on your Mac and are downloaded once; Claude runs in the cloud. Settings › AI lists the models, with the one that fits your Mac best first and a note on each about why it fits or not."),
             .heading("How much memory"),
             .text("Recommendations come from your Mac's memory. With 8 GB, a small model; with 16 GB, a medium one; with 24 to 36 GB, a large one; with 48 GB or more, the most accurate. A model too big for your memory makes everything slow."),
             .keys([
@@ -328,7 +328,17 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
             ]),
             .heading("No download"),
             .text("On a Mac with Apple Intelligence, Apple's on-device model is offered too. It needs no download and is quicker, but it is less accurate at deciding who speaks."),
-            .tip("Your manuscript never leaves this Mac. Only the model is downloaded."),
+            .heading("Claude (cloud)"),
+            .text("Claude is Anthropic's AI, offered next to the downloaded models and marked Cloud. It is the most accurate choice and needs no download, but it runs on Anthropic's computers: each passage of the book is sent to Anthropic while Tag Speakers or Build Summaries runs, and Anthropic charges for what you use."),
+            .keys([
+                ("Set Up…", "Read the cloud warning, paste an API key from the Claude Console and agree; the key is kept in your keychain"),
+                ("Model menu", "Pick Claude Fable, Opus, Sonnet or Haiku; new models appear on their own"),
+                ("Use Claude", "Tag and summarize with Claude from now on"),
+                ("Disconnect", "Forget the key; nothing more is sent"),
+            ]),
+            .text("Each book asks once before anything is sent: \"Send this book to Claude?\" Until you say yes, nothing from that book leaves your Mac. To take the yes back, choose Book › Stop Sending This Book to Claude. Anthropic doesn't train on API data unless your organization has opted in; the setup window links to how to check."),
+            .text("After Tag Speakers runs with Claude, Review Claude’s Changes lists every line it gave a new speaker or tone. Everything starts checked; uncheck what you don’t want and click Undo Unchecked, and those lines go back to how they were, in one Undo step. Keep All keeps everything. Lines you assigned yourself are never changed. To keep Claude’s changes straight away instead, turn off Review Claude’s changes in Book › Project Settings…"),
+            .tip("With a downloaded model or Apple's, your manuscript never leaves this Mac. Only the model is downloaded."),
         ]
 
         case .keyboardShortcuts: [

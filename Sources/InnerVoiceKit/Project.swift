@@ -399,6 +399,12 @@ public struct ProjectSettings: Codable, Hashable, Sendable {
     /// When the narrator allowed this book's text to be sent to a cloud voice engine
     /// (ElevenLabs). nil: never sent.
     public var cloudVoicesAllowed: Date?
+    /// When the narrator allowed this book's text to be sent to Claude (Anthropic's cloud
+    /// model) for the AI features. nil: never sent.
+    public var cloudTextAllowed: Date?
+    /// Show Claude's changes in a list to keep or undo after each Tag Speakers run.
+    /// nil: on (the default); false: keep them straight away like a local model's.
+    public var reviewCloudAI: Bool?
     /// Steps (`GuidedStep` raw values) the narrator marked done or skipped.
     public var stepsDone: [String]?
     /// How voices are shared (docs/CASTING-STYLE.md). nil: not chosen yet; the book plays as

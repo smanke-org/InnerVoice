@@ -486,6 +486,22 @@ enum Snapshot {
                 await shot("book-stats") { workspace.showBookStats = true }
                 workspace.showBookStats = false
                 try? await Task.sleep(for: .seconds(0.5))
+                await shot("claude-review") {
+                    let p = document.project
+                    let picked = p.lines.filter { $0.speakerID != nil }.prefix(8)
+                    var before: [UUID: Line] = [:]
+                    let items: [AIReviewItem] = picked.enumerated().map { n, line in
+                        var old = line
+                        old.speakerID = n % 3 == 0 ? nil : p.characters.first { $0.id != line.speakerID }?.id
+                        if n % 4 == 1 { old.tone = .neutral }
+                        before[line.id] = old
+                        return AIReviewItem(lineID: line.id, speakerBefore: old.speakerID, speakerAfter: line.speakerID,
+                                            toneBefore: old.tone, toneAfter: n % 4 == 1 ? .whispered : line.tone)
+                    }
+                    document.tagging.review = .init(items: items, before: before, addedCharacters: [], model: "Claude Sonnet 5.5")
+                }
+                document.tagging.review = nil
+                try? await Task.sleep(for: .seconds(0.5))
                 for purpose in ProjectPurpose.allCases {
                     await shot("type-\(purpose.rawValue)") {
                         document.updateSettings("", undoManager: nil) { $0.purpose = purpose }

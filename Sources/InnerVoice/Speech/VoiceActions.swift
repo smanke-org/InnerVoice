@@ -49,6 +49,11 @@ import SwiftUI
         if allowed { VoiceCastingRun.castIfNeeded(document: self) }
     }
 
+    /// Lets this book's text go to Claude for the AI features (the narrator said yes), or stops it.
+    func setCloudTextAllowed(_ allowed: Bool, undoManager: UndoManager?) {
+        updateSettings(allowed ? "Allow Claude" : "Stop Sending to Claude", undoManager: undoManager) { $0.cloudTextAllowed = allowed ? .now : nil }
+    }
+
     func setVoiceEngine(_ engine: VoiceEngine, undoManager: UndoManager?) {
         updateSettings("Change Voice Engine", undoManager: undoManager) { $0.voiceEngine = engine == .apple ? nil : engine }
         VoiceCastingRun.castIfNeeded(document: self)

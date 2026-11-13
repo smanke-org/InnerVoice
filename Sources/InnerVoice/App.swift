@@ -100,6 +100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // The narrator's pause settings, before any script is made.
         _ = PauseStore.shared
         AppState.launched = true
+        AutoSave.start()
         RecentProjects.shared.refresh()
         NotificationCenter.default.addObserver(forName: NSWindow.didBecomeMainNotification, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { RecentProjects.shared.refresh() }
@@ -231,6 +232,12 @@ struct BookCommands: Commands {
             }
             Button("Choose Model…") { focus?.workspace.showModelSheet = true }
                 .disabled(focus == nil)
+            if focus?.document.project.settings.cloudTextAllowed != nil {
+                Button("Stop Sending This Book to Claude") {
+                    if let f = focus { f.document.setCloudTextAllowed(false, undoManager: f.undoManager) }
+                }
+                .disabled(running)
+            }
             Button("Book Stats…") { focus?.workspace.showBookStats = true }
                 .disabled(focus == nil)
             Button("Project Settings…") { focus?.workspace.showProjectSettings = true }

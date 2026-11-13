@@ -1116,3 +1116,86 @@ private let appleVoices = [
     #expect(SpeechScript.chapterLabel([2]) == "Chapter 3")
     #expect(SpeechScript.chapterLabel([4, 0, 1, 2, 6, 7]) == "Chapters 1–3, 5, 7, 8")
 }
+
+/// A justified line squeezed out with wide letter spacing (as in "c o n c e r n e d") comes
+/// out of PDFKit as several short "lines" with spaces between the letters. It must stay one
+/// line of ordinary words inside its paragraph.
+@Test func pdfLetterSpacedLineStaysInItsParagraph() throws {
+    let dir = tempDir()
+    let url = dir.appending(path: "spaced.pdf")
+    var box = CGRect(x: 0, y: 0, width: 612, height: 792)
+    let ctx = CGContext(url as CFURL, mediaBox: &box, nil)!
+    let font = NSFont(name: "Times-Roman", size: 12)!
+    let filler = "Tracy didn’t bother to examine whatever was in the yellow box and she placed it in the trunk."
+    let rows: [(String, CGFloat, CGFloat)] = [
+        (filler, 0, 90), (filler, 0, 72), (filler, 0, 72),
+        ("Tracy didn’t bother to examine it; there was something in her face. She seemed anxious or", 0, 72),
+        ("concerned. Whatever her mood, she had been", 4.5, 72),
+        ("uncharacteristically deferent to the box’s contents.", 0, 72),
+        (filler, 0, 90), (filler, 0, 72),
+    ]
+    ctx.beginPDFPage(nil)
+    var y: CGFloat = 720
+    for (text, kern, x) in rows {
+        if kern == 0 {
+            let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [.font: font]))
+            ctx.textPosition = CGPoint(x: x, y: y)
+            CTLineDraw(line, ctx)
+        } else {
+            // Each letter placed on its own, far apart, the way justifying layout programs
+            // write a squeezed-out line.
+            var pen = x
+            for ch in text {
+                let glyph = CTLineCreateWithAttributedString(NSAttributedString(string: String(ch), attributes: [.font: font]))
+                ctx.textPosition = CGPoint(x: pen, y: y)
+                if ch != " " { CTLineDraw(glyph, ctx) }
+                pen += CGFloat(CTLineGetTypographicBounds(glyph, nil, nil, nil)) + (ch == " " ? kern * 2 : kern)
+            }
+        }
+        y -= 15
+    }
+    ctx.endPDFPage()
+    ctx.closePDF()
+    let blocks = try PDFReader.read(url)
+    let joined = blocks.map(\.text).joined(separator: "\n")
+    #expect(joined.contains("anxious or concerned. Whatever her mood, she had been uncharacteristically deferent"), "\(joined)")
+    #expect(blocks.count == 2, "\(blocks.count) paragraphs")
+}
+
+@Test func closesLetterSpacing() {
+    #expect(PDFReader.closeLetterSpacing("or c o n c e r n e d .") == "or concerned.")
+    #expect(PDFReader.closeLetterSpacing("b e e n uncharacteristically") == "been uncharacteristically")
+    #expect(PDFReader.closeLetterSpacing("I said a word") == "I said a word")
+    #expect(PDFReader.closeLetterSpacing("A. B. Smith") == "A. B. Smith")
+}
+
+/// Claude's review list shows only what the AI changed and still owns, and undoing a line
+/// puts it back without touching the narrator's own assignments.
+@Test func aiReviewListsAndUndoesOnlyAIChanges() {
+    var p = Project(title: "T")
+    let tom = BookCharacter(name: "Tom", colorHex: "#336699")
+    let mara = BookCharacter(name: "Mara", colorHex: "#996633")
+    p.characters = [tom, mara]
+    func line(_ speaker: UUID?, _ source: AssignmentSource) -> Line {
+        var l = Line(paragraphID: UUID(), range: TextSpan(location: 0, length: 1))
+        l.speakerID = speaker
+        l.source = source
+        return l
+    }
+    let ai = line(tom.id, .ai), mine = line(mara.id, .user), same = line(tom.id, .ai)
+    p.lines = [ai, mine, same]
+    var before: [UUID: Line] = [:]
+    before[ai.id] = line(nil, .none).with(id: ai.id)
+    before[mine.id] = line(nil, .none).with(id: mine.id)
+    before[same.id] = same
+    let items = AIReview.items(before: before, project: p)
+    #expect(items.map(\.lineID) == [ai.id])
+    AIReview.undo([ai.id, mine.id], before: before, addedCharacters: [], in: &p)
+    #expect(p.lines[0].speakerID == nil)
+    #expect(p.lines[1].speakerID == mara.id)
+    #expect(ProjectSettings().reviewsCloudAI)
+}
+
+private extension Line {
+    func with(id: UUID) -> Line { var l = self; l.id = id; return l }
+}

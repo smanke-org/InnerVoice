@@ -5,7 +5,7 @@ import FoundationModels
 import InnerVoiceKit
 import Observation
 
-/// Something that answers a prompt: a llama.cpp model or Apple's on-device model.
+/// Something that answers a prompt: a llama.cpp model, Apple's on-device model or Claude.
 protocol TextModel: Sendable {
     var displayName: String { get }
     /// Words per passage this model can take in comfortably.
@@ -94,7 +94,7 @@ nonisolated final class AppleTextModel: TextModel, @unchecked Sendable {
 }
 
 /// Downloads, lists and loads models. The choice is saved as "catalog:<id>",
-/// "file:<path>" or "apple".
+/// "file:<path>", "apple" or "claude:<model id>" (cloud).
 @Observable
 final class ModelManager {
     static let shared = ModelManager()
@@ -147,6 +147,7 @@ final class ModelManager {
 
     var selectionName: String {
         if selection == "apple" { return "Apple On-Device Model" }
+        if selection.hasPrefix("claude:") { return ClaudeAccount.shared.name(of: String(selection.dropFirst(7))) }
         if selection.hasPrefix("catalog:"), let m = ModelCatalog.model(id: String(selection.dropFirst(8))) { return m.name }
         if selection.hasPrefix("file:") { return URL(fileURLWithPath: String(selection.dropFirst(5))).deletingPathExtension().lastPathComponent }
         return "No model"
@@ -155,6 +156,7 @@ final class ModelManager {
     /// True when Tag Speakers can run without asking the narrator to pick a model.
     var isReady: Bool {
         if selection == "apple" { return AppleTextModel.availability.ok }
+        if selection.hasPrefix("claude:") { return ClaudeAccount.shared.isSetUp }
         if selection.hasPrefix("catalog:") { return downloaded.contains(String(selection.dropFirst(8))) }
         if selection.hasPrefix("file:") { return FileManager.default.fileExists(atPath: String(selection.dropFirst(5))) }
         return false
@@ -167,7 +169,11 @@ final class ModelManager {
     // MARK: Loading
 
     /// Loads the chosen model (once) and returns it.
-    func model() async throws -> TextModel {
+    /// `bookAllowed`: the book's `cloudTextAllowed`; Claude sends nothing without it.
+    func model(bookAllowed: Bool = false) async throws -> TextModel {
+        if selection.hasPrefix("claude:") {
+            return try ClaudeTextModel(modelID: String(selection.dropFirst(7)), bookAllowed: bookAllowed)
+        }
         if selection == "apple" {
             let a = AppleTextModel.availability
             guard a.ok else { throw ModelError.appleUnavailable(a.why) }

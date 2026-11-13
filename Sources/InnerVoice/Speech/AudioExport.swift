@@ -40,6 +40,12 @@ enum AudioExporter {
         defer { ActivityStore.shared.record(ActivityKey.secondsExported, count: Int(exported.rounded())) }
         var urls: [URL] = []
         let fileFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 44_100, channels: 1, interleaved: false)!
+        // Each file is written in a local temporary folder and moved into place when it's
+        // finished. A cloud folder (OneDrive, iCloud Drive, Dropbox) takes a file over while
+        // it's still being written, and the next write fails (avfaudio error -40).
+        let staging = FileManager.default.temporaryDirectory.appending(path: "InnerVoice Export \(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: staging) }
         for part in parts where !part.segments.isEmpty {
             // One file (Combined), or one per voice in this part (Separate), in order of first use.
             var names: [String] = []
@@ -48,13 +54,15 @@ enum AudioExporter {
                 if !names.contains(n) { names.append(n) }
             }
             var files: [String: (AVAudioFile, AVAudioConverter)] = [:]
+            var moves: [(from: URL, to: URL)] = []
             for n in names {
-                let url = folder.appending(path: safeName(n.isEmpty ? part.name : part.name + " - " + n) + "." + format.fileExtension)
-                try? FileManager.default.removeItem(at: url)
-                let file = try AVAudioFile(forWriting: url, settings: format.settings, commonFormat: .pcmFormatFloat32, interleaved: false)
+                let fileName = safeName(n.isEmpty ? part.name : part.name + " - " + n) + "." + format.fileExtension
+                let temp = staging.appending(path: fileName)
+                try? FileManager.default.removeItem(at: temp)
+                let file = try AVAudioFile(forWriting: temp, settings: format.settings, commonFormat: .pcmFormatFloat32, interleaved: false)
                 guard let converter = AVAudioConverter(from: SpeechAudio.format, to: fileFormat) else { throw SpeechError.failed("unsupported audio format") }
                 files[n] = (file, converter)
-                urls.append(url)
+                moves.append((temp, folder.appending(path: fileName)))
             }
             func put(_ buffer: AVAudioPCMBuffer, in name: String) throws {
                 for (n, (file, converter)) in files {
@@ -76,6 +84,17 @@ enum AudioExporter {
                     try put(SpeechAudio.silence(gap), in: "\u{0}")
                 }
                 done += 1
+            }
+            // Close the files (which finishes them), then move each into the chosen folder.
+            for (file, _) in files.values { file.close() }
+            files = [:]
+            for move in moves {
+                if FileManager.default.fileExists(atPath: move.to.path) {
+                    _ = try FileManager.default.replaceItemAt(move.to, withItemAt: move.from)
+                } else {
+                    try FileManager.default.moveItem(at: move.from, to: move.to)
+                }
+                urls.append(move.to)
             }
         }
         progress(total, total, "")
