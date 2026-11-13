@@ -124,12 +124,15 @@ public static class AgentPipe
         if (!IsTestRun) throw AgentError.Unavailable("InnerVoice is not running. A Debug build starts only test copies (set APP_STORE)");
 #endif
         StartApp();
-        for (int i = 0; i < 50; i++)
+        // Windows scans a newly installed or copied app before its first start, which can take
+        // well over the Mac's 10 seconds (seen in a Windows VM).
+        int seconds = OperatingSystem.IsWindows() ? 30 : 10;
+        for (int i = 0; i < seconds * 5; i++)
         {
             Thread.Sleep(200);
             if (Exchange(request, connectMs: 100) is { } answer) return answer;
         }
-        throw AgentError.Unavailable($"InnerVoice did not answer within 10 seconds on {Display}");
+        throw AgentError.Unavailable($"InnerVoice did not answer within {seconds} seconds on {Display}");
     }
 
     /// The answer, or null when no InnerVoice is listening.
@@ -163,6 +166,23 @@ public static class AgentPipe
         catch (AgentError) { return false; }
     }
 
+    /// Held by the copy of the app that owns this pipe, from its first moment: a copy started
+    /// while another is still opening waits for it instead of opening a second window.
+    public static Mutex? ClaimFirstCopy(out bool first)
+    {
+        try
+        {
+            var mutex = new Mutex(initiallyOwned: true, @"Local\" + Name, out first);
+            if (!first) { mutex.Dispose(); return null; }
+            return mutex;
+        }
+        catch (Exception e) when (e is UnauthorizedAccessException or IOException or WaitHandleCannotBeOpenedException)
+        {
+            first = true;
+            return null;
+        }
+    }
+
     // MARK: Starting the app
 
     /// The app next to the CLI: the CLI lives in the app's cli\ folder. INNERVOICE_APP names it.
@@ -190,8 +210,14 @@ public static class AgentPipe
         {
             if (AppPath is { } path)
             {
-                var start = new ProcessStartInfo(path) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(path)! };
-                start.ArgumentList.Add("--agent");
+                // On Windows through the shell, so the app doesn't inherit this process's output
+                // handles: a script reading the CLI's output would otherwise wait until the app
+                // quits (found in a Windows VM). The environment still passes to the app.
+                var start = new ProcessStartInfo(path, "--agent")
+                {
+                    UseShellExecute = OperatingSystem.IsWindows(),
+                    WorkingDirectory = Path.GetDirectoryName(path)!,
+                };
                 Process.Start(start);
             }
             else if (!IsTestRun && OperatingSystem.IsWindows())

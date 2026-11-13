@@ -33,8 +33,9 @@ $err = Json (& $Cli no-such-command --json 2>$null | Out-String)
 if ($err.error.code -and $err.error.message) { Pass 'errors with --json are {"error":{code,message}} on stdout' } else { Fail 'errors with --json are {"error":{code,message}} on stdout' }
 
 # Starts the test copy, then every read-only command without required params runs and prints JSON.
-$status = Json (& $Cli status --json 2>$null | Out-String)
-if ($status.testRun -eq $true -and $status.pid) { Pass 'status starts a test copy (testRun, pid)' } else { Fail 'status starts a test copy and says testRun' }
+$raw = & $Cli status --json 2>&1 | Out-String
+$status = Json $raw
+if ($status.testRun -eq $true -and $status.pid) { Pass 'status starts a test copy (testRun, pid)' } else { Fail "status starts a test copy and says testRun (got: $($raw.Trim()))" }
 foreach ($c in $schema.commands) {
   if ($c.readOnly -and @($c.inputSchema.required).Count -eq 0) {
     $words = $c.name -split ' '
