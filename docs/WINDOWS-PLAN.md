@@ -170,7 +170,11 @@ dedicated video memory; `D3D12CreateDevice` confirms DirectX 12), memory (`Globa
 and the processor. Good: DirectX 12 card with 8 GB+ and 16 GB memory. Slow: no card, a smaller
 card or less memory: a plain warning before the download and the first time a book uses the
 engine, suggesting Windows Voices or ElevenLabs. Too weak: under 8 GB of memory. DirectML is
-only used for a card with 2 GB or more of its own memory.
+only used for a card with 2 GB or more of its own memory. The app asks DXGI in a copy of itself
+(`InnerVoice.exe --voice-hardware`, printing one line), so a driver that crashes when asked can't
+take the app down; a crash, hang or odd answer means "couldn't check" and the processor. (The
+first version read the adapter into a struct with a marshaled string and crashed at launch on a
+Parallels ARM64 VM; fixed 2026-11-13, checked there: Parallels Display Adapter, 0 GB of its own.)
 
 **Needs a Windows PC:** DirectML on real cards (speed, and whether every operator runs there:
 the int4 `MatMulNBits` models should, falling back to the CPU if not), the DXGI and memory

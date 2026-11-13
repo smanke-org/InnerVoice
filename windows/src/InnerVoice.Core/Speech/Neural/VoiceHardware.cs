@@ -38,6 +38,12 @@ public static class VoiceHardwareCheck
 {
     /// The specs Settings › Voices recommends.
     public const double RecommendedGpuGB = 8;
+    /// DirectML is used only on a card with this much video memory of its own; integrated
+    /// graphics share the PC's memory and are often no faster than the processor.
+    public const double MinimumGpuGB = 2;
+
+    /// The voices run on the graphics card here.
+    public static bool UsesGpu(VoiceHardware hw) => hw.HasGpu && hw.GpuMemoryGB >= MinimumGpuGB;
     public const int RecommendedMemoryGB = 16, LargeModelsMemoryGB = 32;
 
     public const string Recommended =
@@ -68,6 +74,8 @@ public static class VoiceHardwareCheck
             why = $"This PC has {hw.MemoryGB} GB of memory. {name} needs at least {VoicePacks.For(engine)?.MinimumMemoryGB ?? 8} GB free for itself, so it may not load at all, and everything else on the PC slows down while it runs.";
         else if (!hw.HasGpu)
             why = $"This PC has no DirectX 12 graphics card, so {name} runs on the processor: {Pace(engine)}.";
+        else if (!UsesGpu(hw))
+            why = $"The graphics card ({hw.GpuName}) has little or no video memory of its own, so {name} runs on the processor: {Pace(engine)}.";
         else if (hw.GpuMemoryGB < RecommendedGpuGB)
             why = $"The graphics card ({hw.GpuName}) has {hw.GpuMemoryGB:0.#} GB of video memory; {name} works best with 8 GB or more. Expect lines to come slower than they play.";
         else
@@ -85,14 +93,35 @@ public static class VoiceHardwareCheck
 
     // MARK: Detecting
 
-    /// Reads this PC's hardware (cheap enough to do once at startup, off the UI thread).
-    public static VoiceHardware Detect()
+    /// Reads this PC's hardware in this process, graphics card included. The app asks
+    /// `Detect(gpu)` with the card from a separate process (`ProbeGpu`), because a graphics
+    /// driver that crashes when asked would take the app down with it.
+    public static VoiceHardware Detect() => Detect(OperatingSystem.IsWindows() ? Dxgi.BestDirectX12Adapter() : null);
+
+    /// Memory and processor read here; the graphics card as given (null: none, or unknown).
+    public static VoiceHardware Detect(GpuInfo? gpu)
     {
         int memory = MemoryGB();
         string cpu = CpuName();
         string arch = RuntimeInformation.OSArchitecture.ToString().ToLowerInvariant();
-        var gpu = OperatingSystem.IsWindows() ? Dxgi.BestDirectX12Adapter() : null;
         return new VoiceHardware(memory, gpu?.Name, gpu?.MemoryGB ?? 0, gpu?.Index ?? 0, cpu, Environment.ProcessorCount, arch);
+    }
+
+    /// The graphics card DirectML would use, as one line for a child process to print:
+    /// "none" or "<index>\t<GB>\t<name>". Windows only.
+    public static string ProbeGpu() => OperatingSystem.IsWindows() && Dxgi.BestDirectX12Adapter() is { } g
+        ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{g.Index}\t{g.MemoryGB:0.###}\t{g.Name.Replace('\t', ' ').Replace('\n', ' ')}")
+        : "none";
+
+    /// Reads `ProbeGpu`'s line back; null for "none" or anything unexpected.
+    public static GpuInfo? ParseGpu(string? line)
+    {
+        var parts = line?.Trim().Split('\t', 3);
+        if (parts is not { Length: 3 } || !int.TryParse(parts[0], out var index) || index < 0
+            || !double.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var gb) || gb < 0
+            || parts[2].Trim().Length == 0)
+            return null;
+        return new GpuInfo(index, parts[2].Trim(), gb);
     }
 
     static int MemoryGB()
@@ -131,20 +160,24 @@ public static class VoiceHardwareCheck
     static extern bool GlobalMemoryStatusEx(ref MemoryStatus status);
 }
 
+/// A DirectX 12 graphics card: its DXGI adapter index, name and dedicated video memory.
+public sealed record GpuInfo(int Index, string Name, double MemoryGB);
+
 /// The graphics cards DirectX knows (DXGI), and which can run DirectX 12: the ones DirectML uses.
 static class Dxgi
 {
-    public sealed record Adapter(int Index, string Name, double MemoryGB);
-
     static readonly Guid IID_IDXGIFactory1 = new("770aae78-f26f-4dba-a829-253c83d1b387");
     static readonly Guid IID_ID3D12Device = new("189819f1-1db6-4b57-be54-1821339b85f7");
     const int D3D_FEATURE_LEVEL_11_0 = 0xb000;
     const uint DXGI_ADAPTER_FLAG_SOFTWARE = 2;
 
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    struct AdapterDesc1
+    // DXGI_ADAPTER_DESC1, blittable: GetDesc1 writes it through a raw pointer, so it must have
+    // exactly the native layout (a marshaled string field here let it write 256 bytes of name
+    // over the stack and crash the app).
+    [StructLayout(LayoutKind.Sequential)]
+    unsafe struct AdapterDesc1
     {
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string Description;
+        public fixed char Description[128];
         public uint VendorId, DeviceId, SubSysId, Revision;
         public nuint DedicatedVideoMemory, DedicatedSystemMemory, SharedSystemMemory;
         public uint LuidLow;
@@ -159,7 +192,7 @@ static class Dxgi
     static extern int D3D12CreateDevice(nint adapter, int minimumFeatureLevel, in Guid riid, nint device);
 
     // COM by vtable: IDXGIFactory1::EnumAdapters1 is slot 12, IDXGIAdapter1::GetDesc1 slot 10, Release slot 2.
-    public static unsafe Adapter? BestDirectX12Adapter()
+    public static unsafe GpuInfo? BestDirectX12Adapter()
     {
         try
         {
@@ -167,21 +200,22 @@ static class Dxgi
             var vtable = *(nint**)factory;
             var enumAdapters = (delegate* unmanaged[Stdcall]<nint, uint, nint*, int>)vtable[12];
             var release = (delegate* unmanaged[Stdcall]<nint, uint>)vtable[2];
-            Adapter? best = null;
+            GpuInfo? best = null;
             for (uint i = 0; ; i++)
             {
                 nint adapter;
                 if (enumAdapters(factory, i, &adapter) < 0) break;
                 var avt = *(nint**)adapter;
                 var getDesc1 = (delegate* unmanaged[Stdcall]<nint, AdapterDesc1*, int>)avt[10];
-                AdapterDesc1 desc;
+                AdapterDesc1 desc = default;
                 bool ok = getDesc1(adapter, &desc) >= 0;
                 // D3D12CreateDevice with no output pointer only asks whether the card can (S_FALSE).
                 bool dx12 = ok && (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) == 0 && D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_11_0, IID_ID3D12Device, 0) >= 0;
                 if (dx12)
                 {
                     double gb = (ulong)desc.DedicatedVideoMemory / 1_073_741_824.0;
-                    if (best is null || gb > best.MemoryGB) best = new Adapter((int)i, desc.Description.Trim(), gb);
+                    var name = new string(desc.Description, 0, 128).TrimEnd('\0').Trim();
+                    if (best is null || gb > best.MemoryGB) best = new GpuInfo((int)i, name.Length > 0 ? name : "Graphics card", gb);
                 }
                 ((delegate* unmanaged[Stdcall]<nint, uint>)avt[2])(adapter);
             }

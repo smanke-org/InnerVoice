@@ -478,8 +478,19 @@ public class NeuralVoiceTests
         Assert.Contains("Windows Voices", w);
         Assert.Contains("ElevenLabs", w);
 
-        var smallCard = strong with { GpuName = "Intel Iris Xe", GpuMemoryGB = 0.5 };
+        var integrated = strong with { GpuName = "Intel Iris Xe", GpuMemoryGB = 0.5 };
+        Assert.False(VoiceHardwareCheck.UsesGpu(integrated));
+        Assert.Contains("runs on the processor", VoiceHardwareCheck.Warning(integrated, VoiceEngine.Qwen));
+        var smallCard = strong with { GpuName = "Test Graphics", GpuMemoryGB = 4 };
+        Assert.True(VoiceHardwareCheck.UsesGpu(smallCard));
         Assert.Contains("8 GB or more", VoiceHardwareCheck.Warning(smallCard, VoiceEngine.Qwen));
+        // The graphics card check's answer, from the child process.
+        Assert.Equal(new GpuInfo(1, "Test Graphics RTX", 12), VoiceHardwareCheck.ParseGpu("1\t12\tTest Graphics RTX\r\n"));
+        Assert.Null(VoiceHardwareCheck.ParseGpu("none"));
+        Assert.Null(VoiceHardwareCheck.ParseGpu(null));
+        Assert.Null(VoiceHardwareCheck.ParseGpu("garbage"));
+        Assert.Null(VoiceHardwareCheck.ParseGpu("-1\t4\tX"));
+        Assert.Equal(new GpuInfo(0, "Fallback", 0), VoiceHardwareCheck.Detect(new GpuInfo(0, "Fallback", 0)) is var h ? new GpuInfo(h.GpuIndex, h.GpuName!, h.GpuMemoryGB) : null);
         Assert.Contains("16 GB", VoiceHardwareCheck.Warning(strong with { MemoryGB = 12 }, VoiceEngine.Qwen));
         Assert.Equal(VoiceFit.TooWeak, VoiceHardwareCheck.Fit(strong with { MemoryGB = 4 }, VoiceEngine.Qwen));
         Assert.Contains("may not load", VoiceHardwareCheck.Warning(strong with { MemoryGB = 4 }, VoiceEngine.Qwen));
