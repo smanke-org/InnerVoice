@@ -30,9 +30,14 @@ public sealed partial class ProjectWindow
         recent.Items.Add(new MenuItem { Header = "…" });
         file.Items.Add(recent);
         file.Items.Add(new Separator());
-        // TODO(voices): File › Export Audio… (with "Say chapter recaps": RecapPrompt.SpokenParts)
-        // and File › Export EPUB with Audio… (render each chapter, then ReadAlongEpub.Write) join
-        // this menu with the voices work, as on the Mac.
+        // The voices' exports, in every project type but Narration Tools (as on the Mac).
+        var exportAudio = Item("Export _Audio…", null, () => _ = InnerVoice.App.Export.AudioExportWindow.Show(this, Document));
+        var exportEpub = Item("Export EPUB with Au_dio…", null, () => _ = InnerVoice.App.Export.EpubExportWindow.Show(this, Document));
+        var voicesSeparator = new Separator();
+        file.SubmenuOpened += (_, _) => exportAudio.IsVisible = exportEpub.IsVisible = voicesSeparator.IsVisible = Document.Project.ShowsVoices;
+        file.Items.Add(exportAudio);
+        file.Items.Add(exportEpub);
+        file.Items.Add(voicesSeparator);
         file.Items.Add(Item("_Save", "Ctrl+S", () => _ = Save()));
         file.Items.Add(Item("Save _As…", "Ctrl+Shift+S", () => _ = SaveAs()));
         AddFileItems(file);

@@ -8,8 +8,9 @@ public static class EpubAudioExport
 {
     /// Reads the picked chapters (with narration) and writes the book to `path`. Everything is
     /// made in a local temporary folder and moved into place at the end (cloud folders). The
-    /// audio is M4A, which EPUB reading apps play; there is no WAV choice.
-    public static async Task Write(Project project, BookIndex index, IReadOnlyList<int> picked, string path, VoiceResolver resolver,
+    /// audio is M4A, which EPUB reading apps play; there is no WAV choice. Returns the seconds
+    /// of speech in the book (for Activity).
+    public static async Task<double> Write(Project project, BookIndex index, IReadOnlyList<int> picked, string path, VoiceResolver resolver,
                                    IAudioEncoder encoder, SpeechRenderer? renderer = null, Action<int, int, string>? progress = null,
                                    PauseSettings? pauses = null, CancellationToken ct = default)
     {
@@ -29,10 +30,11 @@ public static class EpubAudioExport
                 pages.Add(ReadAlongEpub.MakePage(project.Chapters[chapters[n]], n + 1, ReadAlongEpub.Segments(segments), language));
                 parts.Add(new AudioPart($"c{n + 1:000}", segments));
             }
+            double spoken = 0;
             var timing = parts.Select(_ => new Dictionary<string, (double Begin, double End)>()).ToList();
             var titles = chapters.Select(c => AudioExporter.ChapterTitle(project, c)).ToList();
             var files = await AudioExporter.Write(parts, audioFolder, AudioFormat.M4a, resolver, renderer, encoder,
-                timing: (p, seg, begin, end) => timing[p][seg.Id] = (begin, end),
+                timing: (p, seg, begin, end) => { timing[p][seg.Id] = (begin, end); spoken += end - begin; },
                 progress: (done, total, part) =>
                 {
                     var what = part.Length > 1 && int.TryParse(part[1..], out var k) && k >= 1 && k <= titles.Count ? titles[k - 1] : part;
@@ -57,6 +59,7 @@ public static class EpubAudioExport
             var dir = Path.GetDirectoryName(Path.GetFullPath(path));
             if (dir is not null) Directory.CreateDirectory(dir);
             File.Move(output, path, overwrite: true);
+            return spoken;
         }
         finally
         {
