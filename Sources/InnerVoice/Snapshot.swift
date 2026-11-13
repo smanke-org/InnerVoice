@@ -502,6 +502,7 @@ enum Snapshot {
                 }
                 document.tagging.review = nil
                 try? await Task.sleep(for: .seconds(0.5))
+                await claudeShots(document: document, workspace: workspace) { name, setup in await shot(name, settle: 1.0, setup) }
                 for purpose in ProjectPurpose.allCases {
                     await shot("type-\(purpose.rawValue)") {
                         document.updateSettings("", undoManager: nil) { $0.purpose = purpose }

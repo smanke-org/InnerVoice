@@ -44,6 +44,11 @@ public struct Chapter: Codable, Identifiable, Hashable, Sendable {
     public var id: UUID
     public var title: String
     public var paragraphs: [Paragraph]
+    /// "Previously…": a short recap of the story so far, heard at the chapter's start
+    /// (Chapter Recaps). Optional, like `recapEdited`, so older projects open unchanged.
+    public var recap: String?
+    /// The narrator changed the recap: Write Chapter Recaps leaves it alone.
+    public var recapEdited: Bool?
 
     public init(id: UUID = UUID(), title: String, paragraphs: [Paragraph]) {
         self.id = id
@@ -102,6 +107,11 @@ public struct Line: Codable, Identifiable, Hashable, Sendable {
     /// The AI model that tagged the line (for its accuracy in Activity). Optional and set
     /// only on AI lines.
     public var aiModel: String?
+    /// How to perform the line beyond its tone ("barely audible", "through gritted teeth"),
+    /// sent to ElevenLabs only, as an audio tag. Optional: older projects open unchanged.
+    public var delivery: String?
+    /// Who wrote the delivery hint. The narrator's (.user) is never replaced.
+    public var deliverySource: ToneSource?
 
     public init(id: UUID = UUID(), paragraphID: UUID, range: TextSpan, kind: LineKind = .spoken,
                 speakerID: UUID? = nil, confidence: Double = 0, source: AssignmentSource = .none,

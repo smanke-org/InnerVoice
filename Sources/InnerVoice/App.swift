@@ -195,7 +195,7 @@ struct BookCommands: Commands {
 
     var body: some Commands {
         CommandMenu("Book") {
-            let running = focus?.document.tagging.isRunning ?? false
+            let running = (focus?.document.tagging.isRunning ?? false) || (focus?.document.claude.isRunning ?? false)
             Button("Tag Speakers") {
                 if let f = focus { TagCommand.run(document: f.document, workspace: f.workspace, undoManager: f.undoManager) }
             }
@@ -232,6 +232,7 @@ struct BookCommands: Commands {
             }
             Button("Choose Model…") { focus?.workspace.showModelSheet = true }
                 .disabled(focus == nil)
+            ClaudeMenu(focus: focus, running: running)
             if focus?.document.project.settings.cloudTextAllowed != nil {
                 Button("Stop Sending This Book to Claude") {
                     if let f = focus { f.document.setCloudTextAllowed(false, undoManager: f.undoManager) }
@@ -357,6 +358,31 @@ enum RevisionImport {
                 alert.messageText = "Unable to Import Revised Manuscript"
                 alert.informativeText = error.localizedDescription
                 alert.runModal()
+            }
+        }
+    }
+}
+
+/// Book › Claude (Cloud): the features only Claude does. Each one asks before it sends
+/// anything (the book's permission, then the estimated cost).
+struct ClaudeMenu: View {
+    let focus: ProjectFocus?
+    let running: Bool
+
+    var body: some View {
+        Menu("Claude (Cloud)") {
+            if !ClaudeAccount.shared.isSetUp {
+                Button("Set Up Claude…") { focus?.workspace.showModelSheet = true }
+                    .disabled(focus == nil)
+                Divider()
+            }
+            ForEach(ClaudeFeatures.Job.allCases) { job in
+                if focus.map({ ClaudeFeatures.offered(job, in: $0.document.project) }) ?? true {
+                    Button(job.rawValue + "…") {
+                        if let f = focus { f.document.claude.run(job, undoManager: f.undoManager) }
+                    }
+                    .disabled(focus == nil || running || !ClaudeAccount.shared.isSetUp)
+                }
             }
         }
     }

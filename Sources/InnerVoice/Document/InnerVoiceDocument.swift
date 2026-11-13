@@ -51,6 +51,8 @@ nonisolated final class InnerVoiceDocument: ReferenceFileDocument {
     private(set) var lineRevision = 0 { willSet { objectWillChange.send() } }
     /// Per-document AI work (Tag Speakers, Build Summaries).
     @MainActor lazy var tagging = TaggingController(document: self)
+    /// Claude's own features (Clean Up Text, Chapter Recaps, Delivery Hints, Suggest Spellings).
+    @MainActor lazy var claude = ClaudeFeatures(document: self)
 
     init() {
         project = .empty

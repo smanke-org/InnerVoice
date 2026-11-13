@@ -65,27 +65,22 @@ final class TaggingController {
         task?.cancel()
     }
 
-    /// With Claude chosen, a book that hasn't said yes asks once (the narrator just clicked,
-    /// so a question is expected). Any other model: always true.
-    private static func claudeAllowed(_ document: InnerVoiceDocument, undoManager: UndoManager?) -> Bool {
-        guard ModelManager.shared.selection.hasPrefix("claude:"), document.project.settings.cloudTextAllowed == nil else { return true }
-        guard !SystemHooks.isTestRun else { return false }
-        let alert = NSAlert()
-        alert.messageText = "Send this book to Claude?"
-        alert.informativeText = ClaudeAccount.warning + "\n\nInnerVoice sends the book a passage at a time, only when you run an AI feature. To stop, choose Book › Stop Sending This Book to Claude."
-        alert.addButton(withTitle: "Don't Send")
-        alert.addButton(withTitle: "Send to Claude")
-        guard alert.runModal() == .alertSecondButtonReturn else { return false }
-        document.setCloudTextAllowed(true, undoManager: undoManager)
-        return true
+    /// With Claude chosen: a book that hasn't said yes asks once (the narrator just clicked,
+    /// so a question is expected), and every whole-book run shows its estimated cost first
+    /// (`ClaudeAsk`). Any other model: always true.
+    private static func claudeAllowed(_ document: InnerVoiceDocument, undoManager: UndoManager?, action: String, estimate: () -> CostEstimate) -> Bool {
+        let selection = ModelManager.shared.selection
+        guard selection.hasPrefix("claude:") else { return true }
+        return ClaudeAsk.confirm(document, undoManager: undoManager, action: action, modelID: String(selection.dropFirst(7)), estimate: estimate())
     }
 
     // MARK: Tag Speakers
 
     /// Tags every line the narrator and the rules haven't settled. With `chapters`, only those.
     func tagSpeakers(undoManager: UndoManager?, chapters: [Int]? = nil) {
-        guard let document, !isRunning else { return }
-        guard Self.claudeAllowed(document, undoManager: undoManager) else { return }
+        guard let document, !isRunning, !document.claude.isRunning else { return }
+        guard Self.claudeAllowed(document, undoManager: undoManager, action: "Tag Speakers",
+                                 estimate: { CostEstimator.tagSpeakers(project: document.project, chapters: chapters) }) else { return }
         failure = nil
         finished = nil
         status = Status(job: .tagging, progress: 0, message: "Loading the model…")
@@ -308,8 +303,9 @@ final class TaggingController {
     }
 
     func buildSummaries(undoManager: UndoManager?, only: [UUID]? = nil) {
-        guard let document, !isRunning else { return }
-        guard Self.claudeAllowed(document, undoManager: undoManager) else { return }
+        guard let document, !isRunning, !document.claude.isRunning else { return }
+        guard Self.claudeAllowed(document, undoManager: undoManager, action: "Build Summaries",
+                                 estimate: { CostEstimator.buildSummaries(project: document.project, characters: only?.count ?? document.project.characters.count) }) else { return }
         failure = nil
         finished = nil
         status = Status(job: .summaries, progress: 0, message: "Loading the model…")

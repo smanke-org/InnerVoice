@@ -20,6 +20,9 @@ public struct SpeechSegment: Hashable, Identifiable, Sendable {
     /// What kind of gap follows, so the player can use the narrator's current pause
     /// settings (Settings › Voices) without remaking the script.
     public var pause: PauseKind = .line
+    /// The line's delivery hint ("barely audible"). Only ElevenLabs is sent it; every other
+    /// engine ignores it.
+    public var delivery: String? = nil
 
     public init(id: String, paragraphID: UUID, lineID: UUID? = nil, speakerID: UUID? = nil, text: String,
                 tone: Tone = .neutral, kind: LineKind? = nil, pauseAfter: Double = 0.3, sound: VocalSound? = nil) {
@@ -164,8 +167,10 @@ public enum SpeechScript {
             if !text.isEmpty, speaker == nil || line.speakerID == speaker {
                 let sound = ToneRules.sound(for: line, in: paragraph, linesInParagraph: lines)
                 add(apply(say, to: text)) { part, first in
-                    SpeechSegment(id: "\(paragraph.id)-\(n)", paragraphID: paragraph.id, lineID: line.id, speakerID: line.speakerID,
-                                  text: part, tone: line.tone ?? .neutral, kind: line.kind, sound: first ? sound : nil)
+                    var seg = SpeechSegment(id: "\(paragraph.id)-\(n)", paragraphID: paragraph.id, lineID: line.id, speakerID: line.speakerID,
+                                            text: part, tone: line.tone ?? .neutral, kind: line.kind, sound: first ? sound : nil)
+                    seg.delivery = DeliveryPrompt.clean(line.delivery ?? "")
+                    return seg
                 }
             }
             cursor = NSMaxRange(r)
@@ -181,9 +186,25 @@ public enum SpeechScript {
     /// The picked chapters (indexes, any order, gaps allowed), read in book order; each ends
     /// with the chapter pause, as a run of chapters does.
     public static func segments(chapters picked: [Int], project: Project, index: BookIndex,
-                                includeNarration: Bool, only speaker: UUID? = nil, pauses: PauseSettings = .current) -> [SpeechSegment] {
+                                includeNarration: Bool, only speaker: UUID? = nil, pauses: PauseSettings = .current,
+                                recaps: Bool = false) -> [SpeechSegment] {
         Set(picked).sorted().filter { project.chapters.indices.contains($0) }.flatMap {
-            segments(chapter: $0, project: project, index: index, includeNarration: includeNarration, only: speaker, pauses: pauses)
+            segments(chapter: $0, project: project, index: index, includeNarration: includeNarration, only: speaker, pauses: pauses, recaps: recaps)
+        }
+    }
+
+    /// The chapter's recap, read by the narrator: "Previously…", then the recap.
+    public static func recapSegments(chapter c: Int, project: Project, pauses: PauseSettings = .current) -> [SpeechSegment] {
+        guard project.chapters.indices.contains(c), let recap = project.chapters[c].recapText else { return [] }
+        let chapter = project.chapters[c]
+        let anchor = chapter.paragraphs.first(where: { $0.style == .heading })?.id ?? chapter.paragraphs.first?.id ?? chapter.id
+        let parts = ["Previously…"] + (pauses.splitSentences ? sentences(recap) : [recap])
+        let say = sayings(project)
+        return parts.enumerated().map { k, part in
+            var seg = SpeechSegment(id: "\(chapter.id)-recap-\(k)", paragraphID: anchor, text: k == 0 ? part : apply(say, to: part))
+            seg.pause = k == parts.count - 1 ? .paragraph : .sentence
+            seg.pauseAfter = pauses.seconds(seg.pause)
+            return seg
         }
     }
 
@@ -204,15 +225,23 @@ public enum SpeechScript {
     /// A run of paragraphs, from `start` (a paragraph id) to the end of its chapter, or the
     /// whole chapter. `chapters` > 1 carries on into the following chapters.
     public static func segments(chapter: Int, from start: UUID? = nil, chapters: Int = 1, project: Project, index: BookIndex,
-                                includeNarration: Bool, only speaker: UUID? = nil, pauses: PauseSettings = .current) -> [SpeechSegment] {
+                                includeNarration: Bool, only speaker: UUID? = nil, pauses: PauseSettings = .current,
+                                recaps: Bool = false) -> [SpeechSegment] {
         var out: [SpeechSegment] = []
         for c in chapter..<min(project.chapters.count, chapter + chapters) {
             var started = start == nil || c != chapter
+            // "Previously…" after the chapter's title, when the whole chapter is read.
+            var recap = recaps && started && includeNarration && speaker == nil ? recapSegments(chapter: c, project: project, pauses: pauses) : []
             for p in project.chapters[c].paragraphs {
                 if !started, p.id == start { started = true }
                 guard started else { continue }
+                if !recap.isEmpty, p.style != .heading {
+                    out += recap
+                    recap = []
+                }
                 out += segments(for: p, project: project, index: index, includeNarration: includeNarration, only: speaker, pauses: pauses)
             }
+            out += recap
             if !out.isEmpty {
                 out[out.count - 1].pause = .chapter
                 out[out.count - 1].pauseAfter = pauses.chapter

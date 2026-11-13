@@ -475,7 +475,7 @@ struct ProjectSettingsSheet: View {
                     get: { document.project.settings.reviewsCloudAI },
                     set: { on in document.updateSettings("Review Claude’s Changes", undoManager: undoManager) { $0.reviewCloudAI = on ? nil : false } }
                 ))
-                Text("After Tag Speakers runs with Claude, a list shows every line it changed, so you can keep or undo each one. Turn this off to keep Claude’s changes straight away, as with a model on your Mac.")
+                Text("After Tag Speakers runs with Claude, a list shows every line it changed, so you can keep or undo each one; Clean Up Text, chapter recaps and delivery hints wait in a list too. Turn this off to keep Claude’s changes straight away, as with a model on your Mac. Suggested spellings always wait for you.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
