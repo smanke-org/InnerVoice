@@ -20,6 +20,10 @@ public struct SpeechSegment: Hashable, Identifiable, Sendable {
     /// What kind of gap follows, so the player can use the narrator's current pause
     /// settings (Settings › Voices) without remaking the script.
     public var pause: PauseKind = .line
+    /// Where its words are in the paragraph's text (UTF-16), for read-along highlighting in
+    /// an EPUB with audio. A sentence when the text splits the same way after pronunciations,
+    /// otherwise the whole line or stretch of narration. nil for a scene break.
+    public var source: NSRange?
 
     public init(id: String, paragraphID: UUID, lineID: UUID? = nil, speakerID: UUID? = nil, text: String,
                 tone: Tone = .neutral, kind: LineKind? = nil, pauseAfter: Double = 0.3, sound: VocalSound? = nil) {
@@ -126,6 +130,7 @@ public enum SpeechScript {
             guard includeNarration, speaker == nil else { return [] }
             var seg = SpeechSegment(id: "\(paragraph.id)-0", paragraphID: paragraph.id, text: apply(say, to: paragraph.text), pauseAfter: pauses.heading)
             seg.pause = .heading
+            seg.source = NSRange(location: 0, length: (paragraph.text as NSString).length)
             return [seg]
         case .body, .blockQuote:
             break
@@ -136,10 +141,12 @@ public enum SpeechScript {
         var cursor = 0
         var n = 0
         /// One piece (narration or a line), split into sentences when asked.
-        func add(_ text: String, make: (String, Bool) -> SpeechSegment) {
+        func add(_ text: String, at range: NSRange, make: (String, Bool) -> SpeechSegment) {
             let parts = pauses.splitSentences ? sentences(text) : [text]
+            let spans = pauses.splitSentences ? sentenceRanges(in: ns, range: range) : [range]
             for (k, part) in parts.enumerated() {
                 var seg = make(part, k == 0)
+                seg.source = spans.count == parts.count ? spans[k] : range
                 let last = k == parts.count - 1
                 seg.pause = last ? .line : .sentence
                 seg.pauseAfter = pauses.seconds(seg.pause)
@@ -149,9 +156,10 @@ public enum SpeechScript {
         }
         func narration(upTo end: Int) {
             guard end > cursor else { return }
-            let piece = clean(ns.substring(with: NSRange(location: cursor, length: end - cursor)))
+            let raw = NSRange(location: cursor, length: end - cursor)
+            let piece = clean(ns.substring(with: raw))
             if includeNarration, speaker == nil, !piece.isEmpty {
-                add(apply(say, to: piece)) { text, _ in
+                add(apply(say, to: piece), at: cleanRange(piece, in: ns, raw)) { text, _ in
                     SpeechSegment(id: "\(paragraph.id)-\(n)", paragraphID: paragraph.id, text: text)
                 }
             }
@@ -163,7 +171,7 @@ public enum SpeechScript {
             let text = clean(ns.substring(with: r))
             if !text.isEmpty, speaker == nil || line.speakerID == speaker {
                 let sound = ToneRules.sound(for: line, in: paragraph, linesInParagraph: lines)
-                add(apply(say, to: text)) { part, first in
+                add(apply(say, to: text), at: cleanRange(text, in: ns, r)) { part, first in
                     SpeechSegment(id: "\(paragraph.id)-\(n)", paragraphID: paragraph.id, lineID: line.id, speakerID: line.speakerID,
                                   text: part, tone: line.tone ?? .neutral, kind: line.kind, sound: first ? sound : nil)
                 }
@@ -219,6 +227,31 @@ public enum SpeechScript {
             }
         }
         return out
+    }
+
+    /// Where `cleaned` (a `clean` of the text at `raw`) sits in the paragraph.
+    static func cleanRange(_ cleaned: String, in ns: NSString, _ raw: NSRange) -> NSRange {
+        let r = ns.range(of: cleaned, options: [], range: raw)
+        return r.location == NSNotFound ? raw : r
+    }
+
+    /// The sentences of `range` in the paragraph, as ranges, trimmed of spaces.
+    static func sentenceRanges(in ns: NSString, range: NSRange) -> [NSRange] {
+        let text = ns.substring(with: range)
+        let tokenizer = NLTokenizer(unit: .sentence)
+        tokenizer.string = text
+        var out: [NSRange] = []
+        tokenizer.enumerateTokens(in: text.startIndex..<text.endIndex) { r, _ in
+            let piece = String(text[r])
+            let trimmed = piece.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                let local = NSRange(r, in: text)
+                let lead = (piece as NSString).range(of: trimmed).location
+                out.append(NSRange(location: range.location + local.location + lead, length: (trimmed as NSString).length))
+            }
+            return true
+        }
+        return out.isEmpty ? [range] : out
     }
 
     /// Narration between quotes keeps stray quote marks and dashes; take them off.

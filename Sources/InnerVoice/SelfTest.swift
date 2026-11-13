@@ -332,8 +332,47 @@ enum SelfTest {
         } catch {
             check("Export Audio writes an M4A file", false, error.localizedDescription)
         }
+        await epubWithAudio(doc, in: dir)
         try? FileManager.default.removeItem(at: dir)
         SpeechRenderer.shared.clearCache()
+    }
+
+    /// Export EPUB with Audio on two short chapters: the file opens again with the same
+    /// chapters, mimetype comes first and stored, and every sentence has its clip.
+    private static func epubWithAudio(_ doc: InnerVoiceDocument, in dir: URL) async {
+        var small = doc.project
+        small.chapters = small.chapters.prefix(2).map { c in
+            var c = c
+            c.paragraphs = Array(c.paragraphs.prefix(3))
+            return c
+        }
+        let index = BookIndex(small)
+        let url = dir.appending(path: "Sample.epub")
+        do {
+            try await EpubExporter.write(project: small, index: index, chapters: Array(small.chapters.indices), to: url,
+                                         resolver: VoiceResolver(project: small, index: index)) { _, _, _ in }
+            let data = try Data(contentsOf: url)
+            check("Export EPUB with Audio puts mimetype first, stored",
+                  data.count > 58 && data[8] == 0 && data[9] == 0 && String(data: data[30..<38], encoding: .utf8) == "mimetype")
+            let back = try ManuscriptImporter.read(url)
+            let titles = small.chapters.indices.map { EpubExporter.title(small, $0) }
+            check("the EPUB opens again with the same chapters (from its table of contents)", back.chapters.map(\.title) == titles,
+                  back.chapters.map(\.title).joined(separator: ", "))
+            let unpacked = dir.appending(path: "Sample EPUB")
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+            p.arguments = ["-x", "-k", url.path, unpacked.path]
+            try p.run()
+            p.waitUntilExit()
+            let smil = (try? String(contentsOf: unpacked.appending(path: "OEBPS/smil/c001.smil"), encoding: .utf8)) ?? ""
+            let opf = (try? String(contentsOf: unpacked.appending(path: "OEBPS/content.opf"), encoding: .utf8)) ?? ""
+            let clips = smil.components(separatedBy: "<par ").count - 1
+            let spoken = SpeechScript.segments(chapter: 0, project: small, index: index, includeNarration: true).filter { !$0.text.isEmpty }.count
+            check("each sentence of the EPUB has its clip of audio", clips >= max(1, spoken / 2) && opf.contains("media-overlay=\"mo-c001\"")
+                  && opf.contains("media:duration"), "\(clips) clips for \(spoken) segments")
+        } catch {
+            check("Export EPUB with Audio writes an EPUB", false, error.localizedDescription)
+        }
     }
 
     /// The setup sheet's Hear It clips (Resources/Samples/casting-<style>.m4a): the opening
