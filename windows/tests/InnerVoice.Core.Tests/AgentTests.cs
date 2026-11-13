@@ -29,6 +29,9 @@ public class AgentTests
     static string Windows(string mac) =>
         AgentCommands.WindowsWording.Aggregate(mac, (s, w) => s.Replace(w.Mac, w.Windows).Replace(Json.Write(w.Mac)[1..^1], Json.Write(w.Windows)[1..^1]));
 
+    /// A Mac help fixture, with Unix line ends even where Git checked it out with Windows ones.
+    static string MacFixture(string name) => File.ReadAllText(Fixtures.PathOf("agent/" + name)).Replace("\r\n", "\n");
+
     static (int Exit, string Out, string Err) Cli(params string[] args)
     {
         var stdout = new StringWriter { NewLine = "\n" };
@@ -40,20 +43,20 @@ public class AgentTests
     [Fact]
     public void HelpMatchesTheMac()
     {
-        var mac = File.ReadAllText(Fixtures.PathOf("agent/mac-help.txt")).TrimEnd('\n');
+        var mac = MacFixture("mac-help.txt").TrimEnd('\n');
         Assert.Equal(Windows(mac), AgentCli.HelpText());
         var (exit, output, _) = Cli("help");
         Assert.Equal(0, exit);
         Assert.Equal(Windows(mac) + "\n", output);
         // Every Windows wording change is used: none is left over from an old Mac text.
         foreach (var (m, _) in AgentCommands.WindowsWording)
-            Assert.Contains(m, File.ReadAllText(Fixtures.PathOf("agent/mac-help.json")).Replace("\\\"", "\""));
+            Assert.Contains(m, MacFixture("mac-help.json").Replace("\\\"", "\""));
     }
 
     [Fact]
     public void EveryCommandsUsageMatchesTheMac()
     {
-        var blocks = File.ReadAllText(Fixtures.PathOf("agent/mac-usage.txt")).Split("=== ", StringSplitOptions.RemoveEmptyEntries);
+        var blocks = MacFixture("mac-usage.txt").Split("=== ", StringSplitOptions.RemoveEmptyEntries);
         Assert.Equal(blocks.Length, AgentCommands.All.Count);
         foreach (var block in blocks)
         {
@@ -71,7 +74,7 @@ public class AgentTests
     [Fact]
     public void SchemaMatchesTheMac()
     {
-        var mac = Json.Parse(Windows(File.ReadAllText(Fixtures.PathOf("agent/mac-help.json"))));
+        var mac = Json.Parse(Windows(MacFixture("mac-help.json")));
         var (exit, output, _) = Cli("help", "--json");
         Assert.Equal(0, exit);
         Assert.Equal(Json.Write(mac), output.TrimEnd('\n'));
@@ -269,9 +272,13 @@ public class AgentTests
         }
         Assert.Equal("{\"ok\":true,\"result\":{\"echo\":{\"command\":\"status\",\"args\":{\"é\":\"ünïcode\"}}}}", reply);
 
-        // Another InnerVoice can't serve the same pipe: it stops listening at once.
-        var second = AgentPipe.Listen(_ => Task.FromResult("{\"ok\":true,\"result\":\"second\"}"), stop.Token, name);
-        Assert.Same(second, await Task.WhenAny(second, Task.Delay(TimeSpan.FromSeconds(5))));
+        // Another InnerVoice can't serve the same pipe: it stops listening at once. Only Windows
+        // pipes refuse a second first instance reliably; .NET's Unix sockets on the Mac don't.
+        if (OperatingSystem.IsWindows())
+        {
+            var second = AgentPipe.Listen(_ => Task.FromResult("{\"ok\":true,\"result\":\"second\"}"), stop.Token, name);
+            Assert.Same(second, await Task.WhenAny(second, Task.Delay(TimeSpan.FromSeconds(5))));
+        }
 
         // A second copy of the app hands over its files and links.
         Assert.True(await Task.Run(() => AgentPipe.Forward(["innervoice://open/cast"], name)));
