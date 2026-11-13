@@ -86,8 +86,11 @@ way on both.
   in its manifest; a copy run from a folder writes `HKCU\Software\Classes\innervoice` at launch.
   `innervoice <link>` follows one from the command line.
 - **MCP:** `claude mcp add --scope user innervoice -- innervoice mcp`.
-- **Not yet:** `lines tone`, `open voices`/`pronunciations` and `export --kind pronunciations`
-  answer error code `not_available` until AI voices come to Windows (`TODO(voices)`).
+- **Voices:** `lines tone`, tones in `lines list`, each character's `voice` (on the engine in use),
+  `casting style` shades and `export --kind pronunciations` work as on the Mac. The Windows app
+  has no Pronunciations page, so `open pronunciations` shows the Manuscript, as `open` does for
+  any page the project type doesn't show (Narration Tools hides Voices; Produce with AI Voices
+  hides Index and the Teleprompter).
 - **Test copies:** `APP_STORE=<folder>` makes a test copy: its own pipe (named from the folder),
   its settings and models in that folder, and it only opens or saves projects in the temporary
   folder. `INNERVOICE_DEMO=1` opens the sample book at launch; `projects demo` opens another.

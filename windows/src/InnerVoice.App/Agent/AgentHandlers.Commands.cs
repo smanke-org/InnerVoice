@@ -3,6 +3,7 @@ using InnerVoice.App.AI;
 using InnerVoice.App.Document;
 using InnerVoice.App.Export;
 using InnerVoice.App.Pages;
+using InnerVoice.App.Speech;
 using InnerVoice.App.Windows;
 using InnerVoice.Core;
 using InnerVoice.Core.AI;
@@ -44,21 +45,28 @@ public static partial class AgentHandlers
                 return new JObject { ["project"] = Name(w), ["page"] = "cast", ["character"] = c.Name };
             }
             var raw = (args.String("page") ?? "manuscript").ToLowerInvariant();
-            PageKind page = raw switch
+            PageKind? page = raw switch
             {
                 "manuscript" => PageKind.Manuscript,
                 "cast" => PageKind.Cast,
+                "voices" => PageKind.Voices,
                 "index" => PageKind.Index,
+                // The Windows app keeps pronunciations in the project (the agent's `pronunciations`
+                // commands, the guide in File › Export…) but has no page for them: the Mac's window
+                // shows the Manuscript for a page the project doesn't show.
+                "pronunciations" => null,
                 "record" or "teleprompter" => PageKind.Teleprompter,
                 "review" => PageKind.Review,
                 "revisions" => PageKind.Revisions,
-                // TODO(voices): the Voices and Pronunciations pages.
-                "voices" or "pronunciations" => throw AgentError.NotYet($"the {(raw == "voices" ? "Voices" : "Pronunciations")} page isn't in InnerVoice for Windows yet: it comes with AI voices"),
-                "retakes" => throw AgentError.NotYet("InnerVoice for Windows has no Retakes page"),
-                _ => throw AgentError.Usage($"no page \"{raw}\". Pages: manuscript, cast, voices, index, pronunciations, record, retakes, review, revisions"),
+                // The Mac's pages (Workspace.Page); it has no Retakes page either.
+                _ => throw AgentError.Usage($"no page \"{raw}\". Pages: manuscript, cast, voices, index, pronunciations, teleprompter, review, revisions"),
             };
-            w.Workspace.Go(page);
-            return new JObject { ["project"] = Name(w), ["page"] = PageRaw(page) };
+            // As the Mac's window does when a page isn't shown for the project type (Narration
+            // Tools hides Voices and Pronunciations, Produce with AI Voices hides Index and the
+            // Teleprompter): the Manuscript instead.
+            var shown = page is { } k && w.VisiblePages().Contains(k) ? k : PageKind.Manuscript;
+            w.Workspace.Go(shown);
+            return new JObject { ["project"] = Name(w), ["page"] = PageRaw(shown) };
         });
 
         add("projects list", _ =>
@@ -259,11 +267,22 @@ public static partial class AgentHandlers
             };
         });
 
-        // TODO(voices): set tones once the voices work models them on Line (the Mac's setTone).
+        // The tone becomes the narrator's (`ToneSource.User`), so Tag Speakers never changes it.
         add("lines tone", args =>
         {
-            Project(args);
-            throw AgentError.NotYet("setting tones isn't in InnerVoice for Windows yet: tones come with AI voices. `innervoice lines list` shows tones set on the Mac");
+            var (w, d) = Project(args);
+            var ids = args.List("ids");
+            var raw = args.String("tone");
+            if (raw is null && ids.Count > 0 && Tones.Parse(ids[^1]) is not null) { raw = ids[^1]; ids.RemoveAt(ids.Count - 1); }
+            if (raw is null || Tones.Parse(raw) is not { } tone)
+                throw AgentError.Usage("Give a tone: " + string.Join(", ", Tones.All.Select(t => t.Raw())) + ". Example: innervoice lines tone 3f2a9c1e angry");
+            var picked = FindLines(ids, d);
+            d.SetTone(tone, picked.Select(l => l.Id).ToList());
+            return new JObject
+            {
+                ["project"] = Name(w), ["tone"] = tone.Raw(),
+                ["lines"] = picked.Select(l => LineByID(l.Id, d)).OfType<Line>().Select(l => (object?)LineJSON(l, d)).ToList(),
+            };
         });
 
         add("lines reveal", args =>
@@ -401,8 +420,8 @@ public static partial class AgentHandlers
                 d.SetCastingStyle(style);
             }
             var readers = d.Readers();
-            // TODO(voices): a book with AI voices takes its shades from the voices (the Mac's VoiceResolver).
-            var shades = d.Shades();
+            // A book with AI voices takes its shades from the voices; a narration book from the narrator.
+            var shades = d.Project.ShowsVoices ? VoiceSetup.Resolver(d).Shades : d.Shades();
             return new JObject
             {
                 ["project"] = Name(w), ["castingStyle"] = d.Project.Settings.CastingStyle is { } cs ? Raw(cs) : null,
@@ -564,8 +583,7 @@ public static partial class AgentHandlers
                 "narrator-script" => Exporter.Kind.NarratorScript,
                 "manuscript" => Exporter.Kind.Manuscript,
                 "cast" => Exporter.Kind.Cast,
-                // TODO(voices): the pronunciation guide comes with AI voices.
-                "pronunciations" => throw AgentError.NotYet("the pronunciation guide isn't in InnerVoice for Windows yet: it comes with AI voices"),
+                "pronunciations" => Exporter.Kind.Pronunciations,
                 _ => throw AgentError.Usage($"--kind must be narrator-script, manuscript, cast or pronunciations, not \"{rawKind}\""),
             };
             var rawFormat = (args.String("format") ?? "pdf").ToLowerInvariant();
