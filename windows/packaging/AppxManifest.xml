@@ -49,11 +49,11 @@
         </uap:Extension>
         <!-- innervoice:// links (src/InnerVoice.Agent/AgentUrl.cs): Windows starts InnerVoice.exe
              with the link, which hands it to a running InnerVoice through the agent pipe. -->
-        <uap:Extension Category="windows.protocol">
-          <uap:Protocol Name="innervoice" Parameters="&quot;%1&quot;">
+        <uap3:Extension Category="windows.protocol">
+          <uap3:Protocol Name="innervoice" Parameters="&quot;%1&quot;">
             <uap:DisplayName>InnerVoice Link</uap:DisplayName>
-          </uap:Protocol>
-        </uap:Extension>
+          </uap3:Protocol>
+        </uap3:Extension>
       </Extensions>
     </Application>
     <!-- The `innervoice` command for agents and scripts (src/InnerVoice.Cli, a console program
