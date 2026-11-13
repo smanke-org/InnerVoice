@@ -1,10 +1,13 @@
 # InnerVoice for Windows
 
-The Narration Tools from InnerVoice for Mac, on Windows: open a manuscript, see who speaks
-every line, fix it, build character summaries with a local AI model (or Claude, in the cloud,
-once the narrator sets it up and allows the book), keep an index and
-narrator scripts, and read from the teleprompter in the booth (record in your own audio app).
-Projects (`.innervoice`) open on both Windows and the Mac. There are no AI voices on Windows.
+InnerVoice for Mac, on Windows: open a manuscript, see who speaks every line, fix it, build
+character summaries with a local AI model (or Claude, in the cloud, once the narrator sets it
+up and allows the book), keep an index and narrator scripts, and read from the teleprompter in
+the booth (record in your own audio app). Books made with AI voices give every character a
+voice and a tone, play table reads and export audio or an EPUB with audio, with Windows' own
+voices or ElevenLabs (in the cloud, set up and allowed per book); Qwen3-TTS and Orpheus on
+ONNX Runtime come later (docs/WINDOWS-PLAN.md § Voice engines). Projects (`.innervoice`) open
+on both Windows and the Mac.
 
 The plan and the decisions behind it are in [../docs/WINDOWS-PLAN.md](../docs/WINDOWS-PLAN.md).
 
@@ -12,9 +15,12 @@ The plan and the decisions behind it are in [../docs/WINDOWS-PLAN.md](../docs/WI
 
 - `src/InnerVoice.Core` — the book model and logic, ported from the Mac's `Sources/InnerVoiceKit`
   (no UI). `Model/` (project.json rules, archive), `Import/` (Word, PDF, RTF, text, Markdown,
-  OpenDocument, EPUB, HTML), rules, dialogue finder, prompts, llama.cpp binding.
+  OpenDocument, EPUB, HTML), rules, dialogue finder, prompts, llama.cpp binding, voices
+  (`Voices.cs`, `ToneRules.cs`, `SpeechScript.cs`, `SeriesVoices.cs`) and `Speech/` (the voice
+  engine interface, renderer and audio cache, resolver, audio DSP, WAV, audio export).
 - `src/InnerVoice.App` — the Avalonia app: `Document/` (open, save, undo, edits), `Pages/`,
-  `Windows/`, `Controls/` (the manuscript view), `AI/`, `Export/`, `Help/`.
+  `Windows/`, `Controls/` (the manuscript view), `AI/`, `Speech/` (Windows Voices, ElevenLabs,
+  the player), `Export/`, `Help/`.
 - `tests/InnerVoice.Core.Tests` — xUnit tests, including golden checks against fixtures the Mac's
   Kit writes (`Fixtures/`).
 - `tests/InnerVoice.App.Tests` — headless app tests and light/dark snapshots of every page.
@@ -78,6 +84,11 @@ Placeholder text only (the sample story, every name made up). Never put a real m
 
 The VM has no GPU for the AI, so Tag Speakers runs on the processor: use Gemma 4 E2B or
 Qwen 3 4B there.
+
+Voices: Windows Voices and the speakers work in the VM if it has audio; check real speech
+output, the ElevenLabs key in Credential Manager, the microphone in Clone a Voice and M4A
+export (Media Foundation) there or on a PC. On the Mac, tests use fake engines and play
+silently (`INNERVOICE_SPEECH_AUDIBLE` has no effect off Windows).
 
 ## Releasing
 

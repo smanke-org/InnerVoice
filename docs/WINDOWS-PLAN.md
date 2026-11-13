@@ -32,6 +32,67 @@ that is marked "Dropped" or "Later" is now in scope:
   (32 GB for the larger models) is ideal; integrated graphics or a CPU alone will work,
   slowly. Measure real speeds on test hardware before shipping these numbers.
 
+### AI voices, part A (done 2026-11-13, branch `claude/win-voices-a-7d409e`)
+
+Everything but the local neural models. Ported file for file into `InnerVoice.Core`, with
+the Mac's tests: `Voices.cs` (tones, engines, `VoiceChoice`/`CastVoice`, `VoiceInfo` with
+Orpheus's voices and the Qwen3-TTS presets, `VoiceCasting`), `ToneRules.cs` (+ `TonePrompt`,
+run inside Tag Speakers), `SpeechScript.cs` (segments, pauses, pronunciations, recaps; a
+rule-based `SentenceSplitter` stands in for NaturalLanguage and is tested against the Mac's
+cases), `SeriesVoices.cs`, `VoiceDescription` (in `VoiceNotes.cs`), the voice titles and
+`SharedRolesNeeded` in `CastingStyle.cs`, and Voices/Listen in `GuidedSteps.cs`. Tones and
+voices are modeled now (`Line.Tone…`, `BookCharacter.Voices`, `ProjectSettings.VoiceEngine`,
+`NarratorVoices`, `RoleVoices`, `CloudVoicesAllowed`, `Project.TonesTagged/VoicesCast`), with
+the Mac's JSON names; `RoundTripTests` still compares the Mac fixture field by field.
+
+The app has the Voices page, Play Line / Play from Here (follow-along), tones on the line's
+right-click menu, Settings › Voices, Export Audio (M4A via WinRT `MediaTranscoder`, or WAV),
+Export EPUB with Audio, Series Voices, Clone a Voice (ElevenLabs), Voice Design, Cloud
+Usage for ElevenLabs, Project Type (asked once; Book › Project Type…), and Help. New Windows
+projects no longer default to Narration Tools: they ask, like the Mac.
+
+Shortcuts differ from the Mac where Windows reserves the Mac's: Play Line is Ctrl+Space
+(⌥Space opens the window menu on Windows), Play from Here Ctrl+Shift+Space, Stop Playing
+Ctrl+Shift+. (Ctrl+. stops an AI run), Voices page Ctrl+5.
+
+A Mac book's Apple voices (`com.apple.voice…`) speak on Windows as the closest Windows voice
+of the same gender ("Ava (Mac voice)"); the book keeps the Mac's choice. The Mac doesn't yet
+do the reverse for Windows voice IDs (a Mac follow-up: it shows them as missing).
+
+### Voice engines (the interface part B plugs into)
+
+`InnerVoice.Core/Speech/IVoiceEngine.cs`. One `IVoiceEngine` per `VoiceEngine` value (`apple`,
+`qwen`, `orpheus`, `elevenlabs`; never `mixed`), registered once at startup with
+`VoiceEngineRegistry.Register` (App: `Speech/VoiceActions.cs` › `VoiceSetup.Start`).
+
+| Member | Contract |
+| --- | --- |
+| `Engine` | The `VoiceEngine` it implements. |
+| `IsReady` | Can speak now (downloaded, or set up). Cheap: views read it every redraw. |
+| `NotReadyReason` | Words for the narrator when not ready (Settings › Voices, errors). |
+| `Voices` | Its voices, best first, cached by the engine. Qwen3-TTS: `VoiceInfo.QwenPresets` plus clones (`Cloned = true`, voiceID `clone:<id>`). Orpheus: `VoiceInfo.Orpheus`. |
+| `Info(choice)` | The `VoiceInfo` a choice names, or null. |
+| `ShadesPitch` / `ShadesPace` | The engine shades by itself (Qwen3-TTS: pitch-shift the voice sample before cloning, as the Mac does; pace is left to the renderer). When false, `SpeechRenderer` shifts the finished audio (`ShadeAudio`, resample + WSOLA). |
+| `Render(request, ct)` | One `SpeechRequest` → 24 kHz mono float samples. May run on any thread, several at once (the player renders two ahead). Throw `SpeechException` with words for the narrator. |
+| `Prepare(ct)` | Optional: load the model ahead of the first line (the Voices page calls it). |
+| `Unload()` | Optional: free memory when the narrator turns the engine off. |
+
+What part B gets for free: the cache (`SpeechRenderer`, keyed by the Mac's `SpeechRequest`
+cache key, in LocalAppData\InnerVoice\Speech, pruned at 1 GB), trimming each voice's
+silence, pauses, playback speed, shading, Export Audio and EPUB with Audio, casting
+(`VoiceCasting.Cast` designs Qwen3-TTS voices from summaries and Voice Notes;
+`VoiceResolver.WithNotes` adds the notes at speaking time), the Voices page (it lists any
+registered engine; Qwen shows Describe a Voice), engine switches and Mix Engines. Part B
+still needs: the ONNX Runtime + DirectML engines (`SpeechAudio.Leveled` is the Mac's -20 dB
+leveling), the voice-pack downloads and the hardware check in Settings › Voices (replace the
+"Qwen3-TTS and Orpheus — Coming later" card), On This PC cloning in Clone a Voice, and
+`Tone.Direction()` / `VocalSound` for the models that act.
+
+Platform split: a `-r win-*` build targets `net10.0-windows10.0.19041.0` (WinRT speech and
+Media Foundation, under `#if WINDOWS`); other builds are `net10.0` (tests on the Mac; on a
+PC, SAPI through System.Speech). Audio out is NAudio's WinMM output; test runs play
+silently unless `INNERVOICE_SPEECH_AUDIBLE` is set.
+
 Original scope, kept for its porting notes:
 
 A Windows version of InnerVoice with only the **Narration Tools** workflow: who's
@@ -155,7 +216,7 @@ testable job; the golden fixtures in section 4 keep the two versions agreeing.
 |---|---|
 | Open a manuscript: Word (.docx), PDF, RTF, plain text, Markdown, OpenDocument, EPUB, HTML | Readers rewritten on the libraries above; chapter detection ported |
 | Dialogue finding, rule attribution, Fix a whole exchange | Pure logic, ported |
-| Tag Speakers with a local model (llama.cpp), model picker with memory advice, download and SHA-256 check | Advice reworded for PCs (RAM plus GPU memory, see below). The tone pass is skipped: tones only matter to AI voices. |
+| Tag Speakers with a local model (llama.cpp), model picker with memory advice, download and SHA-256 check | Advice reworded for PCs (RAM plus GPU memory, see below). The tone pass runs too (AI voices part A). |
 | Manuscript: colors, highlight or outline, initials, line kinds, Unsure in red, Assign popover, merge and split characters, Delete Text, search, jump to chapter | AvaloniaEdit, see above |
 | Review page | Ported |
 | Cast and character summaries: facts linked to their line, late-reveal flags, line and word counts, Voice Notes ("From the book:" block, voice brief), colors from `CharacterPalette` (Automatic or picked), pin | Ported. Red stays reserved for Who's Speaking?/Unsure. |
@@ -174,7 +235,7 @@ testable job; the golden fixtures in section 4 keep the two versions agreeing.
 
 | Mac feature | Why |
 |---|---|
-| AI voices: Apple voices, Qwen3-TTS and Orpheus on MLX, ElevenLabs, Voices page, Play, Export Audio, pauses and speed, Series Voices, the tone pass | Out of scope; MLX is Apple silicon only |
+| AI voices: Apple voices, Qwen3-TTS and Orpheus on MLX, ElevenLabs, Voices page, Play, Export Audio, pauses and speed, Series Voices, the tone pass | Superseded by § Parity: ported in part A (Windows Voices, ElevenLabs); Qwen3-TTS and Orpheus on ONNX Runtime are part B |
 | Apple's on-device model (FoundationModels fallback) | Mac only. Without a model, the Windows app still finds dialogue, applies the rules and lets the narrator tag by hand. (Windows' own on-device model only exists on Copilot+ PCs; not worth a second engine.) |
 | Pages import | Pages is a Mac app; the error already tells people to export to Word |
 | `.rtfd` import, `.doc` (Word 97) import | Mac-only formats / no free reader. A `.doc` gets a "Save it as .docx" message. |
@@ -182,7 +243,7 @@ testable job; the golden fixtures in section 4 keep the two versions agreeing.
 | ToolHUD menu hub, ShortcutsLens report | Mac house features |
 | Dock and menu bar choices, menu bar item | No Windows equivalent needed |
 | Agent CLI `innervoice` + MCP, `innervoice://` URLs | Later, if asked for (named pipes and an MSIX protocol activation) |
-| Project type question | The Windows app is Narration Tools only (see file format rules) |
+| Project type question | Superseded: ported in part A (asked once, Book › Project Type…) |
 
 ### Needs a Windows equivalent
 
@@ -254,9 +315,9 @@ Placeholder Book.innervoice  (zip, UTF-8 names)
    a newer Mac version adds come back out unchanged on save. A Mac book with voices
    survives a trip through the Windows app.
 6. **Keep `Original/` and `Audio/`** entries on save, including ones Windows can't use.
-7. **`purpose`:** Windows never changes it. New projects made on Windows are
-   `narration`. A Mac book set to `aiVoices` opens with the Narration Tools pages and a
-   one-line note that its voices are kept for the Mac.
+7. **`purpose`:** as on the Mac since AI voices part A: nil (not asked) shows everything,
+   the window asks once, and Book › Project Type… changes it. Narration Tools hides the
+   voices; Produce with AI Voices hides the Index, Teleprompter, narrators and Narrator Scripts.
 8. **`format`:** if it's higher than the Windows app knows, open read-only and say a newer
    InnerVoice made it.
 9. **Schema changes start in the Kit.** Any new field is added to the Swift model first (or
@@ -289,7 +350,7 @@ the same type names so diffs stay readable. `NSRegularExpression` patterns move 
 | `DialogueFinder.swift` | 210 | Pure | Port |
 | `RuleAttribution.swift` | 389 | Pure (`CharacterPalette`, `RuleAttribution`, `Exchange`) | Port |
 | `RevisionMerger.swift` | 154 | Pure | Port |
-| `GuidedSteps.swift` | 114 | Pure | Port, without the `voices` and `listen` steps |
+| `GuidedSteps.swift` | 114 | Pure | Ported, with the `voices` and `listen` steps (AI voices part A) |
 | `Activity.swift` | 153 | Pure | Port (days in the PC's time zone) |
 | `VoiceNotes.swift` | 116 | Pure | Port ("From the book:" blocks help a human narrator too) |
 | `AI/Prompts.swift` | 408 | Pure (attribution and summary prompts, GBNF grammars, JSON reply parsing) | Port; grammars copied verbatim |
@@ -299,10 +360,10 @@ the same type names so diffs stay readable. `NSRegularExpression` patterns move 
 | `Import/ChapterDetector.swift` | 124 | Pure | Port |
 | `Import/ManuscriptImporter.swift` | 499 | **Mixed, AppKit** | Plain text and Markdown: pure, port. `DocxReader`, `OdtReader`: `XMLParser` delegates, port the logic onto `XmlReader`. `AttributedReader` (RTF, DOC, HTML through `NSAttributedString` and `NSFont`): rewrite on RtfPipe and AngleSharp, keeping its body-size and heading rules. `Zip.unpack` shells out to `ditto`: use `ZipArchive`. `PagesReader`: dropped. |
 | `Import/EpubPdfReaders.swift` | 384 | **Mixed, AppKit + PDFKit** | EPUB: `XMLParser` parts port; the `NSAttributedString` HTML fallback becomes AngleSharp. PDF: line extraction (`PDFDocument`, line selections, `NSFont` sizes) is rewritten on PdfPig (group words into lines by baseline; size from the letters). `PDFLine`, `dropRunningLines`, `median`, `pageLefts` and `paragraphs(from:)` are pure and port line for line. PdfPig uses the same bottom-left PDF coordinates as PDFKit, so the per-page margins in `pageLefts` (mirrored margins in printed books) work unchanged. |
-| `ToneRules.swift` | 286 | Pure, voices only | Not ported (tone pass skipped; tone data round-trips) |
-| `SpeechScript.swift` | 222 | `NaturalLanguage`, voices only | Not ported |
-| `Voices.swift` | 650 | `Synchronization`, voices only | Not ported; its Codable fields round-trip through the extension data |
-| `SeriesVoices.swift` | 119 | Pure, voices only | Not ported |
+| `ToneRules.swift` | 286 | Pure | Ported with `TonePrompt` (AI voices part A); the tone pass runs inside Tag Speakers |
+| `SpeechScript.swift` | 222 | `NaturalLanguage` | Ported (AI voices part A); a rule-based `SentenceSplitter` replaces NLTokenizer |
+| `Voices.swift` | 650 | `Synchronization` | Ported (AI voices part A); tones and voices are modeled, no longer extension data |
+| `SeriesVoices.swift` | 119 | Pure | Ported (AI voices part A) |
 
 Ported: 18 files, about 4,100 lines of Swift, of which only the two importer files (about
 880 lines) touch AppKit or PDFKit.
