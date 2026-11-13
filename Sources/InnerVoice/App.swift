@@ -185,6 +185,8 @@ struct FileCommands: Commands {
                 Button("Export Audio…") { focus?.workspace.showAudioExport = true }
                     .keyboardShortcut("e", modifiers: [.command, .option, .shift])
                     .disabled(focus == nil)
+                Button("Export EPUB with Audio…") { focus?.workspace.showEpubExport = true }
+                    .disabled(focus == nil)
             }
         }
     }

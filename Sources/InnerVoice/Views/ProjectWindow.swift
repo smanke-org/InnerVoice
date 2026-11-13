@@ -42,6 +42,9 @@ struct ProjectWindow: View {
         .sheet(isPresented: $workspace.showAudioExport) {
             AudioExportSheet(document: document, workspace: workspace, isPresented: $workspace.showAudioExport)
         }
+        .sheet(isPresented: $workspace.showEpubExport) {
+            EpubExportSheet(document: document, workspace: workspace, isPresented: $workspace.showEpubExport)
+        }
         .sheet(isPresented: $workspace.showProjectType) {
             ProjectTypeSheet(document: document, workspace: workspace, step: document.project.settings.purpose == nil ? 0 : 1)
         }

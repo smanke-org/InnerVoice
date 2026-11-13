@@ -30,9 +30,11 @@ enum AudioExporter {
     /// Renders and writes each part. `progress` hears (done, total, what) after each segment.
     /// With `stem`, each part is written Separate: one file per voice (named by `stem`, such
     /// as "Narrator" or "Men’s Voice"), all the same length, with silence wherever another
-    /// voice speaks, so they line up when mixed.
+    /// voice speaks, so they line up when mixed. `timing` hears where each spoken segment
+    /// starts and ends in its part's file, in seconds (part index, segment, start, end).
     static func write(_ parts: [Part], to folder: URL, format: Format, resolver: VoiceResolver,
                       stem: ((SpeechSegment) -> String)? = nil,
+                      timing: ((Int, SpeechSegment, Double, Double) -> Void)? = nil,
                       progress: (Int, Int, String) -> Void) async throws -> [URL] {
         let total = parts.reduce(0) { $0 + $1.segments.count }
         var done = 0
@@ -46,7 +48,8 @@ enum AudioExporter {
         let staging = FileManager.default.temporaryDirectory.appending(path: "InnerVoice Export \(UUID().uuidString)")
         try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: staging) }
-        for part in parts where !part.segments.isEmpty {
+        for (partIndex, part) in parts.enumerated() where !part.segments.isEmpty {
+            var position = 0.0
             // One file (Combined), or one per voice in this part (Separate), in order of first use.
             var names: [String] = []
             for seg in part.segments {
@@ -76,12 +79,16 @@ enum AudioExporter {
                 if let request = resolver.request(for: seg) {
                     let audio = SpeechAudio.trimmed(try await SpeechRenderer.shared.render(request))
                     try put(audio, in: stem?(seg) ?? "")
-                    exported += Double(audio.frameLength) / audio.format.sampleRate
+                    let seconds = Double(audio.frameLength) / audio.format.sampleRate
+                    timing?(partIndex, seg, position, position + seconds)
+                    position += seconds
+                    exported += seconds
                 }
                 let gap = seg.pause == .none ? seg.pauseAfter : PauseSettings.current.seconds(seg.pause)
                 if gap > 0 {
                     // Silence goes in every file alike.
                     try put(SpeechAudio.silence(gap), in: "\u{0}")
+                    position += gap
                 }
                 done += 1
             }

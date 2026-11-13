@@ -283,6 +283,8 @@ final class Workspace {
     /// Characters picked at once on the Cast page (⌘-click, ⇧-click).
     var pickedCast: Set<UUID> = []
     var showAudioExport = false
+    /// Export EPUB with Audio: the book's text with the voices, highlighted as it plays.
+    var showEpubExport = false
     /// The chapters Export Audio reads, by index (nil: every chapter). Kept while the window is open.
     var audioExportChapters: Set<Int>?
     /// Switches Review to this filter (snapshots, links from other pages).

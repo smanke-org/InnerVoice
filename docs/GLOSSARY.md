@@ -70,6 +70,7 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | Play Line / Play from Here | Hear the selected line, or a table read from it to the end | preview, speak |
 | Table read | Play from Here with narration read too (Settings › Voices) | read-through |
 | Export Audio | Saving the voices as M4A or WAV files | render, bounce |
+| EPUB with Audio | An EPUB of the book with the voices built in; each sentence is highlighted as it's read (EPUB 3 Media Overlays) | read-along book, talking book, audio EPUB |
 | Assign | Give a line to a character | tag, retag, set speaker |
 | Pin | Keep a character at the top of every speaker list | favorite, star |
 | Delete Text | Take text the narrator doesn't read out of the project (the imported file never changes) | remove, hide, strike |

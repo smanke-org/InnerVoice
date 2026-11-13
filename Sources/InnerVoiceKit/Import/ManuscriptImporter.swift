@@ -37,6 +37,7 @@ public enum ManuscriptImporter {
         let blocks: [RawBlock]
         var bookTitle = title
         var author = ""
+        var fromTOC: [Chapter]?
         switch ext {
         case "txt", "text": blocks = try PlainTextReader.read(url, markdown: false)
         case "md", "markdown": blocks = try PlainTextReader.read(url, markdown: true)
@@ -47,6 +48,7 @@ public enum ManuscriptImporter {
             blocks = epub.blocks
             if !epub.title.isEmpty { bookTitle = epub.title }
             author = epub.author
+            fromTOC = epub.chapters
         case "pdf": blocks = try PDFReader.read(url)
         case "pages": blocks = try PagesReader.read(url)
         case "rtf": blocks = try AttributedReader.read(url, type: .rtf)
@@ -55,7 +57,7 @@ public enum ManuscriptImporter {
         case "html", "htm", "xhtml": blocks = try AttributedReader.read(url, type: .html)
         default: throw ImportError.unsupported(name)
         }
-        let chapters = ChapterDetector.chapters(from: blocks, fallbackTitle: bookTitle)
+        let chapters = fromTOC ?? ChapterDetector.chapters(from: blocks, fallbackTitle: bookTitle)
         guard !chapters.isEmpty else { throw ImportError.noText(name) }
         return ImportedBook(title: bookTitle, author: author, chapters: chapters)
     }

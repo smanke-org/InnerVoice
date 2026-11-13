@@ -407,6 +407,9 @@ enum Snapshot {
                 workspace.showAudioExport = false
                 workspace.audioExportChapters = nil
                 try? await Task.sleep(for: .seconds(0.5))
+                await shot("epub-export-sheet") { workspace.page = .manuscript; workspace.showEpubExport = true }
+                workspace.showEpubExport = false
+                try? await Task.sleep(for: .seconds(0.5))
                 // Project types: the question, the AI voices setup, Project Settings, and the
                 // sidebar for each type.
                 await shot("project-type") { workspace.showProjectType = true }

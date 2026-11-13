@@ -59,8 +59,22 @@ Selection string: `claude:<model id>`.
    - Self-test: `FakeClaude` URLProtocol (SelfTestClaude.swift) checks nothing is sent without
      a key, consent and the book's yes, and runs each feature end to end. Live calls are
      untested here (no key).
-4. EPUB: table of contents → chapters, footnotes left out of narration; EPUB 3 export with
-   Media Overlays (text highlights as the audio plays).
+4. DONE 2026-11-12: EPUB. Import (`Import/EpubReader.swift`): chapters from the EPUB 3 nav
+   or EPUB 2 toc.ncx, fragment anchors included (an entry pointing inside a file its parent
+   starts is a section, not a chapter; a part page's title goes before its first chapter);
+   the contents and copyright pages (landmarks, guide, epub:type, title) are left out; files
+   the contents don't list join the chapter before unless they open with a heading; fewer
+   than two usable entries → `ChapterDetector` as before. Footnotes, endnotes and their
+   markers (noteref links, linked superscript numbers) are dropped in `XHTMLBlocks`.
+   Export: File › Export EPUB with Audio… (`Export/EpubExport.swift`, voices books only)
+   renders each picked chapter with `AudioExporter.write` (its `timing` callback gives each
+   segment's place in the file), and `ReadAlongEpub` (Kit) writes XHTML pages with a span per
+   sentence (`SpeechSegment.source`), SMIL per chapter, nav, OPF with `media:duration` and
+   `media-overlay`, `mimetype` first and stored, audio streamed from disk. Made in a temp
+   folder, then moved into place. Not checked with epubcheck (no Java here) or in Apple
+   Books (opening it there would add it to the library). Apple's Books Asset Guide documents
+   read aloud for fixed-layout books only, so Apple Books may show this reflowable book
+   without highlighting; Readium-based readers (Thorium) play reflowable overlays.
 5. Windows port of 1–4 (C# Anthropic SDK).
    - 1–2 ported 2026-11-12 (with autosave and the PDF letter-spacing fix from the same Mac
      commit). `windows/src/InnerVoice.Core/AI/Claude.cs` (`ClaudeTextModel`, official `Anthropic`

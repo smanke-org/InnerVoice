@@ -187,7 +187,7 @@ enum ZipFile {
         return files
     }
 
-    private static func deflate(_ data: Data) -> Data? {
+    static func deflate(_ data: Data) -> Data? {
         guard !data.isEmpty else { return nil }
         let capacity = data.count + 1024
         var out = Data(count: capacity)
@@ -233,7 +233,12 @@ enum CRC32 {
     }
 
     static func checksum(_ data: Data) -> UInt32 {
-        var crc: UInt32 = 0xFFFF_FFFF
+        update(0, with: data)
+    }
+
+    /// Carries a checksum on over more data, for files read in pieces (start from 0).
+    static func update(_ checksum: UInt32, with data: Data) -> UInt32 {
+        var crc = checksum ^ 0xFFFF_FFFF
         data.withUnsafeBytes { raw in
             for b in raw.bindMemory(to: UInt8.self) {
                 crc = table[Int((crc ^ UInt32(b)) & 0xFF)] ^ (crc >> 8)
