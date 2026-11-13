@@ -1,5 +1,34 @@
 # InnerVoice for Windows — plan
 
+## Parity (decided 2026-11-12, replaces the Narration-Tools-only scope below)
+
+The Mac app is the primary version. Windows gets **feature-by-feature parity wherever
+possible**, and every new Mac feature gets a Windows port by default. Anything below
+that is marked "Dropped" or "Later" is now in scope:
+
+- **AI voices, both project types:** the Voices page, Play and table reads, Export Audio,
+  pauses and speed, the tone pass, Casting Style audio, Series Voices, Clone a Voice,
+  spoken chapter recaps, delivery hints, Export EPUB with Audio.
+- **Voice engines:**
+  - Windows built-in voices (the stand-in for Apple's voices: instant, no download, the
+    fallback on slow PCs).
+  - ElevenLabs (cloud, same consent gates as the Mac).
+  - Qwen3-TTS and Orpheus, the same models as the Mac, through ONNX Runtime with DirectML
+    (any DirectX 12 GPU), with a CPU fallback. Same voice packs and design/clone behavior;
+    where a model part won't export, say so and match the Mac as closely as possible.
+- **Also ported:** the agent CLI and MCP (`innervoice`, named pipes), `innervoice://` URLs,
+  Pages import, and the GitHub-releases updater with a direct download (MSIX stays as an
+  option).
+- **Widest range of PCs:** x64 and ARM64, GPU or CPU-only. Before a local voice model is
+  downloaded or used, the app checks the hardware and, on weak machines, warns plainly why
+  voices may be unusably slow there and suggests the built-in voices or ElevenLabs.
+  Settings shows what makes a better experience: a DirectX 12 GPU with 8 GB or more of
+  video memory (for example NVIDIA RTX 3060 or AMD RX 6700 XT and up) and 16 GB of RAM
+  (32 GB for the larger models) is ideal; integrated graphics or a CPU alone will work,
+  slowly. Measure real speeds on test hardware before shipping these numbers.
+
+Original scope, kept for its porting notes:
+
 A Windows version of InnerVoice with only the **Narration Tools** workflow: who's
 speaking, Review, character summaries, Index, Rehearse, Pronunciations, the Record
 teleprompter, Retakes, narrators and Narrator Scripts. No AI voices, no audio export.
