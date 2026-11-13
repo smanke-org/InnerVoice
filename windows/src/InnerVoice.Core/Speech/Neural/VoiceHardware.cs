@@ -1,5 +1,5 @@
 // The hardware check for the local voices: what this PC has (graphics card, its own video
-// memory, memory, processor), whether Qwen3-TTS or Orpheus will be usable on it, and the
+// memory, memory, processor), whether Pocket TTS or Orpheus will be usable on it, and the
 // plain warning shown before a download or the first use on a weak PC.
 
 using System.Runtime.InteropServices;
@@ -44,22 +44,24 @@ public static class VoiceHardwareCheck
 
     /// The voices run on the graphics card here.
     public static bool UsesGpu(VoiceHardware hw) => hw.HasGpu && hw.GpuMemoryGB >= MinimumGpuGB;
-    public const int RecommendedMemoryGB = 16, LargeModelsMemoryGB = 32;
+    public const int RecommendedMemoryGB = 16;
 
     public const string Recommended =
-        "For the best experience: a DirectX 12 graphics card with 8 GB or more of video memory (NVIDIA GeForce RTX 3060 or AMD Radeon RX 6700 XT class and up) and 16 GB of memory, or 32 GB to keep Qwen3-TTS and Orpheus loaded together.";
+        "Pocket TTS is small (about 2 GB of memory while it speaks) and runs well on the processor of most PCs with 8 GB of memory. For Orpheus, the best experience: a DirectX 12 graphics card with 8 GB or more of video memory (NVIDIA GeForce RTX 3060 or AMD Radeon RX 6700 XT class and up) and 16 GB of memory.";
 
     /// Measured on a Mac's processor (Apple M5 Max, ONNX Runtime CPU, 2026-11-13; see
     /// docs/WINDOWS-PLAN.md): seconds of speech made per second. A PC's processor is likely
     /// slower; these need checking on real PCs, with and without a graphics card.
-    public static double CpuSpeed(VoiceEngine e) => e == VoiceEngine.Orpheus ? 0.13 : 0.9;
+    public static double CpuSpeed(VoiceEngine e) => e == VoiceEngine.Orpheus ? 0.13 : 6;
 
     public static VoiceFit Fit(VoiceHardware hw, VoiceEngine engine)
     {
         var pack = VoicePacks.For(engine);
         int minimum = pack?.MinimumMemoryGB ?? 8, recommended = pack?.RecommendedMemoryGB ?? RecommendedMemoryGB;
+        double card = pack?.RecommendedGpuGB ?? RecommendedGpuGB;
         if (hw.MemoryGB < minimum) return VoiceFit.TooWeak;
-        if (!hw.HasGpu || hw.GpuMemoryGB < RecommendedGpuGB || hw.MemoryGB < recommended) return VoiceFit.Slow;
+        if (card > 0 && (!hw.HasGpu || hw.GpuMemoryGB < card)) return VoiceFit.Slow;
+        if (hw.MemoryGB < recommended) return VoiceFit.Slow;
         return VoiceFit.Good;
     }
 
@@ -69,17 +71,19 @@ public static class VoiceHardwareCheck
         var fit = Fit(hw, engine);
         if (fit == VoiceFit.Good) return null;
         var name = engine.Title();
+        var pack = VoicePacks.For(engine);
+        double card = pack?.RecommendedGpuGB ?? RecommendedGpuGB;
         string why;
         if (fit == VoiceFit.TooWeak)
-            why = $"This PC has {hw.MemoryGB} GB of memory. {name} needs at least {VoicePacks.For(engine)?.MinimumMemoryGB ?? 8} GB free for itself, so it may not load at all, and everything else on the PC slows down while it runs.";
-        else if (!hw.HasGpu)
+            why = $"This PC has {hw.MemoryGB} GB of memory. {name} needs at least {pack?.MinimumMemoryGB ?? 8} GB free for itself, so it may not load at all, and everything else on the PC slows down while it runs.";
+        else if (card > 0 && !hw.HasGpu)
             why = $"This PC has no DirectX 12 graphics card, so {name} runs on the processor: {Pace(engine)}.";
-        else if (!UsesGpu(hw))
+        else if (card > 0 && !UsesGpu(hw))
             why = $"The graphics card ({hw.GpuName}) has little or no video memory of its own, so {name} runs on the processor: {Pace(engine)}.";
-        else if (hw.GpuMemoryGB < RecommendedGpuGB)
-            why = $"The graphics card ({hw.GpuName}) has {hw.GpuMemoryGB:0.#} GB of video memory; {name} works best with 8 GB or more. Expect lines to come slower than they play.";
+        else if (card > 0 && hw.GpuMemoryGB < card)
+            why = $"The graphics card ({hw.GpuName}) has {hw.GpuMemoryGB:0.#} GB of video memory; {name} works best with {card:0} GB or more. Expect lines to come slower than they play.";
         else
-            why = $"This PC has {hw.MemoryGB} GB of memory; {name} works best with 16 GB or more. Expect lines to come slower than they play.";
+            why = $"This PC has {hw.MemoryGB} GB of memory; {name} works best with {pack?.RecommendedMemoryGB ?? RecommendedMemoryGB} GB or more. Expect lines to come slower than they play.";
         return why + " Windows Voices are fast on any PC, and ElevenLabs runs in the cloud.";
     }
 

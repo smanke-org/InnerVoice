@@ -25,11 +25,11 @@ public static class VoiceSetup
         SpeechRenderer.Shared = new SpeechRenderer(CacheFolder);
         VoiceEngineRegistry.Register(new WindowsVoices());
         ElevenLabsEngine.Register();
-        // Qwen3-TTS and Orpheus on ONNX Runtime (DirectML or the CPU). Test runs keep their
-        // models, samples and clones in temporary folders, never the narrator's own.
+        // Pocket TTS and Orpheus on ONNX Runtime (DirectML or the CPU). Test runs keep their
+        // models and clones in temporary folders, never the narrator's own.
         VoicePacks.Folder = AppPaths.IsTestRun ? Path.Combine(Path.GetTempPath(), "InnerVoice Voice Models (test)") : Path.Combine(AppPaths.Support, "Voice Models");
         LocalClones.Shared = new LocalClones(AppPaths.IsTestRun ? Path.Combine(Path.GetTempPath(), $"InnerVoice Cloned Voices (test {Environment.ProcessId})") : Path.Combine(AppPaths.Support, "Cloned Voices"));
-        VoiceEngineRegistry.Register(new QwenEngine());
+        VoiceEngineRegistry.Register(new PocketEngine());
         VoiceEngineRegistry.Register(new OrpheusEngine());
         VoiceModels.Shared.DetectHardware();
         VoiceHooks.Install();
@@ -171,7 +171,7 @@ public static class VoiceCastingRun
         bool missingRole = CastingStyleRules.SharedRolesNeeded(project.Settings).Any(r => project.Settings.RoleVoice(r, engine) is null);
         if (open.Count == 0 && !missingRole && project.Settings.NarratorVoice(engine) is not null) return;
         var voices = VoiceInfo.Castable(EngineSwitches.Shared.VoicesFor(engine, project));
-        if (voices.Count == 0 && engine != VoiceEngine.Qwen) return;
+        if (voices.Count == 0) return;
         var sure = speaking.Where(c => !open.Contains(c.Id)).Select(c => c.Id).ToHashSet();
         document.ApplyQuietly(p => VoiceCasting.Cast(p, index, engine, voices, sure));
     }

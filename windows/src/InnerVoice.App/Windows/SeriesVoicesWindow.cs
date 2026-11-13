@@ -70,7 +70,12 @@ public sealed class SeriesVoicesWindow : Window
     static bool SamePath(string a, string? b) => b is not null && string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
 
     /// Reads the other project without opening it.
-    public static Project ReadProject(string path) => ProjectJson.Decode(ProjectArchive.Read(File.ReadAllBytes(path)).ProjectJson);
+    public static Project ReadProject(string path)
+    {
+        var p = ProjectJson.Decode(ProjectArchive.Read(File.ReadAllBytes(path)).ProjectJson);
+        LegacyVoices.Migrate(p); // an older book's Qwen3-TTS voices, as Pocket TTS ones (as the Mac's readProject)
+        return p;
+    }
 
     async Task Load(string path)
     {
@@ -121,7 +126,7 @@ public sealed class SeriesVoicesWindow : Window
         }
         column.Children.Add(Ui.Divider());
         column.Children.Add(notes);
-        column.Children.Add(Ui.Caption("Qwen3-TTS designs voices from Voice Notes, so this keeps those voices the same. It replaces the Voice Notes of the matched characters here.", Avalonia.Media.TextWrapping.Wrap));
+        column.Children.Add(Ui.Caption("Casting and ElevenLabs’ Voice Design read what they say about how a character sounds. It replaces the Voice Notes of the matched characters here.", Avalonia.Media.TextWrapping.Wrap));
         narrator.IsVisible = old.Settings.NarratorVoices is { Count: > 0 };
         column.Children.Add(narrator);
         if (old.Settings.VoiceEngine is { } e && e != document.Project.Settings.Engine)

@@ -1,6 +1,6 @@
-// Byte-level BPE, the text tokenizer both local voice models use: Qwen3-TTS (Qwen2's
-// vocab.json + merges.txt) and Orpheus (Llama 3's tokenizer.json). Small and dependency
-// free, so the same code runs in the tests on a Mac and in the app on Windows.
+// Byte-level BPE, Orpheus's text tokenizer (Llama 3's tokenizer.json). Small and dependency
+// free, so the same code runs in the tests on a Mac and in the app on Windows. (Pocket TTS
+// uses SentencePiece: SentencePiece.cs.)
 
 using System.Collections.Concurrent;
 using System.Text;
@@ -11,8 +11,7 @@ namespace InnerVoice.Core.Speech.Neural;
 
 public sealed class BpeTokenizer
 {
-    // The pre-tokenizers: Qwen2 splits numbers one digit at a time, Llama 3 up to three.
-    const string QwenSplit = @"(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+";
+    // Llama 3's pre-tokenizer: numbers up to three digits at a time.
     const string LlamaSplit = @"(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+";
 
     readonly Dictionary<string, int> vocab;
@@ -43,16 +42,6 @@ public sealed class BpeTokenizer
     }
 
     public int VocabCount => vocab.Count + special.Count;
-
-    /// Qwen2's tokenizer (Qwen3-TTS): vocab.json and merges.txt, with the chat markers.
-    public static BpeTokenizer Qwen(string vocabJson, string mergesTxt)
-    {
-        var vocab = JsonSerializer.Deserialize<Dictionary<string, int>>(File.ReadAllText(vocabJson))!;
-        var merges = File.ReadLines(mergesTxt).Where(l => l.Length > 0 && !l.StartsWith("#version", StringComparison.Ordinal))
-            .Select(l => l.Split(' ')).Where(p => p.Length == 2).Select(p => (p[0], p[1]));
-        var special = new Dictionary<string, int> { ["<|endoftext|>"] = 151643, ["<|im_start|>"] = 151644, ["<|im_end|>"] = 151645 };
-        return new BpeTokenizer(vocab, merges, special, QwenSplit, ignoreMerges: false, nfc: true);
-    }
 
     /// A Hugging Face tokenizer.json with a byte-level BPE model (Llama 3, so Orpheus).
     public static BpeTokenizer FromTokenizerJson(string path)

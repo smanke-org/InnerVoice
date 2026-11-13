@@ -177,8 +177,9 @@ public sealed partial class VoicesPage
                 column.Children.Add(fitList);
             }
         }
-        // Qwen3-TTS: any description.
-        if (engine == VoiceEngine.Qwen) column.Children.Add(DescribeBox(current, c, choose));
+        // Pocket TTS can't take a description: say where one goes instead.
+        if (engine == VoiceEngine.Pocket || (engine == VoiceEngine.Mixed && EngineSwitches.Shared.Usable(VoiceEngine.Pocket)))
+            column.Children.Add(DescriptionNote(c));
         if (c is not null && engine is VoiceEngine.Elevenlabs or VoiceEngine.Mixed && CloudDesign?.Invoke(this, c) is { } design) column.Children.Add(design);
 
         column.Children.Add(Ui.Headline(engine == VoiceEngine.Mixed ? "All Voices" : $"All {engine.Title()}"));
@@ -197,7 +198,7 @@ public sealed partial class VoicesPage
         column.Children.Add(all);
         if (OpenCloneVoice is not null)
             column.Children.Add(Ui.Row(Look.Sm, Ui.Button("Clone a Voice…", () => OpenCloneVoice(this, c?.Id)),
-                Ui.Caption("Make a voice from recordings of a real person, with their permission.")));
+                Ui.Caption("Make a voice from a recording of a real person, with their consent: on this PC with Pocket TTS (free, nothing leaves the PC), or with ElevenLabs. Every project can use it.", TextWrapping.Wrap)));
     }
 
     static string Describe(VoiceInfo v)
@@ -262,27 +263,14 @@ public sealed partial class VoicesPage
             Ui.Caption("Windows Voices change pitch and speed."));
     }
 
-    /// Qwen3-TTS makes a voice from any description.
-    Control DescribeBox(CastVoice? current, BookCharacter? c, Action<VoiceChoice> choose)
+    /// Pocket TTS can't make a voice from words: say so where a description used to go, and
+    /// point to what can (the Mac's wording).
+    static Control DescriptionNote(BookCharacter? c)
     {
-        var box = new TextBox
-        {
-            Text = current?.Choice.VoiceID == "design" ? current.Choice.Design ?? "" : "", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap,
-            MinHeight = 60, PlaceholderText = "A woman in her sixties with a low, warm voice, speaking English with a Scottish accent.",
-        };
-        var save = Ui.Button("Save Description", () =>
-        {
-            var text = box.Text?.Trim() ?? "";
-            if (text.Length > 0) choose(new VoiceChoice(VoiceEngine.Qwen, "design", text));
-        });
-        var row = Ui.Row(Look.Sm, save);
-        if (c is not null)
-            row.Children.Insert(0, Ui.Button("Describe from Summary", () =>
-                box.Text = VoiceCasting.Describe(VoiceCasting.Profile(c, Document.Project, Document.Index), c.Name)));
         var note = c is null
-            ? "Or describe any voice and Qwen3-TTS makes it. Say who they are and how they sound."
-            : $"Or describe any voice and Qwen3-TTS makes it. Say who they are and how they sound. {c.FirstName}’s Voice Notes are added to the description, so what you write there shapes the voice too.";
-        return Ui.Column(Look.Sm, Ui.Headline("Describe a Voice"), Ui.Caption(note, TextWrapping.Wrap), box, row);
+            ? "Pocket TTS can’t make a voice from a description: it speaks in its stock voices and in voices you clone. To get a voice from a description, use Design a Voice from Voice Notes with ElevenLabs (Cloud; set it up in Settings › Voices)."
+            : $"Pocket TTS can’t make a voice from a description: it speaks in its stock voices and in voices you clone. {c.FirstName}’s Voice Notes help casting choose a voice (gender, age, pitch and pace), but they don’t change how a Pocket TTS voice sounds. To get a voice from {c.FirstName}’s description, use Design a Voice from Voice Notes with ElevenLabs (Cloud; set it up in Settings › Voices).";
+        return Ui.Column(Look.Sm, Ui.Headline("Voices from a Description"), Ui.Caption(note, TextWrapping.Wrap));
     }
 
     // MARK: Shade and what the book says
@@ -314,7 +302,7 @@ public sealed partial class VoicesPage
         }
         string note = engine switch
         {
-            VoiceEngine.Qwen => "Qwen3-TTS shifts the narrator’s voice sample, so it stays the same voice.",
+            VoiceEngine.Pocket => "Pocket TTS shifts the clip it copies the narrator’s voice from, so it stays the same voice.",
             VoiceEngine.Apple => "Windows Voices change pitch and speed.",
             _ => $"{engine.Title()} shifts the finished audio. Keep it within 2 to sound natural.",
         };

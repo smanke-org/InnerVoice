@@ -169,40 +169,48 @@ public class VoiceTests
         Assert.Equal(Gender.Female, VoiceInfo.Orpheus.First(v => v.VoiceID == edda.Voice(VoiceEngine.Orpheus)?.Choice.VoiceID).Gender);
     }
 
+    /// The Mac's pocketCastsStockVoicesByGenderAndAge.
     [Fact]
-    public void QwenVoicesAreDesignedFromTheSummary()
+    public void PocketCastsStockVoicesByGenderAndAge()
     {
         var p = CastingProject();
-        VoiceCasting.Cast(p, new BookIndex(p), VoiceEngine.Qwen, []);
-        var design = Named(p, "Edda Voss").Voice(VoiceEngine.Qwen)?.Choice.Design ?? "";
-        Assert.Contains("older woman", design);
-        Assert.Contains("Scottish", design);
-        Assert.NotNull(p.Settings.NarratorVoice(VoiceEngine.Qwen)?.Choice.Design);
+        VoiceCasting.Cast(p, new BookIndex(p), VoiceEngine.Pocket, VoiceInfo.Pocket);
+        // Edda is about 60: a woman's stock voice, made lower and slower (stock voices are young).
+        var edda = Named(p, "Edda Voss").Voice(VoiceEngine.Pocket)?.Choice;
+        Assert.Equal(Gender.Female, VoiceInfo.Pocket.First(v => v.VoiceID == edda?.VoiceID).Gender);
+        Assert.True(edda?.Pitch == 0.89 && edda?.Rate == 0.92);
+        Assert.Equal(-2, PocketVoice.Semitones(edda?.Pitch));
+        // Nothing is designed from a description any more.
+        Assert.All(p.Characters, c => Assert.Null(c.Voice(VoiceEngine.Pocket)?.Choice.Design));
+        // The narrator gets the engine's own voice, the best there is.
+        Assert.Equal(PocketVoice.BuiltInID, p.Settings.NarratorVoice(VoiceEngine.Pocket)?.Choice.VoiceID);
     }
 
+    /// The Mac's pocketGivesThinCharactersDistinctStockVoices.
     [Fact]
-    public void QwenGivesThinCharactersDistinctPresets()
+    public void PocketGivesThinCharactersDistinctStockVoices()
     {
         var p = Make("“Where is it?” asked Ann.", "“Gone,” said Bea.", "“Look again,” said Ann.", "“I did,” said Bea.");
         var index = new BookIndex(p);
-        VoiceCasting.Cast(p, index, VoiceEngine.Qwen, VoiceInfo.QwenPresets);
+        VoiceCasting.Cast(p, index, VoiceEngine.Pocket, VoiceInfo.Pocket);
         var speaking = p.Characters.Where(c => (index.StatsFor(c.Id)?.Lines ?? 0) > 0).ToList();
-        var ids = speaking.Select(c => c.Voice(VoiceEngine.Qwen)?.Choice.VoiceID).OfType<string>().ToList();
+        var ids = speaking.Select(c => c.Voice(VoiceEngine.Pocket)?.Choice.VoiceID).OfType<string>().ToList();
         Assert.Equal(speaking.Count, ids.Count);
-        // The book says nothing about how they sound: ready-made voices, and not the same one.
-        Assert.All(ids, id => Assert.StartsWith("preset:", id));
+        Assert.All(ids, id => Assert.StartsWith(PocketVoice.StockPrefix, id));
         Assert.Equal(ids.Count, ids.Distinct().Count());
-        Assert.All(speaking, c => Assert.False(string.IsNullOrEmpty(c.Voice(VoiceEngine.Qwen)?.Choice.Design)));
+        // Nobody shares the narrator's voice.
+        Assert.DoesNotContain(p.Settings.NarratorVoice(VoiceEngine.Pocket)?.Choice.VoiceID ?? "", ids);
     }
+
 
     [Fact]
     public void MixedCastingUsesRealEngines()
     {
         var p = Make("“Where is it?” asked Ann.", "“Gone,” said Bea.", "“Hush,” said Cal.");
-        VoiceCasting.Cast(p, new BookIndex(p), VoiceEngine.Mixed, [.. VoiceInfo.QwenPresets, .. VoiceInfo.Orpheus]);
+        VoiceCasting.Cast(p, new BookIndex(p), VoiceEngine.Mixed, [.. VoiceInfo.Pocket, .. VoiceInfo.Orpheus]);
         var choices = p.Characters.Select(c => c.Voice(VoiceEngine.Mixed)?.Choice).OfType<VoiceChoice>().ToList();
         Assert.NotEmpty(choices);
-        Assert.All(choices, c => Assert.True(c.Engine is VoiceEngine.Qwen or VoiceEngine.Orpheus));
+        Assert.All(choices, c => Assert.True(c.Engine is VoiceEngine.Pocket or VoiceEngine.Orpheus));
         Assert.NotEqual(VoiceEngine.Mixed, p.Settings.NarratorVoice(VoiceEngine.Mixed)?.Choice.Engine);
     }
 
@@ -289,7 +297,7 @@ public class VoiceTests
     [Fact]
     public void EngineRawValuesMatchTheMac()
     {
-        Assert.Equal(["apple", "qwen", "orpheus", "elevenlabs", "mixed"], Enum.GetValues<VoiceEngine>().Select(e => e.Raw()));
+        Assert.Equal(["apple", "pocket", "orpheus", "elevenlabs", "mixed"], Enum.GetValues<VoiceEngine>().Select(e => e.Raw()));
         Assert.Equal("Windows Voices", VoiceEngine.Apple.Title());
         Assert.True(VoiceEngine.Elevenlabs.IsCloud());
         Assert.Equal(VoiceEngine.Elevenlabs, VoiceEngines.Parse("elevenlabs"));
@@ -413,13 +421,13 @@ public class VoiceTests
         var edda = new BookCharacter("Doctor Edda Voss", "#333333");
         var nobody = new BookCharacter("Silent Sam", "#444444");
         old.Characters = [mara, tom, edda, nobody];
-        var qwen = new VoiceChoice(VoiceEngine.Qwen, "design", "A woman with a warm voice.");
-        mara.SetVoice(new CastVoice(qwen, 0.6, VoiceSource.Auto), VoiceEngine.Qwen);
+        var tara = new VoiceChoice(VoiceEngine.Pocket, "stock:tara");
+        mara.SetVoice(new CastVoice(tara, 0.6, VoiceSource.Auto), VoiceEngine.Pocket);
         mara.SetVoice(new CastVoice(new VoiceChoice(VoiceEngine.Apple, "karen"), 0.6, VoiceSource.Auto), VoiceEngine.Apple);
         tom.SetVoice(new CastVoice(new VoiceChoice(VoiceEngine.Orpheus, "leo"), 1, VoiceSource.User), VoiceEngine.Orpheus);
         edda.SetVoice(new CastVoice(new VoiceChoice(VoiceEngine.Orpheus, "zac"), 1, VoiceSource.User), VoiceEngine.Orpheus);
-        old.Settings.VoiceEngine = VoiceEngine.Qwen;
-        old.Settings.SetNarratorVoice(new CastVoice(VoiceInfo.QwenPresets[0].Choice, 1, VoiceSource.Auto), VoiceEngine.Qwen);
+        old.Settings.VoiceEngine = VoiceEngine.Pocket;
+        old.Settings.SetNarratorVoice(new CastVoice(VoiceInfo.Pocket[0].Choice, 1, VoiceSource.Auto), VoiceEngine.Pocket);
 
         // This book: Mara goes by "Miss Quinn" as her name now, Tom keeps his, Edda is just "Edda".
         var @new = new Project();
@@ -438,12 +446,12 @@ public class VoiceTests
         var chosen = matches.Select(m => m.Source == tom.Id ? new SeriesVoices.Match(tom.Id, null, null) : m).ToList();
         Assert.Equal(2, SeriesVoices.Apply(chosen, old, @new, new SeriesVoices.Options()));
         var q = @new.Characters[0];
-        Assert.True(q.Voice(VoiceEngine.Qwen)?.Choice == qwen && q.Voice(VoiceEngine.Qwen)?.Source == VoiceSource.User);
+        Assert.True(q.Voice(VoiceEngine.Pocket)?.Choice == tara && q.Voice(VoiceEngine.Pocket)?.Source == VoiceSource.User);
         Assert.Equal("karen", q.Voice(VoiceEngine.Apple)?.Choice.VoiceID);
         Assert.Equal("Warm, clipped.", q.VoiceNotes);
         Assert.Null(@new.Characters[1].Voices);
         Assert.Equal("zac", @new.Characters[2].Voice(VoiceEngine.Orpheus)?.Choice.VoiceID);
-        Assert.True(@new.Settings.VoiceEngine == VoiceEngine.Qwen && @new.Settings.NarratorVoice(VoiceEngine.Qwen)?.Source == VoiceSource.User);
+        Assert.True(@new.Settings.VoiceEngine == VoiceEngine.Pocket && @new.Settings.NarratorVoice(VoiceEngine.Pocket)?.Source == VoiceSource.User);
 
         // Casting keeps carried-over voices.
         VoiceCasting.Cast(@new, new BookIndex(@new), VoiceEngine.Orpheus, VoiceInfo.Orpheus);

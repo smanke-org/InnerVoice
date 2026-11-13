@@ -13,8 +13,8 @@ using Xunit;
 
 namespace InnerVoice.App.Tests;
 
-/// Qwen3-TTS and Orpheus in the app: Settings › Voices (downloads, the hardware check, the
-/// recommended specs) and Clone a Voice › On This PC, with a fake Qwen3-TTS and a fake
+/// Pocket TTS and Orpheus in the app: Settings › Voices (downloads, the hardware check, the
+/// recommended specs, old Qwen3-TTS files) and Clone a Voice › On This PC, with a fake Pocket TTS and a fake
 /// recognizer. The models themselves are tested in the Core tests.
 [Collection("Voice engines")]
 public class LocalVoicesAppTests
@@ -48,9 +48,9 @@ public class LocalVoicesAppTests
             var settings = SettingsWindow.Show(null, "Voices");
             Pump();
             var all = string.Join("\n", Texts(settings));
-            Assert.Contains("Qwen3-TTS", all);
+            Assert.Contains("Pocket TTS", all);
             Assert.Contains("Orpheus", all);
-            Assert.Contains($"Download ({VoicePacks.Qwen.SizeDescription})", all);
+            Assert.Contains($"Download ({VoicePacks.Pocket.SizeDescription})", all);
             Assert.Contains($"Download ({VoicePacks.Orpheus.SizeDescription})", all);
             Assert.DoesNotContain("Coming later", all);
             // What this PC has, the plain warning, and what makes it better.
@@ -61,17 +61,17 @@ public class LocalVoicesAppTests
             Assert.Contains("RTX 3060", all);
 
             // A download in progress, then one that failed.
-            models.States[VoiceEngine.Qwen] = new VoiceModels.State.Downloading(0.5, 4_000_000_000, false);
+            models.States[VoiceEngine.Pocket] = new VoiceModels.State.Downloading(0.5, 4_000_000_000, false);
             models.Use(Weak);
             Pump();
             all = string.Join("\n", Texts(settings));
-            Assert.Contains($"50% of {VoicePacks.Qwen.SizeDescription}", all);
+            Assert.Contains($"50% of {VoicePacks.Pocket.SizeDescription}", all);
             Assert.Contains("Cancel", all);
-            models.States[VoiceEngine.Qwen] = new VoiceModels.State.Failed("Unable to download: check the internet connection, then try again.");
+            models.States[VoiceEngine.Pocket] = new VoiceModels.State.Failed("Unable to download: check the internet connection, then try again.");
             models.Use(Weak);
             Pump();
             Assert.Contains("Unable to download", string.Join("\n", Texts(settings)));
-            models.States.Remove(VoiceEngine.Qwen);
+            models.States.Remove(VoiceEngine.Pocket);
 
             // A strong PC: no warning, and the graphics card is used.
             models.Use(Strong);
@@ -90,16 +90,76 @@ public class LocalVoicesAppTests
         }
     }
 
-    /// Qwen3-TTS, downloaded, speaking a tone.
-    sealed class FakeQwen : IVoiceEngine
+    /// Qwen3-TTS's leftovers are offered for removal, only while they're there, and only the
+    /// test's own Voice Models folder is touched.
+    [AvaloniaFact]
+    public void OldQwenFilesCanBeRemoved()
     {
-        public VoiceEngine Engine => VoiceEngine.Qwen;
+        VoiceSetup.Start();
+        var folder = VoicePacks.Folder;
+        Assert.Contains("(test)", folder);
+        var qwen = Path.Combine(folder, "qwen", "design");
+        Directory.CreateDirectory(qwen);
+        File.WriteAllBytes(Path.Combine(qwen, "talker.onnx"), new byte[3_000_000]);
+        Directory.CreateDirectory(Path.Combine(folder, "Samples"));
+        File.WriteAllBytes(Path.Combine(folder, "Samples", "a.wav"), new byte[1_000]);
+        try
+        {
+            var settings = SettingsWindow.Show(null, "Voices");
+            Pump();
+            var all = string.Join("\n", Texts(settings));
+            Assert.Contains("Old Voice Files", all);
+            Assert.Contains("Qwen3-TTS, which Pocket TTS replaced, left 3 MB of models and voice samples on this PC.", all);
+            Assert.Contains("Remove Old Voice Files…", all);
+            settings.Close();
+            VoiceModels.Shared.RemoveOldFiles();
+            Assert.False(Directory.Exists(Path.Combine(folder, "qwen")));
+            Assert.False(Directory.Exists(Path.Combine(folder, "Samples")));
+            Assert.Null(VoiceModels.Shared.OldFiles);
+            settings = SettingsWindow.Show(null, "Voices");
+            Pump();
+            Assert.DoesNotContain("Old Voice Files", string.Join("\n", Texts(settings)));
+            settings.Close();
+        }
+        finally
+        {
+            if (Directory.Exists(Path.Combine(folder, "qwen"))) Directory.Delete(Path.Combine(folder, "qwen"), true);
+            if (Directory.Exists(Path.Combine(folder, "Samples"))) Directory.Delete(Path.Combine(folder, "Samples"), true);
+        }
+    }
+
+    /// A book from before Pocket TTS switches when it's opened, and shows as edited.
+    [AvaloniaFact]
+    public void OpeningAQwenBookMovesItToPocketTTS()
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), $"iv-qwen-{Guid.NewGuid():N}.innervoice");
+        File.Copy(Books.Fixture("sample-windows.innervoice"), tmp);
+        try
+        {
+            var doc = ProjectDocument.Open(tmp);
+            Assert.True(doc.IsDirty);
+            Assert.False(LegacyVoices.NeedsMigration(doc.Project));
+            Assert.Equal(VoiceEngine.Pocket, doc.Project.Settings.VoiceEngine);
+            Assert.Null(doc.UndoName); // no undo step
+            // A Pocket TTS book opens as it is.
+            var mac = Path.Combine(Path.GetTempPath(), $"iv-pocket-{Guid.NewGuid():N}.innervoice");
+            File.Copy(Books.Fixture("sample-mac.innervoice"), mac);
+            Assert.False(ProjectDocument.Open(mac).IsDirty);
+            File.Delete(mac);
+        }
+        finally { File.Delete(tmp); }
+    }
+
+    /// Pocket TTS, downloaded, speaking a tone.
+    sealed class FakePocket : IVoiceEngine
+    {
+        public VoiceEngine Engine => VoiceEngine.Pocket;
         public bool IsReady => true;
         public string? NotReadyReason => null;
-        public IReadOnlyList<VoiceInfo> Voices => LocalClones.Shared.All.Select(LocalClones.Info).Concat(VoiceInfo.QwenPresets).ToList();
+        public IReadOnlyList<VoiceInfo> Voices => LocalClones.Shared.All.Select(LocalClones.Info).Concat(VoiceInfo.Pocket).ToList();
         public VoiceInfo? Info(VoiceChoice choice) => Voices.FirstOrDefault(v => v.VoiceID == choice.VoiceID);
         public bool ShadesPitch => true;
-        public bool ShadesPace => false;
+        public bool ShadesPace => true;
         public Task<float[]> Render(SpeechRequest request, CancellationToken ct) => Task.FromResult(Tone(150, 0.5));
     }
 
@@ -116,14 +176,14 @@ public class LocalVoicesAppTests
         VoiceSetup.Start();
         var clones = LocalClones.Shared;
         LocalClones.Shared = new LocalClones(Directory.CreateTempSubdirectory("iv-clones-").FullName);
-        VoiceEngineRegistry.Register(new FakeQwen());
+        VoiceEngineRegistry.Register(new FakePocket());
         EngineSwitches.Shared = new EngineSwitches();
         var wav = Path.Combine(Path.GetTempPath(), $"iv-recording-{Guid.NewGuid():N}.wav");
-        // 14 seconds of a voice: the clip is cut at the long pause after 9 seconds.
-        WavFile.Write(wav, Tone(180, 14));
+        // 20 seconds of a voice: the clip is cut at the long pause after 9 seconds.
+        WavFile.Write(wav, Tone(180, 20));
         var words = new List<CloneClip.Word>();
         var transcript = "";
-        for (double t = 0.3; t + 0.4 < 14; t += 0.5)
+        for (double t = 0.3; t + 0.4 < 20; t += 0.5)
         {
             transcript += (transcript.Length > 0 ? " " : "") + "word";
             words.Add(new CloneClip.Word(t, t + 0.4, transcript.Length));
@@ -134,8 +194,8 @@ public class LocalVoicesAppTests
         try
         {
             var doc = ProjectDocument.Unsaved(TestApp.Sample());
-            doc.Change("Purpose", p => { p.Settings.Purpose = ProjectPurpose.AiVoices; p.Settings.VoiceEngine = VoiceEngine.Qwen; });
-            Assert.Equal(VoiceEngine.Qwen, doc.Project.EngineInUse());
+            doc.Change("Purpose", p => { p.Settings.Purpose = ProjectPurpose.AiVoices; p.Settings.VoiceEngine = VoiceEngine.Pocket; });
+            Assert.Equal(VoiceEngine.Pocket, doc.Project.EngineInUse());
             var who = doc.Project.Characters.First(c => (doc.Index.StatsFor(c.Id)?.Lines ?? 0) > 0);
 
             var window = new CloneVoiceWindow(doc);
@@ -167,7 +227,7 @@ public class LocalVoicesAppTests
             var c = Assert.Single(LocalClones.Shared.All);
             Assert.Equal("Placeholder Voice", c.Name);
             Assert.Equal(window.ClipText, c.Text);
-            Assert.Equal(c.VoiceID, doc.Project.Character(who.Id)!.Voice(VoiceEngine.Qwen)?.Choice.VoiceID);
+            Assert.Equal(c.VoiceID, doc.Project.Character(who.Id)!.Voice(VoiceEngine.Pocket)?.Choice.VoiceID);
             Assert.Contains("“Placeholder Voice” is ready", string.Join("\n", Texts(window)));
             window.Close();
 
@@ -193,7 +253,7 @@ public class LocalVoicesAppTests
         {
             LocalCloning.TestTranscriber = null;
             LocalClones.Shared = clones;
-            VoiceEngineRegistry.Register(new QwenEngine());
+            VoiceEngineRegistry.Register(new PocketEngine());
             File.Delete(wav);
         }
     }

@@ -192,10 +192,41 @@ public sealed class VoiceModels
         if (VoicePacks.For(e) is not { } pack) return;
         Cancel(e);
         NeuralModels.Shared.Unload(e);
-        if (e == VoiceEngine.Qwen) QwenSamples.Forget();
+        if (e == VoiceEngine.Pocket) PocketClips.Forget();
         VoicePacks.Remove(pack);
         Changed?.Invoke();
         VoiceHooks.EnginesChanged();
+    }
+
+    // MARK: Old voice files
+
+    /// The files Qwen3-TTS left (Settings › Voices › Remove Old Voice Files), worked out once
+    /// per visit to Settings › Voices: the card asks on every redraw.
+    public (IReadOnlyList<string> Folders, long Bytes)? OldFiles { get; private set; }
+
+    public void CheckOldFiles()
+    {
+        var folders = VoicePacks.OldQwenFiles;
+        OldFiles = folders.Count == 0 ? null : (folders, VoicePacks.SizeOf(folders));
+    }
+
+    /// Moves Qwen3-TTS's models and voice samples to the Recycle Bin. Test runs touch only
+    /// their own Voice Models folder (a temporary one, or APP_VOICE_MODELS), never the
+    /// narrator's, and delete outright there.
+    public void RemoveOldFiles()
+    {
+        foreach (var folder in VoicePacks.OldQwenFiles)
+        {
+            try
+            {
+                if (AppPaths.IsTestRun || !OperatingSystem.IsWindows()) Directory.Delete(folder, recursive: true);
+                else Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory(folder, Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs,
+                                                                             Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OperationCanceledException) { }
+        }
+        CheckOldFiles();
+        Changed?.Invoke();
     }
 
     /// For tests.

@@ -11,7 +11,12 @@
     <PackageReference Include="PdfPig" Version="0.1.16" />
     <PackageReference Include="RtfPipe" Version="2.0.7677.4303" />
   </ItemGroup>
-  <!-- The local neural voices (Qwen3-TTS, Orpheus): ONNX Runtime. Windows builds get the
+  <!-- Pocket TTS's stock voices: the Mac's nine clips (Resources/StockVoices) as 16-bit WAV,
+       made by tools/make-stock-voices.sh. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\Resources\StockVoices\*.wav" LogicalName="StockVoices.%(Filename)%(Extension)" />
+  </ItemGroup>
+  <!-- The local neural voices (Pocket TTS, Orpheus): ONNX Runtime. Windows builds get the
        DirectML package (GPU through DirectX 12, falling back to the CPU); everything else,
        including the tests on a Mac, the CPU package. Both ship the same managed API. -->
   <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('win'))">

@@ -14,7 +14,7 @@ using InnerVoice.Core.Speech;
 namespace InnerVoice.App.Windows;
 
 /// Book › Clone a Voice… (and the Voices page): a voice made from recordings of one person.
-/// The Mac's CloneVoiceSheet. On This PC: Qwen3-TTS clones from a clip of the recordings, and
+/// The Mac's CloneVoiceSheet. On This PC: Pocket TTS speaks from a clip of the recordings (up to 15 s), and
 /// the words in it are found on this PC (LocalCloning); nothing leaves the PC. ElevenLabs:
 /// nothing is sent until the rights checkbox is on, and then only the recordings and the
 /// name, never text from the book. Recordings made here are temporary files, deleted when the
@@ -83,7 +83,7 @@ public sealed class CloneVoiceWindow : Window
     public IReadOnlyList<string> Recordings => recordings;
 
     bool ElevenReady => ElevenLabsEngine.Shared.IsSetUp && document.Project.Settings.CloudVoicesAllowed is not null;
-    bool QwenReady => VoiceEngineRegistry.IsReady(VoiceEngine.Qwen);
+    bool PocketReady => VoiceEngineRegistry.IsReady(VoiceEngine.Pocket);
 
     /// The clip made from the recordings (tests).
     public LocalCloning.Clip? PreparedClip => clip;
@@ -95,7 +95,7 @@ public sealed class CloneVoiceWindow : Window
     {
         if (place == Place.ThisPC)
         {
-            if (!QwenReady) return "Download Qwen3-TTS first";
+            if (!PocketReady) return "Download Pocket TTS first";
             if (name.Trim().Length == 0) return "Name the voice first";
             if (recorder is not null) return "Stop recording first";
             if (preparing) return "Finding the words in the recording…";
@@ -143,6 +143,9 @@ public sealed class CloneVoiceWindow : Window
         }
         ToolTip.SetTip(places, "Where the voice is made and kept");
         panel.Children.Add(places);
+        panel.Children.Add(Ui.Caption(place == Place.ThisPC
+            ? "Pocket TTS learns the voice from up to 15 seconds of a recording and speaks any line in it. The recording and the voice stay on this PC, and every InnerVoice project can use it. Free."
+            : "ElevenLabs makes a voice from a recording of one person and saves it in your ElevenLabs voices under the name you choose, so every InnerVoice project (and elevenlabs.io) can use it.", TextWrapping.Wrap));
         panel.Children.Add(PlaceNotice());
 
         // Name, who gets it.
@@ -261,19 +264,19 @@ public sealed class CloneVoiceWindow : Window
         if (place == Place.ThisPC)
         {
             var e = document.Project.EngineInUse();
-            if (!QwenReady)
+            if (!PocketReady)
             {
-                var pack = Core.Speech.Neural.VoicePacks.Qwen;
-                if (VoiceModels.Shared.States.GetValueOrDefault(VoiceEngine.Qwen) is VoiceModels.State.Downloading d)
-                    return Notice($"Downloading Qwen3-TTS: {(int)(d.Fraction * 100)}% of {pack.SizeDescription}.", "Cancel", () => VoiceModels.Shared.Cancel(VoiceEngine.Qwen));
-                var failed = VoiceModels.Shared.States.GetValueOrDefault(VoiceEngine.Qwen) is VoiceModels.State.Failed f ? " " + f.Message : "";
-                return Notice($"Cloning on this PC uses Qwen3-TTS, a free download ({pack.SizeDescription}, once).{failed}", "Download", async () =>
+                var pack = Core.Speech.Neural.VoicePacks.Pocket;
+                if (VoiceModels.Shared.States.GetValueOrDefault(VoiceEngine.Pocket) is VoiceModels.State.Downloading d)
+                    return Notice($"Downloading Pocket TTS: {(int)(d.Fraction * 100)}% of {pack.SizeDescription}.", "Cancel", () => VoiceModels.Shared.Cancel(VoiceEngine.Pocket));
+                var failed = VoiceModels.Shared.States.GetValueOrDefault(VoiceEngine.Pocket) is VoiceModels.State.Failed f ? " " + f.Message : "";
+                return Notice($"Cloning on this PC uses Pocket TTS, a free download ({pack.SizeDescription}, once).{failed}", "Download", async () =>
                 {
-                    if (await VoiceModels.Shared.ConfirmHardware(this, VoiceEngine.Qwen, downloading: true)) VoiceModels.Shared.Download(VoiceEngine.Qwen);
+                    if (await VoiceModels.Shared.ConfirmHardware(this, VoiceEngine.Pocket, downloading: true)) VoiceModels.Shared.Download(VoiceEngine.Pocket);
                 });
             }
-            if (e is not (VoiceEngine.Qwen or VoiceEngine.Mixed))
-                return Ui.Text($"This book speaks with {e.Title()}. Voices cloned on this PC speak with Qwen3-TTS: to hear one in this book, choose Qwen3-TTS or Mix Engines on the Voices page.",
+            if (e is not (VoiceEngine.Pocket or VoiceEngine.Mixed))
+                return Ui.Text($"This book speaks with {e.Title()}. Voices cloned on this PC speak with Pocket TTS: to hear one in this book, choose Pocket TTS or Mix Engines on the Voices page.",
                     13, brush: Look.Brush(Look.SecondaryInk), wrap: TextWrapping.Wrap);
             return new Panel();
         }
@@ -315,7 +318,7 @@ public sealed class CloneVoiceWindow : Window
         var col = Ui.Column(Look.Sm, Ui.Headline("Recordings"));
         var add = OperatingSystem.IsWindows() ? "Record the voice here, or add audio files (MP3, WAV, M4A…)." : "Add audio files (MP3, WAV, M4A…).";
         col.Children.Add(Ui.Caption(place == Place.ThisPC
-            ? $"{add} 15 to 30 seconds of one person speaking clearly is plenty; the first 10 seconds of speech are used."
+            ? $"{add} 15 to 30 seconds of one person speaking clearly is plenty, with no music, echo or other voices. The first 15 seconds of speech are used."
             : $"{add} ElevenLabs needs at least 10 seconds; 1 to 2 minutes of clear speech clones best.", TextWrapping.Wrap));
         foreach (var path in recordings)
         {
@@ -493,7 +496,7 @@ public sealed class CloneVoiceWindow : Window
     Control Done(VoiceInfo v)
     {
         var col = Ui.Column(Look.Md);
-        bool local = v.Engine == VoiceEngine.Qwen;
+        bool local = v.Engine == VoiceEngine.Pocket;
         var head = Ui.Row(Look.Sm, Ui.Headline($"“{v.Name}” is ready"));
         if (!local) head.Children.Add(SettingsWindow.ElevenLabsCloudBadge());
         col.Children.Add(head);

@@ -21,8 +21,12 @@ public sealed partial class SettingsWindow
     /// Try It plays a passage over and over until Stop.
     static bool sampling;
 
-    void AddVoicesTab(TabControl tabs) =>
+    void AddVoicesTab(TabControl tabs)
+    {
+        // Listing the folders for Old Voice Files happens when the pane is built, never per redraw.
+        VoiceModels.Shared.CheckOldFiles();
         tabs.Items.Add(new TabItem { FontSize = 16, Header = "Voices", Content = Ui.Scroll(VoicesPane()) });
+    }
 
     Control VoicesPane()
     {
@@ -219,12 +223,13 @@ public sealed partial class SettingsWindow
         wCol.Children.Add(wActions);
         col.Children.Add(Ui.Card(wCol, Look.Md));
 
-        // Qwen3-TTS and Orpheus: downloaded voice models that run on this PC.
+        // Pocket TTS and Orpheus: downloaded voice models that run on this PC.
         foreach (var pack in VoicePacks.Packs) col.Children.Add(LocalModelCard(pack));
         col.Children.Add(HardwareCard());
 
         col.Children.Add(ElevenLabsRow());
-        col.Children.Add(Note("Windows Voices, Qwen3-TTS and Orpheus run on this PC; downloading them is the only time they use the internet. ElevenLabs is different: it makes its voices in the cloud, so the text it speaks is sent to ElevenLabs, and each book asks first. Choose the engine for each project on its Voices page; turn an engine off to hide it there."));
+        if (OldVoiceFilesCard() is { } old) col.Children.Add(old);
+        col.Children.Add(Note("Windows Voices, Pocket TTS and Orpheus run on this PC; downloading them is the only time they use the internet. ElevenLabs is different: it makes its voices in the cloud, so the text it speaks is sent to ElevenLabs, and each book asks first. Choose the engine for each project on its Voices page; turn an engine off to hide it there."));
         return col;
     }
 
@@ -348,7 +353,30 @@ public sealed partial class SettingsWindow
 
     static readonly Color Caution = Color.Parse("#B8860B");
 
-    /// Qwen3-TTS or Orpheus: what it does, Download (with progress, Cancel) or Installed
+    /// Qwen3-TTS, the engine Pocket TTS replaced, left its models and voice samples behind:
+    /// offered for the Recycle Bin, only while they're there. Nothing is removed on its own.
+    /// (VoicesPane checks for them once per visit, never per redraw.)
+    Control? OldVoiceFilesCard()
+    {
+        if (VoiceModels.Shared.OldFiles is not { } old) return null;
+        var col = Ui.Column(Look.Xs, Ui.Text("Old Voice Files", 14, FontWeight.SemiBold),
+            Ui.Text($"Qwen3-TTS, which Pocket TTS replaced, left {Bytes(old.Bytes)} of models and voice samples on this PC. InnerVoice doesn’t use them anymore.", 12, wrap: TextWrapping.Wrap),
+            Ui.Row(Look.Sm, Ui.Button("Remove Old Voice Files…", async () =>
+            {
+                if (await Dialogs.Confirm(this, "Move the old Qwen3-TTS files to the Recycle Bin?",
+                    "Books that used Qwen3-TTS voices already speak with Pocket TTS. You can get the files back from the Recycle Bin until you empty it.", "Move to Recycle Bin"))
+                {
+                    VoiceModels.Shared.RemoveOldFiles();
+                    Build();
+                }
+            }, tip: "Move the Qwen3-TTS models and voice samples to the Recycle Bin")));
+        return Ui.Card(col, Look.Md);
+    }
+
+    /// "8.8 GB", "420 MB", as Windows shows file sizes.
+    static string Bytes(long n) => n >= 1_000_000_000 ? $"{n / 1e9:0.0} GB" : n >= 1_000_000 ? $"{n / 1e6:0} MB" : $"{Math.Max(1, n / 1000)} KB";
+
+    /// Pocket TTS or Orpheus: what it does, Download (with progress, Cancel) or Installed
     /// (Remove), where it runs, and the hardware warning when this PC is weak for it.
     Control LocalModelCard(VoicePack pack)
     {
@@ -377,7 +405,7 @@ public sealed partial class SettingsWindow
                     actions.Children.Add(Ui.Button("Remove…", async () =>
                     {
                         if (await Dialogs.Confirm(this, $"Remove {pack.Title}?",
-                            $"Its models ({pack.SizeDescription}) are deleted from this PC{(e == VoiceEngine.Qwen ? ", with the voice samples made from them" : "")}. Books cast with it keep their voices and can download it again.", "Remove"))
+                            $"Its models ({pack.SizeDescription}) are deleted from this PC. Books cast with it keep their voices and can download it again.", "Remove"))
                             models.Remove(e);
                     }, tip: $"Delete the {pack.Title} models from this PC ({pack.SizeDescription})"));
                 }
@@ -445,7 +473,7 @@ public sealed partial class SettingsWindow
             row.Children.Add(label);
             col.Children.Add(row);
         }
-        col.Children.Add(Note("Qwen3-TTS speaks these from a short recording kept on this PC, so every project here can use them. Casting never chooses them on its own."));
+        col.Children.Add(Note("Pocket TTS speaks these from a short recording kept on this PC, so every project here can use them. Casting never chooses them on its own."));
         return col;
     }
 

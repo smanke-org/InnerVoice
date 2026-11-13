@@ -80,12 +80,12 @@ public sealed class EngineSwitches
         _ => VoiceEngineRegistry.VoicesOf(engine),
     };
 
-    /// A voice when nothing is cast yet: the best system voice, Orpheus's first, or a plain
-    /// Qwen3-TTS design.
+    /// A voice when nothing is cast yet: the best system voice, Orpheus's first, or Pocket
+    /// TTS's own voice.
     public VoiceChoice? Fallback(VoiceEngine engine) => engine switch
     {
         VoiceEngine.Orpheus => new VoiceChoice(VoiceEngine.Orpheus, "tara"),
-        VoiceEngine.Qwen => VoiceInfo.QwenPresets[0].Choice,
+        VoiceEngine.Pocket => VoiceInfo.Pocket[0].Choice,
         VoiceEngine.Mixed => Enabled.Select(Fallback).FirstOrDefault(c => c is not null),
         _ => VoiceEngineRegistry.VoicesOf(engine).FirstOrDefault()?.Choice,
     };
@@ -93,19 +93,10 @@ public sealed class EngineSwitches
 
 public static class VoiceNames
 {
-    /// "Aria", "Tara", or the start of a Qwen3-TTS design.
+    /// "Aria", "Tara".
     public static string Name(VoiceChoice choice)
     {
         if (choice.IsNarrator) return "Same as Narrator";
-        if (choice.Engine == VoiceEngine.Qwen && !choice.VoiceID.StartsWith("preset:", StringComparison.Ordinal) && !choice.VoiceID.StartsWith("clone:", StringComparison.Ordinal))
-        {
-            // Short enough for a list row, cut at a word.
-            if (choice.Design is not { } d) return "Designed voice";
-            if (d.Length <= 48) return d;
-            var head = d[..47];
-            int cut = head.LastIndexOf(' ');
-            return (cut > 0 ? head[..cut] : head).TrimEnd(' ', ',', ';') + "…";
-        }
         return VoiceEngineRegistry.Info(choice)?.Name ?? "Missing voice";
     }
 }
@@ -142,7 +133,7 @@ public sealed class VoiceResolver
         // ElevenLabs only for a book that allows its text to be sent.
         Usable = VoiceEngines.Engines.Where(x => switches.Usable(x) && (!x.IsCloud() || project.Settings.CloudVoicesAllowed is not null)).ToHashSet();
         foreach (var c in project.Characters)
-            if (c.Voice(e)?.Choice is { } v) Characters[c.Id] = WithNotes(v, c);
+            if (c.Voice(e)?.Choice is { } v) Characters[c.Id] = v;
         // Casting Style: a character read by the narrator or a shared voice (Men, Women,
         // Other) speaks in that voice; Own Voice keeps their own.
         var roleChoices = new Dictionary<VoiceRole, VoiceChoice>();
@@ -192,15 +183,9 @@ public sealed class VoiceResolver
         return pov;
     }
 
-    /// Qwen3-TTS designs a voice from a description: the character's Voice Notes go with it,
-    /// so what the narrator writes there shapes how they sound.
-    public static VoiceChoice WithNotes(VoiceChoice v, BookCharacter? c)
-    {
-        if (c is null || v.Engine != VoiceEngine.Qwen || v.VoiceID != "design") return v;
-        var output = v.Copy();
-        output.Design = VoiceDescription.Design(v.Design ?? "", c);
-        return output;
-    }
+    // Voice Notes don't reach the on-device engines when they speak: Pocket TTS, Orpheus and
+    // the system's voices can't take a description. ElevenLabs gets the notes once, when it
+    // designs a voice from them (Voice Design, on the narrator's click).
 
     /// The shade a segment is said with: the speaker's, when the narrator's voice says their
     /// spoken or thought line (not narration, and not letters the narrator reads out).

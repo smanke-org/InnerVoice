@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- Measures the local voices (Qwen3-TTS, Orpheus) on this computer: seconds of audio per
+  <!-- Measures the local voices (Pocket TTS, Orpheus) on this computer: seconds of audio per
        second, and where they run. Not shipped; see tools/VoiceBench/README.md. -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>

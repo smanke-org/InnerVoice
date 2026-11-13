@@ -1,13 +1,13 @@
 namespace InnerVoice.Core.Speech;
 
-/// The part of a recording a voice cloned on this PC learns from (the Mac's CloneClip). Qwen3-TTS
-/// clones best from a few seconds of one person speaking, together with exactly what they say,
-/// so a longer recording is cut at a pause between words. On Windows the clip is at most 10
-/// seconds (the Mac's is 15): the codec encoder in the ONNX export takes 10 seconds.
+/// The part of a recording a voice cloned on this PC learns from (the Mac's CloneClip). Pocket
+/// TTS clones well from about 5 to 15 seconds of one person speaking (Kyutai's own voice clips
+/// are 10 s), so a longer recording is cut at a pause between words. The words it says are
+/// kept with it, for the narrator to check.
 public static class CloneClip
 {
     /// The longest clip the clone model is given.
-    public const double Longest = 10;
+    public const double Longest = 15;
     /// Shorter than this carries too little of the voice.
     public const double Shortest = 4;
 

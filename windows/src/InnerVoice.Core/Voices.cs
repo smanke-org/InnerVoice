@@ -21,11 +21,19 @@ public enum ToneSource { Rule, Ai, User }
 public enum VocalSound { Laugh, Chuckle, Sigh, Gasp, Groan, Sniffle, Yawn, Cough }
 
 /// A text-to-speech engine. Raw values match the Mac's `VoiceEngine`.
+///
+/// Projects made before Pocket TTS may say "qwen" (Qwen3-TTS, retired 2026-11-13): it reads as
+/// `Pocket`, and `LegacyVoices.Migrate` turns that engine's voices into Pocket TTS ones when the
+/// project is opened. Any other engine this version doesn't know (a project saved by a newer
+/// InnerVoice) reads as `Mixed`, which names no voices: those characters fall back to the
+/// narrator's voice instead of the whole project failing to open (`VoiceEngineConverter`).
+[JsonConverter(typeof(VoiceEngineConverter))]
 public enum VoiceEngine
 {
     /// The system's voices: Apple's on the Mac, Windows' built-in voices here.
     Apple,
-    Qwen,
+    /// Pocket TTS (Kyutai), on this PC: every voice cloned from a short clip.
+    Pocket,
     Orpheus,
     /// ElevenLabs, in the cloud: the only engine that sends text off the computer. Off until
     /// the narrator sets it up, and each book must allow it.
@@ -107,9 +115,21 @@ public static class Tones
 public static class VoiceEngines
 {
     /// The engines that make sound (everything but Mixed).
-    public static readonly VoiceEngine[] Engines = [VoiceEngine.Apple, VoiceEngine.Qwen, VoiceEngine.Orpheus, VoiceEngine.Elevenlabs];
+    public static readonly VoiceEngine[] Engines = [VoiceEngine.Apple, VoiceEngine.Pocket, VoiceEngine.Orpheus, VoiceEngine.Elevenlabs];
 
-    /// The raw value stored in the file ("apple", "qwen", "orpheus", "elevenlabs", "mixed").
+    /// The raw value older projects use for Qwen3-TTS, the engine Pocket TTS replaced.
+    public const string RetiredQwen = "qwen";
+    /// A Mac test build briefly saved its on-device engine as "chatterbox" (never released): it
+    /// reads as Pocket TTS too.
+    public const string UnreleasedTestEngine = "chatterbox";
+
+    /// The engine a raw value in a file means: a known one, "qwen" and "chatterbox" as Pocket
+    /// TTS, anything else as Mixed (as the Mac's `VoiceEngine.init(from:)`).
+    public static VoiceEngine FromFile(string? raw) =>
+        Parse(raw) is { } e && raw == e.Raw() ? e
+            : raw is RetiredQwen or UnreleasedTestEngine ? VoiceEngine.Pocket : VoiceEngine.Mixed;
+
+    /// The raw value stored in the file ("apple", "pocket", "orpheus", "elevenlabs", "mixed").
     public static string Raw(this VoiceEngine e) => e.ToString().ToLowerInvariant();
 
     public static VoiceEngine? Parse(string? raw) =>
@@ -122,7 +142,7 @@ public static class VoiceEngines
     public static string Title(this VoiceEngine e) => e switch
     {
         VoiceEngine.Apple => "Windows Voices",
-        VoiceEngine.Qwen => "Qwen3-TTS",
+        VoiceEngine.Pocket => "Pocket TTS",
         VoiceEngine.Orpheus => "Orpheus",
         VoiceEngine.Elevenlabs => "ElevenLabs",
         _ => "Mix Engines",
@@ -130,6 +150,19 @@ public static class VoiceEngines
 
     /// Whether the engine acts out a line's tone (the system's voices can't).
     public static bool ActsTones(this VoiceEngine e) => e != VoiceEngine.Apple;
+}
+
+/// Reads an engine the way the Mac's `VoiceEngine.init(from:)` does (`VoiceEngines.FromFile`),
+/// so an old or newer project still opens; writes its raw value.
+public sealed class VoiceEngineConverter : JsonConverter<VoiceEngine>
+{
+    public override VoiceEngine Read(ref System.Text.Json.Utf8JsonReader reader, Type typeToConvert, System.Text.Json.JsonSerializerOptions options) =>
+        reader.TokenType == System.Text.Json.JsonTokenType.String
+            ? VoiceEngines.FromFile(reader.GetString())
+            : throw new System.Text.Json.JsonException("Expected a voice engine name.");
+
+    public override void Write(System.Text.Json.Utf8JsonWriter writer, VoiceEngine value, System.Text.Json.JsonSerializerOptions options) =>
+        writer.WriteStringValue(value.Raw());
 }
 
 public static class VoiceGenders
@@ -143,10 +176,11 @@ public static class VoiceGenders
 public sealed class VoiceChoice : ModelObject, IEquatable<VoiceChoice>
 {
     public VoiceEngine Engine { get; set; }
-    /// Windows/Apple: the voice identifier. Orpheus: the voice name. Qwen3-TTS: "design",
-    /// "preset:…" or "clone:…". ElevenLabs: its voice ID.
+    /// Windows/Apple: the voice identifier. Orpheus: the voice name. Pocket TTS: "stock:<name>"
+    /// or "clone:<id>". ElevenLabs: its voice ID.
     public string VoiceID { get; set; } = "";
-    /// Qwen3-TTS designs a voice from this description ("A woman in her sixties…").
+    /// A description of the voice ("A woman in her sixties…"). Written by Qwen3-TTS (retired)
+    /// and kept in the file format; no engine speaks from it now.
     public string? Design { get; set; }
     /// Speed and pitch, 1 is the voice's own.
     public double? Rate { get; set; }
@@ -215,7 +249,7 @@ public sealed record VoiceInfo(
     int Quality = 0,
     /// A short description for the voice list ("Bright, conversational").
     string Detail = "",
-    /// Qwen3-TTS: the description the voice is designed from.
+    /// A description of the voice, when there is one (kept in the file format).
     string? Design = null,
     /// A voice cloned from someone's recordings (ElevenLabs' cloned or professional voices,
     /// and "clone:" voices): listed first and never cast.
@@ -238,27 +272,22 @@ public sealed record VoiceInfo(
         ("leo", Gender.Male, "Steady, relaxed"), ("dan", Gender.Male, "Deep, easygoing"), ("zac", Gender.Male, "Energetic, youthful"),
     }.Select(v => new VoiceInfo(VoiceEngine.Orpheus, v.Id, char.ToUpperInvariant(v.Id[0]) + v.Id[1..], v.G, VoiceAge.Young, "American", 2, v.Detail)).ToList();
 
-    /// Ready-made Qwen3-TTS voices: a description each, for characters the book says little
-    /// about and for choosing from a list. Any other description works too.
-    public static readonly IReadOnlyList<VoiceInfo> QwenPresets = new (string Id, string Name, Gender G, VoiceAge A, string Accent, string Detail, string Design)[]
+    /// Pocket TTS's stock voices. Pocket TTS can't design a voice from a description: it
+    /// clones one from a few seconds of speech. The clips ship with the app
+    /// (windows/Resources/StockVoices, the Mac's clips): Orpheus's eight voices (Apache 2.0) said
+    /// one plain passage, and Alba is Pocket TTS's own default voice (Alba MacKenna, CC BY 4.0,
+    /// from Kyutai's voice collection; credited in About and Help). Orpheus's are young adult and
+    /// American: casting shifts a clip's pitch for a child or an older character, as it fakes
+    /// age with pitch for the system's voices.
+    public static readonly IReadOnlyList<VoiceInfo> Pocket = new (string Id, string Name, Gender G, VoiceAge A, int Quality, string Detail)[]
     {
-        ("narrator", "Audiobook Narrator", Gender.Neutral, VoiceAge.Adult, "American", "Calm, clear, measured", "A calm, clear audiobook narrator with a warm, measured voice."),
-        ("storyteller", "Warm Storyteller", Gender.Female, VoiceAge.Adult, "American", "Warm, low, unhurried", "A woman in her forties with a warm, low, unhurried voice."),
-        ("bright", "Bright Young Woman", Gender.Female, VoiceAge.Young, "American", "Bright, clear, lively", "A young woman with a bright, clear, lively voice."),
-        ("soft", "Soft-Spoken", Gender.Female, VoiceAge.Young, "American", "Soft, gentle, breathy", "A young woman with a soft, gentle, slightly breathy voice."),
-        ("brisk", "Brisk Professional", Gender.Female, VoiceAge.Adult, "American", "Crisp, confident", "A woman in her thirties with a crisp, confident, brisk voice."),
-        ("dame", "Grand Dame", Gender.Female, VoiceAge.Older, "British", "Rich, commanding, cultured", "An older woman with a rich, commanding, cultured voice, speaking English with a British accent."),
-        ("grandmother", "Kind Grandmother", Gender.Female, VoiceAge.Older, "American", "Soft, kind, a little creaky", "An older woman with a soft, kind, slightly creaky voice."),
-        ("lass", "Highland Lass", Gender.Female, VoiceAge.Young, "Scottish", "Light, musical", "A young woman with a light, musical voice, speaking English with a Scottish accent."),
-        ("girl", "Little Girl", Gender.Female, VoiceAge.Child, "American", "High, eager", "A young girl with a high, eager voice."),
-        ("baritone", "Easy Baritone", Gender.Male, VoiceAge.Adult, "American", "Warm, easygoing", "A man in his forties with a warm, easygoing baritone voice."),
-        ("hero", "Young Hero", Gender.Male, VoiceAge.Young, "American", "Earnest, energetic", "A young man with an earnest, energetic, clear voice."),
-        ("gentleman", "Gentleman", Gender.Male, VoiceAge.Adult, "British", "Refined, measured", "A man with a refined, measured voice, speaking English with a British accent."),
-        ("elder", "Gravelly Elder", Gender.Male, VoiceAge.Older, "American", "Deep, gravelly", "An older man with a deep, gravelly voice."),
-        ("sailor", "Weathered Sailor", Gender.Male, VoiceAge.Older, "Irish", "Rough, booming", "A man in his fifties with a rough, weathered, booming voice, speaking English with an Irish accent."),
-        ("clerk", "Nervous Clerk", Gender.Male, VoiceAge.Young, "American", "Thin, quick, nervous", "A young man with a thin, quick, nervous voice."),
-        ("boy", "Little Boy", Gender.Male, VoiceAge.Child, "American", "High, cheerful", "A young boy with a high, cheerful voice."),
-    }.Select(v => new VoiceInfo(VoiceEngine.Qwen, "preset:" + v.Id, v.Name, v.G, v.A, v.Accent, 2, v.Detail, v.Design)).ToList();
+        ("alba", "Alba", Gender.Female, VoiceAge.Adult, 3, "The engine’s own voice; natural, easygoing"),
+        ("tara", "Tara", Gender.Female, VoiceAge.Young, 2, "Warm, conversational"), ("leah", "Leah", Gender.Female, VoiceAge.Young, 2, "Bright, friendly"),
+        ("jess", "Jess", Gender.Female, VoiceAge.Young, 2, "Lively, expressive"), ("mia", "Mia", Gender.Female, VoiceAge.Young, 2, "Soft, light"),
+        ("zoe", "Zoe", Gender.Female, VoiceAge.Young, 2, "Clear, youthful"),
+        ("leo", "Leo", Gender.Male, VoiceAge.Young, 2, "Steady, relaxed"), ("dan", "Dan", Gender.Male, VoiceAge.Young, 2, "Deep, easygoing"),
+        ("zac", "Zac", Gender.Male, VoiceAge.Young, 2, "Energetic, youthful"),
+    }.Select(v => new VoiceInfo(VoiceEngine.Pocket, PocketVoice.StockPrefix + v.Id, v.Name, v.G, v.A, "American", v.Quality, v.Detail)).ToList();
 }
 
 /// What the book says a character should sound like, read from the summary and the lines.
@@ -441,7 +470,7 @@ public static class VoiceCasting
         return s;
     }
 
-    /// A description Qwen3-TTS designs a voice from.
+    /// A description of the voice the profile asks for: ElevenLabs' Voice Design starts from it.
     public static string Describe(CastingProfile p, string name)
     {
         string who = (p.Gender, p.Age) switch
@@ -459,7 +488,7 @@ public static class VoiceCasting
             _ => "An adult",
         };
         var parts = new List<string> { who };
-        // Something about the voice itself, so Qwen3-TTS doesn't make a thin one.
+        // Something about the voice itself, so the designed voice isn't a thin one.
         string? pitch = p.PitchLean < 0 ? "low-pitched" : p.PitchLean > 0 ? "high-pitched" : null;
         // Timbre words that only repeat the pitch ("low" after "low-pitched") are left out.
         var timbre = p.Timbre.Where(t => pitch is null || !new[] { "low", "deep", "high", "higher", "lower" }.Contains(t.ToLowerInvariant())).ToList();
@@ -524,11 +553,15 @@ public static class VoiceCasting
 
     /// Casts every character with lines who has no voice the narrator chose, and the
     /// narrator if they have none. Main characters choose first. Characters in `keep` keep
-    /// the voice they have, like the narrator's choices. Returns how many characters got a voice.
-    public static int Cast(Project project, BookIndex index, VoiceEngine engine, IReadOnlyList<VoiceInfo> voices, IReadOnlySet<Guid>? keep = null)
+    /// the voice they have, like the narrator's choices; `keepExisting` keeps every voice there
+    /// is (the narrator's and the roles' too) and only fills what's missing. Returns how many
+    /// characters got a voice.
+    public static int Cast(Project project, BookIndex index, VoiceEngine engine, IReadOnlyList<VoiceInfo> voices, IReadOnlySet<Guid>? keep = null,
+                           bool keepExisting = false)
     {
         keep ??= new HashSet<Guid>();
-        bool Kept(BookCharacter c) => c.Voice(engine) is { } v && (v.Source == VoiceSource.User || keep.Contains(c.Id));
+        bool keeping = keepExisting || keep.Count > 0;
+        bool Kept(BookCharacter c) => c.Voice(engine) is { } v && (v.Source == VoiceSource.User || keepExisting || keep.Contains(c.Id));
         int LinesOf(Guid id) => index.StatsFor(id)?.Lines ?? 0;
         HashSet<int> ChaptersOf(Guid id) => index.StatsFor(id)?.Chapters ?? [];
 
@@ -546,14 +579,8 @@ public static class VoiceCasting
 
         // The narrator first: heard most of all, and nobody should share their voice.
         string? narratorID = null;
-        if (project.Settings.NarratorVoice(engine) is { } n && (n.Source == VoiceSource.User || keep.Count > 0))
+        if (project.Settings.NarratorVoice(engine) is { } n && (n.Source == VoiceSource.User || keeping))
             narratorID = n.Choice.VoiceID;
-        else if (engine == VoiceEngine.Qwen && VoiceInfo.QwenPresets.Count > 0)
-        {
-            var preset = VoiceInfo.QwenPresets[0];
-            narratorID = preset.VoiceID;
-            project.Settings.SetNarratorVoice(new CastVoice(preset.Choice, 0.9, VoiceSource.Auto), engine);
-        }
         else if (voices.OrderByDescending(v => v.Quality).ThenByDescending(v => v.Gender == Gender.Neutral ? 1 : 0).FirstOrDefault() is { } best)
         {
             narratorID = best.VoiceID;
@@ -566,16 +593,6 @@ public static class VoiceCasting
             if (project.Character(id) is not { } c || Kept(c)) continue;
             var p = Profile(c, project, index);
             var chapters = ChaptersOf(id);
-            if (engine == VoiceEngine.Qwen && (p.Timbre.Count > 0 || p.Accent is not null || VoiceDescription.Notes(c) is not null))
-            {
-                // The book or the Voice Notes say how they sound: a voice designed from that
-                // (the notes are added when it speaks, so editing them changes the voice).
-                // Characters nothing describes get a distinct ready-made voice below.
-                var designed = new VoiceChoice(VoiceEngine.Qwen, "design", Describe(p, c.Name));
-                c.SetVoice(new CastVoice(designed, Confidence(p, 0), VoiceSource.Auto), engine);
-                count++;
-                continue;
-            }
             (VoiceInfo Voice, double Score, double Shared)? pick = null;
             foreach (var v in voices)
             {
@@ -590,19 +607,10 @@ public static class VoiceCasting
                 c.SetVoice(null, engine);
                 continue;
             }
-            var choice = chosen.Voice.Choice;
-            // The system's voices are all adults: a child sounds higher, an older voice lower and slower.
-            if (chosen.Voice.Engine == VoiceEngine.Apple && p.Age is { } age && age != chosen.Voice.Age)
-            {
-                switch (age)
-                {
-                    case VoiceAge.Child: choice.Pitch = 1.3; choice.Rate = 1.05; break;
-                    case VoiceAge.Young: choice.Pitch = 1.08; break;
-                    case VoiceAge.Older: choice.Pitch = 0.88; choice.Rate = 0.92; break;
-                }
-            }
-            // The system's voices can't take a description: the brief's pitch and pace nudge them.
-            if (chosen.Voice.Engine == VoiceEngine.Apple && (p.PitchLean != 0 || p.PaceLean != 0))
+            var choice = AgeAdjusted(chosen.Voice, p.Age);
+            // The system's voices and Pocket TTS can't take a description: the brief's pitch and
+            // pace nudge them (for Pocket TTS, about a semitone and 6% a step).
+            if ((chosen.Voice.Engine == VoiceEngine.Apple || chosen.Voice.Engine == VoiceEngine.Pocket) && (p.PitchLean != 0 || p.PaceLean != 0))
             {
                 choice.Pitch = Math.Round((choice.Pitch ?? 1) * (1 + 0.06 * p.PitchLean) * 100, MidpointRounding.AwayFromZero) / 100;
                 choice.Rate = Math.Round((choice.Rate ?? 1) * (1 + 0.06 * p.PaceLean) * 100, MidpointRounding.AwayFromZero) / 100;
@@ -612,9 +620,40 @@ public static class VoiceCasting
             Take(chosen.Voice.VoiceID, chapters);
             count++;
         }
-        CastRoles(project, engine, voices, keepAutomatic: keep.Count > 0);
+        CastRoles(project, engine, voices, keepAutomatic: keeping);
         project.VoicesCast = AppleDate.Now;
         return count;
+    }
+
+    /// A voice made to sound the character's age when it doesn't. The system's voices are all
+    /// adults: a child sounds higher, an older voice lower and slower. Pocket TTS's stock voices
+    /// are young adults: its pitch is a shift of the clip it clones from, so the steps stay
+    /// within what keeps the voice (docs/CASTING-STYLE.md §6: ±2 semitones kept it, −4 began to
+    /// lose it): a child +3 semitones (1.19) and a little quicker, an older voice −2 (0.89) and
+    /// slower. Young and adult characters keep the voice as it is.
+    public static VoiceChoice AgeAdjusted(VoiceInfo voice, VoiceAge? age)
+    {
+        var choice = voice.Choice;
+        if (age is not { } a || a == voice.Age) return choice;
+        switch (voice.Engine)
+        {
+            case VoiceEngine.Apple:
+                switch (a)
+                {
+                    case VoiceAge.Child: choice.Pitch = 1.3; choice.Rate = 1.05; break;
+                    case VoiceAge.Young: choice.Pitch = 1.08; break;
+                    case VoiceAge.Older: choice.Pitch = 0.88; choice.Rate = 0.92; break;
+                }
+                break;
+            case VoiceEngine.Pocket when !voice.VoiceID.StartsWith(PocketVoice.ClonePrefix, StringComparison.Ordinal):
+                switch (a)
+                {
+                    case VoiceAge.Child: choice.Pitch = 1.19; choice.Rate = 1.05; break;
+                    case VoiceAge.Older: choice.Pitch = 0.89; choice.Rate = 0.92; break;
+                }
+                break;
+        }
+        return choice;
     }
 
     /// Casting Style: a voice for each shared role the style uses (Men, Women, Other) that

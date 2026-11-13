@@ -33,18 +33,4 @@ public static class Pitch
         pitches.Sort();
         return (frames == 0 ? 0 : pitches.Count / (double)frames, pitches.Count == 0 ? 0 : pitches[pitches.Count / 2]);
     }
-
-    /// A designed voice that plainly contradicts its description: a man's voice above 180 Hz
-    /// or a woman's below 150 Hz (children excepted). Qwen3-TTS does this now and then
-    /// (measured: 1 seed in 14 for a baritone came out at 240 Hz).
-    public static bool Contradicts(string description, float[] audio)
-    {
-        var d = description.ToLowerInvariant();
-        if (d.Contains("boy") || d.Contains("girl") || d.Contains("child") || d.Contains("kid")) return false;
-        var gender = VoiceCasting.GenderOfDescription(description);
-        if (gender is not (Gender.Male or Gender.Female)) return false;
-        var (voiced, hz) = Analyze(audio);
-        if (voiced < 0.2 || hz == 0) return false;
-        return gender == Gender.Male ? hz > 180 : hz < 150;
-    }
 }

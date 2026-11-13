@@ -22,6 +22,13 @@ public sealed class Sampler(ulong seed)
         return (z >> 11) * (1.0 / (1UL << 53));
     }
 
+    /// A standard normal draw (Box–Muller): Pocket TTS's noise.
+    public double NextGaussian()
+    {
+        double u = 1 - NextDouble(), v = NextDouble();
+        return Math.Sqrt(-2 * Math.Log(u)) * Math.Cos(2 * Math.PI * v);
+    }
+
     /// Lowers the scores of tokens already said (scores above zero are divided, below zero
     /// multiplied), as Hugging Face and MLX do.
     public static void Penalize(Span<float> logits, IEnumerable<int> seen, float penalty)

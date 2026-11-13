@@ -110,7 +110,7 @@ Show a line in the manuscript, selected, as clicking it in the Index does.
 
 Example: innervoice lines reveal 3f2a9c1e --json
 === characters list
-List the cast, most lines first. Returns `characters` (id, name, aliases, color, lines, words, firstLine, chapters, facts, narrator, showInIndex, voice).
+List the cast, most lines first. Returns `characters` (id, name, aliases, color, lines, words, firstLine, chapters, facts, narrator, showInIndex, voice: engine apple, pocket, orpheus or elevenlabs, name, source, confidence, needsYou).
 
   innervoice characters list [--project <string>]
 

@@ -16,7 +16,11 @@ public static class Onnx
     /// Where the last model opened runs, for Settings › Voices ("Graphics card" or "CPU").
     public static string LastDevice { get; private set; } = "CPU";
 
-    public static InferenceSession Open(string path)
+    /// `small`: a small model run a step at a time (Pocket TTS). On the processor it gets at
+    /// most 4 threads (its matrices are small: more threads only wait on each other; the
+    /// export's own advice, measured about twice as fast) and no memory arena, which
+    /// otherwise grows with every new sequence length the cache passes through.
+    public static InferenceSession Open(string path, bool small = false)
     {
         if (PreferGpu && OperatingSystem.IsWindows())
         {
@@ -39,8 +43,14 @@ public static class Onnx
         var cpu = new SessionOptions
         {
             GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
-            IntraOpNumThreads = Math.Max(1, Environment.ProcessorCount - 1),
+            IntraOpNumThreads = small ? Math.Clamp(Environment.ProcessorCount, 1, 4) : Math.Max(1, Environment.ProcessorCount - 1),
         };
+        if (small)
+        {
+            cpu.InterOpNumThreads = 1;
+            cpu.EnableCpuMemArena = false;
+            cpu.EnableMemoryPattern = false;
+        }
         LastDevice = "CPU";
         return new InferenceSession(path, cpu);
     }

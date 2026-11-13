@@ -48,7 +48,13 @@ public sealed class ProjectDocument
     {
         var contents = ProjectArchive.Read(File.ReadAllBytes(path));
         var project = ProjectJson.Decode(contents.ProjectJson);
-        return new ProjectDocument(project, contents.Audio, contents.Original, path, project.Format > Project.CurrentFormat);
+        bool readOnly = project.Format > Project.CurrentFormat;
+        // A book from before Pocket TTS: its Qwen3-TTS voices become Pocket TTS ones, as on the
+        // Mac. The window shows it edited (saved like any change), with no undo step.
+        bool migrated = !readOnly && LegacyVoices.Migrate(project);
+        var document = new ProjectDocument(project, contents.Audio, contents.Original, path, readOnly) { IsDirty = migrated };
+        if (migrated) document.ScheduleAutosave();
+        return document;
     }
 
     /// A new project from an imported manuscript, not saved yet.

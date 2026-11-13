@@ -1,4 +1,4 @@
-// Audio in the app's one format: 24 kHz mono, 32-bit float (what Qwen3-TTS and Orpheus make;
+// Audio in the app's one format: 24 kHz mono, 32-bit float (what Pocket TTS and Orpheus make;
 // Windows' voices and ElevenLabs are converted). The Mac does this with AVAudioEngine and
 // AVAudioUnitTimePitch; here it's plain C#, so it runs the same on every PC and in tests.
 

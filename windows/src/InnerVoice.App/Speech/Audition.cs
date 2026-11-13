@@ -38,7 +38,7 @@ public static class Audition
             Text = SpeechScript.Clean(text), Tone = sampleTone, Kind = LineKind.Spoken, PauseAfter = 0, Pause = PauseKind.None,
         };
         var resolver = new VoiceResolver(project, choice.IsNarrator ? null : choice.Engine, index, writtenByNarrator: AppSettings.Current.WrittenByNarrator);
-        if (!choice.IsNarrator) resolver.Narrator = VoiceResolver.WithNotes(choice, character);
+        if (!choice.IsNarrator) resolver.Narrator = choice;
         resolver.AuditionShade = shade;
         resolver.Characters.Clear();
         SpeechPlayer.Shared.Play([seg], resolver);

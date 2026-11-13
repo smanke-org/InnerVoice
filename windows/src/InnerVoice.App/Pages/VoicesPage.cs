@@ -180,10 +180,10 @@ public sealed partial class VoicesPage : Page
             }
             Document.SetCloudVoicesAllowed(true);
         }
-        // Qwen3-TTS and Orpheus run on this PC: offer the download, and say first if it's too weak for them.
-        if (e is VoiceEngine.Qwen or VoiceEngine.Orpheus && !VoiceModels.Shared.IsInstalled(e))
+        // Pocket TTS and Orpheus run on this PC: offer the download, and say first if it's too weak for them.
+        if (e is VoiceEngine.Pocket or VoiceEngine.Orpheus && !VoiceModels.Shared.IsInstalled(e))
             await VoiceModels.Shared.OfferDownload(this, e);
-        else if (e is VoiceEngine.Qwen or VoiceEngine.Orpheus && !await VoiceModels.Shared.ConfirmHardware(this, e, downloading: false))
+        else if (e is VoiceEngine.Pocket or VoiceEngine.Orpheus && !await VoiceModels.Shared.ConfirmHardware(this, e, downloading: false))
         {
             Refresh(false);
             return;

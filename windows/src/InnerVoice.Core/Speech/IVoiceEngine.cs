@@ -1,12 +1,12 @@
 // The voice engine abstraction (docs/WINDOWS-PLAN.md § Voice engines). Every engine that
 // makes sound implements IVoiceEngine and is registered once at startup with
 // `VoiceEngineRegistry.Register`. Engines are keyed by the Mac's `VoiceEngine` values, so a
-// book's casting (`BookCharacter.Voices["qwen"]`…) means the same thing on both computers:
+// book's casting (`BookCharacter.Voices["pocket"]`…) means the same thing on both computers:
 //
 //   apple       Windows' built-in voices (App/Speech/WindowsVoices.cs; the Mac's Apple voices)
 //   elevenlabs  ElevenLabs, in the cloud (App/Speech/ElevenLabs.cs)
-//   qwen        Qwen3-TTS through ONNX Runtime (part B)
-//   orpheus     Orpheus through ONNX Runtime (part B)
+//   pocket      Pocket TTS through ONNX Runtime (Speech/Neural)
+//   orpheus     Orpheus through ONNX Runtime (Speech/Neural)
 //
 // The renderer (SpeechRenderer) owns caching, shading the engine can't do itself, and the
 // one audio format; an engine only turns one SpeechRequest into 24 kHz mono samples.
@@ -101,11 +101,12 @@ public interface IVoiceEngine
     VoiceInfo? Info(VoiceChoice choice);
 
     /// The engine changes pitch itself for a shade (the system voices take a pitch setting;
-    /// Qwen3-TTS shifts its voice sample before cloning). When false, the renderer shifts the
+    /// Pocket TTS shifts the clip it clones from). When false, the renderer shifts the
     /// finished audio.
     bool ShadesPitch { get; }
 
-    /// The engine changes pace itself for a shade (the system voices take a rate).
+    /// The engine changes pace itself for a shade (the system voices take a rate; Pocket TTS
+    /// stretches its audio by the shade's, the voice's and the tone's speed together).
     bool ShadesPace { get; }
 
     /// Speaks one request: 24 kHz mono float samples (SpeechAudio.SampleRate). Throw a
@@ -120,7 +121,7 @@ public interface IVoiceEngine
 }
 
 /// The engines this computer has, by `VoiceEngine` value. The app registers its engines at
-/// startup (and tests register fakes); part B adds Qwen3-TTS and Orpheus here.
+/// startup (and tests register fakes): Pocket TTS and Orpheus among them.
 public static class VoiceEngineRegistry
 {
     static readonly Dictionary<VoiceEngine, IVoiceEngine> engines = [];
@@ -149,8 +150,8 @@ public static class VoiceEngineRegistry
 
     public static VoiceInfo? Info(VoiceChoice choice) => choice.Engine switch
     {
-        // Qwen3-TTS presets need no engine to be named.
-        VoiceEngine.Qwen when Get(VoiceEngine.Qwen) is null => VoiceInfo.QwenPresets.FirstOrDefault(v => v.VoiceID == choice.VoiceID),
+        // Stock voices need no engine to be named.
+        VoiceEngine.Pocket when Get(VoiceEngine.Pocket) is null => VoiceInfo.Pocket.FirstOrDefault(v => v.VoiceID == choice.VoiceID),
         VoiceEngine.Orpheus when Get(VoiceEngine.Orpheus) is null => VoiceInfo.Orpheus.FirstOrDefault(v => v.VoiceID == choice.VoiceID),
         _ => Get(choice.Engine)?.Info(choice),
     };

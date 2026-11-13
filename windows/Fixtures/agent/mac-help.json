@@ -271,7 +271,7 @@
             "readOnly": false
         },
         {
-            "description": "List the cast, most lines first. Returns `characters` (id, name, aliases, color, lines, words, firstLine, chapters, facts, narrator, showInIndex, voice). Example: innervoice characters list --json",
+            "description": "List the cast, most lines first. Returns `characters` (id, name, aliases, color, lines, words, firstLine, chapters, facts, narrator, showInIndex, voice: engine apple, pocket, orpheus or elevenlabs, name, source, confidence, needsYou). Example: innervoice characters list --json",
             "destructive": false,
             "inputSchema": {
                 "properties": {

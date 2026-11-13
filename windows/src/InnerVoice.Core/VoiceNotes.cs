@@ -139,8 +139,8 @@ public sealed class VoiceBrief
     }
 }
 
-/// Voice Notes as a description for the voice models that take one (Qwen3-TTS at speaking
-/// time, ElevenLabs' Voice Design): the narrator's own notes, then the brief, then "From the
+/// A character's Voice Notes turned into words a voice model can design a voice from
+/// (ElevenLabs' Voice Design; the on-device engines can't take a description): the narrator's own notes, then the brief, then "From the
 /// book", without headings or Contrast lines, capped at a whole line.
 public static class VoiceDescription
 {

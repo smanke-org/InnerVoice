@@ -1,7 +1,7 @@
 // Clone a Voice › On This PC, the Mac's CloneAudio: joins the recordings at 24 kHz, finds the
 // words with Windows' own speech recognizer on this PC (SAPI dictation, never a cloud
 // recognizer), and cuts a clip of at most 10 seconds at a pause (CloneClip). The narrator can
-// fix the words; the clip and its words are what Qwen3-TTS clones from.
+// fix the words; the clip and its words are what Pocket TTS clones from.
 
 using System.Globalization;
 using InnerVoice.Core.Speech;

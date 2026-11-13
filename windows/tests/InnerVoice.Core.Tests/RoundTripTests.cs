@@ -110,7 +110,7 @@ public class RoundTripTests
     }
 
     /// Sets (recorded, reviewed) have no order.
-    static JsonNode Normalize(JsonNode n)
+    internal static JsonNode Normalize(JsonNode n)
     {
         switch (n)
         {
@@ -131,7 +131,7 @@ public class RoundTripTests
         }
     }
 
-    static string Diff(JsonNode a, JsonNode b)
+    internal static string Diff(JsonNode a, JsonNode b)
     {
         var sa = a.ToJsonString();
         var sb = b.ToJsonString();

@@ -5,7 +5,7 @@ character summaries with a local AI model (or Claude, in the cloud, once the nar
 up and allows the book), keep an index and narrator scripts, and read from the teleprompter in
 the booth (record in your own audio app). Books made with AI voices give every character a
 voice and a tone, play table reads and export audio or an EPUB with audio, with Windows' own
-voices, Qwen3-TTS and Orpheus (downloaded once, running on this PC through ONNX Runtime, on
+voices, Pocket TTS and Orpheus (downloaded once, running on this PC through ONNX Runtime, on
 the graphics card with DirectML or on the processor), or ElevenLabs (in the cloud, set up and
 allowed per book). See docs/WINDOWS-PLAN.md § Local voices. Projects (`.innervoice`) open
 on both Windows and the Mac.
@@ -19,7 +19,7 @@ The plan and the decisions behind it are in [../docs/WINDOWS-PLAN.md](../docs/WI
   OpenDocument, Pages, EPUB, HTML), rules, dialogue finder, prompts, llama.cpp binding, voices
   (`Voices.cs`, `ToneRules.cs`, `SpeechScript.cs`, `SeriesVoices.cs`) and `Speech/` (the voice
   engine interface, renderer and audio cache, resolver, audio DSP, WAV, audio export;
-  `Speech/Neural/`: Qwen3-TTS and Orpheus on ONNX Runtime, voice packs, the hardware check).
+  `Speech/Neural/`: Pocket TTS and Orpheus on ONNX Runtime, voice packs, the hardware check).
 - `src/InnerVoice.Agent` — the agent interface shared by the app and the CLI (the Mac's
   `Sources/InnerVoice/Agent/`): the command list, parser, help, output, MCP server, named pipe,
   `innervoice://` links. No packages.
@@ -29,7 +29,11 @@ The plan and the decisions behind it are in [../docs/WINDOWS-PLAN.md](../docs/WI
   link registration), `Document/` (open, save, undo, edits), `Pages/`, `Windows/`, `Controls/`
   (the manuscript view), `AI/`, `Speech/` (Windows Voices, ElevenLabs, the voice model
   downloads, cloning on this PC, the player), `Export/`, `Help/`.
-- `tools/VoiceBench` — measures Qwen3-TTS and Orpheus on a computer (`--hardware`, `--bench`).
+- `tools/VoiceBench` — measures Pocket TTS and Orpheus on a computer (`--hardware`, `--bench`, `--clone`).
+- `tools/PocketCheck` — the provenance check for the Pocket TTS ONNX files (every weight is Kyutai's).
+- `tools/MacFixtures` — writes the Mac-made Pocket TTS fixtures (the Mac's sample, an old Qwen3-TTS
+  book and the Mac's migration of it) with the Mac's own Kit; `make-stock-voices.sh` copies the
+  Mac's stock voice clips into `Resources/StockVoices` as WAV.
 - `tests/InnerVoice.Core.Tests` — xUnit tests, including golden checks against fixtures the Mac's
   Kit writes (`Fixtures/`).
 - `tests/InnerVoice.App.Tests` — headless app tests and light/dark snapshots of every page.
@@ -142,14 +146,14 @@ Placeholder text only (the sample story, every name made up). Never put a real m
 5. Use the sample book and the files in `Fixtures/import`; never a real manuscript.
 
 The VM has no GPU for the AI, so Tag Speakers runs on the processor: use Gemma 4 E2B or
-Qwen 3 4B there.
+Llama 3.1 8B there.
 
 Voices: Windows Voices and the speakers work in the VM if it has audio; check real speech
 output, the ElevenLabs key in Credential Manager, the microphone in Clone a Voice and M4A
 export (Media Foundation) there or on a PC. On the Mac, tests use fake engines and play
 silently (`INNERVOICE_SPEECH_AUDIBLE` has no effect off Windows).
 
-Qwen3-TTS and Orpheus: the tests use fake models. To run the real ones (11 GB), download the
+Pocket TTS and Orpheus: the tests use fake models. To run the real ones (3 GB), download the
 packs into a folder laid out like Voice Models and set `INNERVOICE_TEST_VOICE_MODELS` to it for
 `NeuralVoiceTests.TheRealModelsSpeak`, or run `dotnet run --project tools/VoiceBench -- --bench
 <folder> <output folder>` for speeds and WAV files to listen to. On a PC, run VoiceBench
