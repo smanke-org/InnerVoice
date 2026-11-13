@@ -17,8 +17,13 @@ that is marked "Dropped" or "Later" is now in scope:
     (any DirectX 12 GPU), with a CPU fallback. Same voice packs and design/clone behavior;
     where a model part won't export, say so and match the Mac as closely as possible.
 - **Also ported:** the agent CLI and MCP (`innervoice`, named pipes), `innervoice://` URLs,
-  Pages import, and the GitHub-releases updater with a direct download (MSIX stays as an
-  option).
+  and Pages import.
+- **Distribution: the Microsoft Store is the primary channel** (free for individual
+  developers; the Store signs the MSIX, so there is no SmartScreen warning, and it handles
+  installs and updates). The Mac's GitHub-releases updater is **not** ported: Store copies
+  update through the Store. No paid code signing. An unsigned build may still be posted on
+  GitHub releases, with a note that SmartScreen will warn ("More info → Run anyway") and
+  that it doesn't update itself.
 - **Widest range of PCs:** x64 and ARM64, GPU or CPU-only. Before a local voice model is
   downloaded or used, the app checks the hardware and, on weak machines, warns plainly why
   voices may be unusably slow there and suggests the built-in voices or ElevenLabs.
