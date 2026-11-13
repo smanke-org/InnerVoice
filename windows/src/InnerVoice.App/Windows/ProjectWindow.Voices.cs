@@ -140,12 +140,6 @@ public sealed class ProjectTypeWindow : Window
 
 public sealed partial class ProjectWindow
 {
-    /// The Listen step: Export Audio when the window has it, else a table read.
-    public static Action<ProjectWindow, ProjectDocument>? OpenAudioExport { get; set; }
-
-    void ListenStep()
-    {
-        if (OpenAudioExport is { } open) open(this, Document);
-        else PlayFromHere();
-    }
+    /// The Listen step: Export Audio (File › Export Audio…).
+    void ListenStep() => _ = InnerVoice.App.Export.AudioExportWindow.Show(this, Document);
 }
