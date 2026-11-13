@@ -135,7 +135,9 @@ struct VoiceResolver {
         guard let choice = choice(for: segment) else { return nil }
         return SpeechRequest(text: segment.text, choice: choice, tone: segment.speakerID == nil && segment.lineID == nil ? .neutral : segment.tone,
                              kind: segment.lineID == nil ? nil : segment.kind, sound: segment.sound, cloudAllowed: cloudAllowed,
-                             shade: shade(for: segment, choice: choice))
+                             shade: shade(for: segment, choice: choice),
+                             // Delivery hints are ElevenLabs' audio tags: never sent to another engine.
+                             delivery: choice.engine == .elevenlabs && segment.lineID != nil ? segment.delivery : nil)
     }
 }
 

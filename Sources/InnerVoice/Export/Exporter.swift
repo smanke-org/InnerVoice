@@ -96,6 +96,9 @@ enum Exporter {
                 if let pos, pos.chapter != lastChapter {
                     lastChapter = pos.chapter
                     out.append(text(project.chapters[pos.chapter].title, h2, spacing: 8))
+                    if let recap = project.chapters[pos.chapter].recapText {
+                        out.append(text("Previously… \(recap)", body, color: gray, spacing: 10))
+                    }
                 }
                 if o.includeCues, i > 0 {
                     let cue = project.lines[i - 1]

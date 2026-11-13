@@ -48,6 +48,13 @@ struct PronunciationsPage: View {
                     .help("Look through the manuscript for unusual names and words again")
                 Button("Add Term", systemImage: "plus") { add() }
                     .help("Add a term to the guide")
+                if ClaudeAccount.shared.isSetUp {
+                    Button("Suggest Spellings (Cloud)", systemImage: "sparkles") {
+                        document.claude.run(.spellings, undoManager: undoManager)
+                    }
+                    .help("Cloud: Claude suggests a Say It As for each term without one. Sends each term and the sentence it first appears in to Anthropic. You confirm each spelling.")
+                    .disabled(document.claude.isRunning || document.tagging.isRunning)
+                }
             }
         }
     }

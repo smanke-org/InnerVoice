@@ -382,11 +382,12 @@ final class ElevenLabs {
 
     // MARK: Speech
 
-    /// What ElevenLabs is sent: the text, with v4 audio tags for the tone and any sound the
-    /// speech tag asks for.
+    /// What ElevenLabs is sent: the text, with v4 audio tags for the tone (with the line's
+    /// delivery hint in the same bracket, "[sad, barely audible]") and any sound the speech
+    /// tag asks for.
     static func text(for request: SpeechRequest) -> String {
         var tags: [String] = []
-        if request.kind != nil, let tag = request.tone.audioTag { tags.append(tag) }
+        if request.kind != nil, let tag = DeliveryPrompt.audioTag(tone: request.tone, delivery: request.delivery) { tags.append(tag) }
         if let sound = request.sound { tags.append(sound.audioTag) }
         return (tags + [request.text]).joined(separator: " ")
     }

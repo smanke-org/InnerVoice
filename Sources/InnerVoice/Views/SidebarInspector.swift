@@ -252,6 +252,13 @@ struct ProjectInspector: View {
                 }
             }
             if document.project.showsVoices {
+            LabeledContent("Delivery") {
+                DraftTextField("e.g. barely audible", text: Binding(get: { line.delivery ?? "" }, set: { new in
+                    document.change("Delivery Hint", undoManager: undoManager) { DeliveryPrompt.set(new, for: [line.id], in: &$0) }
+                }))
+                .textFieldStyle(.roundedBorder)
+                .help("How ElevenLabs performs the line beyond its tone, sent as an audio tag (ElevenLabs only; other voices ignore it). Book › Claude › Suggest Delivery Hints fills these in.")
+            }
             LabeledContent("Voice") {
                 HStack(spacing: Space.sm) {
                     Button("Play", systemImage: "play.fill") { PlayCommand.playLine(document: document, workspace: workspace) }
@@ -322,9 +329,33 @@ struct ProjectInspector: View {
                     }
                 }
             }
+            if let chapter, ci > 0 || chapter.recapText != nil {
+                recapEditor(chapter)
+            }
             Text("Click a line to choose who says it.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    /// "Previously…": the chapter's recap, editable. Shown in Narrator Scripts and, when
+    /// asked, spoken at the chapter's start in Export Audio.
+    private func recapEditor(_ chapter: Chapter) -> some View {
+        VStack(alignment: .leading, spacing: Space.xs) {
+            HStack(spacing: Space.xs) {
+                Text("Previously…").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Spacer()
+                if chapter.recapText != nil, chapter.recapEdited != true {
+                    Label("Claude", systemImage: "sparkles").font(.caption2).foregroundStyle(.secondary)
+                        .help("Written by Claude (Book › Claude › Write Chapter Recaps). Edit it, and it’s yours.")
+                }
+            }
+            DraftTextField("A short recap of the story so far", text: Binding(get: { chapter.recap ?? "" }, set: { new in
+                document.change("Edit Recap", undoManager: undoManager) { RecapPrompt.edit(new, chapterID: chapter.id, in: &$0) }
+            }), axis: .vertical)
+            .textFieldStyle(.roundedBorder)
+            .lineLimit(2...6)
+            .font(.callout)
         }
     }
 

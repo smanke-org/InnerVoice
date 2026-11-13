@@ -62,7 +62,7 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | The Clip | On This Mac: the first 15 seconds of speech a cloned voice is learned from, with the words it says | sample, reference |
 | Use Voices from Another Project | Copy voices (and optionally Voice Notes, narrator voice, engine) from an earlier book in a series, after matching its characters to this book's | import cast, series voices, voice transfer |
 | Voice brief | The AI's casting note in Voice Notes: pitch, pace, texture, attitude, and the contrast with scene partners | voice profile, direction |
-| Cloud | Marks ElevenLabs, the one engine that sends text off the Mac | online, remote |
+| Cloud | Marks what sends text off the Mac: ElevenLabs (voices) and Claude (the cloud model) | online, remote |
 | Send This Book to ElevenLabs | The per-book permission before any of its text goes to ElevenLabs; Stop Sending This Book ends it | consent, opt in |
 | Sound | A sigh, laugh, gasp, groan, sniffle, yawn or cough a speech tag asks for; Orpheus performs it | effect, tag |
 | Casting | Choosing a voice for each character from the summary; Cast Voices Again redoes it | auto-assign, matching |
@@ -88,4 +88,9 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | Pronunciation | A term and how the AI voices should say it (Produce with AI Voices) | glossary entry, word |
 | Teleprompter | The book in large type for the booth, one paragraph at a time; it keeps your place but doesn't record | Record, prompter, studio |
 | Revised Manuscript | A new draft imported into an existing project | update, new version |
-| Model | The on-device AI that reads the book | engine, LLM |
+| Model | The AI that reads the book: downloaded, Apple's on-device model, or Claude (Cloud) | engine, LLM |
+| Estimated cost | What a Claude run will cost with the chosen model, worked out on the Mac before anything is sent; tokens only for a model with no known price. Always called an estimate | price, quote, bill |
+| Clean Up Text | Book › Claude: Claude finds what importing left in the text (scanning mistakes, broken hyphenation, page numbers and headers, footnote markers, letter spacing) and proposes fixes. Only the project changes | proofread, OCR fix, repair |
+| Recap | "Previously…": a short summary of the story so far at the start of a chapter. Written by Claude (Write Chapter Recaps) or the narrator; in the inspector, Narrator Scripts and, when asked, Export Audio | summary, synopsis, previously-on |
+| Delivery hint | How a line is performed beyond its tone ("barely audible", "through gritted teeth"). ElevenLabs only, sent as an audio tag | direction, emotion tag, stage direction |
+| Suggest Spellings | Claude proposes a Say It As for pronunciation terms without one; the narrator confirms each | auto-pronounce |

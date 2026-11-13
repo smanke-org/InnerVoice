@@ -28,8 +28,37 @@ Selection string: `claude:<model id>`.
    Claude Tag Speakers run, a list of changed speakers/tones to keep or undo (`AIReview` in the
    Kit, `AIReviewSheet`). Build Summaries isn't reviewed: its notes are already replaced only
    while unedited and stay editable.
-3. New features: text cleanup (OCR/EPUB artifacts), chapter recaps, delivery hints for
-   ElevenLabs (audio tags), pronunciation spellings from Claude.
+3. DONE 2026-11-12 (Mac): Book › Claude (Cloud), each asking first (the book's permission,
+   then the estimated cost) and each one Undo step:
+   - Clean Up Text (`CleanupPrompt`, `TextCleanup` in the Kit): find/replace fixes for import
+     problems, refused unless the text is really there and the change is a repair (edit
+     distance), never a rewrite. Edited paragraphs get their lines found again; each keeps
+     the old line with the same words (id, speaker, tone, delivery). A paragraph whose fixes
+     would lose a line the narrator assigned keeps its text. Emptied paragraphs (page
+     numbers) are removed unless they're all the chapter has. The imported file never changes.
+   - Write Chapter Recaps (`RecapPrompt`): `Chapter.recap` / `recapEdited` (optional, older
+     files open). Each recap is written from the story chapter before it; edited ones are
+     never rewritten. Shown and edited in the inspector next to the chapter, in Narrator
+     Scripts under the chapter title, and spoken by the narrator after the title in Export
+     Audio when "Say chapter recaps" is on (`SpeechScript.segments(…, recaps:)`).
+   - Suggest Delivery Hints (`DeliveryPrompt`): `Line.delivery` / `deliverySource` (the
+     narrator's are never replaced). eleven_v4 audio tags are free-form text in square
+     brackets (ElevenLabs' audio tag guide, checked 2026-11-12), layered in one bracket with
+     the tone: "[sad, barely audible]". Only `VoiceResolver` for an ElevenLabs voice puts the
+     hint on a `SpeechRequest`; no other engine reads it. Edited in the inspector. AI voice
+     projects only.
+   - Suggest Spellings (`SpellingPrompt`): only each term and the sentence it first appears
+     in are sent; always waits for the narrator to check each one; Confirmed stays theirs.
+   - Review: with Review Claude's changes on, fixes, recaps and hints wait in
+     `ClaudeProposalsSheet` (keep/leave out, editable); off, they're applied at once.
+   - Cost estimate (phase 1 leftover): `ClaudePricing` / `CostEstimate` / `CostEstimator` in
+     the Kit, from the text that would be sent (about 4 characters a token plus a margin;
+     output doubled for thinking). Shown in "Send this book to Claude?" and in a confirmation
+     before every whole-book run (Tag Speakers, Build Summaries, each feature above), with
+     "Don't show the estimate again". Never calls count_tokens.
+   - Self-test: `FakeClaude` URLProtocol (SelfTestClaude.swift) checks nothing is sent without
+     a key, consent and the book's yes, and runs each feature end to end. Live calls are
+     untested here (no key).
 4. EPUB: table of contents → chapters, footnotes left out of narration; EPUB 3 export with
    Media Overlays (text highlights as the audio plays).
 5. Windows port of 1–4 (C# Anthropic SDK).

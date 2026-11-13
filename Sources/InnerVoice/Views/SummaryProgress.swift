@@ -17,6 +17,7 @@ struct BackgroundAIBar: View {
     var body: some View {
         VStack(spacing: 0) {
             if page != .manuscript { runs }
+            ClaudeRunBar(document: document)
             if let e = speech.current {
                 HStack(spacing: Space.md) {
                     Image(systemName: "person.wave.2").foregroundStyle(.tint)
@@ -113,5 +114,59 @@ struct BackgroundAIBar: View {
                 Text("\(Int((min(1, value) * 100).rounded()))%").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+/// A Claude feature at work (Clean Up Text, Chapter Recaps, Delivery Hints, Suggest
+/// Spellings), on every page: its progress and Stop, then its result. Labeled Cloud.
+struct ClaudeRunBar: View {
+    @ObservedObject var document: InnerVoiceDocument
+
+    var body: some View {
+        let claude = document.claude
+        Group {
+            if let s = claude.status {
+                HStack(alignment: .center, spacing: Space.md) {
+                    Image(systemName: "sparkles").foregroundStyle(.tint)
+                    VStack(alignment: .leading, spacing: 3) {
+                        ProgressView(value: min(1, max(0, s.progress))).progressViewStyle(.linear)
+                        HStack(spacing: Space.sm) {
+                            Text(s.message).font(.callout.weight(.medium)).lineLimit(1)
+                            CloudBadge(service: "Anthropic")
+                            Spacer(minLength: 0)
+                            Text("\(Int((min(1, s.progress) * 100).rounded()))%").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: 520, alignment: .leading)
+                    Spacer(minLength: 0)
+                    Button("Stop") { claude.stop() }
+                        .help("Stop. Nothing is changed; what Claude found so far is dropped.")
+                }
+                .padding(Space.md)
+                .frame(maxWidth: .infinity)
+                .background(.bar)
+            } else if let failure = claude.failure {
+                HStack(spacing: Space.md) {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                    Text(failure).lineLimit(2)
+                    Spacer(minLength: 0)
+                    Button("Dismiss") { claude.failure = nil }
+                }
+                .padding(Space.md)
+                .frame(maxWidth: .infinity)
+                .background(.bar)
+            } else if let done = claude.finished, claude.pending == nil {
+                HStack(spacing: Space.md) {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    Text(done).lineLimit(2)
+                    Spacer(minLength: 0)
+                    Button("Dismiss") { claude.finished = nil }
+                }
+                .padding(Space.md)
+                .frame(maxWidth: .infinity)
+                .background(.bar)
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: claude.status)
     }
 }

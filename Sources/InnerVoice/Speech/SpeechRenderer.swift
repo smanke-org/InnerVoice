@@ -15,12 +15,16 @@ struct SpeechRequest: Hashable, Sendable {
     /// Casting Style: how the narrator's voice changes for the character saying this
     /// (pitch and pace; `ShadeAudio`). nil or neutral: the voice as it is.
     var shade: Shade? = nil
+    /// The line's delivery hint. ElevenLabs only: `VoiceResolver` sets it for ElevenLabs
+    /// voices alone, and no other engine reads it.
+    var delivery: String? = nil
 
     /// The file name of the rendered audio in the cache. Version 1 of the rendering.
     var cacheKey: String {
         var parts = ["v1", choice.engine.rawValue, choice.voiceID, choice.design ?? "", String(choice.rate ?? 1), String(choice.pitch ?? 1),
                      tone.rawValue, kind?.rawValue ?? "narration", text]
         if choice.engine == .orpheus || choice.engine == .elevenlabs, let sound { parts.append(sound.rawValue) }
+        if choice.engine == .elevenlabs, let delivery { parts.append("delivery \(delivery)") }
         // Unshaded audio keeps the key it always had, so the cache stays warm.
         if let shade, shade.pitch != 0 || shade.pace != 0 { parts.append("shade \(shade.pitch) \(shade.pace)") }
         return SHA256.hash(data: Data(parts.joined(separator: "\u{1F}").utf8)).map { String(format: "%02x", $0) }.joined()

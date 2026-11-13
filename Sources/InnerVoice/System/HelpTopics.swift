@@ -218,14 +218,14 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
             .text("Settings › Voices › Pauses sets each gap in seconds: between sentences, between a line and the narration around it, between paragraphs, after a chapter title, at a scene break and between chapters. Tight, Natural and Relaxed are starting points. With \"Set the pause between sentences\" on, each sentence is spoken on its own so that gap is exact; turn it off to let each voice pace its own sentences."),
             .text("Click Try It to hear a passage from the front book over and over; move a slider and the next pause changes, with nothing to remake. Playback speed (0.75× to 2×) speeds up Play, pauses included, without changing the voices' pitch. Export Audio always saves at normal speed, with your pauses."),
             .heading("Exporting audio"),
-            .text("File › Export Audio… saves all the voices or one character's lines as M4A or WAV files, one file per chapter or all in one. Under Chapters, check the chapters to include: Select All checks or clears every one, and ⇧-click checks a run of chapters. The window remembers your choice until you close the book. Each file is finished on this Mac and then moved into the folder you chose, so exporting into OneDrive, iCloud Drive or Dropbox works too."),
+            .text("File › Export Audio… saves all the voices or one character's lines as M4A or WAV files, one file per chapter or all in one. Under Chapters, check the chapters to include: Select All checks or clears every one, and ⇧-click checks a run of chapters. The window remembers your choice until you close the book. When chapters have recaps, Say chapter recaps reads each one (\"Previously…\") after the chapter's title. Each file is finished on this Mac and then moved into the folder you chose, so exporting into OneDrive, iCloud Drive or Dropbox works too."),
             .heading("Engines"),
             .text("Choose the engine for each project from the menu at the top of the Voices page. Each engine keeps its own casting, so switching back and forth loses nothing."),
             .keys([
                 ("Apple Voices", "Come with your Mac and work right away. They can't act, so a tone only changes speed and pitch a little. More natural Premium voices are a free download in System Settings › Accessibility › Spoken Content."),
                 ("Qwen3-TTS", "Sixteen ready-made voices, from a little girl to a weathered sailor, or any voice you describe. When the summary says how a character sounds (\"An older man with a deep, gravelly voice, speaking English with a Scottish accent\"), casting designs that voice for them. It records a short sample of each voice in each tone, then speaks every line from that sample, so the voice stays the same and the tone comes through. 6.2 GB."),
                 ("Orpheus", "Eight natural American voices that act from the words. A sigh, laugh, gasp or groan in the speech tag (\"she sighed\") is performed too. 3.6 GB."),
-                ("ElevenLabs (Cloud)", "Natural voices from your ElevenLabs account, made on ElevenLabs' servers with its eleven_v4 model, which acts each tone. Unlike the others it sends text off your Mac: every line an ElevenLabs voice speaks goes to ElevenLabs, and uses your plan's credits."),
+                ("ElevenLabs (Cloud)", "Natural voices from your ElevenLabs account, made on ElevenLabs' servers with its eleven_v4 model, which acts each tone and any delivery hint (\"barely audible\"; see Choosing a Model › Claude's own features). Unlike the others it sends text off your Mac: every line an ElevenLabs voice speaks goes to ElevenLabs, and uses your plan's credits."),
             ]),
             .heading("ElevenLabs and your manuscript"),
             .text("ElevenLabs is the only part of InnerVoice that sends your book anywhere. Set it up in Settings › Voices: Open API Keys Page, create a key, paste it, click Check Key, and tick that you understand your text goes to ElevenLabs. The key is kept in your Mac's keychain."),
@@ -286,6 +286,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
             .text("For a production with more than one narrator, add the narrators in Cast and cast each character to one of them."),
             .heading("Narrator Scripts"),
             .text("Export a Narrator Script for each narrator as PDF or Word. It has only their lines, each with its cue line and its chapter and paragraph, and the summaries of the characters they voice. Send it to the narrator; they don't need InnerVoice."),
+            .text("A chapter with a recap (\"Previously…\", in the inspector next to the chapter, or from Book › Claude › Write Chapter Recaps) has it under the chapter's title."),
             .heading("The whole manuscript"),
             .text("You can also export the tagged manuscript as a PDF with colors, initials and a key to the characters, for printing or reading on an iPad, and the cast list as PDF or CSV."),
         ]
@@ -296,6 +297,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
                 ("Say It As", "How to say it, in your own spelling: \"SHEV-on\""),
                 ("Note", "Anything else: where it comes from, what the author said"),
                 ("Confirmed", "Mark it once the author has confirmed it"),
+                ("Suggest Spellings", "Cloud: Claude suggests a Say It As for each term without one. Only the terms and the sentence each first appears in are sent; you check each spelling you want to use"),
             ]),
         ]
 
@@ -338,6 +340,17 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
             ]),
             .text("Each book asks once before anything is sent: \"Send this book to Claude?\" Until you say yes, nothing from that book leaves your Mac. To take the yes back, choose Book › Stop Sending This Book to Claude. Anthropic doesn't train on API data unless your organization has opted in; the setup window links to how to check."),
             .text("After Tag Speakers runs with Claude, Review Claude’s Changes lists every line it gave a new speaker or tone. Everything starts checked; uncheck what you don’t want and click Undo Unchecked, and those lines go back to how they were, in one Undo step. Keep All keeps everything. Lines you assigned yourself are never changed. To keep Claude’s changes straight away instead, turn off Review Claude’s changes in Book › Project Settings…"),
+            .heading("What it costs"),
+            .text("Before Tag Speakers, Build Summaries or any of Claude's own features sends a book, InnerVoice shows the estimated cost for the model you picked, worked out on your Mac from the book's length (nothing is sent to count it). It's an estimate: your bill may differ. A model InnerVoice doesn't know the price of shows tokens only. Tick \"Don’t show the estimate again\" to skip it next time."),
+            .heading("Claude's own features"),
+            .text("Book › Claude (Cloud) has four features that only Claude does. Each one sends text to Anthropic, so each asks first, and each is one Undo step."),
+            .keys([
+                ("Clean Up Text…", "Finds what importing left behind: scanning mistakes, words broken by a hyphen, page numbers and headers, footnote markers, spaced-out letters. Only the project changes; your manuscript file never does, and lines you assigned keep their speakers"),
+                ("Write Chapter Recaps…", "A short \"Previously…\" for each chapter, in the inspector next to the chapter. Edit it, and it's yours. Narrator Scripts include it, and Export Audio can say it after the chapter title"),
+                ("Suggest Delivery Hints…", "How each line is performed beyond its tone (\"barely audible\", \"through gritted teeth\"). Hints go to ElevenLabs only, as audio tags; edit them in the inspector. Produce with AI Voices only"),
+                ("Suggest Spellings…", "A Say It As for each pronunciation without one; only the terms and the sentence each first appears in are sent. You confirm each one"),
+            ]),
+            .text("With Review Claude's changes on (Book › Project Settings…), fixes, recaps and hints wait in a list to keep or leave out; nothing changes until you apply them. Suggested spellings always wait for you."),
             .tip("With a downloaded model or Apple's, your manuscript never leaves this Mac. Only the model is downloaded."),
         ]
 

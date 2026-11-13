@@ -26,7 +26,7 @@ enum SelfTest {
         }
     }
 
-    private static func check(_ name: String, _ ok: Bool, _ detail: String = "") {
+    static func check(_ name: String, _ ok: Bool, _ detail: String = "") {
         count += 1
         if !ok { failures += 1 }
         print(ok ? "PASS \(name)" : "FAIL \(name)\(detail.isEmpty ? "" : ": \(detail)")")
@@ -1222,6 +1222,7 @@ enum SelfTest {
         await localClones(doc, undo: undo)
         redrawCost(doc)
         seriesVoices(doc, undo: undo)
+        await claudeFeatures()
 
         if let path = ProcessInfo.processInfo.environment["APP_SELFTEST_MODEL"] {
             await liveModel(path: path)

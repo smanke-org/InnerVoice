@@ -164,6 +164,8 @@ struct AudioExportSheet: View {
     @State private var characterID: UUID?
     @AppStorage("voices.readNarration") private var narration = true
     @AppStorage("audioExport.perChapter") private var perChapter = true
+    /// Say each chapter's recap ("Previously…") after its title.
+    @AppStorage("audioExport.recaps") private var recaps = false
     /// Separate: a file per voice (Narrator, Men’s Voice, a character…), lined up for mixing.
     @AppStorage("audioExport.separate") private var separate = false
     @AppStorage("audioExport.format") private var formatRaw = AudioExporter.Format.m4a.rawValue
@@ -263,6 +265,10 @@ struct AudioExportSheet: View {
                     }
                 } else {
                     Toggle("Read narration too", isOn: $narration)
+                    if narration, picked.contains(where: { document.project.chapters.indices.contains($0) && document.project.chapters[$0].recapText != nil }) {
+                        Toggle("Say chapter recaps (“Previously…”)", isOn: $recaps)
+                            .help("The narrator reads each chapter’s recap after its title. Recaps are in the inspector next to the chapter.")
+                    }
                 }
                 if scope == .book, picked.count > 1 {
                     Picker("Files", selection: $perChapter) {
@@ -330,16 +336,16 @@ struct AudioExportSheet: View {
         case .book:
             if chapters.count == 1, let c = chapters.first {
                 return [AudioExporter.Part(name: "\(title) - \(chapterTitle(c))",
-                                           segments: SpeechScript.segments(chapter: c, project: project, index: index, includeNarration: narration))]
+                                           segments: SpeechScript.segments(chapter: c, project: project, index: index, includeNarration: narration, recaps: recaps))]
             }
             if perChapter {
                 return chapters.map { c in
                     AudioExporter.Part(name: String(format: "%02d ", c + 1) + chapterTitle(c),
-                                       segments: SpeechScript.segments(chapter: c, project: project, index: index, includeNarration: narration))
+                                       segments: SpeechScript.segments(chapter: c, project: project, index: index, includeNarration: narration, recaps: recaps))
                 }
             }
             return [AudioExporter.Part(name: title + which,
-                                       segments: SpeechScript.segments(chapters: chapters, project: project, index: index, includeNarration: narration))]
+                                       segments: SpeechScript.segments(chapters: chapters, project: project, index: index, includeNarration: narration, recaps: recaps))]
         case .character:
             guard let id = characterID else { return [] }
             if id == Self.narratorTag {
