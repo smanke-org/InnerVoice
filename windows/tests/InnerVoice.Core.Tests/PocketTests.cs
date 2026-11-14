@@ -4,112 +4,66 @@ using InnerVoice.Core.Import;
 
 namespace InnerVoice.Core.Tests;
 
-/// The Mac's PocketTTSTests (Pocket TTS replaced Qwen3-TTS, 2026-11-13): old books switch when
-/// opened, the tones, and decoding engine values this version doesn't know. The old book is
-/// the Mac's own (Fixtures/legacy-qwen.json, from tools/MacFixtures), and the Mac's migration of
-/// it and of the Windows-saved Qwen3-TTS sample are compared field by field, so a book migrates
-/// the same on both computers.
+/// The Mac's PocketTTSTests, and the file format since Qwen3-TTS came back beside Pocket TTS
+/// (2026-11-14): a book saved with Qwen3-TTS opens as Qwen3-TTS, with its voices as they were
+/// and nothing migrated (the old book is the Mac's own, Fixtures/legacy-qwen.json from
+/// tools/MacFixtures, and the Windows-saved Qwen3-TTS sample); "chatterbox" still reads as
+/// Pocket TTS and an engine this version doesn't know as Mix Engines; and the tones.
 public class PocketTests
 {
     static Project OldProject() => ProjectJson.Decode(File.ReadAllBytes(Fixtures.PathOf("legacy-qwen.json")));
 
     static BookCharacter Character(Project p, string name) => p.Characters.First(c => c.Name == name);
 
+    /// Every number as the double it means, so two ways of writing one compare equal.
+    static JsonNode Numbers(JsonNode n) => n switch
+    {
+        JsonObject o => new JsonObject(o.Select(kv => KeyValuePair.Create(kv.Key, kv.Value is null ? null : Numbers(kv.Value)))),
+        JsonArray a => new JsonArray(a.Select(x => x is null ? null : Numbers(x)).ToArray()),
+        JsonValue v when v.GetValueKind() == System.Text.Json.JsonValueKind.Number => JsonValue.Create(v.GetValue<double>()),
+        _ => n.DeepClone(),
+    };
+
     [Fact]
-    public void OldEngineReadsAsPocketTTS()
+    public void AQwenBookStaysQwen()
     {
         var p = OldProject();
-        Assert.Equal(VoiceEngine.Pocket, p.Settings.VoiceEngine);
-        // The voices still sit under "qwen" until migrated.
-        Assert.True(LegacyVoices.NeedsMigration(p));
-        Assert.Equal(VoiceEngine.Pocket, Character(p, "Mara Quinn").Voices!["qwen"].Choice.Engine);
-    }
-
-    [Fact]
-    public void OldBooksSwitchToPocketTTS()
-    {
-        var p = OldProject();
-        Assert.True(LegacyVoices.Migrate(p));
-        Assert.False(LegacyVoices.NeedsMigration(p));
-        Assert.All(p.Characters, c => Assert.False(c.Voices?.ContainsKey("qwen") == true));
-
-        // Ready-made → nearest stock voice (Kind Grandmother → Mia, an older woman: lower and
-        // slower), the narrator's own speed and pitch kept on top, still the narrator's choice.
-        var edda = Character(p, "Edda Voss").Voice(VoiceEngine.Pocket)!;
-        Assert.True(edda.Choice.VoiceID == "stock:mia" && edda.Source == VoiceSource.User);
-        Assert.True(edda.Choice.Pitch == 0.85 && edda.Choice.Rate == 0.92);
-        Assert.Null(edda.Choice.Design);
-
-        // Designed → the stock voice casting picks for that character, a woman's for Mara.
-        var mara = Character(p, "Mara Quinn").Voice(VoiceEngine.Pocket)!;
-        Assert.True(mara.Choice.VoiceID.StartsWith("stock:") && mara.Source == VoiceSource.Auto);
-        Assert.Equal(Gender.Female, VoiceInfo.Pocket.First(v => v.VoiceID == mara.Choice.VoiceID).Gender);
-
-        // A designed voice the narrator chose stays theirs; the Orpheus voice doesn't move.
-        var tom = Character(p, "Tom Hale");
-        var tomVoice = tom.Voice(VoiceEngine.Pocket)!;
-        Assert.Equal(VoiceSource.User, tomVoice.Source);
-        Assert.Equal(Gender.Male, VoiceInfo.Pocket.First(v => v.VoiceID == tomVoice.Choice.VoiceID).Gender);
-        Assert.True(tom.Voice(VoiceEngine.Orpheus)?.Choice.VoiceID == "leo" && tom.Voice(VoiceEngine.Orpheus)?.Source == VoiceSource.User);
-
-        // A clone keeps its recording, now spoken by Pocket TTS.
-        var pip = Character(p, "Pip").Voice(VoiceEngine.Pocket)!;
-        Assert.Equal(new VoiceChoice(VoiceEngine.Pocket, "clone:ABC"), pip.Choice);
-        Assert.Equal(VoiceSource.User, pip.Source);
-
-        // The narrator's ready-made voice → the engine's own voice (Alba), still the narrator's choice.
-        var narrator = p.Settings.NarratorVoice(VoiceEngine.Pocket)!;
-        Assert.True(narrator.Choice.VoiceID == PocketVoice.BuiltInID && narrator.Source == VoiceSource.User);
-        Assert.Equal("stock:alba", PocketVoice.BuiltInID);
-        Assert.False(p.Settings.NarratorVoices?.ContainsKey("qwen") == true);
-
-        // Roles: ready-made → stock; designed (the narrator's) → a stock voice of that gender, still theirs.
-        Assert.Equal("stock:dan", p.Settings.RoleVoice(VoiceRole.Men, VoiceEngine.Pocket)?.Choice.VoiceID);
-        var women = p.Settings.RoleVoice(VoiceRole.Women, VoiceEngine.Pocket)!;
-        Assert.True(women.Source == VoiceSource.User && VoiceInfo.Pocket.First(v => v.VoiceID == women.Choice.VoiceID).Gender == Gender.Female);
-
-        // Nobody without a voice got one, and the date casting last ran is kept.
-        Assert.Single(Character(p, "Edda Voss").Voices!);
-        Assert.Equal(700_000_000, p.VoicesCast?.Seconds);
-        Assert.All(p.Characters.Where(c => c.Name is not ("Edda Voss" or "Mara Quinn" or "Tom Hale" or "Pip")), c => Assert.Null(c.Voice(VoiceEngine.Pocket)));
-
-        // Saved and read again, nothing changes and nothing is left to migrate.
-        var again = ProjectJson.Decode(ProjectJson.Encode(p));
-        Assert.False(LegacyVoices.Migrate(again));
-        Assert.True(JsonNode.DeepEquals(JsonNode.Parse(ProjectJson.Encode(p)), JsonNode.Parse(ProjectJson.Encode(again))));
-        Assert.DoesNotContain("\"qwen\"", System.Text.Encoding.UTF8.GetString(ProjectJson.Encode(p)));
-    }
-
-    /// The same old book migrates to exactly what the Mac makes of it.
-    [Fact]
-    public void OldBooksMigrateLikeTheMac()
-    {
-        var p = OldProject();
-        Assert.True(LegacyVoices.Migrate(p));
-        var mac = RoundTripTests.Normalize(JsonNode.Parse(File.ReadAllBytes(Fixtures.PathOf("legacy-qwen-migrated-mac.json")))!);
-        var windows = RoundTripTests.Normalize(JsonNode.Parse(ProjectJson.Encode(p))!);
+        Assert.Equal(VoiceEngine.Qwen, p.Settings.VoiceEngine);
+        // The voices stay under "qwen", spoken by Qwen3-TTS: presets, designs and clones.
+        Assert.All(p.Characters.Where(c => c.Voices?.ContainsKey("qwen") == true), c => Assert.Equal(VoiceEngine.Qwen, c.Voices!["qwen"].Choice.Engine));
+        var edda = Character(p, "Edda Voss").Voice(VoiceEngine.Qwen)!;
+        Assert.True(edda.Choice.VoiceID == "preset:grandmother" && edda.Source == VoiceSource.User && edda.Choice.Pitch == 0.95);
+        var mara = Character(p, "Mara Quinn").Voice(VoiceEngine.Qwen)!;
+        Assert.Equal(new VoiceChoice(VoiceEngine.Qwen, "design", "A woman in her thirties with a warm voice."), mara.Choice);
+        Assert.Equal(new VoiceChoice(VoiceEngine.Qwen, "clone:ABC"), Character(p, "Pip").Voice(VoiceEngine.Qwen)?.Choice);
+        Assert.Equal("preset:narrator", p.Settings.NarratorVoice(VoiceEngine.Qwen)?.Choice.VoiceID);
+        Assert.Equal("preset:baritone", p.Settings.RoleVoice(VoiceRole.Men, VoiceEngine.Qwen)?.Choice.VoiceID);
+        // Nothing moved to Pocket TTS.
+        Assert.All(p.Characters, c => Assert.Null(c.Voice(VoiceEngine.Pocket)));
+        Assert.Null(p.Settings.NarratorVoice(VoiceEngine.Pocket));
+        // Saved back exactly as the Mac wrote it (the same numbers: JSONSerialization wrote
+        // them with 17 digits, 0.94999999999999996 for 0.95).
+        var mac = Numbers(RoundTripTests.Normalize(JsonNode.Parse(File.ReadAllBytes(Fixtures.PathOf("legacy-qwen.json")))!));
+        var windows = Numbers(RoundTripTests.Normalize(JsonNode.Parse(ProjectJson.Encode(p))!));
         Assert.True(JsonNode.DeepEquals(mac, windows), RoundTripTests.Diff(mac, windows));
     }
 
     /// The Windows-saved sample from before Pocket TTS (a designed voice the narrator chose, a
-    /// ready-made role voice) migrates as the Mac's WindowsFixtures test migrates it.
+    /// ready-made role voice) opens as Qwen3-TTS and saves back unchanged.
     [Fact]
-    public void TheWindowsSavedQwenSampleMigratesLikeTheMac()
+    public void TheWindowsSavedQwenSampleOpensAsQwen()
     {
         var contents = ProjectArchive.Read(File.ReadAllBytes(Fixtures.PathOf("sample-windows.innervoice")));
         var p = ProjectJson.Decode(contents.ProjectJson);
-        Assert.Equal(VoiceEngine.Pocket, p.Settings.VoiceEngine);
-        Assert.Contains(p.Characters, c => c.Voices?.GetValueOrDefault("qwen")?.Choice.VoiceID == "design");
-        Assert.True(LegacyVoices.Migrate(p));
-        Assert.False(LegacyVoices.NeedsMigration(p));
-        Assert.Contains(p.Characters, c => c.Voice(VoiceEngine.Pocket) is { Source: VoiceSource.User } v && v.Choice.VoiceID.StartsWith("stock:"));
-        var mac = RoundTripTests.Normalize(JsonNode.Parse(File.ReadAllBytes(Fixtures.PathOf("sample-windows-migrated-mac.json")))!);
-        var windows = RoundTripTests.Normalize(JsonNode.Parse(ProjectJson.Encode(p))!);
-        Assert.True(JsonNode.DeepEquals(mac, windows), RoundTripTests.Diff(mac, windows));
+        Assert.Equal(VoiceEngine.Qwen, p.Settings.VoiceEngine);
+        Assert.Contains(p.Characters, c => c.Voice(VoiceEngine.Qwen) is { Source: VoiceSource.User } v && v.Choice.VoiceID == "design");
+        var before = RoundTripTests.Normalize(JsonNode.Parse(contents.ProjectJson)!);
+        var after = RoundTripTests.Normalize(JsonNode.Parse(ProjectJson.Encode(p))!);
+        Assert.True(JsonNode.DeepEquals(before, after), RoundTripTests.Diff(before, after));
     }
 
-    /// A book the new Mac saved (engine "pocket", stock voices) opens here and saves back
-    /// unchanged, with nothing to migrate.
+    /// A book the Mac saved with Pocket TTS (engine "pocket", stock voices) opens here and saves
+    /// back unchanged.
     [Fact]
     public void AMacSavedPocketBookOpensAndSavesUnchanged()
     {
@@ -119,8 +73,6 @@ public class PocketTests
         var tom = p.Characters.First(c => c.Name.StartsWith("Tom"));
         Assert.Equal(new VoiceChoice(VoiceEngine.Pocket, "stock:dan", pitch: 0.89), tom.Voice(VoiceEngine.Pocket)?.Choice);
         Assert.Equal("stock:leo", p.Settings.RoleVoice(VoiceRole.Men, VoiceEngine.Pocket)?.Choice.VoiceID);
-        Assert.False(LegacyVoices.NeedsMigration(p));
-        Assert.False(LegacyVoices.Migrate(p));
         var mac = RoundTripTests.Normalize(JsonNode.Parse(contents.ProjectJson)!);
         var windows = RoundTripTests.Normalize(JsonNode.Parse(ProjectJson.Encode(p))!);
         Assert.True(JsonNode.DeepEquals(mac, windows), RoundTripTests.Diff(mac, windows));
@@ -128,35 +80,23 @@ public class PocketTests
         Assert.NotNull(VoiceInfo.Pocket.FirstOrDefault(v => v.VoiceID == "stock:dan"));
     }
 
+    /// The sixteen ready-made Qwen3-TTS voices, with the Mac's voice IDs, narrator first.
     [Fact]
-    public void ProjectsWithoutQwenAreLeftAlone()
-    {
-        var p = ProjectBuilder.Make(new ImportedBook("Test", "", [new Chapter("Chapter 1", [new Paragraph("“Hi,” said Ann.", ParagraphStyle.Body, null)])]), "t.txt");
-        p.Characters[0].SetVoice(new CastVoice(new VoiceChoice(VoiceEngine.Orpheus, "tara"), 1, VoiceSource.User), VoiceEngine.Orpheus);
-        var before = ProjectJson.Encode(p);
-        Assert.False(LegacyVoices.Migrate(p));
-        Assert.Equal(before, ProjectJson.Encode(p));
-    }
-
-    [Fact]
-    public void EveryQwenPresetHasAStockVoiceOfItsGender()
+    public void TheSixteenQwenPresets()
     {
         var genders = new Dictionary<string, Gender>
         {
-            ["storyteller"] = Gender.Female, ["bright"] = Gender.Female, ["soft"] = Gender.Female, ["brisk"] = Gender.Female, ["dame"] = Gender.Female,
-            ["grandmother"] = Gender.Female, ["lass"] = Gender.Female, ["girl"] = Gender.Female, ["baritone"] = Gender.Male, ["hero"] = Gender.Male,
-            ["gentleman"] = Gender.Male, ["elder"] = Gender.Male, ["sailor"] = Gender.Male, ["clerk"] = Gender.Male, ["boy"] = Gender.Male,
+            ["narrator"] = Gender.Neutral, ["storyteller"] = Gender.Female, ["bright"] = Gender.Female, ["soft"] = Gender.Female, ["brisk"] = Gender.Female,
+            ["dame"] = Gender.Female, ["grandmother"] = Gender.Female, ["lass"] = Gender.Female, ["girl"] = Gender.Female, ["baritone"] = Gender.Male,
+            ["hero"] = Gender.Male, ["gentleman"] = Gender.Male, ["elder"] = Gender.Male, ["sailor"] = Gender.Male, ["clerk"] = Gender.Male, ["boy"] = Gender.Male,
         };
-        Assert.Equal(16, LegacyVoices.Presets.Count);
-        foreach (var (preset, gender) in genders)
+        Assert.Equal(genders.Keys.Select(k => "preset:" + k), VoiceInfo.QwenPresets.Select(v => v.VoiceID));
+        foreach (var v in VoiceInfo.QwenPresets)
         {
-            var mapped = LegacyVoices.Mapped(new CastVoice(new VoiceChoice(VoiceEngine.Pocket, "preset:" + preset), 1, VoiceSource.Auto));
-            Assert.Equal(gender, VoiceInfo.Pocket.First(v => v.VoiceID == mapped?.Choice.VoiceID).Gender);
+            Assert.Equal(genders[v.VoiceID["preset:".Length..]], v.Gender);
+            Assert.Equal(VoiceEngine.Qwen, v.Engine);
+            Assert.False(string.IsNullOrWhiteSpace(v.Design));
         }
-        // Children sound higher and a little quicker.
-        var girl = LegacyVoices.Mapped(new CastVoice(new VoiceChoice(VoiceEngine.Pocket, "preset:girl"), 1, VoiceSource.Auto));
-        Assert.True(PocketVoice.Semitones(girl?.Choice.Pitch) == 3 && girl?.Choice.Rate == 1.05);
-        Assert.Null(LegacyVoices.Mapped(new CastVoice(new VoiceChoice(VoiceEngine.Pocket, "design", "A man."), 1, VoiceSource.Auto)));
     }
 
     [Fact]
@@ -165,12 +105,14 @@ public class PocketTests
         var choice = System.Text.Json.JsonSerializer.Deserialize<VoiceChoice>("""{"engine":"someday-engine","voiceID":"x"}""", ProjectJson.Options)!;
         // Mixed names no voices, so the player falls back to the narrator.
         Assert.Equal(VoiceEngine.Mixed, choice.Engine);
-        Assert.Equal([VoiceEngine.Apple, VoiceEngine.Pocket, VoiceEngine.Orpheus, VoiceEngine.Elevenlabs, VoiceEngine.Mixed, VoiceEngine.Pocket],
-            System.Text.Json.JsonSerializer.Deserialize<VoiceEngine[]>("""["apple","chatterbox","orpheus","elevenlabs","mixed","qwen"]""", ProjectJson.Options));
-        // Saved as "pocket"; the unreleased test build's "chatterbox" reads as Pocket TTS.
+        Assert.Equal([VoiceEngine.Apple, VoiceEngine.Pocket, VoiceEngine.Orpheus, VoiceEngine.Elevenlabs, VoiceEngine.Mixed, VoiceEngine.Qwen, VoiceEngine.Pocket],
+            System.Text.Json.JsonSerializer.Deserialize<VoiceEngine[]>("""["apple","chatterbox","orpheus","elevenlabs","mixed","qwen","pocket"]""", ProjectJson.Options));
+        // Saved as "pocket" and "qwen"; the unreleased test build's "chatterbox" reads as Pocket TTS.
         Assert.Equal("\"pocket\"", System.Text.Json.JsonSerializer.Serialize(VoiceEngine.Pocket, ProjectJson.Options));
-        // Outside a project too (the attribute on the enum).
-        Assert.Equal(VoiceEngine.Pocket, System.Text.Json.JsonSerializer.Deserialize<VoiceEngine>("\"qwen\""));
+        Assert.Equal("\"qwen\"", System.Text.Json.JsonSerializer.Serialize(VoiceEngine.Qwen, ProjectJson.Options));
+        // Outside a project too (the attribute on the enum): "qwen" is Qwen3-TTS, never Pocket TTS.
+        Assert.Equal(VoiceEngine.Qwen, System.Text.Json.JsonSerializer.Deserialize<VoiceEngine>("\"qwen\""));
+        Assert.Equal(VoiceEngine.Pocket, System.Text.Json.JsonSerializer.Deserialize<VoiceEngine>("\"chatterbox\""));
         // A whole project with an engine from the future still opens.
         var p = ProjectJson.Decode(System.Text.Encoding.UTF8.GetBytes(System.Text.Encoding.UTF8.GetString(File.ReadAllBytes(Fixtures.PathOf("legacy-qwen.json"))).Replace("\"voiceEngine\":\"qwen\"", "\"voiceEngine\":\"hologram\"")));
         Assert.Equal(VoiceEngine.Mixed, p.Settings.VoiceEngine);

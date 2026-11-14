@@ -4,18 +4,16 @@
 //   sample-mac.innervoice          the Mac's sample project as Tests/InnerVoiceKitTests/
 //                                  WindowsFixtures.swift writes it since Pocket TTS (engine
 //                                  "pocket", stock voices), from the same markdown
-//   legacy-qwen.json               the old book from PocketTTSTests.oldProject() (engine "qwen")
-//   legacy-qwen-migrated-mac.json  that book after the Mac's LegacyVoices.migrate
-//   sample-windows-migrated-mac.json  the Windows-saved Qwen3-TTS sample after the Mac's migrate
-// The Windows tests migrate the same inputs and compare field by field.
+//   legacy-qwen.json               a Qwen3-TTS book (engine "qwen": presets, designs, a clone,
+//                                  narrator and role voices), from PocketTTSTests.oldProject()
+// Since Qwen3-TTS came back (2026-11-14) nothing is migrated: the Windows tests open the book as
+// Qwen3-TTS and save it back unchanged. (The migrated fixtures 1.0.0–1.0.2 compared are gone.)
 
 import Foundation
 
 let folder = URL(fileURLWithPath: CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "windows/Fixtures")
 let sorted = JSONEncoder()
 sorted.outputFormatting = [.sortedKeys]
-let pretty = JSONEncoder()
-pretty.outputFormatting = [.sortedKeys, .prettyPrinted]
 
 // The sample story, as the current fixture holds it (Original/Sample Story.md).
 let oldSample = try ProjectArchive.read(Data(contentsOf: folder.appending(path: "sample-mac.innervoice")))
@@ -79,7 +77,7 @@ do {
     try archive.write(to: folder.appending(path: "sample-mac.innervoice"))
 }
 
-// MARK: legacy-qwen.json and its migration (PocketTTSTests.oldProject, at 9d41ee9)
+// MARK: legacy-qwen.json (PocketTTSTests.oldProject, at 9d41ee9)
 
 func book(_ paragraphs: [String]) -> ImportedBook {
     ImportedBook(title: "Test", chapters: [Chapter(title: "Chapter 1", paragraphs: paragraphs.map { Paragraph(text: $0) })])
@@ -128,14 +126,4 @@ func oldProjectJSON() throws -> Data {
 
 let old = try oldProjectJSON()
 try old.write(to: folder.appending(path: "legacy-qwen.json"))
-var migrated = try JSONDecoder().decode(Project.self, from: old)
-precondition(LegacyVoices.migrate(&migrated))
-try pretty.encode(migrated).write(to: folder.appending(path: "legacy-qwen-migrated-mac.json"))
-
-// MARK: the Windows-saved sample (Qwen3-TTS) after the Mac's migrate
-
-let windowsSample = try ProjectArchive.read(Data(contentsOf: folder.appending(path: "sample-windows.innervoice")))
-var w = try JSONDecoder().decode(Project.self, from: windowsSample.projectJSON)
-precondition(LegacyVoices.migrate(&w))
-try pretty.encode(w).write(to: folder.appending(path: "sample-windows-migrated-mac.json"))
-print("Wrote sample-mac.innervoice, legacy-qwen.json, legacy-qwen-migrated-mac.json and sample-windows-migrated-mac.json to \(folder.path)")
+print("Wrote sample-mac.innervoice and legacy-qwen.json to \(folder.path)")

@@ -6,9 +6,10 @@ using InnerVoice.Core.Speech.Neural;
 
 namespace InnerVoice.Core.Tests;
 
-/// The local voices (Pocket TTS and Orpheus on ONNX Runtime): everything around the models with
-/// fakes, and the real models when INNERVOICE_TEST_VOICE_MODELS names a Voice Models folder
-/// (Pocket TTS 0.5 GB, Orpheus 2.5 GB; VoiceBench --bench uses the same layout).
+/// The local voices (Pocket TTS, Qwen3-TTS and Orpheus on ONNX Runtime): everything around the
+/// models with fakes, and the real models when INNERVOICE_TEST_VOICE_MODELS names a Voice Models
+/// folder (Pocket TTS 0.5 GB, Qwen3-TTS 8.8 GB, Orpheus 2.5 GB; VoiceBench --bench uses the same
+/// layout).
 [Collection("Engines")]
 public class NeuralVoiceTests
 {
@@ -41,6 +42,17 @@ public class NeuralVoiceTests
         Assert.EndsWith(",", parts[0]);
         Assert.Equal(["“Run!” she said.", "He ran."], SpeechChunks.Sentences("“Run!” she said. He ran."));
         Assert.Equal(["Mr. Hale left.", "Dr. Moss stayed!", "Why?"], SpeechChunks.Sentences("Mr. Hale left. Dr. Moss stayed! Why?"));
+    }
+
+    [Fact]
+    public void QwenTokenizerSplitsAndMapsBytes()
+    {
+        var dir = TempDir();
+        // A tiny byte-level vocabulary: "Ġ" is the space byte.
+        File.WriteAllText(Path.Combine(dir, "vocab.json"), """{"H":0,"e":1,"l":2,"o":3,"Ġ":4,"w":5,"r":6,"d":7,"He":8,"ll":9,"Hell":10,"Hello":11,"Ġw":12,"Ġwo":13,"!":14}""");
+        File.WriteAllText(Path.Combine(dir, "merges.txt"), "#version: 0.2\nH e\nl l\nHe ll\nHell o\nĠ w\nĠw o\n");
+        var qwen = BpeTokenizer.Qwen(Path.Combine(dir, "vocab.json"), Path.Combine(dir, "merges.txt"));
+        Assert.Equal([151644, 11, 13, 6, 2, 7, 14, 151645], qwen.Encode("<|im_start|>Hello world!<|im_end|>"));
     }
 
     [Fact]
@@ -129,14 +141,70 @@ public class NeuralVoiceTests
 
     // MARK: Audio
 
+
     [Fact]
-    public void PitchFindsTheVoice()
+    public void TheSpeakerEncodersMelMatchesTheReference()
+    {
+        // The FFT finds a sine in its bin.
+        var re = new double[1024]; var im = new double[1024];
+        for (int i = 0; i < 1024; i++) re[i] = Math.Sin(2 * Math.PI * 32 * i / 1024);
+        Mel.Fft(re, im);
+        int peak = Enumerable.Range(0, 512).MaxBy(k => re[k] * re[k] + im[k] * im[k]);
+        Assert.Equal(32, peak);
+        // Slaney filters: 128 triangles over 513 bins, each with weight, none negative.
+        var f = Mel.Filters(24000, 1024, 128, 0, 12000);
+        Assert.Equal(128, f.Length);
+        Assert.All(f, row => { Assert.Equal(513, row.Length); Assert.True(row.Sum() > 0); Assert.True(row.Min() >= 0); });
+        // Frames: reflect-padded by 384 on each side, hop 256.
+        var mel = Mel.LogMel(Tone(440, 1), out int frames);
+        Assert.Equal(1 + (24000 + 768 - 1024) / 256, frames);
+        Assert.Equal(frames * 128, mel.Length);
+        // A 440 Hz tone is loudest in the band that holds 440 Hz.
+        int loudest = Enumerable.Range(0, 128).MaxBy(b => mel[frames / 2 * 128 + b]);
+        int band = Enumerable.Range(0, 128).MaxBy(b => f[b][(int)Math.Round(440 * 1024 / 24000.0)]);
+        Assert.InRange(loudest, band - 1, band + 1);
+    }
+
+
+    [Fact]
+    public void PitchFindsTheVoiceAndCatchesAContradiction()
     {
         var (voiced, hz) = Pitch.Analyze(Tone(120, 1));
         Assert.True(voiced > 0.9);
         Assert.InRange(hz, 115, 125);
         Assert.InRange(Pitch.Analyze(Tone(240, 1)).Hz, 230, 250);
+        Assert.True(Pitch.Contradicts("A man in his forties with a warm, easygoing baritone voice.", Tone(240, 1)));
+        Assert.False(Pitch.Contradicts("A man in his forties with a warm, easygoing baritone voice.", Tone(115, 1)));
+        Assert.True(Pitch.Contradicts("A young woman with a bright, clear, lively voice.", Tone(110, 1)));
+        // Children and descriptions with no gender are never second-guessed.
+        Assert.False(Pitch.Contradicts("A young boy with a high, cheerful voice.", Tone(300, 1)));
+        Assert.False(Pitch.Contradicts("A calm, clear audiobook narrator.", Tone(300, 1)));
     }
+
+    [Fact]
+    public void NumPyArraysAreReadByRow()
+    {
+        var path = Path.Combine(TempDir(), "m.npy");
+        var header = "{'descr': '<f4', 'fortran_order': False, 'shape': (3, 4), }\n";
+        using (var f = File.Create(path))
+        {
+            f.Write([0x93, .. "NUMPY"u8, 1, 0]);
+            f.Write(BitConverter.GetBytes((ushort)header.Length));
+            f.Write(Encoding.ASCII.GetBytes(header));
+            for (int i = 0; i < 12; i++) f.Write(BitConverter.GetBytes((float)i));
+        }
+        foreach (var inMemory in new[] { false, true })
+        {
+            using var m = NpyMatrix.Open(path, inMemory);
+            Assert.Equal((3, 4), (m.Rows, m.Columns));
+            Assert.Equal([4f, 5, 6, 7], m.Row(1));
+            var sum = new float[4];
+            m.AddRow(2, sum);
+            m.AddRow(0, sum);
+            Assert.Equal([8f, 10, 12, 14], sum);
+        }
+    }
+
 
     [Fact]
     public void OrpheusCodesBecomeSnacsThreeLevels()
@@ -195,7 +263,9 @@ public class NeuralVoiceTests
         Assert.Equal("Every word of it.", c.Text);
         Assert.Equal(6, c.Seconds, 2);
         Assert.True(LocalClones.IsClone(new VoiceChoice(VoiceEngine.Pocket, c.VoiceID)));
+        Assert.True(LocalClones.IsClone(new VoiceChoice(VoiceEngine.Qwen, c.VoiceID)));
         Assert.False(LocalClones.IsClone(new VoiceChoice(VoiceEngine.Orpheus, c.VoiceID)));
+        Assert.Equal(VoiceEngine.Qwen, LocalClones.Info(c, VoiceEngine.Qwen).Engine);
         var info = LocalClones.Info(c);
         Assert.True(info.Cloned);
         Assert.Empty(VoiceInfo.Castable([info]));
@@ -218,16 +288,25 @@ public class NeuralVoiceTests
     sealed class Fakes : IDisposable
     {
         public readonly List<PocketLine> Said = [];
+        public readonly List<(string Text, string Description, ulong Seed)> Designed = [];
+        public readonly List<(string Text, VoiceSample Sample, ulong Seed)> Cloned = [];
         public readonly List<(string Text, string Voice)> Spoken = [];
         public readonly PocketEngine Pocket = new() { AssumeReady = true };
+        public readonly QwenEngine Qwen = new() { AssumeReady = true };
         public readonly OrpheusEngine Orpheus = new() { AssumeReady = true };
+        readonly Func<string, string, ulong, CancellationToken, float[]> designer = QwenSamples.Designer;
         readonly LocalClones clones = LocalClones.Shared;
+        /// What Qwen3-TTS's VoiceDesign model makes for a description.
+        public Func<string, float[]> Voice = d => Tone(d.Contains("woman") ? 220 : 115, 4);
 
         public Fakes()
         {
             VoicePacks.Folder = TempDir();
             PocketClips.Forget();
+            QwenSamples.Forget();
             LocalClones.Shared = new LocalClones(TempDir());
+            QwenSamples.Designer = (text, description, seed, ct) => { lock (Designed) Designed.Add((text, description, seed)); return Voice(description); };
+            Qwen.Cloner = (text, sample, seed, ct) => { lock (Cloned) Cloned.Add((text, sample, seed)); return Tone(150, text.Length / 20.0, 0.05f); };
             // A quiet tone at the clip's own pitch, a twentieth of a second a character.
             Pocket.Speaker = (line, ct) => { lock (Said) Said.Add(line); return Tone(Math.Max(60, Pitch.Analyze(line.Clip).Hz), line.Text.Length / 20.0, 0.05f); };
             Orpheus.Speaker = (text, voice, seed, ct) => { lock (Spoken) Spoken.Add((text, voice)); return Tone(180, 1, 0.05f); };
@@ -236,6 +315,8 @@ public class NeuralVoiceTests
         public void Dispose()
         {
             PocketClips.Forget();
+            QwenSamples.Designer = designer;
+            QwenSamples.Forget();
             LocalClones.Shared = clones;
             VoicePacks.Folder = Path.Combine(Path.GetTempPath(), "InnerVoice Voice Models (test)");
         }
@@ -288,7 +369,7 @@ public class NeuralVoiceTests
         Assert.InRange(Rms(whispered) / Rms(a), 0.68, 0.72);
         var thought = await f.Pocket.Render(spoken with { Kind = LineKind.Thought, Tone = Core.Tone.Neutral }, default);
         Assert.InRange(Rms(thought) / Rms(a), 0.83, 0.87);
-        // A voice nobody has (an unmigrated design) says so.
+        // A voice Pocket TTS doesn't have (a design is a Qwen3-TTS voice) says so.
         await Assert.ThrowsAsync<SpeechException>(() => f.Pocket.Render(spoken with { Choice = new VoiceChoice(VoiceEngine.Pocket, "design", "A man.") }, default));
     }
 
@@ -340,6 +421,109 @@ public class NeuralVoiceTests
     }
 
     [Fact]
+    public async Task QwenSpeaksEveryLineFromOneSamplePerDescriptionAndTone()
+    {
+        using var f = new Fakes();
+        var design = "A woman in her forties with a warm, low, unhurried voice.";
+        var choice = new VoiceChoice(VoiceEngine.Qwen, "design", design);
+        var spoken = new SpeechRequest { Text = "Where were you?", Choice = choice, Kind = LineKind.Spoken, Tone = Core.Tone.Angry };
+        var a = await f.Qwen.Render(spoken, default);
+        await f.Qwen.Render(spoken with { Text = "Answer me." }, default);
+        // One sample for the description and tone, said in the tone, with the Mac's sample text and seed.
+        var d = Assert.Single(f.Designed);
+        Assert.Equal(QwenSamples.SampleText, d.Text);
+        Assert.Equal(design + " Speaking angry and sharp.", d.Description);
+        Assert.Equal(Sampler.Seed(design), d.Seed);
+        Assert.True(File.Exists(Path.Combine(VoicePacks.SamplesFolder, QwenSamples.Key(design, Core.Tone.Angry) + ".wav")));
+        // Every line is cloned from it, seeded by the line and the description.
+        Assert.Equal(2, f.Cloned.Count);
+        Assert.Equal(QwenSamples.SampleText, f.Cloned[0].Sample.Text);
+        Assert.Equal(Sampler.Seed("Where were you?" + design), f.Cloned[0].Seed);
+        // Leveled to -20 dB from a quiet clone.
+        Assert.InRange(20 * Math.Log10(Math.Sqrt(a.Average(x => (double)x * x))), -21, -19);
+        // Narration is always even: a neutral sample, no tone words.
+        await f.Qwen.Render(new SpeechRequest { Text = "She left.", Choice = choice, Tone = Core.Tone.Angry }, default);
+        Assert.Equal(design, f.Designed[^1].Description);
+        // A thought is a little quieter.
+        var thought = await f.Qwen.Render(spoken with { Kind = LineKind.Thought }, default);
+        Assert.Equal(0.85, thought.Max() / a.Max(), 2);
+    }
+
+    [Fact]
+    public async Task QwenRedesignsASampleThatContradictsItsDescription()
+    {
+        using var f = new Fakes();
+        int calls = 0;
+        f.Voice = _ => Tone(++calls == 1 ? 240 : 115, 4);
+        var design = "A man in his forties with a warm, easygoing baritone voice.";
+        await f.Qwen.Render(new SpeechRequest { Text = "Evening.", Choice = new VoiceChoice(VoiceEngine.Qwen, "design", design) }, default);
+        Assert.Equal(2, f.Designed.Count);
+        Assert.Equal(Sampler.Seed(design + 1), f.Designed[1].Seed);
+        Assert.InRange(Pitch.Analyze(f.Cloned[0].Sample.Audio).Hz, 110, 120);
+    }
+
+    [Fact]
+    public async Task AShadeShiftsTheQwenSampleNotTheLine()
+    {
+        using var f = new Fakes();
+        Assert.True(f.Qwen.ShadesPitch);
+        Assert.False(f.Qwen.ShadesPace);
+        var choice = VoiceInfo.QwenPresets.First(v => v.VoiceID == "preset:baritone").Choice;
+        await f.Qwen.Render(new SpeechRequest { Text = "Evening.", Choice = choice, Shade = Shade.Make(-2) }, default);
+        double hz = Pitch.Analyze(f.Cloned[0].Sample.Audio).Hz;
+        Assert.InRange(hz, 115 * Math.Pow(2, -2 / 12.0) - 4, 115 * Math.Pow(2, -2 / 12.0) + 4);
+        Assert.True(File.Exists(Path.Combine(VoicePacks.SamplesFolder, QwenSamples.Key(choice.Design!, Core.Tone.Neutral) + "-shade-2.wav")));
+        // Long text goes a few sentences at a time, 0.18 s apart.
+        var text = string.Concat(Enumerable.Repeat("The wagon rolled slowly down the long hill toward the river. ", 6)).Trim();
+        f.Cloned.Clear();
+        await f.Qwen.Render(new SpeechRequest { Text = text, Choice = choice }, default);
+        Assert.True(f.Cloned.Count > 1);
+        Assert.Equal(text, string.Join(" ", f.Cloned.Select(c => c.Text)));
+    }
+
+    [Fact]
+    public async Task AVoiceClonedOnThisPCSpeaksWithQwenFromItsClip()
+    {
+        using var f = new Fakes();
+        var c = LocalClones.Shared.Add("Ellen", Gender.Female, Tone(210, 6), "What the clip says.");
+        var choice = new VoiceChoice(VoiceEngine.Qwen, c.VoiceID);
+        Assert.Equal("Ellen", f.Qwen.Info(choice)!.Name);
+        Assert.Equal(c.VoiceID, f.Qwen.Voices[0].VoiceID); // clones first
+        await f.Qwen.Render(new SpeechRequest { Text = "Hello.", Choice = choice }, default);
+        Assert.Empty(f.Designed);
+        Assert.Equal("What the clip says.", f.Cloned.Single().Sample.Text);
+        Assert.Equal(Sampler.Seed("Hello." + c.VoiceID), f.Cloned.Single().Seed);
+        LocalClones.Shared.Delete(c.Id);
+        await Assert.ThrowsAsync<SpeechException>(() => f.Qwen.Render(new SpeechRequest { Text = "Again.", Choice = choice }, default));
+        Assert.Null(f.Qwen.Info(choice));
+    }
+
+
+    /// A clone's clip can be up to 15 seconds (Pocket TTS); Qwen3-TTS's ONNX codec encoder takes
+    /// 10, so it gets the clip cut at its quietest moment before 10 s, with the words cut to match.
+    [Fact]
+    public async Task ALongCloneClipIsFittedForQwen()
+    {
+        using var f = new Fakes();
+        // 14 seconds: speech with a silent gap at 8.5 s.
+        var audio = Tone(200, 14);
+        for (int i = (int)(8.5 * SpeechAudio.SampleRate); i < (int)(8.8 * SpeechAudio.SampleRate); i++) audio[i] = 0;
+        var text = string.Join(" ", Enumerable.Range(1, 28).Select(n => $"w{n}"));
+        var c = LocalClones.Shared.Add("Long", Gender.Female, audio, text);
+        await f.Qwen.Render(new SpeechRequest { Text = "Hello.", Choice = new VoiceChoice(VoiceEngine.Qwen, c.VoiceID) }, default);
+        var sample = f.Cloned.Single().Sample;
+        Assert.InRange(sample.Audio.Length / (double)SpeechAudio.SampleRate, 8.5, 8.8);
+        Assert.StartsWith("w1 w2", sample.Text);
+        Assert.True(sample.Text.Length < text.Length && !sample.Text.EndsWith(' '));
+        Assert.Equal(sample.Text, string.Join(" ", text.Split(' ').Take(sample.Text.Split(' ').Length))); // whole words
+        // A short clip is used as it is.
+        var shortOne = new VoiceSample(Tone(200, 6), "Six seconds.");
+        Assert.Same(shortOne, QwenSamples.Fitted(shortOne));
+        // Pocket TTS still gets the whole clip.
+        Assert.Equal(14 * SpeechAudio.SampleRate, LocalClones.Shared.Sample(c.VoiceID).Audio.Length);
+    }
+
+    [Fact]
     public async Task OrpheusPerformsTheSoundOnce()
     {
         using var f = new Fakes();
@@ -363,6 +547,11 @@ public class NeuralVoiceTests
             Assert.False(pocket.IsReady);
             Assert.Contains("Settings › Voices", pocket.NotReadyReason);
             var e = await Assert.ThrowsAsync<SpeechException>(() => pocket.Render(new SpeechRequest { Text = "Hi.", Choice = VoiceInfo.Pocket[0].Choice }, default));
+            Assert.Contains("isn’t downloaded yet", e.Message);
+            var qwen = new QwenEngine();
+            Assert.False(qwen.IsReady);
+            Assert.Contains("Settings › Voices", qwen.NotReadyReason);
+            e = await Assert.ThrowsAsync<SpeechException>(() => qwen.Render(new SpeechRequest { Text = "Hi.", Choice = VoiceInfo.QwenPresets[0].Choice }, default));
             Assert.Contains("isn’t downloaded yet", e.Message);
             Assert.False(new OrpheusEngine().IsReady);
         }
@@ -393,8 +582,16 @@ public class NeuralVoiceTests
         Assert.Contains(VoicePacks.Pocket.Files, f => f.Local == "pocket/tokenizer.model" && f.Sha256 == "d461765ae179566678c93091c5fa6f2984c31bbe990bf1aa62d92c64d91bc3f6");
         Assert.Contains(VoicePacks.Pocket.Files, f => f.Local == "pocket/LICENSE");
         Assert.All(VoicePacks.Pocket.Repos, r => Assert.Contains("CC BY 4.0", r.License));
-        // Nothing of Qwen3-TTS is downloaded any more.
-        Assert.DoesNotContain(VoicePacks.Packs.SelectMany(p => p.Files), f => f.Local.StartsWith("qwen/", StringComparison.Ordinal) || f.Repo.Id.Contains("Qwen", StringComparison.OrdinalIgnoreCase));
+        // Qwen3-TTS: WaveKat's ONNX exports of the Qwen team's models, Apache 2.0. The two models
+        // share one tokenizer and one audio decoder, and every file comes from Hugging Face.
+        Assert.InRange(VoicePacks.Qwen.Bytes, 8e9, 9.5e9);
+        Assert.Equal("8.8 GB", VoicePacks.Qwen.SizeDescription);
+        Assert.Single(VoicePacks.Qwen.Files, f => f.Local.EndsWith("vocoder.onnx.data", StringComparison.Ordinal));
+        Assert.Contains(VoicePacks.Qwen.Files, f => f.Local.StartsWith("qwen/clone/speaker_encoder", StringComparison.Ordinal));
+        Assert.All(VoicePacks.Qwen.Files, f => Assert.StartsWith("https://huggingface.co/wavekat/Qwen3-TTS-", f.Url));
+        Assert.All(VoicePacks.Qwen.Repos, r => Assert.Equal("Apache-2.0", r.License));
+        Assert.Equal([VoiceEngine.Pocket, VoiceEngine.Qwen, VoiceEngine.Orpheus], VoicePacks.Packs.Select(p => p.Engine));
+        Assert.All(VoicePacks.Packs.SelectMany(p => p.Files), f => Assert.StartsWith("https://huggingface.co/", f.Url));
         Assert.InRange(VoicePacks.Orpheus.Bytes, 2.3e9, 2.7e9);
         Assert.Contains(VoicePacks.Orpheus.Files, f => f.Local == "orpheus/snac/decoder_model.onnx");
         Assert.All(VoicePacks.Packs.SelectMany(p => p.Repos), r => Assert.False(string.IsNullOrEmpty(r.License)));
@@ -508,8 +705,15 @@ public class NeuralVoiceTests
         Assert.Contains("works best with 8 GB or more", VoiceHardwareCheck.Warning(noGpu with { MemoryGB = 6 }, VoiceEngine.Pocket));
         Assert.Equal(VoiceFit.TooWeak, VoiceHardwareCheck.Fit(noGpu with { MemoryGB = 3 }, VoiceEngine.Pocket));
         Assert.Contains("may not load", VoiceHardwareCheck.Warning(noGpu with { MemoryGB = 3 }, VoiceEngine.Pocket));
+        // Qwen3-TTS is large: a card with 8 GB and 16 GB of memory, as before.
+        Assert.Equal(VoiceFit.Good, VoiceHardwareCheck.Fit(strong, VoiceEngine.Qwen));
+        Assert.Equal(VoiceFit.Slow, VoiceHardwareCheck.Fit(noGpu, VoiceEngine.Qwen));
+        Assert.Contains("no DirectX 12 graphics card", VoiceHardwareCheck.Warning(noGpu, VoiceEngine.Qwen));
+        Assert.Contains("8 GB or more", VoiceHardwareCheck.Warning(smallCard, VoiceEngine.Qwen));
+        Assert.Equal(VoiceFit.TooWeak, VoiceHardwareCheck.Fit(strong with { MemoryGB = 4 }, VoiceEngine.Qwen));
         Assert.Contains("RTX 3060", VoiceHardwareCheck.Recommended);
         Assert.Contains("Pocket TTS is small", VoiceHardwareCheck.Recommended);
+        Assert.Contains("32 GB to keep Qwen3-TTS and Orpheus loaded together", VoiceHardwareCheck.Recommended);
         // The graphics card check's answer, from the child process.
         Assert.Equal(new GpuInfo(1, "Test Graphics RTX", 12), VoiceHardwareCheck.ParseGpu("1\t12\tTest Graphics RTX\r\n"));
         Assert.Null(VoiceHardwareCheck.ParseGpu("none"));
@@ -528,7 +732,7 @@ public class NeuralVoiceTests
     static string? Models => Environment.GetEnvironmentVariable("INNERVOICE_TEST_VOICE_MODELS") is { Length: > 0 } m && Directory.Exists(m) ? m : null;
 
     /// Runs only with the models: set INNERVOICE_TEST_VOICE_MODELS to a Voice Models folder
-    /// (pocket/ and, optionally, orpheus/; VoiceBench --bench uses the same layout).
+    /// (pocket/, qwen/ and orpheus/, any of them; VoiceBench --bench uses the same layout).
     [Fact]
     public async Task TheRealModelsSpeak()
     {
@@ -537,18 +741,33 @@ public class NeuralVoiceTests
         try
         {
             PocketClips.Forget();
-            Assert.True(VoicePacks.IsInstalled(VoicePacks.Pocket));
-            var pocket = new PocketEngine();
-            var line = await pocket.Render(new SpeechRequest { Text = "The rain had not stopped for three days.", Choice = new VoiceChoice(VoiceEngine.Pocket, "stock:dan") }, default);
-            var (voiced, hz) = Pitch.Analyze(line);
-            Assert.InRange(SpeechAudio.Seconds(line), 1.2, 8);
-            Assert.True(voiced > 0.3, $"voiced {voiced}");
-            Assert.InRange(hz, 80, 190); // a man's voice, like the clip
-            // Short lines stop when they're said (no run-on), at the even and the angry temperature.
-            foreach (var tone in new[] { Core.Tone.Neutral, Core.Tone.Angry })
+            QwenSamples.Forget();
+            Assert.True(VoicePacks.Packs.Any(VoicePacks.IsInstalled));
+            if (VoicePacks.IsInstalled(VoicePacks.Qwen))
             {
-                var shortLine = await pocket.Render(new SpeechRequest { Text = "No.", Choice = new VoiceChoice(VoiceEngine.Pocket, "stock:tara"), Kind = LineKind.Spoken, Tone = tone }, default);
-                Assert.InRange(SpeechAudio.Seconds(shortLine), 0.2, 2.5);
+                // A ready-made voice: a sample designed once (kept in Voice Models\Samples), then cloned.
+                var choice = VoiceInfo.QwenPresets.First(v => v.VoiceID == "preset:baritone").Choice;
+                var q = await new QwenEngine().Render(new SpeechRequest { Text = "The rain had not stopped for three days.", Choice = choice }, default);
+                var (qVoiced, qHz) = Pitch.Analyze(q);
+                Assert.InRange(SpeechAudio.Seconds(q), 1.2, 8);
+                Assert.True(qVoiced > 0.3, $"voiced {qVoiced}");
+                Assert.InRange(qHz, 80, 180); // a man's voice, as described
+                NeuralModels.Shared.Unload(VoiceEngine.Qwen);
+            }
+            if (VoicePacks.IsInstalled(VoicePacks.Pocket))
+            {
+                var pocket = new PocketEngine();
+                var line = await pocket.Render(new SpeechRequest { Text = "The rain had not stopped for three days.", Choice = new VoiceChoice(VoiceEngine.Pocket, "stock:dan") }, default);
+                var (voiced, hz) = Pitch.Analyze(line);
+                Assert.InRange(SpeechAudio.Seconds(line), 1.2, 8);
+                Assert.True(voiced > 0.3, $"voiced {voiced}");
+                Assert.InRange(hz, 80, 190); // a man's voice, like the clip
+                // Short lines stop when they're said (no run-on), at the even and the angry temperature.
+                foreach (var tone in new[] { Core.Tone.Neutral, Core.Tone.Angry })
+                {
+                    var shortLine = await pocket.Render(new SpeechRequest { Text = "No.", Choice = new VoiceChoice(VoiceEngine.Pocket, "stock:tara"), Kind = LineKind.Spoken, Tone = tone }, default);
+                    Assert.InRange(SpeechAudio.Seconds(shortLine), 0.2, 2.5);
+                }
             }
             if (VoicePacks.IsInstalled(VoicePacks.Orpheus))
             {
@@ -560,6 +779,7 @@ public class NeuralVoiceTests
         finally
         {
             NeuralModels.Shared.Unload(VoiceEngine.Pocket);
+            NeuralModels.Shared.Unload(VoiceEngine.Qwen);
             NeuralModels.Shared.Unload(VoiceEngine.Orpheus);
             VoicePacks.Folder = Path.Combine(Path.GetTempPath(), "InnerVoice Voice Models (test)");
         }

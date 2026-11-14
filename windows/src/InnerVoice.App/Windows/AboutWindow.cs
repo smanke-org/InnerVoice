@@ -77,15 +77,17 @@ public static class Credits
     public sealed record Credit(string Text, Uri License);
 
     static readonly Uri CcBy4 = new("https://creativecommons.org/licenses/by/4.0/");
+    static readonly Uri Apache2 = new("https://www.apache.org/licenses/LICENSE-2.0");
 
     public static readonly IReadOnlyList<Credit> All =
     [
         new("Pocket TTS voices: the Pocket TTS model and its Mimi codec by Kyutai (kyutai.org), CC BY 4.0, in KevinAHM’s ONNX conversion (KevinAHM/pocket-tts-onnx).", CcBy4),
         new("The stock voice Alba: a clip by Alba MacKenna from Kyutai’s voice collection (kyutai/tts-voices), CC BY 4.0, converted to 24 kHz mono.", CcBy4),
-        new("The other eight stock voices were spoken by Orpheus TTS by Canopy Labs, Apache 2.0.", new Uri("https://www.apache.org/licenses/LICENSE-2.0")),
+        new("The other eight stock voices were spoken by Orpheus TTS by Canopy Labs, Apache 2.0.", Apache2),
+        new("Qwen3-TTS voices: Qwen3-TTS by Alibaba’s Qwen team, Apache 2.0, in WaveKat’s ONNX conversions (Qwen3-TTS 1.7B VoiceDesign and 0.6B Base). It runs on this PC only.", Apache2),
     ];
 
     /// Help › Voices & Listening › Credits (the Mac's words, with the Windows download).
     public const string HelpText =
-        "Pocket TTS is made by Kyutai and shared under the Creative Commons Attribution 4.0 license (CC BY 4.0); InnerVoice downloads KevinAHM’s ONNX conversion of it. Its Mimi audio codec is Kyutai’s too. The stock voice Alba is a clip by Alba MacKenna from Kyutai’s voice collection, CC BY 4.0, converted to 24 kHz mono. The other eight stock voices were spoken by Orpheus TTS (Canopy Labs, Apache 2.0). About InnerVoice lists these with links to the licenses.";
+        "Pocket TTS is made by Kyutai and shared under the Creative Commons Attribution 4.0 license (CC BY 4.0); InnerVoice downloads KevinAHM’s ONNX conversion of it. Its Mimi audio codec is Kyutai’s too. The stock voice Alba is a clip by Alba MacKenna from Kyutai’s voice collection, CC BY 4.0, converted to 24 kHz mono. The other eight stock voices were spoken by Orpheus TTS (Canopy Labs, Apache 2.0). Qwen3-TTS is made by Alibaba’s Qwen team and shared under the Apache 2.0 license; InnerVoice downloads WaveKat’s ONNX conversion of it. About InnerVoice lists these with links to the licenses.";
 }

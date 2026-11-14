@@ -32,7 +32,7 @@ public static class ProjectJson
         };
         o.Converters.Add(new UpperGuidConverter());
         o.Converters.Add(new AppleDateConverter());
-        // Before the enum converter: "qwen" and "chatterbox" read as Pocket TTS, an engine this
+        // Before the enum converter: "chatterbox" reads as Pocket TTS, an engine this
         // version doesn't know as Mix Engines (the Mac's VoiceEngine.init(from:)).
         o.Converters.Add(new VoiceEngineConverter());
         o.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false));

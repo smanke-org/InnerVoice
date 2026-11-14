@@ -13,11 +13,12 @@ that is marked "Dropped" or "Later" is now in scope:
   - Windows built-in voices (the stand-in for Apple's voices: instant, no download, the
     fallback on slow PCs).
   - ElevenLabs (cloud, same consent gates as the Mac).
-  - Pocket TTS and Orpheus, the same models as the Mac, through ONNX Runtime with DirectML
-    (any DirectX 12 GPU), with a CPU fallback. Same voices and clone behavior; where a model
-    part won't export, say so and match the Mac as closely as possible. (Qwen3-TTS was
-    replaced by Pocket TTS on 2026-11-13 on both, because the user wants no Chinese models; the
-    Qwen 3 tagging models went the same day. § Local voices.)
+  - Pocket TTS, Qwen3-TTS and Orpheus, the same models as the Mac, through ONNX Runtime with
+    DirectML (any DirectX 12 GPU), with a CPU fallback. Same voices and clone behavior; where a
+    model part won't export, say so and match the Mac as closely as possible. (Qwen3-TTS was
+    replaced by Pocket TTS on 2026-11-13 on both, because the user wanted no Chinese models;
+    on 2026-11-14 the user brought Qwen3-TTS back beside Pocket TTS, marked in Settings as
+    developed in China and running locally. The Qwen 3 tagging models stay out. § Local voices.)
 - **Also ported:** the agent CLI and MCP (`innervoice`, named pipes), `innervoice://` URLs,
   and Pages import. Done 2026-11-13 (`windows/README.md` › Agent CLI, MCP and links):
   - `innervoice.exe` is a console program of its own (`src/InnerVoice.Cli`, in the app's `cli\`
@@ -54,7 +55,7 @@ that is marked "Dropped" or "Later" is now in scope:
   downloaded or used, the app checks the hardware and, on weak machines, warns plainly why
   voices may be unusably slow there and suggests the built-in voices or ElevenLabs.
   Settings shows what makes a better experience: Pocket TTS is small and runs well on the
-  processor of most PCs with 8 GB of RAM; for Orpheus a DirectX 12 GPU with 8 GB or more of
+  processor of most PCs with 8 GB of RAM; for Qwen3-TTS and Orpheus a DirectX 12 GPU with 8 GB or more of
   video memory (for example NVIDIA RTX 3060 or AMD RX 6700 XT and up) and 16 GB of RAM is
   ideal, and integrated graphics or a CPU alone will work, slowly. Measured on a Mac's CPU
   only so far (§ Local voices); check on real PCs.
@@ -63,7 +64,7 @@ that is marked "Dropped" or "Later" is now in scope:
 
 Everything but the local neural models. Ported file for file into `InnerVoice.Core`, with
 the Mac's tests: `Voices.cs` (tones, engines, `VoiceChoice`/`CastVoice`, `VoiceInfo` with
-Orpheus's voices and, since 2026-11-13, Pocket TTS's stock voices, `VoiceCasting`), `ToneRules.cs` (+ `TonePrompt`,
+Orpheus's voices, Qwen3-TTS's sixteen presets and, since 2026-11-13, Pocket TTS's stock voices, `VoiceCasting`), `ToneRules.cs` (+ `TonePrompt`,
 run inside Tag Speakers), `SpeechScript.cs` (segments, pauses, pronunciations, recaps; a
 rule-based `SentenceSplitter` stands in for NaturalLanguage and is tested against the Mac's
 cases), `SeriesVoices.cs`, `VoiceDescription` (in `VoiceNotes.cs`), the voice titles and
@@ -89,7 +90,7 @@ do the reverse for Windows voice IDs (a Mac follow-up: it shows them as missing)
 ### Voice engines (the interface part B plugs into)
 
 `InnerVoice.Core/Speech/IVoiceEngine.cs`. One `IVoiceEngine` per `VoiceEngine` value (`apple`,
-`pocket`, `orpheus`, `elevenlabs`; never `mixed`), registered once at startup with
+`pocket`, `qwen`, `orpheus`, `elevenlabs`; never `mixed`), registered once at startup with
 `VoiceEngineRegistry.Register` (App: `Speech/VoiceActions.cs` › `VoiceSetup.Start`).
 
 | Member | Contract |
@@ -97,9 +98,9 @@ do the reverse for Windows voice IDs (a Mac follow-up: it shows them as missing)
 | `Engine` | The `VoiceEngine` it implements. |
 | `IsReady` | Can speak now (downloaded, or set up). Cheap: views read it every redraw. |
 | `NotReadyReason` | Words for the narrator when not ready (Settings › Voices, errors). |
-| `Voices` | Its voices, best first, cached by the engine. Pocket TTS: clones (`Cloned = true`, voiceID `clone:<id>`) plus `VoiceInfo.Pocket` (voiceID `stock:<name>`). Orpheus: `VoiceInfo.Orpheus`. |
+| `Voices` | Its voices, best first, cached by the engine. Pocket TTS: clones (`Cloned = true`, voiceID `clone:<id>`) plus `VoiceInfo.Pocket` (voiceID `stock:<name>`). Qwen3-TTS: the same clones plus `VoiceInfo.QwenPresets` (voiceID `preset:<slug>`); any `design` choice is a voice too. Orpheus: `VoiceInfo.Orpheus`. |
 | `Info(choice)` | The `VoiceInfo` a choice names, or null. |
-| `ShadesPitch` / `ShadesPace` | The engine shades by itself (Pocket TTS does both, as the Mac does: the shade's, casting's and the tone's semitones shift the clip before cloning; the voice's rate, the shade's pace and the tone's speed stretch the finished line). When false, `SpeechRenderer` shifts the finished audio (`ShadeAudio`, resample + WSOLA). |
+| `ShadesPitch` / `ShadesPace` | The engine shades by itself (Pocket TTS does both, as the Mac does: the shade's, casting's and the tone's semitones shift the clip before cloning; the voice's rate, the shade's pace and the tone's speed stretch the finished line; Qwen3-TTS shifts its voice sample's pitch and leaves pace to the renderer). When false, `SpeechRenderer` shifts the finished audio (`ShadeAudio`, resample + WSOLA). |
 | `Render(request, ct)` | One `SpeechRequest` → 24 kHz mono float samples. May run on any thread, several at once (the player renders two ahead). Throw `SpeechException` with words for the narrator. |
 | `Prepare(ct)` | Optional: load the model ahead of the first line (the Voices page calls it). |
 | `Unload()` | Optional: free memory when the narrator turns the engine off. |
@@ -108,37 +109,61 @@ Part B used all of this as it was (§ Local voices below). What it got for free:
 cache key, in LocalAppData\InnerVoice\Speech, pruned at 1 GB), trimming each voice's
 silence, pauses, playback speed, shading, Export Audio and EPUB with Audio, casting
 (`VoiceCasting.Cast` picks stock voices by gender and age, `AgeAdjusted` for a child or an
-older character; Voice Notes reach no on-device engine when it speaks), the Voices page (it
-lists any registered engine; Pocket TTS shows "Voices from a Description" pointing to
-ElevenLabs), engine switches and Mix Engines.
+older character; on Qwen3-TTS the narrator gets the "narrator" preset, characters the book or
+Voice Notes describe a designed voice, the rest a distinct preset; Voice Notes reach Qwen3-TTS
+designs when they speak, `VoiceResolver.WithNotes`, and no other on-device engine), the Voices
+page (it lists any registered engine; Qwen3-TTS shows Describe a Voice, Pocket TTS "Voices from
+a Description" pointing to ElevenLabs), engine switches and Mix Engines.
 
 Platform split: a `-r win-*` build targets `net10.0-windows10.0.19041.0` (WinRT speech and
 Media Foundation, under `#if WINDOWS`); other builds are `net10.0` (tests on the Mac; on a
 PC, SAPI through System.Speech). Audio out is NAudio's WinMM output; test runs play
 silently unless `INNERVOICE_SPEECH_AUDIBLE` is set.
 
-### Local voices: Pocket TTS and Orpheus (part B 2026-11-13, branch `claude/win-voices-b-490e58`; Pocket TTS the same day, replacing Qwen3-TTS)
+### Local voices: Pocket TTS, Qwen3-TTS and Orpheus (part B 2026-11-13, branch `claude/win-voices-b-490e58`; Pocket TTS the same day; Qwen3-TTS back beside it 2026-11-14)
 
-Both run through ONNX Runtime 1.24.4: the DirectML package on Windows (any DirectX 12 card,
+All three run through ONNX Runtime 1.24.4: the DirectML package on Windows (any DirectX 12 card,
 `DirectML.dll` 1.15.4 copied per architecture by the app's csproj), falling back to the CPU when
 there's no card or DirectML can't load a model; the CPU package elsewhere (tests on the Mac).
-Code: `InnerVoice.Core/Speech/Neural/` (`PocketTts` = the model, `SentencePiece`, `OrpheusTts`,
-`NeuralSpeech` = the engines, stock clips (`PocketClips`) and clones, `VoicePacks`,
-`VoiceHardware`, `BpeTokenizer` (Orpheus), `Sampler`, `Pitch`), `InnerVoice.Core/PocketVoices.cs`
-(`PocketVoice`, `PocketDelivery`, `LegacyVoices`, ported from the Mac's PocketTTS.swift),
-`App/Speech/VoiceModels.cs` (downloads, hardware warning, Old Voice Files),
+Code: `InnerVoice.Core/Speech/Neural/` (`PocketTts` = the model, `SentencePiece`, `QwenTts`,
+`Mel` (its speaker encoder's input), `Npy` (its embeddings), `OrpheusTts`, `NeuralSpeech` = the
+engines, stock clips (`PocketClips`), Qwen's voice samples (`QwenSamples`) and clones,
+`VoicePacks`, `VoiceHardware`, `BpeTokenizer` (Qwen and Orpheus), `Sampler`, `Pitch`),
+`InnerVoice.Core/PocketVoices.cs` (`PocketVoice`, `PocketDelivery`, ported from the Mac's
+PocketTTS.swift), `App/Speech/VoiceModels.cs` (downloads, hardware warning),
 `App/Speech/LocalCloning.cs`.
 
-**Why Pocket TTS.** The user wants no Chinese models (2026-11-13). Qwen3-TTS (Alibaba) went on
-both computers, and with it its ONNX code, downloads, the Qwen BPE tokenizer, the speaker
-encoder's mel, the NumPy reader and the designed-voice samples; Orpheus keeps its Llama BPE.
-The Qwen 3 tagging models went too (`ModelCatalog.RetiredIDs`; Llama 3.1 8B, Phi-4, gpt-oss
-20B and Mistral Small 3.2 came in, with the `mistral` and `harmony` chat formats).
+**Pocket TTS, then Qwen3-TTS back.** On 2026-11-13 the user wanted no Chinese models: Qwen3-TTS
+(Alibaba) went on both computers (its ONNX code, downloads, the Qwen BPE, the mel and NumPy
+readers, the designed-voice samples), Pocket TTS came in, and books moved their Qwen3-TTS voices
+to Pocket TTS when opened (`LegacyVoices`, Windows 1.0.0–1.0.2). On 2026-11-14 the user brought
+Qwen3-TTS back beside Pocket TTS, restored from before the removal (af6edca's engine, with
+everything added since: Export Speed per engine, Casting Style, pronunciations, Mix Engines).
+"qwen" is a real engine again; nothing migrates any more (`LegacyVoices` and Remove Old Voice
+Files are gone; books already migrated keep their Pocket TTS voices; "chatterbox" still reads as
+Pocket TTS and an unknown engine as Mix Engines). The Qwen 3 *tagging* models stay out
+(`ModelCatalog.RetiredIDs`; Llama 3.1 8B, Phi-4, gpt-oss 20B and Mistral Small 3.2, with the
+`mistral` and `harmony` chat formats).
+
+**Where Qwen3-TTS comes from, said in the app.** The user asked that Settings mark it as
+developed in China and running locally, so it's safe to use: Settings › Voices shows "Developed
+in China · Runs on this PC" (green, `SettingsWindow.LocalOriginBadge`) beside Qwen3-TTS, with
+the detail "Qwen3-TTS comes from Alibaba's Qwen team in China. It runs entirely on this PC from
+open model files (Apache 2.0): your book's text and the audio never leave the PC, and it never
+connects to Alibaba or any server in China. The only network use is the one-time model download
+from Hugging Face." The same mark is on Describe a Voice and in the engine menu's tooltip. Keep
+it true: every Qwen file's URL is `https://huggingface.co/wavekat/…/resolve/<commit>/…`
+(`VoicePackFile.Url`, checked by `ThePacksArePinnedAndChecked`), and `QwenModel`/`QwenShared`
+open the config, tokenizer, `.npy` embeddings and ONNX graphs from the Voice Models folder only;
+ONNX Runtime fetches nothing. Credited in About › Acknowledgments and Help › Credits (Alibaba's
+Qwen team, Apache 2.0; WaveKat's ONNX export).
 
 **Models** (existing exports; nothing had to be exported here, so there is no export script):
 
 | Pack | Repository @ pinned commit | What | License |
 |---|---|---|---|
+| Qwen3-TTS (8.8 GB) | `wavekat/Qwen3-TTS-1.7B-VoiceDesign-ONNX` @ 62c7863 | VoiceDesign 1.7B, int4 talker + code predictor, fp32 vocoder, embeddings (.npy), tokenizer | Apache-2.0 (Qwen's weights and WaveKat's export) |
+| | `wavekat/Qwen3-TTS-0.6B-Base-ONNX` @ 177cd39 | Base 0.6B for cloning, int4, with the speaker encoder (ECAPA) and the codec's encoder | Apache-2.0 |
 | Pocket TTS (473 MB) | `KevinAHM/pocket-tts-onnx` @ 58a6d00 | The five fp32 graphs at the repository's root (`flow_lm_main`, `flow_lm_flow`, `mimi_encoder` with the speaker projection, `mimi_decoder`, `text_conditioner`), unchanged since 2026-02-06, plus `tokenizer.model` and the license | CC BY 4.0 (Kyutai's model, Mimi codec and tokenizer; KevinAHM's export) |
 | Orpheus (2.5 GB) | `onnx-community/orpheus-3b-0.1-ft-ONNX` @ 03791ab | `model_q4` (4-bit weights, fp32 activations) | Apache-2.0 (Canopy Labs); built on Llama 3.2 3B, so Meta's Llama 3.2 Community License terms apply too, as on the Mac |
 | | `onnx-community/snac_24khz-ONNX` @ f317cdf | SNAC 24 kHz decoder, fp32 | MIT |
@@ -176,6 +201,33 @@ voice; noise scaled by √temperature, one flow step, speech ends 3 frames (5 fo
 fewer) after the end-of-speech logit passes −4, at most (words + 2) s a group. A clip's
 conditioning is worked out once and kept while the model is loaded.
 
+**How Qwen3-TTS speaks** (as before the removal, as the Mac): sixteen presets ("preset:<slug>":
+narrator, storyteller, bright, soft, brisk, dame, grandmother, lass, girl, baritone, hero,
+gentleman, elder, sailor, clerk, boy), "design" (`VoiceChoice.Design`; the character's Voice
+Notes are added when it speaks, `VoiceResolver.WithNotes`) and "clone:<id>" (the same Cloned
+Voices clip Pocket TTS uses, spoken with its words). `QwenSamples`: the VoiceDesign model records
+`SampleText` once per description and tone into Voice Models\Samples, then the Base model clones
+every line from that sample, so a character keeps one voice; a shade shifts the sample's pitch
+(`-shade<n>.wav`), pace is stretched by the renderer. Casting on qwen: the narrator gets the
+"narrator" preset, characters the book or Voice Notes describe a designed voice
+(`VoiceCasting.Describe`), the rest a distinct preset.
+
+**Where Qwen3-TTS differs from the Mac:**
+- Clone model: Base **0.6B** (the Mac uses Base 1.7B, 8-bit MLX). No usable 1.7B Base ONNX export
+  exists at a reasonable size (arubeh's is 14 GB fp32). The design model is the same 1.7B
+  VoiceDesign. Precision: int4 (RTN) talkers versus the Mac's 8-bit; the codec decoder is fp32.
+- The codec's encoder in WaveKat's export takes exactly 10 seconds. Clone clips are cut at up to
+  15 s for Pocket TTS (`CloneClip.Longest`, as the Mac), so Qwen3-TTS gets a longer clip cut at
+  its quietest moment between 6 and 10 s, with the words cut at the same share of the text
+  (`QwenSamples.Fitted`). Design samples are about 5 s, so they're unaffected.
+- Sampling uses the Mac's parameters (temperature 0.9, top-k 50, repetition 1.05, 1200/2400
+  frames) and the Mac's seeds, with a different random generator.
+- A designed sample whose pitch contradicts its description (a man's voice above 180 Hz, a
+  woman's below 150 Hz; not children) is made again with the next seed, up to three tries
+  (`Pitch.Contradicts`; measured, 1 seed in 14 gave a 240 Hz "baritone").
+- The speaker encoder's mel follows the Mac (reflect pad, magnitudes, Slaney filters), not
+  WaveKat's script (librosa power spectrum).
+
 **Where it differs from the Mac:**
 - The Mac runs mlx-community's bfloat16 copy on MLX; Windows runs the fp32 ONNX graphs (the
   same weights, rounded the other way).
@@ -190,25 +242,23 @@ conditioning is worked out once and kept while the model is loaded.
 - Clone a Voice › On This PC finds the words with Windows' desktop speech recognizer (SAPI
   dictation through System.Speech, on this PC only; WinRT dictation would use Microsoft's online
   service, so it's never used). Without an English recognizer the narrator types the words.
-  Pocket TTS doesn't need the words; they're kept for the narrator, as on the Mac.
-- Old Voice Files: Qwen3-TTS's `Voice Models\qwen` and `Samples` go to the Recycle Bin
-  (Settings › Voices › Remove Old Voice Files…; test runs delete only in their own folder).
+  Pocket TTS doesn't need the words; they're kept for the narrator, as on the Mac. Qwen3-TTS
+  does: it clones from the clip and exactly what it says.
 
-**Old books** (`LegacyVoices.Migrate`, run by `ProjectDocument.Open` and the Series Voices
-reader): engine "qwen" (and the Mac test build's "chatterbox") reads as `pocket`
-(`VoiceEngineConverter`), an engine this version doesn't know reads as `mixed`, and the voices
-under "qwen" move to "pocket" exactly as on the Mac (presets → nearest stock voice, designs →
-what casting picks, clones keep their recording, the narrator's choices stay theirs). The window
-shows the book edited (no undo step) and autosaves it. Golden tests: the Mac's own old book
-(`Fixtures/legacy-qwen.json`) and the Windows-saved Qwen3-TTS sample migrate to exactly the
-Mac's results (`legacy-qwen-migrated-mac.json`, `sample-windows-migrated-mac.json`, written by
-`windows/tools/MacFixtures` with the Mac's Kit), and the Mac's new `sample-mac.innervoice`
+**File format** (`VoiceEngineConverter`, as the Mac's `VoiceEngine.init(from:)`): "qwen" is
+Qwen3-TTS, "pocket" Pocket TTS, the Mac test build's "chatterbox" reads as `pocket`, and an
+engine this version doesn't know reads as `mixed`. Nothing is migrated when a book opens or in
+Series Voices. Golden tests: the Mac's own Qwen3-TTS book (`Fixtures/legacy-qwen.json`, written
+by `windows/tools/MacFixtures` with the Mac's Kit) and the Windows-saved Qwen3-TTS sample open
+as Qwen3-TTS with every voice as it was and save back unchanged; the Mac's `sample-mac.innervoice`
 (engine "pocket") opens and saves back unchanged.
 
 **Measured** on this Mac's CPU (Apple M5 Max, 18 cores, ONNX Runtime CPU, 2026-11-13), seconds of
 audio per second: Pocket TTS 6–9× (stock voices 7.1×, tones 8.8×, a clone 4–6×; 4 intra-op
 threads and no memory arena, the export's advice), model loads in under a second, about 2 GB
-peak; Orpheus 0.13–0.15×, 3.3 GB, loads in 2–4 s. A typical PC processor is slower than an M5
+peak; Qwen3-TTS (measured at part B) voice sample (VoiceDesign 1.7B) 0.6–1.1×, lines (Base 0.6B
+clone) 0.8–1.2×, about 6 GB with both Qwen models loaded; Orpheus 0.13–0.15×, 3.3 GB, loads in
+2–4 s. A typical PC processor is slower than an M5
 Max; DirectML on a graphics card, integrated graphics, x64 and ARM64 PCs need measuring on real
 PCs with `windows/tools/VoiceBench` (`--hardware`, then `--bench "<Voice Models>" <out>` and
 `--clone`).
@@ -218,20 +268,24 @@ dedicated video memory; `D3D12CreateDevice` confirms DirectX 12), memory (`Globa
 and the processor. Each pack says what it needs (`VoicePack.MinimumMemoryGB`,
 `RecommendedMemoryGB`, `RecommendedGpuGB`). Pocket TTS: no card needed (it's faster than
 playback on a processor), good from 8 GB of memory, slow below that, too weak under 4 GB.
-Orpheus: good with a DirectX 12 card with 8 GB+ and 16 GB memory, slow without, too weak under
-8 GB. A plain warning comes before the download and the first time a book uses the engine,
+Qwen3-TTS and Orpheus: good with a DirectX 12 card with 8 GB+ and 16 GB memory, slow without,
+too weak under 8 GB. A plain warning comes before the download and the first time a book uses the engine,
 suggesting Windows Voices or ElevenLabs. DirectML is only used for a card with 2 GB or more of
 its own memory. The app asks DXGI in a copy of itself (`InnerVoice.exe --voice-hardware`,
 printing one line), so a driver that crashes when asked can't take the app down; a crash, hang
 or odd answer means "couldn't check" and the processor. (The first version read the adapter
 into a struct with a marshaled string and crashed at launch on a Parallels ARM64 VM; fixed
-2026-11-13, checked there: Parallels Display Adapter, 0 GB of its own.) Below 16 GB, loading
-one local model drops the other (the Mac's rule since Pocket TTS).
+2026-11-13, checked there: Parallels Display Adapter, 0 GB of its own.) Memory
+(`NeuralModels`, the Mac's `makeRoom`): from 16 GB Pocket TTS stays loaded beside Qwen3-TTS or
+Orpheus; Qwen3-TTS and Orpheus stay loaded together only from 32 GB; otherwise loading one drops
+the other.
 
 **Needs a Windows PC:** Pocket TTS on DirectML (speed, and whether every operator of the five
 graphs runs there: the stateful attention cache, `IsNaN`/`Where` and the streaming
 convolutions fall back to the CPU per node if not), its CPU speed on x64 and ARM64 (Snapdragon)
-processors, the DXGI and memory detection, the Recycle Bin for Old Voice Files, SAPI
+processors, Qwen3-TTS on DirectML and its speed since it came back (the restored engine was
+tested here only with fake models; the real-model test runs with INNERVOICE_TEST_VOICE_MODELS),
+the DXGI and memory detection, SAPI
 recognition with real recordings, MP3/M4A reading through Media Foundation, microphone
 recording into a clone, Orpheus on DirectML, and listening to the voices.
 

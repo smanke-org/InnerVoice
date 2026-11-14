@@ -132,10 +132,16 @@ public sealed partial class VoicesPage : Page
     {
         updating = true;
         var choices = EngineSwitches.Shared.Choices;
-        engineBox.ItemsSource = choices.Select(e => new ComboBoxItem
+        engineBox.ItemsSource = choices.Select(e =>
         {
-            Content = e.Title() + (e.IsCloud() ? " (Cloud)" : VoiceEngineRegistry.IsReady(e) || e == VoiceEngine.Mixed ? "" : " (Not Downloaded)"),
-            Tag = e,
+            var item = new ComboBoxItem
+            {
+                Content = e.Title() + (e.IsCloud() ? " (Cloud)" : VoiceEngineRegistry.IsReady(e) || e == VoiceEngine.Mixed ? "" : " (Not Downloaded)"),
+                Tag = e,
+            };
+            // Qwen3-TTS: where it comes from, and that it stays on this PC.
+            if (e == VoiceEngine.Qwen) ToolTip.SetTip(item, InnerVoice.App.Windows.SettingsWindow.LocalOriginTag + ". " + InnerVoice.App.Windows.SettingsWindow.LocalOriginDetail);
+            return item;
         }).ToList();
         engineBox.SelectedIndex = choices.ToList().IndexOf(Engine);
         updating = false;
@@ -186,10 +192,10 @@ public sealed partial class VoicesPage : Page
             }
             Document.SetCloudVoicesAllowed(true);
         }
-        // Pocket TTS and Orpheus run on this PC: offer the download, and say first if it's too weak for them.
-        if (e is VoiceEngine.Pocket or VoiceEngine.Orpheus && !VoiceModels.Shared.IsInstalled(e))
+        // Pocket TTS, Qwen3-TTS and Orpheus run on this PC: offer the download, and say first if it's too weak for them.
+        if (e is VoiceEngine.Pocket or VoiceEngine.Qwen or VoiceEngine.Orpheus && !VoiceModels.Shared.IsInstalled(e))
             await VoiceModels.Shared.OfferDownload(this, e);
-        else if (e is VoiceEngine.Pocket or VoiceEngine.Orpheus && !await VoiceModels.Shared.ConfirmHardware(this, e, downloading: false))
+        else if (e is VoiceEngine.Pocket or VoiceEngine.Qwen or VoiceEngine.Orpheus && !await VoiceModels.Shared.ConfirmHardware(this, e, downloading: false))
         {
             Refresh(false);
             return;

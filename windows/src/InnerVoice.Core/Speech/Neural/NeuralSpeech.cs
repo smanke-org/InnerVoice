@@ -3,8 +3,13 @@
 // from a clip (a stock voice's clip ships with the app; a clone uses the narrator's own), the
 // pitch of a shade, of casting's age and of the tone shifts that clip first, the tone sets
 // the temperature, loudness and pace (PocketDelivery), Orpheus takes a sound tag in front of
-// the first piece, and every line is leveled to -20 dB.
+// the first piece, and every line is leveled to -20 dB. Qwen3-TTS speaks every line by cloning
+// a voice sample (one per description and tone, made once by the VoiceDesign model and kept in
+// Voice Models\Samples, or the narrator's own clip for a clone); a shade shifts that sample's
+// pitch.
 
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -58,23 +63,28 @@ public static partial class SpeechChunks
     }
 }
 
-/// A few seconds of a voice, and what it says (kept for the narrator; Pocket TTS doesn't need
-/// the words).
+/// A few seconds of a voice, and exactly what it says: what Qwen3-TTS clones a line from (Pocket
+/// TTS doesn't need the words; they're kept for the narrator).
 public sealed record VoiceSample(float[] Audio, string Text);
 
 /// Loads the models when they're first needed. Pocket TTS is small (about 2 GB while it
-/// speaks), so PCs with 16 GB or more keep it beside Orpheus; smaller ones keep one model,
-/// as on the Mac.
+/// speaks), so PCs with 16 GB or more keep it beside Qwen3-TTS or Orpheus; Qwen3-TTS and
+/// Orpheus stay loaded together only from 32 GB; below that, loading one drops the other, as
+/// on the Mac.
 public sealed class NeuralModels
 {
     public static NeuralModels Shared { get; set; } = new();
 
     /// The computer's memory; the app sets it from the hardware check.
     public int MemoryGB { get; set; } = 16;
-    bool KeepBoth => MemoryGB >= 16;
+    /// Whether two engines' models may stay loaded together.
+    bool KeepTogether(VoiceEngine a, VoiceEngine b) =>
+        a == VoiceEngine.Pocket || b == VoiceEngine.Pocket ? MemoryGB >= 16 : MemoryGB >= 32;
 
     readonly Lock gate = new();
     PocketModel? pocket;
+    QwenShared? qwenShared;
+    QwenModel? design, clone;
     OrpheusModel? orpheus;
     int loading;
     /// Pocket TTS's conditioning for each clip it has cloned from (voice ID and semitones):
@@ -87,15 +97,23 @@ public sealed class NeuralModels
     /// Which engines have a model in memory now.
     /// Read without the lock: views ask on every redraw, and loading holds the lock for seconds.
     public bool IsLoaded(VoiceEngine e) =>
-        e == VoiceEngine.Pocket ? Volatile.Read(ref pocket) is not null
-            : e == VoiceEngine.Orpheus && Volatile.Read(ref orpheus) is not null;
+        e switch
+        {
+            VoiceEngine.Pocket => Volatile.Read(ref pocket) is not null,
+            VoiceEngine.Qwen => Volatile.Read(ref design) is not null || Volatile.Read(ref clone) is not null,
+            VoiceEngine.Orpheus => Volatile.Read(ref orpheus) is not null,
+            _ => false,
+        };
+
+    static readonly VoiceEngine[] Local = [VoiceEngine.Pocket, VoiceEngine.Qwen, VoiceEngine.Orpheus];
 
     T Load<T>(ref T? slot, Func<T> make, VoiceEngine engine) where T : class
     {
         lock (gate)
         {
             if (slot is not null) return slot;
-            if (!KeepBoth) DropLocked(engine == VoiceEngine.Pocket ? VoiceEngine.Orpheus : VoiceEngine.Pocket);
+            foreach (var other in Local)
+                if (other != engine && !KeepTogether(engine, other)) DropLocked(other);
             Interlocked.Increment(ref loading);
             Changed?.Invoke();
             try { return slot = make(); }
@@ -109,7 +127,11 @@ public sealed class NeuralModels
     }
 
     public PocketModel Pocket() => Load(ref pocket, () => new PocketModel(VoicePacks.PocketFolder), VoiceEngine.Pocket);
+    public QwenModel Design() => Load(ref design, () => new QwenModel(VoicePacks.QwenDesignFolder, SharedQwen()), VoiceEngine.Qwen);
+    public QwenModel Clone() => Load(ref clone, () => new QwenModel(VoicePacks.QwenCloneFolder, SharedQwen()), VoiceEngine.Qwen);
     public OrpheusModel Orpheus() => Load(ref orpheus, () => new OrpheusModel(VoicePacks.OrpheusFolder), VoiceEngine.Orpheus);
+
+    QwenShared SharedQwen() => qwenShared ??= new QwenShared(VoicePacks.QwenSharedFolder);
 
     /// Speaks a line with Pocket TTS, cloning the voice from `clip` (`key` names it for the cache).
     public float[] SpeakPocket(PocketLine line, CancellationToken ct)
@@ -138,6 +160,12 @@ public sealed class NeuralModels
             pocket?.Dispose();
             pocket = null;
             voices.Clear();
+        }
+        else if (engine == VoiceEngine.Qwen)
+        {
+            design?.Dispose(); clone?.Dispose(); qwenShared?.Dispose();
+            design = clone = null;
+            qwenShared = null;
         }
         else if (engine == VoiceEngine.Orpheus)
         {
@@ -203,9 +231,115 @@ public static class PocketClips
     }
 }
 
+/// Qwen3-TTS voice samples: a few seconds in the designed voice, which every line is cloned
+/// from so a character sounds the same from line to line (designing each line separately
+/// drifts; CLAUDE.md).
+public static class QwenSamples
+{
+    /// What the sample says: plain, unhurried and long enough to carry the voice.
+    public const string SampleText = "I have lived in this town for a long time, and I know every road that leads out of it.";
+
+    static readonly Dictionary<string, VoiceSample> memory = [];
+    static readonly Lock gate = new();
+
+    /// Makes a sample (the VoiceDesign model); tests put a fake here.
+    public static Func<string, string, ulong, CancellationToken, float[]> Designer { get; set; } =
+        (text, description, seed, ct) => NeuralModels.Shared.Design().Design(text, description, "english", seed, 1200, ct);
+
+    /// The tone the line's sample is recorded in. Narration is always even.
+    public static Tone SampleTone(SpeechRequest r) => r.Kind is null ? Tone.Neutral : r.Tone;
+
+    public static string Key(string design, Tone tone) =>
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("v1\u001F" + design + "\u001F" + tone.Raw())));
+
+    static string FileFor(string key) => Path.Combine(VoicePacks.SamplesFolder, key + ".wav");
+
+    public static VoiceSample Sample(string design, Tone tone, CancellationToken ct)
+    {
+        var k = Key(design, tone);
+        lock (gate) if (memory.TryGetValue(k, out var m)) return m;
+        var file = FileFor(k);
+        if (File.Exists(file))
+        {
+            var s = new VoiceSample(WavFile.Read(file), SampleText);
+            lock (gate) memory[k] = s;
+            return s;
+        }
+        var prompt = tone == Tone.Neutral ? design : design + " Speaking " + tone.Direction() + ".";
+        // The Mac's seed first; a draw that contradicts the description is made again.
+        var audio = Designer(SampleText, prompt, Sampler.Seed(design), ct);
+        for (int retry = 1; retry < 3 && Pitch.Contradicts(design, audio); retry++)
+            audio = Designer(SampleText, prompt, Sampler.Seed(design + retry), ct);
+        if (audio.Length == 0) throw SpeechException.Failed("Qwen3-TTS made no sound for this voice. Try a different description.");
+        Save(file, audio);
+        var made = new VoiceSample(audio, SampleText);
+        lock (gate) memory[k] = made;
+        return made;
+    }
+
+    /// The sample with its pitch shifted `semitones` (a shade), kept beside the sample so it's
+    /// made once. 0 is the sample itself.
+    public static VoiceSample Shaded(VoiceSample sample, string key, int semitones)
+    {
+        if (semitones == 0) return sample;
+        var k = $"{key}-shade{semitones}";
+        lock (gate) if (memory.TryGetValue(k, out var m)) return m;
+        var file = FileFor(k);
+        var audio = File.Exists(file) ? WavFile.Read(file) : ShadeAudio.Apply(sample.Audio, semitones, 0);
+        if (!File.Exists(file)) Save(file, audio);
+        var s = new VoiceSample(audio, sample.Text);
+        lock (gate) memory[k] = s;
+        return s;
+    }
+
+    static void Save(string file, float[] audio)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            WavFile.Write(file, audio, float32: true);
+        }
+        catch (IOException) { /* kept in memory; made again next time */ }
+    }
+
+    /// The longest sample the clone model takes: its codec encoder in the ONNX export takes 10
+    /// seconds.
+    public const double LongestSample = 10;
+
+    /// A sample Qwen3-TTS can clone from: a clip longer than 10 seconds (clones are cut at up to
+    /// 15 for Pocket TTS) is cut at the quietest moment in its last few seconds before 10, with
+    /// the words cut at the same share of the text (the model needs what the sample says).
+    public static VoiceSample Fitted(VoiceSample sample)
+    {
+        int limit = (int)(LongestSample * SpeechAudio.SampleRate);
+        if (sample.Audio.Length <= limit) return sample;
+        int window = SpeechAudio.SampleRate / 50, from = (int)(6.0 * SpeechAudio.SampleRate);
+        int cut = limit;
+        double quietest = double.MaxValue;
+        for (int i = from; i + window <= limit; i += window)
+        {
+            double e = 0;
+            for (int k = i; k < i + window; k++) e += sample.Audio[k] * sample.Audio[k];
+            if (e < quietest) { quietest = e; cut = i + window / 2; }
+        }
+        double share = cut / (double)sample.Audio.Length;
+        var text = sample.Text.Trim();
+        int at = (int)Math.Round(text.Length * share);
+        // At a word boundary: back to the space before the word the share falls in.
+        while (at > 0 && at < text.Length && !char.IsWhiteSpace(text[at])) at--;
+        return new VoiceSample(sample.Audio[..cut], at > 0 ? text[..at].Trim() : text);
+    }
+
+    public static void Forget()
+    {
+        lock (gate) memory.Clear();
+    }
+}
+
 /// Voices cloned on this PC (Clone a Voice › On This PC): a clip of the narrator's recording
 /// and what it says, kept in Cloned Voices as `<id>.wav` + voices.json. voiceID "clone:<id>"
-/// on the Pocket TTS engine. As the Mac's LocalClones.swift.
+/// on the Pocket TTS or the Qwen3-TTS engine (both speak from the same clip). As the Mac's
+/// LocalClones.swift.
 public sealed class LocalClones
 {
     public const string Prefix = PocketVoice.ClonePrefix;
@@ -217,7 +351,8 @@ public sealed class LocalClones
 
     public static LocalClones Shared { get; set; } = new(Path.Combine(Path.GetTempPath(), "InnerVoice Cloned Voices (test)"));
 
-    public static bool IsClone(VoiceChoice c) => c.Engine == VoiceEngine.Pocket && c.VoiceID.StartsWith(Prefix, StringComparison.Ordinal);
+    public static bool IsClone(VoiceChoice c) =>
+        c.Engine is VoiceEngine.Pocket or VoiceEngine.Qwen && c.VoiceID.StartsWith(Prefix, StringComparison.Ordinal);
 
     public string Folder { get; }
     readonly Lock gate = new();
@@ -247,7 +382,10 @@ public sealed class LocalClones
 
     string AudioFile(string id) => Path.Combine(Folder, id + ".wav");
 
-    public static VoiceInfo Info(Clone c) => new(VoiceEngine.Pocket, c.VoiceID, c.Name, c.Gender, VoiceAge.Adult, "", 3, "Cloned on this PC", Cloned: true);
+    public static VoiceInfo Info(Clone c) => Info(c, VoiceEngine.Pocket);
+
+    /// The clone as a voice of `engine` (Pocket TTS or Qwen3-TTS).
+    public static VoiceInfo Info(Clone c, VoiceEngine engine) => new(engine, c.VoiceID, c.Name, c.Gender, VoiceAge.Adult, "", 3, "Cloned on this PC", Cloned: true);
 
     public Clone? For(string voiceID)
     {
@@ -296,6 +434,7 @@ public sealed class LocalClones
         }
         try { File.Delete(AudioFile(id)); } catch (IOException) { }
         PocketClips.Forget();
+        QwenSamples.Forget();
         Changed?.Invoke();
     }
 
@@ -415,6 +554,68 @@ public sealed class PocketEngine : IVoiceEngine
     public Task Prepare(CancellationToken ct) => Ready && !AssumeReady ? Task.Run(() => NeuralModels.Shared.Pocket(), ct) : Task.CompletedTask;
 
     public void Unload() => NeuralModels.Shared.Unload(VoiceEngine.Pocket);
+}
+
+/// Qwen3-TTS on this PC.
+public sealed class QwenEngine : IVoiceEngine
+{
+    public VoiceEngine Engine => VoiceEngine.Qwen;
+    public bool IsReady => VoicePacks.IsInstalled(VoicePacks.Qwen);
+    public string? NotReadyReason => IsReady ? null : "Qwen3-TTS isn’t downloaded yet. Download it in Settings › Voices.";
+    public bool ShadesPitch => true;
+    public bool ShadesPace => false;
+
+    /// Clones from a sample (the Base model); tests put a fake here.
+    public Func<string, VoiceSample, ulong, CancellationToken, float[]> Cloner { get; set; } =
+        (text, sample, seed, ct) => NeuralModels.Shared.Clone().Clone(text, sample.Audio, sample.Text, "english", seed, 2400, ct);
+
+    /// Test runs speak without the download.
+    public bool AssumeReady { get; set; }
+    bool Ready => AssumeReady || IsReady;
+
+    public IReadOnlyList<VoiceInfo> Voices =>
+        LocalClones.Shared.All.Select(c => LocalClones.Info(c, VoiceEngine.Qwen)).Concat(VoiceInfo.QwenPresets).ToList();
+
+    public VoiceInfo? Info(VoiceChoice choice)
+    {
+        if (LocalClones.IsClone(choice)) return LocalClones.Shared.For(choice.VoiceID) is { } c ? LocalClones.Info(c, VoiceEngine.Qwen) : null;
+        if (VoiceInfo.QwenPresets.FirstOrDefault(v => v.VoiceID == choice.VoiceID) is { } p) return p;
+        return new VoiceInfo(VoiceEngine.Qwen, choice.VoiceID, VoiceNames.Name(choice), VoiceCasting.GenderOfDescription(choice.Design ?? "") ?? Gender.Neutral,
+                             VoiceAge.Adult, "", 2, "Designed from a description", choice.Design);
+    }
+
+    public Task<float[]> Render(SpeechRequest r, CancellationToken ct) => Task.Run(() => RenderNow(r, ct), ct);
+
+    float[] RenderNow(SpeechRequest r, CancellationToken ct)
+    {
+        if (!Ready) throw SpeechException.EngineUnavailable(VoiceEngine.Qwen);
+        var pieces = new List<float[]>();
+        int semitones = r.Shade?.Pitch ?? 0;
+        foreach (var piece in SpeechChunks.Chunks(r.Text))
+        {
+            ct.ThrowIfCancellationRequested();
+            if (LocalClones.IsClone(r.Choice))
+            {
+                // A voice cloned on this PC: every line from the narrator's own clip.
+                var sample = QwenSamples.Shaded(QwenSamples.Fitted(LocalClones.Shared.Sample(r.Choice.VoiceID)),
+                                                 r.Choice.VoiceID.Replace(':', '-'), semitones); // no ':' in a file name
+                pieces.Add(Cloner(piece, sample, Sampler.Seed(piece + r.Choice.VoiceID), ct));
+            }
+            else
+            {
+                var design = r.Choice.Design ?? VoiceInfo.QwenPreset(r.Choice.VoiceID)?.Design ?? VoiceInfo.QwenPresets[0].Design!;
+                var tone = QwenSamples.SampleTone(r);
+                // A shade (Casting Style) shifts the sample's pitch; the clone keeps the voice.
+                var sample = QwenSamples.Shaded(QwenSamples.Sample(design, tone, ct), QwenSamples.Key(design, tone), semitones);
+                pieces.Add(Cloner(piece, sample, Sampler.Seed(piece + design), ct));
+            }
+        }
+        return LocalRender.Finish(pieces, r);
+    }
+
+    public Task Prepare(CancellationToken ct) => Ready && !AssumeReady ? Task.Run(() => NeuralModels.Shared.Clone(), ct) : Task.CompletedTask;
+
+    public void Unload() => NeuralModels.Shared.Unload(VoiceEngine.Qwen);
 }
 
 /// Orpheus on this PC.

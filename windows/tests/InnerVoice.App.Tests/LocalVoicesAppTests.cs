@@ -13,8 +13,8 @@ using Xunit;
 
 namespace InnerVoice.App.Tests;
 
-/// Pocket TTS and Orpheus in the app: Settings › Voices (downloads, the hardware check, the
-/// recommended specs, old Qwen3-TTS files) and Clone a Voice › On This PC, with a fake Pocket TTS and a fake
+/// Pocket TTS, Qwen3-TTS and Orpheus in the app: Settings › Voices (downloads, the hardware check,
+/// the recommended specs, where Qwen3-TTS comes from) and Clone a Voice › On This PC, with fake engines and a fake
 /// recognizer. The models themselves are tested in the Core tests.
 [Collection("Voice engines")]
 public class LocalVoicesAppTests
@@ -49,8 +49,15 @@ public class LocalVoicesAppTests
             Pump();
             var all = string.Join("\n", Texts(settings));
             Assert.Contains("Pocket TTS", all);
+            Assert.Contains("Qwen3-TTS", all);
             Assert.Contains("Orpheus", all);
             Assert.Contains($"Download ({VoicePacks.Pocket.SizeDescription})", all);
+            Assert.Contains($"Download ({VoicePacks.Qwen.SizeDescription})", all);
+            Assert.Equal("8.8 GB", VoicePacks.Qwen.SizeDescription);
+            // Qwen3-TTS says where it comes from and that it stays on this PC (the user's wording).
+            Assert.Contains("Developed in China · Runs on this PC", all);
+            Assert.Contains("Qwen3-TTS comes from Alibaba’s Qwen team in China. It runs entirely on this PC from open model files (Apache 2.0): your book’s text and the audio never leave the PC, and it never connects to Alibaba or any server in China. The only network use is the one-time model download from Hugging Face.", all);
+            Assert.DoesNotContain("Old Voice Files", all);
             Assert.Contains($"Download ({VoicePacks.Orpheus.SizeDescription})", all);
             Assert.DoesNotContain("Coming later", all);
             // What this PC has, the plain warning, and what makes it better.
@@ -90,64 +97,120 @@ public class LocalVoicesAppTests
         }
     }
 
-    /// Qwen3-TTS's leftovers are offered for removal, only while they're there, and only the
-    /// test's own Voice Models folder is touched.
+    /// Qwen3-TTS's files are live again: Settings never offers them for removal (Remove Old
+    /// Voice Files is gone), even with the models and samples on disk.
     [AvaloniaFact]
-    public void OldQwenFilesCanBeRemoved()
+    public void QwenFilesAreNotOfferedForRemoval()
     {
         VoiceSetup.Start();
         var folder = VoicePacks.Folder;
         Assert.Contains("(test)", folder);
         var qwen = Path.Combine(folder, "qwen", "design");
         Directory.CreateDirectory(qwen);
-        File.WriteAllBytes(Path.Combine(qwen, "talker.onnx"), new byte[3_000_000]);
-        Directory.CreateDirectory(Path.Combine(folder, "Samples"));
-        File.WriteAllBytes(Path.Combine(folder, "Samples", "a.wav"), new byte[1_000]);
+        File.WriteAllBytes(Path.Combine(qwen, "talker.onnx"), new byte[1_000]);
+        Directory.CreateDirectory(VoicePacks.SamplesFolder);
+        File.WriteAllBytes(Path.Combine(VoicePacks.SamplesFolder, "a.wav"), new byte[1_000]);
         try
         {
             var settings = SettingsWindow.Show(null, "Voices");
             Pump();
             var all = string.Join("\n", Texts(settings));
-            Assert.Contains("Old Voice Files", all);
-            Assert.Contains("Qwen3-TTS, which Pocket TTS replaced, left 3 MB of models and voice samples on this PC.", all);
-            Assert.Contains("Remove Old Voice Files…", all);
+            Assert.DoesNotContain("Old Voice Files", all);
+            Assert.DoesNotContain("Recycle Bin", all);
             settings.Close();
-            VoiceModels.Shared.RemoveOldFiles();
-            Assert.False(Directory.Exists(Path.Combine(folder, "qwen")));
-            Assert.False(Directory.Exists(Path.Combine(folder, "Samples")));
-            Assert.Null(VoiceModels.Shared.OldFiles);
-            settings = SettingsWindow.Show(null, "Voices");
-            Pump();
-            Assert.DoesNotContain("Old Voice Files", string.Join("\n", Texts(settings)));
-            settings.Close();
+            Assert.True(Directory.Exists(qwen));
         }
         finally
         {
             if (Directory.Exists(Path.Combine(folder, "qwen"))) Directory.Delete(Path.Combine(folder, "qwen"), true);
-            if (Directory.Exists(Path.Combine(folder, "Samples"))) Directory.Delete(Path.Combine(folder, "Samples"), true);
+            if (Directory.Exists(VoicePacks.SamplesFolder)) Directory.Delete(VoicePacks.SamplesFolder, true);
         }
     }
 
-    /// A book from before Pocket TTS switches when it's opened, and shows as edited.
+    /// A book saved with Qwen3-TTS opens as Qwen3-TTS, unchanged and not marked edited.
     [AvaloniaFact]
-    public void OpeningAQwenBookMovesItToPocketTTS()
+    public void OpeningAQwenBookKeepsQwen()
     {
         var tmp = Path.Combine(Path.GetTempPath(), $"iv-qwen-{Guid.NewGuid():N}.innervoice");
         File.Copy(Books.Fixture("sample-windows.innervoice"), tmp);
         try
         {
             var doc = ProjectDocument.Open(tmp);
-            Assert.True(doc.IsDirty);
-            Assert.False(LegacyVoices.NeedsMigration(doc.Project));
-            Assert.Equal(VoiceEngine.Pocket, doc.Project.Settings.VoiceEngine);
-            Assert.Null(doc.UndoName); // no undo step
-            // A Pocket TTS book opens as it is.
+            Assert.False(doc.IsDirty);
+            Assert.Equal(VoiceEngine.Qwen, doc.Project.Settings.VoiceEngine);
+            Assert.Contains(doc.Project.Characters, c => c.Voice(VoiceEngine.Qwen)?.Choice.VoiceID == "design");
+            Assert.All(doc.Project.Characters, c => Assert.Null(c.Voice(VoiceEngine.Pocket)));
+            // A Pocket TTS book opens as it is too.
             var mac = Path.Combine(Path.GetTempPath(), $"iv-pocket-{Guid.NewGuid():N}.innervoice");
             File.Copy(Books.Fixture("sample-mac.innervoice"), mac);
             Assert.False(ProjectDocument.Open(mac).IsDirty);
             File.Delete(mac);
         }
         finally { File.Delete(tmp); }
+    }
+
+    /// Qwen3-TTS, downloaded.
+    sealed class FakeQwen : IVoiceEngine
+    {
+        public VoiceEngine Engine => VoiceEngine.Qwen;
+        public bool IsReady => true;
+        public string? NotReadyReason => null;
+        public IReadOnlyList<VoiceInfo> Voices => LocalClones.Shared.All.Select(c => LocalClones.Info(c, VoiceEngine.Qwen)).Concat(VoiceInfo.QwenPresets).ToList();
+        public VoiceInfo? Info(VoiceChoice choice) => Voices.FirstOrDefault(v => v.VoiceID == choice.VoiceID);
+        public bool ShadesPitch => true;
+        public bool ShadesPace => false;
+        public Task<float[]> Render(SpeechRequest request, CancellationToken ct) => Task.FromResult(Tone(150, 0.5));
+    }
+
+    /// In a book that speaks with Qwen3-TTS, a voice cloned on this PC is a Qwen3-TTS voice
+    /// (the same clip Pocket TTS would speak from).
+    [AvaloniaFact]
+    public async Task CloningInAQwenBookGivesAQwenVoice()
+    {
+        VoiceSetup.Start();
+        var clones = LocalClones.Shared;
+        LocalClones.Shared = new LocalClones(Directory.CreateTempSubdirectory("iv-clones-").FullName);
+        VoiceEngineRegistry.Register(new FakeQwen());
+        EngineSwitches.Shared = new EngineSwitches();
+        var wav = Path.Combine(Path.GetTempPath(), $"iv-recording-{Guid.NewGuid():N}.wav");
+        WavFile.Write(wav, Tone(180, 12));
+        var words = new List<CloneClip.Word>();
+        var transcript = "";
+        for (double t = 0.3; t + 0.4 < 12; t += 0.5)
+        {
+            transcript += (transcript.Length > 0 ? " " : "") + "word";
+            words.Add(new CloneClip.Word(t, t + 0.4, transcript.Length));
+        }
+        LocalCloning.TestTranscriber = _ => (transcript, words);
+        try
+        {
+            var doc = ProjectDocument.Unsaved(TestApp.Sample());
+            doc.Change("Purpose", p => { p.Settings.Purpose = ProjectPurpose.AiVoices; p.Settings.VoiceEngine = VoiceEngine.Qwen; });
+            Assert.Equal(VoiceEngine.Qwen, doc.Project.EngineInUse());
+            var who = doc.Project.Characters.First(c => (doc.Index.StatsFor(c.Id)?.Lines ?? 0) > 0);
+            var window = new CloneVoiceWindow(doc);
+            window.Show();
+            Pump();
+            Assert.Contains("Qwen3-TTS learns the voice", string.Join("\n", Texts(window)));
+            window.AddRecordings([wav]);
+            await window.Preparing!;
+            Pump();
+            window.Prepare("Placeholder Voice", rights: true, useFor: who.Id);
+            await window.Clone();
+            Pump();
+            var c = Assert.Single(LocalClones.Shared.All);
+            var voice = doc.Project.Character(who.Id)!.Voice(VoiceEngine.Qwen)?.Choice;
+            Assert.Equal(new VoiceChoice(VoiceEngine.Qwen, c.VoiceID), voice);
+            Assert.True(LocalClones.IsClone(voice!));
+            window.Close();
+        }
+        finally
+        {
+            LocalCloning.TestTranscriber = null;
+            LocalClones.Shared = clones;
+            VoiceEngineRegistry.Register(new QwenEngine());
+            File.Delete(wav);
+        }
     }
 
     /// Pocket TTS, downloaded, speaking a tone.

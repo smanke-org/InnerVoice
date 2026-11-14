@@ -14,7 +14,7 @@ using InnerVoice.Core.Speech;
 namespace InnerVoice.App.Windows;
 
 /// Book › Clone a Voice… (and the Voices page): a voice made from recordings of one person.
-/// The Mac's CloneVoiceSheet. On This PC: Pocket TTS speaks from a clip of the recordings (up to 15 s), and
+/// The Mac's CloneVoiceSheet. On This PC: Pocket TTS (or Qwen3-TTS, in a book that speaks with it) speaks from a clip of the recordings (up to 15 s), and
 /// the words in it are found on this PC (LocalCloning); nothing leaves the PC. ElevenLabs:
 /// nothing is sent until the rights checkbox is on, and then only the recordings and the
 /// name, never text from the book. Recordings made here are temporary files, deleted when the
@@ -83,7 +83,10 @@ public sealed class CloneVoiceWindow : Window
     public IReadOnlyList<string> Recordings => recordings;
 
     bool ElevenReady => ElevenLabsEngine.Shared.IsSetUp && document.Project.Settings.CloudVoicesAllowed is not null;
-    bool PocketReady => VoiceEngineRegistry.IsReady(VoiceEngine.Pocket);
+    /// The engine a voice cloned on this PC speaks with here: Qwen3-TTS in a book that speaks
+    /// with it, Pocket TTS otherwise (the same clip works for both).
+    VoiceEngine LocalEngine => document.Project.EngineInUse() == VoiceEngine.Qwen ? VoiceEngine.Qwen : VoiceEngine.Pocket;
+    bool LocalReady => VoiceEngineRegistry.IsReady(LocalEngine);
 
     /// The clip made from the recordings (tests).
     public LocalCloning.Clip? PreparedClip => clip;
@@ -95,7 +98,7 @@ public sealed class CloneVoiceWindow : Window
     {
         if (place == Place.ThisPC)
         {
-            if (!PocketReady) return "Download Pocket TTS first";
+            if (!LocalReady) return $"Download {LocalEngine.Title()} first";
             if (name.Trim().Length == 0) return "Name the voice first";
             if (recorder is not null) return "Stop recording first";
             if (preparing) return "Finding the words in the recording…";
@@ -144,7 +147,7 @@ public sealed class CloneVoiceWindow : Window
         ToolTip.SetTip(places, "Where the voice is made and kept");
         panel.Children.Add(places);
         panel.Children.Add(Ui.Caption(place == Place.ThisPC
-            ? "Pocket TTS learns the voice from up to 15 seconds of a recording and speaks any line in it. The recording and the voice stay on this PC, and every InnerVoice project can use it. Free."
+            ? $"{LocalEngine.Title()} learns the voice from up to {(LocalEngine == VoiceEngine.Qwen ? 10 : 15)} seconds of a recording and speaks any line in it. The recording and the voice stay on this PC, and every InnerVoice project can use it. Free."
             : "ElevenLabs makes a voice from a recording of one person and saves it in your ElevenLabs voices under the name you choose, so every InnerVoice project (and elevenlabs.io) can use it.", TextWrapping.Wrap));
         panel.Children.Add(PlaceNotice());
 
@@ -264,19 +267,20 @@ public sealed class CloneVoiceWindow : Window
         if (place == Place.ThisPC)
         {
             var e = document.Project.EngineInUse();
-            if (!PocketReady)
+            var local = LocalEngine;
+            if (!LocalReady)
             {
-                var pack = Core.Speech.Neural.VoicePacks.Pocket;
-                if (VoiceModels.Shared.States.GetValueOrDefault(VoiceEngine.Pocket) is VoiceModels.State.Downloading d)
-                    return Notice($"Downloading Pocket TTS: {(int)(d.Fraction * 100)}% of {pack.SizeDescription}.", "Cancel", () => VoiceModels.Shared.Cancel(VoiceEngine.Pocket));
-                var failed = VoiceModels.Shared.States.GetValueOrDefault(VoiceEngine.Pocket) is VoiceModels.State.Failed f ? " " + f.Message : "";
-                return Notice($"Cloning on this PC uses Pocket TTS, a free download ({pack.SizeDescription}, once).{failed}", "Download", async () =>
+                var pack = Core.Speech.Neural.VoicePacks.For(local)!;
+                if (VoiceModels.Shared.States.GetValueOrDefault(local) is VoiceModels.State.Downloading d)
+                    return Notice($"Downloading {local.Title()}: {(int)(d.Fraction * 100)}% of {pack.SizeDescription}.", "Cancel", () => VoiceModels.Shared.Cancel(local));
+                var failed = VoiceModels.Shared.States.GetValueOrDefault(local) is VoiceModels.State.Failed f ? " " + f.Message : "";
+                return Notice($"Cloning on this PC uses {local.Title()}, a free download ({pack.SizeDescription}, once).{failed}", "Download", async () =>
                 {
-                    if (await VoiceModels.Shared.ConfirmHardware(this, VoiceEngine.Pocket, downloading: true)) VoiceModels.Shared.Download(VoiceEngine.Pocket);
+                    if (await VoiceModels.Shared.ConfirmHardware(this, local, downloading: true)) VoiceModels.Shared.Download(local);
                 });
             }
-            if (e is not (VoiceEngine.Pocket or VoiceEngine.Mixed))
-                return Ui.Text($"This book speaks with {e.Title()}. Voices cloned on this PC speak with Pocket TTS: to hear one in this book, choose Pocket TTS or Mix Engines on the Voices page.",
+            if (e is not (VoiceEngine.Pocket or VoiceEngine.Qwen or VoiceEngine.Mixed))
+                return Ui.Text($"This book speaks with {e.Title()}. Voices cloned on this PC speak with Pocket TTS or Qwen3-TTS: to hear one in this book, choose one of them or Mix Engines on the Voices page.",
                     13, brush: Look.Brush(Look.SecondaryInk), wrap: TextWrapping.Wrap);
             return new Panel();
         }
@@ -489,14 +493,14 @@ public sealed class CloneVoiceWindow : Window
     {
         var c = Core.Speech.Neural.LocalClones.Shared.Add(name, gender, clip!.Audio, clipText);
         Activity.Record(ActivityKey.VoicesCloned);
-        return Core.Speech.Neural.LocalClones.Info(c);
+        return Core.Speech.Neural.LocalClones.Info(c, LocalEngine);
     }
 
     /// The made voice: hear it, and give it to someone.
     Control Done(VoiceInfo v)
     {
         var col = Ui.Column(Look.Md);
-        bool local = v.Engine == VoiceEngine.Pocket;
+        bool local = v.Engine is VoiceEngine.Pocket or VoiceEngine.Qwen;
         var head = Ui.Row(Look.Sm, Ui.Headline($"“{v.Name}” is ready"));
         if (!local) head.Children.Add(SettingsWindow.ElevenLabsCloudBadge());
         col.Children.Add(head);
