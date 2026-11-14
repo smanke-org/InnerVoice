@@ -94,6 +94,55 @@ public static class AudioExporter
     /// The files' sample rate, as the Mac's.
     public const int FileRate = 44_100;
 
+    /// How many lines are made at once for an engine.
+    public static int RenderAhead(VoiceEngine engine) => engine switch
+    {
+        VoiceEngine.Elevenlabs => 4,   // ElevenLabs' Creator plan runs 5 requests at a time; leave one for playback.
+        VoiceEngine.Apple => 3,        // Windows' voices
+        _ => 2,                        // Pocket TTS, Orpheus: one model at a time; the second only overlaps the work around it.
+    };
+
+    /// The first wait before trying a busy engine again; it doubles each time (1, 2, 4, 8,
+    /// 16 seconds). Tests shorten it.
+    public static TimeSpan RetryWait { get; set; } = TimeSpan.FromSeconds(1);
+
+    /// ElevenLabs answers "busy" (HTTP 429) when too many requests run at once (another app,
+    /// or a smaller plan): wait and try again, up to five times, rather than stopping the export.
+    public static async Task<float[]> RenderWithRetry(SpeechRenderer renderer, SpeechRequest request, CancellationToken ct)
+    {
+        var wait = RetryWait;
+        for (int attempt = 0; ; attempt++)
+        {
+            try { return await renderer.Render(request, ct).ConfigureAwait(false); }
+            catch (SpeechException e) when (e.Busy && attempt < 5)
+            {
+                await Task.Delay(wait, ct).ConfigureAwait(false);
+                wait *= 2;
+            }
+        }
+    }
+
+    /// What an export would cost on ElevenLabs: the characters of its ElevenLabs lines not in
+    /// the audio cache (ElevenLabs charges about a credit a character), and how many lines
+    /// that is. Reads only; nothing is sent.
+    public static (long Needed, int Lines) CreditsNeeded(IEnumerable<AudioPart> parts, VoiceResolver resolver, SpeechRenderer? renderer = null,
+                                                             CancellationToken ct = default)
+    {
+        renderer ??= SpeechRenderer.Shared;
+        long needed = 0;
+        int lines = 0, n = 0;
+        foreach (var seg in parts.SelectMany(p => p.Segments))
+        {
+            if (++n % 500 == 0) ct.ThrowIfCancellationRequested();
+            if (resolver.RequestFor(seg) is not { } r || r.Choice.Engine != VoiceEngine.Elevenlabs) continue;
+            int count = r.Text.Trim().Length;
+            if (count == 0 || renderer.IsCached(r)) continue;
+            needed += count;
+            lines++;
+        }
+        return (needed, lines);
+    }
+
     /// Renders and writes each part into `folder`. `progress` hears (done, total, part name)
     /// before each segment, and (total, total, "") at the end. With `stem`, each part is
     /// written Separate: one file per voice (named by `stem`, such as "Narrator" or "Men’s
@@ -140,31 +189,66 @@ public static class AudioExporter
                         writers[n] = (new WavWriter(temp, FileRate), temp, fileName);
                     }
                     long position = 0;
-                    foreach (var seg in part.Segments)
+                    // Lines are made ahead, several at once, and written in book order: the
+                    // network (ElevenLabs) and Windows' voices work in parallel, and the
+                    // on-device models overlap their work with the trimming and writing here.
+                    var requests = part.Segments.Select(resolver.RequestFor).ToArray();
+                    var ahead = new Dictionary<int, Task<float[]>>();
+                    var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    int next = 0;
+                    void Fill(int from)
                     {
-                        ct.ThrowIfCancellationRequested();
-                        progress?.Invoke(done, total, part.Name);
-                        if (resolver.RequestFor(seg) is { } request)
+                        next = Math.Max(next, from);
+                        while (next < requests.Length)
                         {
-                            var audio = SpeechAudio.Trimmed(await renderer.Render(request, ct).ConfigureAwait(false));
-                            var samples = SpeechAudio.Resampled(audio, SpeechAudio.SampleRate, FileRate);
-                            var mine = stem?.Invoke(seg) ?? "";
-                            foreach (var (n, x) in writers)
+                            if (requests[next] is not { } r) { next++; continue; }
+                            if (ahead.Count >= RenderAhead(r.Choice.Engine)) break;
+                            ahead[next] = Start(r);
+                            next++;
+                        }
+                    }
+                    Task<float[]> Start(SpeechRequest r) => Task.Run(() => RenderWithRetry(renderer, r, stop.Token), stop.Token);
+                    try
+                    {
+                        for (int i = 0; i < part.Segments.Count; i++)
+                        {
+                            var seg = part.Segments[i];
+                            ct.ThrowIfCancellationRequested();
+                            progress?.Invoke(done, total, part.Name);
+                            Fill(i);
+                            if (requests[i] is { } request)
                             {
-                                if (n == mine) x.Writer.Write(samples); else x.Writer.WriteSilence(samples.Length);
+                                if (!ahead.Remove(i, out var task)) task = Start(request);
+                                var rendered = await task.ConfigureAwait(false);
+                                Fill(i + 1);
+                                var audio = SpeechAudio.Trimmed(rendered);
+                                var samples = SpeechAudio.Resampled(audio, SpeechAudio.SampleRate, FileRate);
+                                var mine = stem?.Invoke(seg) ?? "";
+                                foreach (var (n, x) in writers)
+                                {
+                                    if (n == mine) x.Writer.Write(samples); else x.Writer.WriteSilence(samples.Length);
+                                }
+                                timing?.Invoke(partIndex, seg, (double)position / FileRate, (double)(position + samples.Length) / FileRate);
+                                position += samples.Length;
                             }
-                            timing?.Invoke(partIndex, seg, (double)position / FileRate, (double)(position + samples.Length) / FileRate);
-                            position += samples.Length;
+                            double gap = seg.Pause == PauseKind.None ? seg.PauseAfter : pauses.Seconds(seg.Pause);
+                            if (gap > 0)
+                            {
+                                // Silence goes in every file alike.
+                                long frames = (long)Math.Round(gap * FileRate);
+                                foreach (var x in writers.Values) x.Writer.WriteSilence(frames);
+                                position += frames;
+                            }
+                            done++;
                         }
-                        double gap = seg.Pause == PauseKind.None ? seg.PauseAfter : pauses.Seconds(seg.Pause);
-                        if (gap > 0)
-                        {
-                            // Silence goes in every file alike.
-                            long frames = (long)Math.Round(gap * FileRate);
-                            foreach (var x in writers.Values) x.Writer.WriteSilence(frames);
-                            position += frames;
-                        }
-                        done++;
+                    }
+                    finally
+                    {
+                        // Stopped, failed or finished: nothing made ahead is wanted any more.
+                        stop.Cancel();
+                        var left = ahead.Values.ToArray();
+                        _ = Task.WhenAll(left).ContinueWith(_ => stop.Dispose(), TaskScheduler.Default);
+                        foreach (var t in left) _ = t.ContinueWith(x => _ = x.Exception, TaskContinuationOptions.OnlyOnFaulted);
                     }
                     foreach (var x in writers.Values) x.Writer.Dispose();
                     // Encode (M4A), then move each into the chosen folder.

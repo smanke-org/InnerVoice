@@ -227,9 +227,64 @@ public class ElevenLabsAppTests
     }
 
     [AvaloniaFact]
+    public async Task ExportAudioEstimatesTheCredits()
+    {
+        var fake = Start();
+        var eleven = ElevenLabsEngine.Shared;
+        var cache = Path.Combine(Path.GetTempPath(), "iv-credits-" + Guid.NewGuid().ToString("N"));
+        var shared = SpeechRenderer.Shared;
+        SpeechRenderer.Shared = new SpeechRenderer(cache);
+        try
+        {
+            var doc = ProjectDocument.Unsaved(TestApp.Sample());
+            doc.Change("Purpose", p => { p.Settings.Purpose = ProjectPurpose.AiVoices; p.Settings.VoiceEngine = VoiceEngine.Elevenlabs; });
+            doc.SetCloudVoicesAllowed(true);
+            // Not set up: no estimate, nothing asked.
+            var w = new Export.AudioExportWindow(doc);
+            await w.CreditsEstimate;
+            Pump();
+            Assert.Null(w.Credits);
+            Assert.Empty(fake.Sent);
+            w.Close();
+
+            eleven.Save("xi-test-key", consent: true);
+            await eleven.RefreshVoices();
+            Pump();
+            w = new Export.AudioExportWindow(doc);
+            await w.CreditsEstimate;
+            Pump();
+            var c = Assert.NotNull(w.Credits);
+            Assert.True(c.Needed > 0 && c.Lines > 0);
+            Assert.Equal(28_800, c.Left);   // 30,000 less 1,200 used
+            // Only the plan was asked: no book text left the PC.
+            Assert.Single(fake.Sent, s => s.Path.StartsWith("/v1/user/subscription"));
+            Assert.DoesNotContain(fake.Sent, s => s.Path.StartsWith("/v1/text-to-speech"));
+            Assert.All(fake.Sent, s => Assert.Equal("", s.Body));
+            w.Close();
+
+            Assert.Equal(("About 1,234 ElevenLabs credits for 56 lines not made yet. Your plan has 28,800 left.", (string?)null),
+                         Export.AudioExportWindow.CreditsText(1234, 56, 28_800));
+            Assert.Equal("About 10 ElevenLabs credits for 1 line not made yet.", Export.AudioExportWindow.CreditsText(10, 1, null).Line);
+            Assert.StartsWith("That’s more than your plan has left", Export.AudioExportWindow.CreditsText(30_000, 400, 28_800).Warning);
+        }
+        finally
+        {
+            SpeechRenderer.Shared = shared;
+            try { Directory.Delete(cache, true); } catch { }
+            eleven.Disconnect();
+            ElevenLabsEngine.TestHttp = null;
+        }
+    }
+
+    [AvaloniaFact]
     public void ErrorsSayWhatToDo()
     {
         Assert.Equal(ElevenLabsErrors.OutOfCredits, ElevenLabsEngine.Failure(402, "/x", []).Message);
+        // Busy (429) can be tried again (Export Audio does); running out of credits can't.
+        Assert.True(ElevenLabsEngine.Failure(429, "/x", "{\"detail\":{\"status\":\"too_many_concurrent_requests\"}}"u8.ToArray()).Busy);
+        Assert.Equal(ElevenLabsErrors.Busy, ElevenLabsEngine.Failure(429, "/x", []).Message);
+        Assert.False(ElevenLabsEngine.Failure(402, "/x", []).Busy);
+        Assert.False(ElevenLabsEngine.Failure(401, "/x", "{\"detail\":{\"status\":\"quota_exceeded\"}}"u8.ToArray()).Busy);
         Assert.Equal(ElevenLabsErrors.BadKey, ElevenLabsEngine.Failure(401, "/x", "{\"detail\":{\"status\":\"invalid_api_key\"}}"u8.ToArray()).Message);
         Assert.Equal(ElevenLabsErrors.VoiceSlotsFull, ElevenLabsEngine.Failure(400, "/x", "{\"detail\":{\"status\":\"voice_limit_reached\",\"message\":\"x\"}}"u8.ToArray()).Message);
         Assert.Contains("text: field required", ElevenLabsEngine.Failure(422, "/x", "{\"detail\":[{\"loc\":[\"body\",\"text\"],\"msg\":\"field required\"}]}"u8.ToArray()).Message);

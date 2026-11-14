@@ -15,15 +15,36 @@ public sealed class FakeEngine(VoiceEngine engine, params VoiceInfo[] voices) : 
     public bool ShadesPitch { get; set; }
     public bool ShadesPace { get; set; }
     public List<SpeechRequest> Rendered { get; } = [];
+    /// How long each line takes (none: at once), for tests of lines made in parallel.
+    public Func<SpeechRequest, TimeSpan>? Delay { get; set; }
+    /// Fails a line with this before making it (none: never).
+    public Func<SpeechRequest, Exception?>? Fail { get; set; }
+    /// The most lines being made at the same moment.
+    public int MostAtOnce => Volatile.Read(ref most);
+    int running, most;
 
-    public Task<float[]> Render(SpeechRequest request, CancellationToken ct)
+    public async Task<float[]> Render(SpeechRequest request, CancellationToken ct)
     {
         lock (Rendered) Rendered.Add(request);
+        if (Fail?.Invoke(request) is { } failure) throw failure;
+        int now = Interlocked.Increment(ref running);
+        try
+        {
+            int seen;
+            while (now > (seen = Volatile.Read(ref most)) && Interlocked.CompareExchange(ref most, now, seen) != seen) { }
+            if (Delay?.Invoke(request) is { } wait) await Task.Delay(wait, ct);
+        }
+        finally { Interlocked.Decrement(ref running); }
+        return Tone(request);
+    }
+
+    static float[] Tone(SpeechRequest request)
+    {
         int words = Math.Max(1, request.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length);
         double hz = 200 * (request.Choice.Pitch ?? 1);
         var x = new float[(int)(0.1 * words * SpeechAudio.SampleRate)];
         for (int i = 0; i < x.Length; i++) x[i] = 0.3f * (float)Math.Sin(2 * Math.PI * hz * i / SpeechAudio.SampleRate);
-        return Task.FromResult(x);
+        return x;
     }
 }
 

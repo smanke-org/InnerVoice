@@ -158,6 +158,84 @@ public class AudioExportTests : IDisposable
         Assert.Empty(Directory.GetFiles(Path.Combine(root, "stopped")));
     }
 
+    /// A scene of many short lines, every one different.
+    static Project LongScene(int lines)
+    {
+        var paragraphs = new List<Paragraph> { new("Chapter 1", ParagraphStyle.Heading, null) };
+        for (int n = 1; n <= lines; n++)
+            paragraphs.Add(new Paragraph($"“This is line {n} of the scene,” said {(n % 2 == 0 ? "Mara" : "Tom")}. The rain fell {n} times.", ParagraphStyle.Body, null));
+        var p = ProjectBuilder.Make(new ImportedBook("Placeholder Book", "A. Writer", [new("Chapter 1", paragraphs)]), "t.txt");
+        foreach (var c in p.Characters)
+            c.SetVoice(new CastVoice(new VoiceChoice(VoiceEngine.Apple, c.Name == "Mara" ? "f" : "m"), 1, VoiceSource.User), VoiceEngine.Apple);
+        p.Settings.SetNarratorVoice(new CastVoice(new VoiceChoice(VoiceEngine.Apple, "m", pitch: 0.8), 1, VoiceSource.User), VoiceEngine.Apple);
+        return p;
+    }
+
+    [Fact]
+    public async Task ParallelExportWritesInBookOrder()
+    {
+        var p = LongScene(12);
+        var index = new BookIndex(p);
+        var resolver = new VoiceResolver(p, index: index);
+        var pauses = PauseSettings.Standard;
+        var segs = SpeechScript.Segments(0, p, index, includeNarration: true, pauses: pauses);
+        var spoken = segs.Where(s => resolver.RequestFor(s) is not null).ToList();
+        Assert.True(spoken.Count >= 20);
+        // Earlier lines take longer, so later ones finish first.
+        var order = spoken.Select((s, k) => (resolver.RequestFor(s)!.Text, k)).GroupBy(x => x.Text).ToDictionary(g => g.Key, g => g.First().k);
+        system.Delay = r => TimeSpan.FromMilliseconds(5 + 4 * (spoken.Count - order.GetValueOrDefault(r.Text)));
+        var timings = new List<(SpeechSegment Seg, double Begin, double End)>();
+        var progress = new List<int>();
+        try
+        {
+            var file = Assert.Single(await AudioExporter.Write([new AudioPart("Scene", segs)], Path.Combine(root, "parallel"), AudioFormat.Wav, resolver, renderer,
+                timing: (_, s, b, e) => timings.Add((s, b, e)), progress: (d, _, _) => progress.Add(d), pauses: pauses));
+            Assert.Equal(spoken, timings.Select(t => t.Seg));   // book order, not the order they were made
+            for (int i = 1; i < timings.Count; i++)
+                Assert.Equal(timings[i - 1].End + pauses.Seconds(timings[i - 1].Seg.Pause), timings[i].Begin, 3);
+            Assert.Equal(Enumerable.Range(0, segs.Count).Append(segs.Count), progress);
+            Assert.InRange(system.MostAtOnce, 2, AudioExporter.RenderAhead(VoiceEngine.Apple));
+            Assert.Equal(file.Seconds, SpeechAudio.Seconds(WavFile.Read(file.Path)), 2);
+        }
+        finally { system.Delay = null; }
+    }
+
+    [Fact]
+    public async Task BusyLinesAreTriedAgain()
+    {
+        var p = Book();
+        var index = new BookIndex(p);
+        var resolver = new VoiceResolver(p, index: index);
+        var part = new AudioPart("Ch", SpeechScript.Segments(1, p, index, includeNarration: true));
+        var busyText = part.Segments.Select(resolver.RequestFor).First(r => r is not null)!.Text;
+        int tries = 0;
+        var wait = AudioExporter.RetryWait;
+        AudioExporter.RetryWait = TimeSpan.FromMilliseconds(5);
+        try
+        {
+            // Busy twice, then made: the export carries on.
+            system.Fail = r => r.Text == busyText && Interlocked.Increment(ref tries) <= 2 ? new SpeechException("Busy.") { Busy = true } : null;
+            Assert.Single(await AudioExporter.Write([part], Path.Combine(root, "busy"), AudioFormat.Wav, resolver, renderer));
+            Assert.Equal(3, tries);
+            // Busy every time: it gives up after five more tries.
+            tries = 0;
+            renderer.ClearCache();
+            system.Fail = r => r.Text == busyText && Interlocked.Increment(ref tries) > 0 ? new SpeechException("Busy.") { Busy = true } : null;
+            await Assert.ThrowsAsync<SpeechException>(() => AudioExporter.Write([part], Path.Combine(root, "busy2"), AudioFormat.Wav, resolver, renderer));
+            Assert.Equal(6, tries);
+            // Any other failure stops it at once.
+            tries = 0;
+            system.Fail = r => r.Text == busyText && Interlocked.Increment(ref tries) > 0 ? new SpeechException("Broken.") : null;
+            await Assert.ThrowsAsync<SpeechException>(() => AudioExporter.Write([part], Path.Combine(root, "broken"), AudioFormat.Wav, resolver, renderer));
+            Assert.Equal(1, tries);
+        }
+        finally
+        {
+            system.Fail = null;
+            AudioExporter.RetryWait = wait;
+        }
+    }
+
     [Fact]
     public async Task EpubWithAudioHasTimedOverlays()
     {

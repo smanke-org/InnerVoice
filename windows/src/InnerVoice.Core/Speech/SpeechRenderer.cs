@@ -58,7 +58,9 @@ public sealed class SpeechRenderer
 
     static void Write(float[] samples, string path)
     {
-        var temp = path + ".part";
+        // A temporary file of its own: Export Audio makes several lines at once, and the same
+        // line (the same words in the same voice) can be in two of them.
+        var temp = $"{path}.{Guid.NewGuid():N}.part";
         try
         {
             WavFile.Write(temp, samples, float32: true);

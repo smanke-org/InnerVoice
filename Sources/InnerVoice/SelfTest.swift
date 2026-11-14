@@ -333,6 +333,20 @@ enum SelfTest {
         } catch {
             check("Export Audio writes an M4A file", false, error.localizedDescription)
         }
+        // Made ahead in parallel, written in book order.
+        SpeechRenderer.shared.clearCache()
+        let many = Array(segs.prefix(40))
+        var order: [String] = []
+        let started = Date()
+        do {
+            _ = try await AudioExporter.write([AudioExporter.Part(name: "Order", segments: many)], to: dir, format: .wav, resolver: resolver,
+                                              timing: { _, seg, _, _ in order.append(seg.id) }) { _, _, _ in }
+            let spoken = many.filter { resolver.request(for: $0) != nil }.map(\.id)
+            check("Export Audio writes lines in book order while making them in parallel", order == spoken, "\(order.count) of \(spoken.count)")
+            print(String(format: "EXPORT TIMING %d lines, %.2f s", many.count, Date().timeIntervalSince(started)))
+        } catch {
+            check("Export Audio writes lines in book order while making them in parallel", false, error.localizedDescription)
+        }
         await epubWithAudio(doc, in: dir)
         try? FileManager.default.removeItem(at: dir)
         SpeechRenderer.shared.clearCache()

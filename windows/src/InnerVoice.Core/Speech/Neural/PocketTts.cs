@@ -35,6 +35,10 @@ public sealed class PocketModel : IDisposable
     public SentencePiece Tokenizer { get; }
     readonly HashSet<int> endTokens;
     readonly string[] mainStateNames, mainOutStateNames, decoderStateNames, decoderOutStateNames;
+    /// One at a time: the sessions are shared, and DirectML can't run a session from two
+    /// threads at once. Export Audio makes two lines at once; the second overlaps only the
+    /// work around the model (chunking, leveling, stretching, writing).
+    readonly SemaphoreSlim gate = new(1, 1);
 
     public PocketModel(string folder)
     {
@@ -67,6 +71,13 @@ public sealed class PocketModel : IDisposable
     public float[] EncodeVoice(float[] clip)
     {
         if (clip.Length < SamplesPerFrame) throw SpeechException.Failed("the voice clip is too short to clone from.");
+        gate.Wait();
+        try { return EncodeVoiceLocked(clip); }
+        finally { gate.Release(); }
+    }
+
+    float[] EncodeVoiceLocked(float[] clip)
+    {
         using var audio = Onnx.Floats(clip, 1, 1, clip.Length);
         using var outs = Onnx.Run(encoder, new Dictionary<string, OrtValue> { ["audio"] = audio });
         var shape = Onnx.Shape(outs[0]);
@@ -145,6 +156,13 @@ public sealed class PocketModel : IDisposable
     /// Says `text` in the voice of `voice` (from EncodeVoice). `temperature` is the sampler's
     /// (0.7 is the model's own); the same seed gives the same take on this PC.
     public float[] Speak(string text, float[] voice, double temperature, ulong seed, CancellationToken ct, Action<double>? progress = null)
+    {
+        gate.Wait(ct);
+        try { return SpeakLocked(text, voice, temperature, seed, ct, progress); }
+        finally { gate.Release(); }
+    }
+
+    float[] SpeakLocked(string text, float[] voice, double temperature, ulong seed, CancellationToken ct, Action<double>? progress)
     {
         var groups = Groups(text);
         var rng = new Sampler(seed);

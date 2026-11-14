@@ -10,12 +10,15 @@ public static class Dialogs
 {
     static Window? Owner(Visual v) => TopLevel.GetTopLevel(v) as Window;
 
-    public static async Task<bool> Confirm(Visual from, string title, string message, string action, bool destructive = true, string cancel = "Cancel") =>
-        (await ConfirmWithCheck(from, title, message, action, null, destructive, cancel)).Ok;
+    /// `cancelIsDefault`: Return cancels even though the action isn't destructive (a warning).
+    public static async Task<bool> Confirm(Visual from, string title, string message, string action, bool destructive = true, string cancel = "Cancel",
+                                           bool cancelIsDefault = false) =>
+        (await ConfirmWithCheck(from, title, message, action, null, destructive, cancel, cancelIsDefault)).Ok;
 
     /// A question with a checkbox under it ("Don't show the estimate again").
     public static async Task<(bool Ok, bool Checked)> ConfirmWithCheck(Visual from, string title, string message, string action, string? checkLabel,
-                                                                       bool destructive = false, string cancel = "Cancel")
+                                                                       bool destructive = false, string cancel = "Cancel",
+                                                                       bool cancelIsDefault = false)
     {
         var owner = Owner(from);
         bool result = false;
@@ -25,9 +28,12 @@ public static class Dialogs
             Title = title, Width = 420, SizeToContent = SizeToContent.Height, CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner, ShowInTaskbar = false,
         };
-        var ok = new Button { Content = action, IsDefault = !destructive };
-        ok.Classes.Add(destructive ? "danger" : "accent");
-        var no = new Button { Content = cancel, IsCancel = true, IsDefault = destructive };
+        bool cancelFirst = destructive || cancelIsDefault;
+        var ok = new Button { Content = action, IsDefault = !cancelFirst };
+        if (destructive) ok.Classes.Add("danger");
+        else if (!cancelIsDefault) ok.Classes.Add("accent");
+        var no = new Button { Content = cancel, IsCancel = true, IsDefault = cancelFirst };
+        if (cancelIsDefault && !destructive) no.Classes.Add("accent");
         ok.Click += (_, _) => { result = true; dialog.Close(); };
         no.Click += (_, _) => dialog.Close();
         var buttons = Ui.Row(Look.Sm, no, ok);

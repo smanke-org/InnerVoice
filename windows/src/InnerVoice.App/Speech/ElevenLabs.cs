@@ -556,6 +556,6 @@ public sealed class ElevenLabsEngine : IVoiceEngine
             _ when status.Contains("quota") => ElevenLabsErrors.OutOfCredits,
             _ => ElevenLabsErrors.Server(code, message),
         };
-        return new SpeechException(text);
+        return new SpeechException(text) { Busy = code == 429 || status.Contains("busy") || status.Contains("too_many") };
     }
 }

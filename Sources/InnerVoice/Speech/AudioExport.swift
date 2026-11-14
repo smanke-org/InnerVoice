@@ -2,6 +2,7 @@
 import AppKit
 import InnerVoiceKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Writes the voices to audio files: the whole book, a chapter or one character's lines,
 /// as M4A or WAV, one file per chapter or all in one.
@@ -73,11 +74,31 @@ enum AudioExporter {
                               to: file, converter: converter, format: fileFormat)
                 }
             }
-            for seg in part.segments {
+            // Lines are made ahead, several at once, and written in book order: the
+            // network (ElevenLabs) and the system voices (Apple) work in parallel, and the
+            // on-device models overlap their GPU work with the trimming and writing here.
+            let requests = part.segments.map { resolver.request(for: $0) }
+            var ahead: [Int: Task<AVAudioPCMBuffer, Error>] = [:]
+            var next = 0
+            defer { for t in ahead.values { t.cancel() } }
+            func fill(from i: Int) {
+                next = max(next, i)
+                while next < requests.count {
+                    guard let request = requests[next] else { next += 1; continue }
+                    guard ahead.count < renderAhead(request.choice.engine) else { break }
+                    ahead[next] = Task { try await renderWithRetry(request) }
+                    next += 1
+                }
+            }
+            for (i, seg) in part.segments.enumerated() {
                 try Task.checkCancellation()
                 progress(done, total, part.name)
-                if let request = resolver.request(for: seg) {
-                    let audio = SpeechAudio.trimmed(try await SpeechRenderer.shared.render(request))
+                fill(from: i)
+                if requests[i] != nil {
+                    let task = ahead.removeValue(forKey: i) ?? Task { try await renderWithRetry(requests[i]!) }
+                    let rendered = try await task.value
+                    fill(from: i + 1)
+                    let audio = SpeechAudio.trimmed(rendered)
                     try put(audio, in: stem?(seg) ?? "")
                     let seconds = Double(audio.frameLength) / audio.format.sampleRate
                     timing?(partIndex, seg, position, position + seconds)
@@ -140,6 +161,32 @@ enum AudioExporter {
         if out.frameLength > 0 { try file.write(from: out) }
     }
 
+    /// How many lines are made at once for an engine.
+    static func renderAhead(_ engine: VoiceEngine) -> Int {
+        // Self-test timing: one at a time, as before, to compare.
+        if SystemHooks.isTestRun, ProcessInfo.processInfo.environment["INNERVOICE_EXPORT_SERIAL"] != nil { return 1 }
+        return switch engine {
+        case .elevenlabs: 4   // ElevenLabs' Creator plan runs 5 requests at a time; leave one for playback.
+        case .apple: 3
+        case .pocket, .orpheus, .mixed: 2   // One GPU: the second only overlaps the CPU work.
+        }
+    }
+
+    /// ElevenLabs answers "busy" when too many requests run at once (another app, or a
+    /// smaller plan): wait and try again rather than stopping the export.
+    static func renderWithRetry(_ request: SpeechRequest) async throws -> AVAudioPCMBuffer {
+        var wait: UInt64 = 1_000_000_000
+        for attempt in 0..<6 {
+            do {
+                return try await SpeechRenderer.shared.render(request)
+            } catch ElevenLabsError.busy where attempt < 5 {
+                try await Task.sleep(nanoseconds: wait)
+                wait *= 2
+            }
+        }
+        return try await SpeechRenderer.shared.render(request)
+    }
+
     static func safeName(_ s: String) -> String {
         let bad = CharacterSet(charactersIn: "/:\\?%*|\"<>")
         return s.components(separatedBy: bad).joined(separator: "-").trimmingCharacters(in: .whitespaces)
@@ -180,6 +227,8 @@ struct AudioExportSheet: View {
     @State private var progress = 0.0
     @State private var status = ""
     @State private var error: String?
+    /// ElevenLabs credits this export would use, and what the plan has left.
+    @State private var credits: (needed: Int, lines: Int, left: Int?)?
 
     private var format: AudioExporter.Format { AudioExporter.Format(rawValue: formatRaw) ?? .m4a }
 
@@ -260,6 +309,9 @@ struct AudioExportSheet: View {
                     .font(.callout)
                     .foregroundStyle(.orange)
             }
+            if let credits, credits.needed > 0 {
+                creditsNote(credits)
+            }
             Form {
                 Picker("Export", selection: $scope) {
                     ForEach(Scope.allCases) { Text($0.title).tag($0) }
@@ -322,6 +374,7 @@ struct AudioExportSheet: View {
         .padding(Space.xl)
         .frame(width: 520)
         .noInitialFocus()
+        .task(id: creditsKey) { await estimateCredits() }
         .onAppear {
             // Chapters added or deleted since the last export: start again from every chapter.
             if let set = workspace.audioExportChapters, set.contains(where: { $0 >= document.project.chapters.count }) {
@@ -368,18 +421,89 @@ struct AudioExportSheet: View {
         }
     }
 
+    private func creditsNote(_ c: (needed: Int, lines: Int, left: Int?)) -> some View {
+        let short = c.left.map { c.needed > $0 } ?? false
+        return VStack(alignment: .leading, spacing: 2) {
+            Label("About \(c.needed.formatted()) ElevenLabs credits for \(c.lines.formatted()) " + (c.lines == 1 ? "line" : "lines") + " not made yet"
+                  + (c.left.map { ". Your plan has \($0.formatted()) left." } ?? "."), systemImage: "creditcard")
+            if short {
+                Text("That’s more than your plan has left: the export would stop when the credits run out. Lines already made aren’t charged again, so you could export fewer chapters now and the rest later.")
+                    .foregroundStyle(Color(nsColor: .attention))
+            }
+        }
+        .font(.callout)
+        .foregroundStyle(short ? Color(nsColor: .attention) : .secondary)
+    }
+
+    /// What the estimate depends on: the choices in the sheet.
+    private var creditsKey: String {
+        "\(scope)|\(characterID?.uuidString ?? "")|\(narration)|\(recaps)|\(picked)|\(document.tagRevision)"
+    }
+
+    /// Counts the characters of the ElevenLabs lines not in the audio cache (ElevenLabs
+    /// charges about a credit a character), then asks ElevenLabs what the plan has left.
+    /// Only the plan's numbers come back; no book text is sent.
+    private func estimateCredits() async {
+        guard ElevenLabs.shared.isSetUp else { credits = nil; return }
+        let resolver = VoiceResolver(project: document.project, index: document.index)
+        var needed = 0, lines = 0
+        for (n, seg) in parts().flatMap(\.segments).enumerated() {
+            if n % 500 == 0 { await Task.yield(); if Task.isCancelled { return } }
+            guard let r = resolver.request(for: seg), r.choice.engine == .elevenlabs, !SpeechRenderer.shared.isCached(r) else { continue }
+            needed += r.text.trimmingCharacters(in: .whitespacesAndNewlines).count
+            lines += 1
+        }
+        credits = (needed, lines, credits?.left)
+        guard needed > 0, credits?.left == nil, let account = try? await ElevenLabs.shared.account(), !Task.isCancelled else { return }
+        credits = (needed, lines, max(0, account.limit - account.used))
+    }
+
     private func export() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
+        if let c = credits, let left = c.left, c.needed > left {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "Not Enough ElevenLabs Credits"
+            alert.informativeText = "This export needs about \(c.needed.formatted()) credits and your plan has \(left.formatted()) left. It will stop when they run out; lines already made are kept and aren’t charged again."
+            alert.addButton(withTitle: "Cancel")
+            alert.addButton(withTitle: "Export Anyway")
+            guard alert.runModal() == .alertSecondButtonReturn else { return }
+        }
+        var parts = parts()
+        let separateFiles = separate && scope != .character
+        let format = self.format
+        // One file: name it. Several (a file per chapter or per voice): name the folder
+        // they go in.
+        let single = parts.filter { !$0.segments.isEmpty }.count == 1 && !separateFiles
+        let panel = NSSavePanel()
         panel.canCreateDirectories = true
-        panel.prompt = "Export Here"
-        panel.message = "Choose a folder for the audio files."
-        guard panel.runModal() == .OK, let folder = panel.url else { return }
-        let parts = parts()
+        panel.isExtensionHidden = false
+        panel.prompt = "Export"
+        if single, let first = parts.firstIndex(where: { !$0.segments.isEmpty }) {
+            panel.message = "Name the audio file and choose where to save it."
+            panel.nameFieldLabel = "File name:"
+            panel.allowedContentTypes = [UTType(filenameExtension: format.fileExtension) ?? .audio]
+            panel.nameFieldStringValue = AudioExporter.safeName(parts[first].name) + "." + format.fileExtension
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+            parts[first].name = url.deletingPathExtension().lastPathComponent
+            exportParts(parts, to: url.deletingLastPathComponent(), format: format)
+        } else {
+            panel.message = "Name the folder for the audio files and choose where to save it."
+            panel.nameFieldLabel = "Folder name:"
+            panel.nameFieldStringValue = AudioExporter.safeName(document.project.title) + " Audio"
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+            do {
+                try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            } catch {
+                self.error = error.localizedDescription
+                return
+            }
+            exportParts(parts, to: url, format: format)
+        }
+    }
+
+    private func exportParts(_ parts: [AudioExporter.Part], to folder: URL, format: AudioExporter.Format) {
         let resolver = VoiceResolver(project: document.project, index: document.index)
         let stem = separate && scope != .character ? AudioExporter.stems(project: document.project, index: document.index, resolver: resolver) : nil
-        let format = self.format
         error = nil
         progress = 0
         running = Task {

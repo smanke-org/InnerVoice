@@ -3,6 +3,7 @@
 // WAV, a file per chapter or one, Combined or Separate.
 
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -29,6 +30,13 @@ public sealed class AudioExportWindow : Window
     Guid? characterID;
     /// A file per chapter (true) or one file; kept while the app runs, like the Mac's.
     static bool perChapter = true;
+    /// The ElevenLabs credit estimate near the top (when ElevenLabs is set up).
+    readonly StackPanel creditsPanel = new() { Spacing = 2, IsVisible = false };
+    (long Needed, int Lines, long? Left)? credits;
+    /// What the plan has left, asked once per window.
+    long? creditsLeft;
+    string? creditsKey;
+    CancellationTokenSource? creditsRun;
 
     public static Task Show(Window owner, ProjectDocument document) => new AudioExportWindow(document).ShowDialog(owner);
 
@@ -49,9 +57,15 @@ public sealed class AudioExportWindow : Window
         // Casting fills in anyone without a voice before the first line is read.
         VoiceCastingRun.CastIfNeeded(document);
         characterID = Cast.FirstOrDefault()?.Id;
-        Closing += (_, _) => running?.Cancel();
+        Closing += (_, _) => { running?.Cancel(); creditsRun?.Cancel(); };
         Build();
     }
+
+    /// The estimate: about how many ElevenLabs credits the export needs, the lines not made
+    /// yet and what the plan has left (null: ElevenLabs isn't set up, or nothing to count yet).
+    public (long Needed, int Lines, long? Left)? Credits => credits;
+    /// The estimate being worked out (tests wait for it).
+    public Task CreditsEstimate { get; private set; } = Task.CompletedTask;
 
     List<BookCharacter> Cast
     {
@@ -86,6 +100,8 @@ public sealed class AudioExportWindow : Window
         content.Children.Add(Ui.Caption($"Each line is read in its character’s voice and tone, with {engine.Title()}.", TextWrapping.Wrap));
         if (project.Settings.CloudVoicesAllowed is not null && engine is VoiceEngine.Elevenlabs or VoiceEngine.Mixed)
             content.Children.Add(Ui.Caption("☁ ElevenLabs voices are made in the cloud: exporting sends the text they speak to ElevenLabs, and uses your plan’s credits.", TextWrapping.Wrap));
+        (creditsPanel.Parent as Panel)?.Children.Remove(creditsPanel);
+        content.Children.Add(creditsPanel);
 
         var form = new StackPanel { Spacing = Look.Md };
         var scope = new StackPanel { Spacing = Look.Xs };
@@ -100,7 +116,10 @@ public sealed class AudioExportWindow : Window
             var picker = new ComboBox { ItemsSource = items, MinWidth = 240 };
             picker.SelectedIndex = characterID == AudioExporter.NarratorOnly ? 0 : Math.Max(0, cast.FindIndex(c => c.Id == characterID) + 1);
             picker.SelectionChanged += (_, _) =>
+            {
                 characterID = picker.SelectedIndex <= 0 ? AudioExporter.NarratorOnly : cast[picker.SelectedIndex - 1].Id;
+                Later(EstimateCredits);
+            };
             if (picker.SelectedIndex == 0) characterID = AudioExporter.NarratorOnly;
             form.Children.Add(Row("Character", picker));
         }
@@ -113,7 +132,7 @@ public sealed class AudioExportWindow : Window
             {
                 var recaps = new CheckBox { Content = "Say chapter recaps (“Previously…”)", IsChecked = AppSettings.Current.ExportAudioRecaps };
                 ToolTip.SetTip(recaps, "The narrator reads each chapter’s recap after its title. Recaps are on the chapter’s right-click menu in the Manuscript.");
-                recaps.IsCheckedChanged += (_, _) => AppSettings.Update(s => s.ExportAudioRecaps = recaps.IsChecked == true);
+                recaps.IsCheckedChanged += (_, _) => { AppSettings.Update(s => s.ExportAudioRecaps = recaps.IsChecked == true); Later(EstimateCredits); };
                 form.Children.Add(recaps);
             }
             if (chapters.Picked.Count > 1)
@@ -161,6 +180,76 @@ public sealed class AudioExportWindow : Window
             buttons.Children.Add(export);
         }
         content.Children.Add(buttons);
+        EstimateCredits();
+    }
+
+    /// What the estimate depends on: the choices in the window, and the book's text and voices.
+    string CreditsKey => string.Join("|", oneCharacter, characterID, Narration, Recaps, string.Join(",", chapters.Picked),
+                                     document.Project.EngineInUse(), RuntimeHelpers.GetHashCode(document.Index));
+
+    /// Counts the characters of the ElevenLabs lines not in the audio cache (off the UI
+    /// thread), then asks ElevenLabs what the plan has left. Only the plan's numbers come
+    /// back; no book text is sent.
+    void EstimateCredits()
+    {
+        if (!ElevenLabsEngine.Shared.IsSetUp)
+        {
+            creditsRun?.Cancel();
+            creditsKey = null;
+            credits = null;
+            ShowCredits();
+            return;
+        }
+        var key = CreditsKey;
+        // While it exports, the line stays as it was; afterwards it's counted again.
+        if (key == creditsKey || running is not null) { ShowCredits(); return; }
+        creditsKey = key;
+        creditsRun?.Cancel();
+        var run = creditsRun = new CancellationTokenSource();
+        var resolver = VoiceSetup.Resolver(document);
+        var parts = AudioExporter.Parts(document.Project, document.Index, chapters.Picked, Narration, Recaps, perChapter, resolver,
+                                        oneCharacter ? characterID ?? AudioExporter.NarratorOnly : null);
+        CreditsEstimate = Estimate(parts, resolver, run.Token);
+    }
+
+    async Task Estimate(List<AudioPart> parts, VoiceResolver resolver, CancellationToken ct)
+    {
+        try
+        {
+            var renderer = SpeechRenderer.Shared;
+            var (needed, lines) = await Task.Run(() => AudioExporter.CreditsNeeded(parts, resolver, renderer, ct), ct);
+            if (ct.IsCancellationRequested) return;
+            credits = (needed, lines, creditsLeft);
+            ShowCredits();
+            if (needed == 0 || creditsLeft is not null) return;
+            var account = await ElevenLabsEngine.Shared.Account(ct);
+            creditsLeft = account.Left;
+            if (ct.IsCancellationRequested) return;
+            credits = (needed, lines, creditsLeft);
+            ShowCredits();
+        }
+        catch (Exception e) when (e is OperationCanceledException or SpeechException or HttpRequestException or InvalidOperationException)
+        {
+            // Only a hint: without the plan's numbers the line says what the export needs.
+        }
+    }
+
+    /// The estimate's words: the line, and the warning when the plan has too few left.
+    public static (string Line, string? Warning) CreditsText(long needed, int lines, long? left) =>
+        ($"About {needed:N0} ElevenLabs credits for {lines:N0} {(lines == 1 ? "line" : "lines")} not made yet" + (left is { } l ? $". Your plan has {l:N0} left." : "."),
+         left is { } have && needed > have
+             ? "That’s more than your plan has left: the export would stop when the credits run out. Lines already made aren’t charged again, so you could export fewer chapters now and the rest later."
+             : null);
+
+    void ShowCredits()
+    {
+        creditsPanel.Children.Clear();
+        if (credits is not { Needed: > 0 } c) { creditsPanel.IsVisible = false; return; }
+        var (line, warning) = CreditsText(c.Needed, c.Lines, c.Left);
+        var brush = Look.Brush(warning is null ? Look.SecondaryInk : Look.Attention);
+        creditsPanel.Children.Add(Ui.Text(line, 12, brush: brush, wrap: TextWrapping.Wrap));
+        if (warning is not null) creditsPanel.Children.Add(Ui.Text(warning, 12, brush: brush, wrap: TextWrapping.Wrap));
+        creditsPanel.IsVisible = true;
     }
 
     /// The progress bar while it runs, and the last status ("Stopped.") after.
@@ -195,9 +284,49 @@ public sealed class AudioExportWindow : Window
 
     async Task PickAndExport()
     {
-        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "Choose a folder for the audio files", AllowMultiple = false });
-        if (folders.Count == 0 || folders[0].TryGetLocalPath() is not { } folder) return;
-        var files = await Export(folder);
+        if (credits is { Left: { } left } c && c.Needed > left
+            && !await Dialogs.Confirm(this, "Not Enough ElevenLabs Credits",
+                $"This export needs about {c.Needed:N0} credits and your plan has {left:N0} left. It will stop when they run out; lines already made are kept and aren’t charged again.",
+                "Export Anyway", destructive: false, cancelIsDefault: true))
+            return;
+        // One file: name it. Several (a file per chapter or per voice): name the folder
+        // they go in.
+        var project = document.Project;
+        var resolver = VoiceSetup.Resolver(document);
+        var parts = AudioExporter.Parts(project, document.Index, chapters.Picked, Narration, Recaps, perChapter, resolver,
+                                        oneCharacter ? characterID ?? AudioExporter.NarratorOnly : null)
+            .Where(p => p.Segments.Count > 0).ToList();
+        var single = parts.Count == 1 && !(Separate && !oneCharacter);
+        var ext = Format.Extension();
+        string folder;
+        string? name = null;
+        if (single)
+        {
+            var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = "Name the audio file",
+                SuggestedFileName = AudioExporter.SafeName(parts[0].Name) + "." + ext,
+                DefaultExtension = ext,
+                ShowOverwritePrompt = true,
+                FileTypeChoices = [new FilePickerFileType(ext.ToUpperInvariant() + " audio") { Patterns = ["*." + ext] }],
+            });
+            if (file?.TryGetLocalPath() is not { } path) return;
+            folder = Path.GetDirectoryName(path)!;
+            name = Path.GetFileNameWithoutExtension(path);
+        }
+        else
+        {
+            var target = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = "Name the folder for the audio files",
+                SuggestedFileName = AudioExporter.SafeName(project.Title) + " Audio",
+            });
+            if (target?.TryGetLocalPath() is not { } path) return;
+            folder = path;
+            try { Directory.CreateDirectory(folder); }
+            catch (Exception e) { error = e.Message; Build(); return; }
+        }
+        var files = await Export(folder, name);
         if (files is { Count: > 0 })
         {
             Close();
@@ -207,7 +336,7 @@ public sealed class AudioExportWindow : Window
 
     /// Writes the files into `folder` (tests call this without the folder picker). Returns
     /// them, or null when stopped or failed (the window says which).
-    public async Task<List<ExportedAudio>?> Export(string folder)
+    public async Task<List<ExportedAudio>?> Export(string folder, string? singleFileName = null)
     {
         var project = document.Project;
         var index = document.Index;
@@ -215,6 +344,9 @@ public sealed class AudioExportWindow : Window
         var picked = chapters.Picked;
         var parts = AudioExporter.Parts(project, index, picked, Narration, Recaps, perChapter, resolver, oneCharacter ? characterID ?? AudioExporter.NarratorOnly : null);
         var stem = Separate && !oneCharacter ? AudioExporter.Stems(project, index, resolver) : null;
+        // The name typed in the save dialog, for a single file.
+        if (singleFileName is { Length: > 0 } && parts.Count(p => p.Segments.Count > 0) == 1)
+            parts = parts.Select(p => p.Segments.Count > 0 ? p with { Name = singleFileName } : p).ToList();
         var format = Format;
         var source = new CancellationTokenSource();
         running = source;
@@ -254,6 +386,7 @@ public sealed class AudioExportWindow : Window
         {
             Activity.Record(ActivityKey.SecondsExported, (int)Math.Round(spoken));
             running = null;
+            creditsKey = null;   // the lines it made are no longer owed
             Build();
         }
     }
