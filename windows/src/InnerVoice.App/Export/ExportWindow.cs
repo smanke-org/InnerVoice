@@ -35,7 +35,7 @@ public sealed class ExportWindow : Window
         Content = content;
         document.Changed += OnChanged;
         Closed += (_, _) => document.Changed -= OnChanged;
-        // Narrator Scripts belong to narration projects, the pronunciation guide to AI voices.
+        // Narrator Scripts belong to narration projects; the pronunciation guide to every book.
         if (!document.Project.ShowsNarrationTools && options.Kind == Exporter.Kind.NarratorScript) options.Kind = Exporter.Kind.Manuscript;
         if (!document.Project.ShowsPronunciations && options.Kind == Exporter.Kind.Pronunciations) options.Kind = Exporter.Kind.NarratorScript;
         Build();

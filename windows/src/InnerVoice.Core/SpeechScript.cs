@@ -362,11 +362,9 @@ public static class SpeechScript
     /// One Pronunciations entry, ready to swap into speech.
     public sealed record Saying(string Term, string Say, bool MatchCase = false);
 
-    public static List<Saying> Sayings(Project project) => project.Pronunciations
-        .Where(p => !p.Dismissed && p.SayItAs.Trim().Length > 0 && p.Term.Trim().Length > 0)
-        .Select(p => new Saying(p.Term.Trim(), p.SayItAs.Trim(), p.MatchCase))
-        .OrderByDescending(x => x.Term.Length)
-        .ToList();
+    /// The book's own pronunciations, then the computer's list (PronunciationLists.cs), longest
+    /// term first.
+    public static List<Saying> Sayings(Project project) => PronunciationLists.Sayings(project, PronunciationLists.Computer);
 
     /// What a Pronunciations entry's play button says (the Mac's `PlayCommand.hear`): the
     /// sentence where the term is first used (40 words at most, else the term alone), with

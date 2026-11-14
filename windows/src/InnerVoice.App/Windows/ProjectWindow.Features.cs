@@ -63,7 +63,23 @@ public sealed partial class ProjectWindow
         book.Items.Add(Typed(Item("_Narrators…", null, () => NarratorsWindow.Show(this, Document)), p => p.ShowsNarrationTools));
         book.Items.Add(Item("_Next Line That Needs You", "Ctrl+Down", () => { Workspace.Go(PageKind.Manuscript); (Get(PageKind.Manuscript) as ManuscriptPage)?.NextNeedingYou(1); }));
         book.Items.Add(Item("Pre_vious Line That Needs You", "Ctrl+Up", () => { Workspace.Go(PageKind.Manuscript); (Get(PageKind.Manuscript) as ManuscriptPage)?.NextNeedingYou(-1); }));
+        AddPronunciationItems(book);
         AddMoreBookItems(book);
+    }
+
+    /// This PC's pronunciations, per book (the Mac's Book menu): share the book's entries with
+    /// every book on this PC, and turn This PC's list on or off for this book.
+    void AddPronunciationItems(MenuItem book)
+    {
+        book.Items.Add(new Separator());
+        book.Items.Add(Typed(Item("Add This Book’s Pronunciations to This _PC…", null,
+            () => _ = InnerVoice.App.Speech.ComputerPronunciations.AddBook(this, Document)), p => p.ShowsPronunciations));
+        var use = Item("_Use This PC’s Pronunciations", null,
+            () => PronunciationsPage.SetUsesComputer(Document, !Document.Project.Settings.UsesComputerPronunciations));
+        use.ToggleType = MenuItemToggleType.CheckBox;
+        ToolTip.SetTip(use, "On: this book uses This PC’s list for words it has no entry of its own for");
+        book.SubmenuOpened += (_, _) => use.IsChecked = Document.Project.Settings.UsesComputerPronunciations;
+        book.Items.Add(Typed(use, p => p.ShowsPronunciations));
     }
 
     void AddMoreBookItems(MenuItem book) => AddVoiceItems(book);

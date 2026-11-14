@@ -27,7 +27,7 @@ public static class Exporter
     public static readonly Kind[] Kinds = [Kind.NarratorScript, Kind.Manuscript, Kind.Cast, Kind.Pronunciations];
 
     /// What File › Export… offers for the project type, as on the Mac: Narrator Scripts
-    /// belong to narration, the pronunciation guide to books with AI voices.
+    /// belong to narration; the pronunciation guide to every book (Pronunciations is in every type).
     public static List<Kind> KindsShown(Project project) =>
         [.. Kinds.Where(k => (k != Kind.NarratorScript || project.ShowsNarrationTools) && (k != Kind.Pronunciations || project.ShowsPronunciations))];
 
