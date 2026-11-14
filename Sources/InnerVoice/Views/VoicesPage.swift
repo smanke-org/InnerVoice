@@ -115,7 +115,7 @@ struct VoicesPage: View {
         let project = document.project
         let readers = CastingStyleRules.readers(project, index: document.index)
         let review = genderFilter ? Set(CastingStyleRules.genderToReview(project, index: document.index)) : nil
-        let shown = cast.filter { (query.isEmpty || $0.matches(query)) && (review?.contains($0.id) ?? true) }
+        let shown = cast.filter { (query.isEmpty || $0.searchMatches(query)) && (review?.contains($0.id) ?? true) }
         func reading(_ r: VoiceRole) -> [BookCharacter] { shown.filter { (readers[$0.id] ?? .own) == r } }
         guard let style else { return [Group(id: "cast", title: "Cast", role: nil, characters: shown)] }
         let anyMain = CastingStyleRules.anyMainMarked(project)
@@ -642,6 +642,7 @@ struct VoiceChooser: View {
     var onClone: (() -> Void)? = nil
     @Environment(\.undoManager) private var undoManager
     @State private var filter: VoiceGender?
+    @State private var voiceQuery = ""
     @State private var cloudDesigning = false
     @State private var loadingCloudVoices = false
     @State private var cloudVoicesError: String?
@@ -821,7 +822,7 @@ struct VoiceChooser: View {
 
     @ViewBuilder
     private var allVoices: some View {
-        let voices = VoiceCatalog.voices(for: engine).filter { filter == nil || $0.gender == filter }
+        let voices = VoiceCatalog.voices(for: engine).filter { (filter == nil || $0.gender == filter) && $0.matches(voiceQuery) }
         VStack(alignment: .leading, spacing: Space.sm) {
             HStack {
                 Text(engine == .mixed ? "All Voices" : "All \(engine.title)").font(.headline)
@@ -833,6 +834,12 @@ struct VoiceChooser: View {
                 .pickerStyle(.segmented)
                 .fixedSize()
                 .help("Show voices by how they sound")
+            }
+            TextField("Find a voice by name, accent or sound", text: $voiceQuery)
+                .textFieldStyle(.roundedBorder)
+                .help("Find a voice by its name, accent or description")
+            if voices.isEmpty, !voiceQuery.isEmpty {
+                Text("No voices match “\(voiceQuery)”.").foregroundStyle(.secondary)
             }
             if engine == .mixed {
                 // Grouped by engine, so it's clear where each voice comes from.

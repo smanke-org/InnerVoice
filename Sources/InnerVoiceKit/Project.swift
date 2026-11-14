@@ -259,6 +259,17 @@ public struct BookCharacter: Codable, Identifiable, Hashable, Sendable {
         return q.count <= 3 && initials.range(of: q, options: [.caseInsensitive, .anchored]) != nil
     }
 
+    /// The Cast and Voices search: a name (as `matches`), the character's notes or Voice
+    /// Notes, or a voice it's cast with (`voiceNames`: the app's display names, since the
+    /// stored IDs mean little to a narrator).
+    public func searchMatches(_ query: String, voiceNames: [String] = []) -> Bool {
+        if matches(query) { return true }
+        let q = query.trimmingCharacters(in: .whitespaces)
+        let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+        let ids = (voices ?? [:]).values.map(\.choice.voiceID)
+        return ([notes, voiceNotes] + voiceNames + ids).contains { $0.range(of: q, options: options) != nil }
+    }
+
     /// Every name the character goes by, longest first, for matching in text.
     public var allNames: [String] {
         var names = [name] + aliases

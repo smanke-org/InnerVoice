@@ -58,7 +58,9 @@ public sealed partial class ProjectWindow
         edit.Items.Add(undoItem);
         edit.Items.Add(redoItem);
         edit.Items.Add(new Separator());
-        edit.Items.Add(Item("_Find", "Ctrl+F", () => { Workspace.Go(PageKind.Manuscript); (Get(PageKind.Manuscript) as ManuscriptPage)?.FocusFind(); }));
+        edit.Items.Add(Item("_Find in Manuscript…", "Ctrl+F", FindInManuscript));
+        // Ctrl+Shift+F does the same (the Mac's ⌘F and ⇧⌘F).
+        KeyBindings.Add(new KeyBinding { Gesture = KeyGesture.Parse("Ctrl+Shift+F"), Command = new Relay(FindInManuscript) });
         edit.Items.Add(Item("Find _Next", "F3", () => (Get(PageKind.Manuscript) as ManuscriptPage)?.FindNext(1)));
         edit.Items.Add(Item("Find _Previous", "Shift+F3", () => (Get(PageKind.Manuscript) as ManuscriptPage)?.FindNext(-1)));
         menu.Items.Add(edit);
@@ -108,6 +110,12 @@ public sealed partial class ProjectWindow
         AddHelpItems(help);
         menu.Items.Add(help);
         return menu;
+    }
+
+    void FindInManuscript()
+    {
+        Workspace.Go(PageKind.Manuscript);
+        (Get(PageKind.Manuscript) as ManuscriptPage)?.FocusFind();
     }
 
     static MenuItem Top(string header) => new() { Header = header };

@@ -315,6 +315,19 @@ public sealed class BookCharacter : ModelObject
         return q.Length <= 3 && Initials.StartsWith(q, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// The Cast and Voices search: a name (as `Matches`), the character's notes or Voice
+    /// Notes, or a voice it's cast with (`voiceNames`: the app's display names, since the
+    /// stored IDs mean little to a narrator).
+    public bool SearchMatches(string query, IEnumerable<string>? voiceNames = null)
+    {
+        if (Matches(query)) return true;
+        var q = query.Trim();
+        var ci = CultureInfo.InvariantCulture.CompareInfo;
+        const CompareOptions opts = CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace;
+        var ids = (Voices ?? []).Values.Select(v => v.Choice.VoiceID);
+        return new[] { Notes, VoiceNotes }.Concat(voiceNames ?? []).Concat(ids).Any(t => ci.IndexOf(t, q, opts) >= 0);
+    }
+
     /// Every name the character goes by, longest first, for matching in text.
     [JsonIgnore]
     public List<string> AllNames

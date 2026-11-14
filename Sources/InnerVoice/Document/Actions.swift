@@ -259,6 +259,8 @@ final class Workspace {
     var page: Page = .manuscript
     var selectedLines: [UUID] = []
     var reveal: Reveal?
+    /// Edit › Find in Manuscript: a new token opens the Manuscript's find bar.
+    var findRequest: UUID?
     /// A Pronunciations entry to select when that page shows (Fix Pronunciation…).
     var focusPronunciation: UUID?
     /// Character opened in the Cast page.

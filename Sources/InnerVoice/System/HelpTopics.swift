@@ -213,12 +213,14 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
             .heading("How each line is said"),
             .text("Every line also gets a tone: neutral, excited, confused, sad, angry, whispered, scared, tender or sarcastic. \"She snapped\" is angry and \"he whispered\" is a whisper; Tag Speakers asks the AI about the rest, with the paragraphs around each line. Tones the AI isn't sure of wait in Review › Unsure Tones, where 1 to 9 pick a tone and Space plays the line."),
             .text("Change a tone yourself from the inspector or by right-clicking a line. Tag Speakers never changes a tone you set."),
+            .text("If the AI gave the book more feeling than you want, Book › Remove Tones… clears tones across the whole manuscript. Choose the tones from Tag Speakers, the tones you set yourself, or both. Lines without a tone are read evenly; getting tones back means running Tag Speakers again, which takes a while, so it asks first. Edit › Undo puts them back while the book is open."),
             .heading("Listening"),
             .keys([
                 ("⌥Space", "Play the selected line in its character's voice"),
                 ("⌥⇧Space", "Play from Here: a table read to the end of the book"),
                 ("⌥Esc", "Stop playing"),
             ]),
+            .text("Or right-click anywhere in the manuscript and choose Play from Here to start at that spot. While it plays, right-click again and choose Stop Playback."),
             .text("Play from Here follows along in the manuscript. Settings › Voices decides whether narration is read too (a full table read) or only the dialogue."),
             .heading("Pauses and speed"),
             .text("Settings › Voices › Pauses sets each gap in seconds: between sentences, between a line and the narration around it, between paragraphs, after a chapter title, at a scene break and between chapters. Tight, Natural and Relaxed are starting points. With \"Set the pause between sentences\" on, each sentence is spoken on its own so that gap is exact; turn it off to let each voice pace its own sentences."),
@@ -390,6 +392,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
             ]),
             .heading("Manuscript"),
             .keys([
+                ("⇧⌘F", "Find in Manuscript (⌘F in the manuscript; ⌘G and ⇧⌘G for next and previous)"),
                 ("⌘↓", "Next Line That Needs You"),
                 ("⌘↑", "Previous Line That Needs You"),
                 ("Return", "Assign To for the focused line"),

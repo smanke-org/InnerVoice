@@ -938,6 +938,30 @@ enum SelfTest {
         guard let r2 = c.layout.paragraphRanges[para.id] else { return }
         tv.setSelectedRange(NSRange(location: r2.location, length: 12))
         let menu = c.menu(for: r2.location + 3, selection: tv.selectedRange())
+        if doc.project.showsVoices {
+            check("the right-click menu starts with Play from Here", menu.items.first?.title == "Play from Here",
+                  menu.items.prefix(3).map(\.title).joined(separator: ", "))
+            check("Stop Playback shows only while playing",
+                  menu.items.contains { $0.title == "Stop Playback" } == SpeechPlayer.shared.isPlaying)
+        }
+        // Remove Tones: only the chosen kind, one Undo step.
+        do {
+            let before = doc.project.lines
+            let mineCount = ToneRemoval.counts(in: doc.project).narrator
+            RemoveTones.perform(ToneRemoval(automatic: true, narrator: false), document: doc, undoManager: undo)
+            await settle()
+            let after = ToneRemoval.counts(in: doc.project)
+            check("Remove Tones clears Tag Speakers' tones and keeps the narrator's",
+                  after.automatic == 0 && after.narrator == mineCount, "\(after)")
+            undo.undo()
+            await settle()
+            check("Undo puts removed tones back", doc.project.lines.map(\.tone) == before.map(\.tone))
+        }
+        // Find in the Manuscript: the find bar opens on request.
+        c.showFindBar()
+        await settle()
+        check("Find in Manuscript shows the find bar", tv.enclosingScrollView?.isFindBarVisible == true)
+        tv.enclosingScrollView?.isFindBarVisible = false
         if let item = menu.items.first(where: { $0.title == "Delete Text" }), let action = item.action {
             NSApp.sendAction(action, to: item.target, from: item)
         } else {

@@ -176,6 +176,10 @@ struct ProjectWindow: View {
             ToolbarItem {
                 TextSizeControl()
             }
+            ToolbarItem {
+                Button("Find", systemImage: "magnifyingglass") { workspace.findRequest = UUID() }
+                    .help("Find words in the manuscript (⇧⌘F)")
+            }
             ToolbarSpacer(.fixed)
             ToolbarItemGroup {
                 let needs = document.project.linesNeedingYou

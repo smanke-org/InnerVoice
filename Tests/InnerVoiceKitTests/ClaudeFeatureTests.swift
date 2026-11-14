@@ -259,3 +259,35 @@ private func texts(_ p: Project) -> [String] {
     let back = try JSONDecoder().decode(Project.self, from: data)
     #expect(back.chapters[0].recap == nil && back.lines[0].delivery == nil)
 }
+
+// MARK: Remove Tones and Find
+
+@Test func removeTonesClearsOnlyTheChosenKinds() {
+    var p = make([["“Run!” she said.", "“Wait,” he said.", "“Fine.”"]])
+    #expect(p.lines.count >= 3)
+    p.lines[0].tone = .excited; p.lines[0].toneSource = .ai
+    p.lines[1].tone = .sad; p.lines[1].toneSource = .user
+    p.lines[2].tone = .angry; p.lines[2].toneSource = .rule
+    p.tonesTagged = .now
+    #expect(ToneRemoval.counts(in: p) == (automatic: 2, narrator: 1))
+    var a = p
+    #expect(ToneRemoval(automatic: true, narrator: false).apply(to: &a) == 2)
+    #expect(a.lines[0].tone == nil && a.lines[2].tone == nil && a.lines[1].tone == .sad)
+    #expect(a.tonesTagged == nil)
+    var n = p
+    #expect(ToneRemoval(automatic: false, narrator: true).apply(to: &n) == 1)
+    #expect(n.lines[1].tone == nil && n.lines[0].tone == .excited && n.tonesTagged != nil)
+    var both = p
+    #expect(ToneRemoval(automatic: true, narrator: true).apply(to: &both) == 3)
+    #expect(ToneRemoval.counts(in: both) == (automatic: 0, narrator: 0))
+}
+
+@Test func findMatchesEveryPlaceIgnoringCaseAndQuotes() {
+    let p = make([["Ada’s cat sat.", "No cats here"], ["CAT!"]])
+    let m = TextSearch.matches(of: "cat", in: p)
+    #expect(m.count == 3)
+    #expect(m.map(\.chapter) == [0, 0, 1])
+    #expect(m[0].range == TextSpan(location: 6, length: 3))
+    #expect(TextSearch.matches(of: "ada's", in: p).count == 1)
+    #expect(TextSearch.matches(of: "  ", in: p).isEmpty)
+}

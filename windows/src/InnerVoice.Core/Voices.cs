@@ -261,6 +261,16 @@ public sealed record VoiceInfo(
 
     public string Id => Engine.Raw() + ":" + VoiceID;
 
+    /// The voice list's search: name, accent or description.
+    public bool Matches(string query)
+    {
+        var q = query.Trim();
+        if (q.Length == 0) return true;
+        var ci = System.Globalization.CultureInfo.InvariantCulture.CompareInfo;
+        const System.Globalization.CompareOptions opts = System.Globalization.CompareOptions.IgnoreCase | System.Globalization.CompareOptions.IgnoreNonSpace;
+        return new[] { Name, Accent, Detail }.Any(t => ci.IndexOf(t, q, opts) >= 0);
+    }
+
     /// What choosing this voice stores.
     public VoiceChoice Choice => new(Engine, VoiceID, Design);
 

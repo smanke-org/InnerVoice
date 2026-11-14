@@ -94,9 +94,12 @@ public sealed partial class CastPage
         return box;
     }
 
-    /// The cards shown: everyone, or with the filter, only genders to review.
+    /// The cards shown: everyone (or whom the search finds), or with the filter, only genders to review.
     IEnumerable<BookCharacter> Filtered(IEnumerable<BookCharacter> ordered)
     {
+        var q = findBox.Text?.Trim() ?? "";
+        if (q.Length > 0)
+            ordered = ordered.Where(c => c.SearchMatches(q, c.Voices?.Values.Select(v => InnerVoice.Core.Speech.VoiceNames.Name(v.Choice)) ?? [])).ToList();
         if (!genderFilter) return ordered;
         var review = CastingStyleRules.GenderToReview(Document.Project, Document.Index).ToHashSet();
         return ordered.Where(c => review.Contains(c.Id));

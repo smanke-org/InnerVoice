@@ -19,6 +19,7 @@ public sealed partial class CastPage : Page
     readonly Button back;
     readonly Button narrators;
     readonly StackPanel toolbar;
+    readonly TextBox findBox = new() { PlaceholderText = "Find a character", Width = 200 };
 
     public CastPage(ProjectDocument document, Workspace workspace) : base(document, workspace)
     {
@@ -26,7 +27,8 @@ public sealed partial class CastPage : Page
         back = Ui.Button("‹ Cast", () => { Workspace.SelectedCharacter = null; Refresh(false); }, tip: "Back to the cast");
         narrators = Ui.Button("Narrators…", () => { if (TopLevel.GetTopLevel(this) is Window w) InnerVoice.App.Windows.NarratorsWindow.Show(w, Document); },
             tip: "Who reads the book, and which characters each narrator reads");
-        toolbar = Ui.Row(Look.Sm, back, sortBox, narrators);
+        findBox.TextChanged += (_, _) => Refresh(false);
+        toolbar = Ui.Row(Look.Sm, back, sortBox, findBox, narrators);
         Refresh(true);
     }
 
@@ -61,12 +63,14 @@ public sealed partial class CastPage : Page
         {
             back.IsVisible = true;
             sortBox.IsVisible = false;
+            findBox.IsVisible = false;
             Content = Detail(c);
             return;
         }
         Workspace.SelectedCharacter = null;
         back.IsVisible = false;
         sortBox.IsVisible = true;
+        findBox.IsVisible = p.Characters.Count > 0;
         if (p.Characters.Count == 0)
         {
             Content = Ui.Empty("No Characters Yet", "Tag Speakers finds the cast as it reads the book. You can also assign a line to a new character.");

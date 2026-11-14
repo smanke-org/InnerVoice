@@ -296,13 +296,20 @@ enum PlayCommand {
 
     /// From the selected line (or the top of the chapter) to the end of the book, as a
     /// table read: each line in its character's voice, narration as set in Settings.
-    static func playFromHere(document: InnerVoiceDocument, workspace: Workspace) {
+    /// With `paragraphID` (a right-click in the Manuscript), it starts there instead: at
+    /// `lineID` when the click was on a line, else at the top of that paragraph.
+    static func playFromHere(document: InnerVoiceDocument, workspace: Workspace, paragraphID: UUID? = nil, lineID: UUID? = nil) {
         VoiceCastingRun.castIfNeeded(document: document)
         let project = document.project
         let index = document.index
         var start: UUID?
         var chapter = min(workspace.visibleChapter, max(0, project.chapters.count - 1))
-        if let id = workspace.selectedLines.first, let i = index.lineIndexByID[id], let pos = index.positions[project.lines[i].paragraphID] {
+        var firstLine = workspace.selectedLines.first
+        if let pid = paragraphID, let pos = index.positions[pid] {
+            start = pid
+            chapter = pos.chapter
+            firstLine = lineID
+        } else if let id = firstLine, let i = index.lineIndexByID[id], let pos = index.positions[project.lines[i].paragraphID] {
             start = project.lines[i].paragraphID
             chapter = pos.chapter
         }
@@ -310,7 +317,7 @@ enum PlayCommand {
         var segs = SpeechScript.segments(chapter: chapter, from: start, chapters: project.chapters.count - chapter, project: project,
                                          index: index, includeNarration: readNarration)
         // Start at the selected line, not the narration before it in its paragraph.
-        if let id = workspace.selectedLines.first, let k = segs.firstIndex(where: { $0.lineID == id }) { segs.removeFirst(k) }
+        if let id = firstLine, let k = segs.firstIndex(where: { $0.lineID == id }) { segs.removeFirst(k) }
         SpeechPlayer.shared.play(segs, resolver: VoiceResolver(project: project)) { seg in
             // Follow along in the manuscript.
             if workspace.page == .manuscript, UserDefaults.standard.object(forKey: "voices.followAlong") as? Bool ?? true {

@@ -40,6 +40,9 @@ public sealed partial class ProjectWindow
         book.Items.Add(Typed(Item("Play from _Here", "Ctrl+Shift+Space", PlayFromHere), p => p.ShowsVoices));
         book.Items.Add(Typed(Item("_Stop Playing", "Ctrl+Shift+OemPeriod", SpeechPlayer.Shared.Stop), p => p.ShowsVoices));
         book.Items.Add(Typed(Item("Cast _Voices Again", null, () => { if (Document.Project.ShowsVoices) Document.CastVoicesAgain(); }), p => p.ShowsVoices));
+        var removeTones = Typed(Item("Remove _Tones…", null, () => _ = RemoveTones()), p => p.ShowsVoices);
+        book.Items.Add(removeTones);
+        book.SubmenuOpened += (_, _) => removeTones.IsEnabled = !Runner.IsRunning;
         book.Items.Add(Typed(Item("Stop Sending This Book to ElevenLabs", null, () => Document.SetCloudVoicesAllowed(false)),
             p => p.ShowsVoices && p.Settings.CloudVoicesAllowed is not null));
         book.SubmenuOpened += (_, _) => voicesSeparator.IsVisible = Document.Project.ShowsVoices;

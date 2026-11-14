@@ -599,6 +599,18 @@ public sealed class ManuscriptCanvas : Control
         }
     }
 
+    /// Scrolls so the text range is in view, a third of the way down (a long paragraph
+    /// scrolls to the match, not to its top).
+    public void ScrollToSpan(Guid id, TextSpan range)
+    {
+        if (needsLayout) Measure(new Size(Bounds.Width > 0 ? Bounds.Width : 900, double.PositiveInfinity));
+        if (!byParagraph.TryGetValue(id, out var b) || b.Layout is null || Scroller is not { } sv) return;
+        var first = b.Layout.HitTestTextPosition(Math.Clamp(range.Location, 0, b.Text.Length));
+        double y = b.Y + first.Y;
+        if (y >= sv.Offset.Y + 40 && y + first.Height <= sv.Offset.Y + sv.Viewport.Height - 40) return;
+        sv.Offset = new Vector(sv.Offset.X, Math.Max(0, y - sv.Viewport.Height / 3));
+    }
+
     public void ScrollToChapter(int chapter)
     {
         if (chapter < 0 || chapter >= chapterTops.Count || Scroller is not { } sv) return;

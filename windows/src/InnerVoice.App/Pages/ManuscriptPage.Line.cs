@@ -95,6 +95,18 @@ public sealed partial class ManuscriptPage
     {
         var menu = new ContextMenu();
         var selection = Canvas.SelectedText();
+        // Play from Here leads the menu when the book has voices: at the clicked line (or the
+        // top of the clicked paragraph), not the selected one. Stop Playback sits above it.
+        if (Document.Project.ShowsVoices && (line is not null || paragraph is not null))
+        {
+            var player = InnerVoice.App.Speech.SpeechPlayer.Shared;
+            if (player.IsPlaying || player.Preparing) menu.Items.Add(Item("Stop Playback", player.Stop));
+            var startLine = line?.Id;
+            var startParagraph = line is null ? paragraph?.Id : null;
+            menu.Items.Add(Item("Play from Here", () => PlayFromHere(startLine, startParagraph), "Ctrl+Shift+Space"));
+            menu.Items.Add(new Separator());
+        }
+        int lead = menu.Items.Count;
         if (line is not null && selection.Count == 0)
         {
             if (!Canvas.SelectedLines.Contains(line.Id))
@@ -136,7 +148,6 @@ public sealed partial class ManuscriptPage
                 menu.Items.Add(Item("Delivery Hint…", () => _ = EditDelivery(ids, line.Delivery)));
                 menu.Items.Add(new Separator());
                 menu.Items.Add(Item("Play Line", () => PlayLines(ids), "Ctrl+Space"));
-                menu.Items.Add(Item("Play from Here", () => PlayFromHere(line.Id), "Ctrl+Shift+Space"));
             }
             if (Document.Project.Character(line.SpeakerID) is { } sp)
             {
@@ -165,7 +176,7 @@ public sealed partial class ManuscriptPage
             menu.Items.Add(new Separator());
             menu.Items.Add(Item("Delete Text…", () => _ = DeleteSelection(), "Delete"));
         }
-        if (menu.Items.Count == 0 && paragraph is not null && Document.Project.ShowsNarrationTools)
+        if (menu.Items.Count == lead && paragraph is not null && Document.Project.ShowsNarrationTools)
         {
             var pid = paragraph.Id;
             menu.Items.Add(Item("Open Teleprompter Here", () => { Workspace.TeleprompterParagraph = pid; Workspace.Go(PageKind.Teleprompter); }));
@@ -173,7 +184,7 @@ public sealed partial class ManuscriptPage
         // Teach the AI voices a word: the one clicked, or a selection of up to three words.
         if (Document.Project.ShowsPronunciations && PronunciationWord(point, selection) is { } fix)
         {
-            if (menu.Items.Count > 0) menu.Items.Add(new Separator());
+            if (menu.Items.Count > lead) menu.Items.Add(new Separator());
             menu.Items.Add(Item($"Fix Pronunciation of “{fix.Word}”…", () => FixPronunciation(fix.Word, fix.Paragraph)));
         }
         // "Previously…": the chapter's recap, for every chapter after the first (or one that has one).
@@ -182,9 +193,10 @@ public sealed partial class ManuscriptPage
             && (at.Chapter > 0 || Document.Project.Chapters[at.Chapter].RecapText is not null))
         {
             int chapterIndex = at.Chapter;
-            if (menu.Items.Count > 0) menu.Items.Add(new Separator());
+            if (menu.Items.Count > lead) menu.Items.Add(new Separator());
             menu.Items.Add(Item("Chapter Recap…", () => _ = EditRecap(chapterIndex)));
         }
+        if (menu.Items.Count == lead && lead > 0 && menu.Items[^1] is Separator) menu.Items.RemoveAt(lead - 1);
         if (menu.Items.Count == 0) return;
         var anchor = AnchorAt(new Rect(point, new Size(1, 1)));
         menu.Closed += (_, _) => RemoveAnchor(anchor);

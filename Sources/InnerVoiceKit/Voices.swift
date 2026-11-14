@@ -230,6 +230,13 @@ public struct VoiceInfo: Hashable, Identifiable, Sendable {
 
     public var id: String { engine.rawValue + ":" + voiceID }
 
+    /// The voice list's search: name, accent or description.
+    public func matches(_ query: String) -> Bool {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return true }
+        return [name, accent, detail].contains { $0.range(of: q, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
+    }
+
     /// What choosing this voice stores.
     public var choice: VoiceChoice { VoiceChoice(engine: engine, voiceID: voiceID, design: design) }
 

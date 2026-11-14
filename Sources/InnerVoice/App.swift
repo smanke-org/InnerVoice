@@ -184,6 +184,15 @@ struct FileCommands: Commands {
                 }
             }
         }
+        CommandGroup(after: .textEditing) {
+            Button("Find in Manuscript…") {
+                guard let f = focus else { return }
+                f.workspace.page = .manuscript
+                f.workspace.findRequest = UUID()
+            }
+            .keyboardShortcut("f", modifiers: [.command, .shift])
+            .disabled(focus == nil)
+        }
         CommandGroup(after: .saveItem) {
             Divider()
             Button("Import Revised Manuscript…") {
@@ -286,6 +295,10 @@ struct BookCommands: Commands {
                 if let f = focus { f.document.castVoicesAgain(undoManager: f.undoManager) }
             }
             .disabled(focus == nil)
+            Button("Remove Tones…") {
+                if let f = focus { RemoveTones.run(document: f.document, undoManager: f.undoManager) }
+            }
+            .disabled(focus == nil || running)
             }
         }
     }

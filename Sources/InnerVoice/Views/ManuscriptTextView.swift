@@ -216,6 +216,10 @@ struct ManuscriptTextView: NSViewRepresentable {
             c.handledReveal = reveal
             DispatchQueue.main.async { c.reveal(reveal) }
         }
+        if let find = workspace.findRequest, find != c.handledFind {
+            c.handledFind = find
+            DispatchQueue.main.async { c.showFindBar() }
+        }
         if let pending = workspace.pendingAssign {
             DispatchQueue.main.async {
                 workspace.pendingAssign = nil
@@ -411,6 +415,17 @@ struct ManuscriptTextView: NSViewRepresentable {
             return out.map { $0.offsetBy(dx: origin.x, dy: origin.y) }
         }
 
+        var handledFind: UUID?
+
+        /// The text view's own find bar: matches highlighted, Next/Previous, a count.
+        func showFindBar() {
+            guard let tv = textView else { return }
+            tv.window?.makeFirstResponder(tv)
+            let item = NSMenuItem()
+            item.tag = NSTextFinder.Action.showFindInterface.rawValue
+            tv.performTextFinderAction(item)
+        }
+
         func reveal(_ r: Workspace.Reveal) {
             guard let textView else { return }
             var range = layout.paragraphRanges[r.paragraphID] ?? NSRange(location: 0, length: 0)
@@ -544,6 +559,20 @@ struct ManuscriptTextView: NSViewRepresentable {
                 menu.addItem(ClosureMenuItem(title: "Fix Pronunciation of “\(word)”…") { [weak self] in
                     self?.fixPronunciation(word, at: char, undo: undo)
                 })
+            }
+            if document.project.showsVoices, let pid = layout.paragraph(at: char) {
+                // At the top: the narrator right-clicked to listen, not to edit.
+                let clickedLine = layout.entry(at: char).flatMap { line($0) }?.id
+                var top: [NSMenuItem] = []
+                if SpeechPlayer.shared.isPlaying {
+                    top.append(ClosureMenuItem(title: "Stop Playback") { SpeechPlayer.shared.stop() })
+                }
+                top.append(ClosureMenuItem(title: "Play from Here") { [weak self] in
+                    guard let self else { return }
+                    PlayCommand.playFromHere(document: self.document, workspace: self.parent.workspace, paragraphID: pid, lineID: clickedLine)
+                })
+                if menu.items.count > 0 { top.append(.separator()) }
+                for (i, item) in top.enumerated() { menu.insertItem(item, at: i) }
             }
             if menu.items.count > 0 { menu.addItem(.separator()) }
             menu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "")

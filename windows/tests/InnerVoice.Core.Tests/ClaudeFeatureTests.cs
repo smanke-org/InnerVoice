@@ -296,4 +296,57 @@ public class ClaudeFeatureTests
         Assert.Equal("ai", (string?)again["lines"]![0]!["deliverySource"]);
         Assert.Equal("Tom said hello.", (string?)again["chapters"]![0]!["recap"]);
     }
+
+    // MARK: Remove Tones and Find
+
+    [Fact]
+    public void RemoveTonesClearsOnlyTheChosenKinds()
+    {
+        var p = Make(["“Run!” she said.", "“Wait,” he said.", "“Fine.”"]);
+        Assert.True(p.Lines.Count >= 3);
+        p.Lines[0].Tone = Tone.Excited; p.Lines[0].ToneSource = ToneSource.Ai;
+        p.Lines[1].Tone = Tone.Sad; p.Lines[1].ToneSource = ToneSource.User;
+        p.Lines[2].Tone = Tone.Angry; p.Lines[2].ToneSource = ToneSource.Rule;
+        p.TonesTagged = AppleDate.Now;
+        Assert.Equal((2, 1), ToneRemoval.Counts(p));
+        var a = p.Copy();
+        Assert.Equal(2, new ToneRemoval(true, false).Apply(a));
+        Assert.True(a.Lines[0].Tone is null && a.Lines[2].Tone is null && a.Lines[1].Tone == Tone.Sad);
+        Assert.Null(a.TonesTagged);
+        var n = p.Copy();
+        Assert.Equal(1, new ToneRemoval(false, true).Apply(n));
+        Assert.True(n.Lines[1].Tone is null && n.Lines[0].Tone == Tone.Excited && n.TonesTagged is not null);
+        var both = p.Copy();
+        Assert.Equal(3, new ToneRemoval(true, true).Apply(both));
+        Assert.Equal((0, 0), ToneRemoval.Counts(both));
+    }
+
+    [Fact]
+    public void FindMatchesEveryPlaceIgnoringCaseAndQuotes()
+    {
+        var p = Make(["Ada’s cat sat.", "No cats here"], ["CAT!"]);
+        var m = TextSearch.Matches("cat", p);
+        Assert.Equal(3, m.Count);
+        Assert.Equal([0, 0, 1], m.Select(x => x.Chapter).ToArray());
+        Assert.Equal(new TextSpan(6, 3), m[0].Range);
+        Assert.Single(TextSearch.Matches("ada's", p));
+        Assert.Empty(TextSearch.Matches("  ", p));
+        Assert.Single(TextSearch.Matches("ÂDA", p));
+    }
+
+    [Fact]
+    public void CastAndVoiceSearchesReachNotesAndStoredIDs()
+    {
+        var c = new BookCharacter("Tom Hale", "#336699") { Notes = "Limps since the war", VoiceNotes = "Gravelly baritone" };
+        Assert.True(c.SearchMatches("hale"));
+        Assert.True(c.SearchMatches("limps"));
+        Assert.True(c.SearchMatches("BARITONE"));
+        Assert.True(c.SearchMatches("rex", ["Rex Voice"]));
+        Assert.False(c.SearchMatches("zebra"));
+        c.SetVoice(new CastVoice(new VoiceChoice(VoiceEngine.Pocket, "stock:alba"), 1, VoiceSource.User), VoiceEngine.Pocket);
+        Assert.True(c.SearchMatches("alba"));
+        var v = new VoiceInfo(VoiceEngine.Pocket, "x", "Daniel", Gender.Male, Accent: "British", Detail: "Warm, deep");
+        Assert.True(v.Matches("") && v.Matches("danI") && v.Matches("brit") && v.Matches("DEEP"));
+        Assert.False(v.Matches("scottish"));
+    }
 }

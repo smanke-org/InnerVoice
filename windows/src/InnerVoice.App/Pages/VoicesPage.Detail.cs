@@ -188,13 +188,26 @@ public sealed partial class VoicesPage
                 ? "Your ElevenLabs account has no voices. Add some in the Voice Library at elevenlabs.io."
                 : "No voices to show.", TextWrapping.Wrap));
         var all = new StackPanel { Spacing = 2 };
-        if (sameAsNarrator)
+        // "Find a voice": name, accent or sound (the description). The list below it
+        // refills as the narrator types; nothing else on the page is rebuilt.
+        var find = new TextBox { PlaceholderText = "Find a voice by name, accent or sound", Text = voiceQuery };
+        void Fill()
         {
-            var same = new VoiceChoice(engine == VoiceEngine.Mixed ? VoiceEngine.Apple : engine, VoiceChoice.NarratorID);
-            all.Children.Add(ChoiceRow("Same as Narrator", "Uses the narrator’s voice", current?.Choice.IsNarrator == true, () => choose(same), null));
+            all.Children.Clear();
+            var q = voiceQuery.Trim();
+            if (sameAsNarrator && q.Length == 0)
+            {
+                var same = new VoiceChoice(engine == VoiceEngine.Mixed ? VoiceEngine.Apple : engine, VoiceChoice.NarratorID);
+                all.Children.Add(ChoiceRow("Same as Narrator", "Uses the narrator’s voice", current?.Choice.IsNarrator == true, () => choose(same), null));
+            }
+            // Clones first; then the rest, best first. The search covers every voice, not just the first 200.
+            var found = voices.Where(v => v.Matches(q)).OrderByDescending(v => v.Cloned).Take(200).ToList();
+            foreach (var v in found) all.Children.Add(VoiceRow(v, c, current?.Choice, choose));
+            if (q.Length > 0 && found.Count == 0) all.Children.Add(Ui.Caption("No voice matches.", TextWrapping.Wrap));
         }
-        // Clones first; then the rest, best first.
-        foreach (var v in voices.OrderByDescending(v => v.Cloned).Take(200)) all.Children.Add(VoiceRow(v, c, current?.Choice, choose));
+        find.TextChanged += (_, _) => { voiceQuery = find.Text ?? ""; Fill(); };
+        if (voices.Count > 0) column.Children.Add(find);
+        Fill();
         column.Children.Add(all);
         if (OpenCloneVoice is not null)
             column.Children.Add(Ui.Row(Look.Sm, Ui.Button("Clone a Voice…", () => OpenCloneVoice(this, c?.Id)),

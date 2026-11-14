@@ -31,7 +31,8 @@ public sealed partial class VoicesPage : Page
     readonly ComboBox engineBox = new() { MinWidth = 190 };
     readonly StackPanel toolbar;
     readonly Button playButton;
-    readonly TextBox search = new() { PlaceholderText = "Search", Margin = new Thickness(Look.Md, Look.Sm) };
+    string voiceQuery = "";
+    readonly TextBox search = new() { PlaceholderText = "Find a character", Margin = new Thickness(Look.Md, Look.Sm) };
     readonly StackPanel list = new();
     readonly ContentControl detail = new();
     bool updating;
@@ -244,7 +245,7 @@ public sealed partial class VoicesPage : Page
                                   Target is VoiceTarget.Role rr && rr.Value == r, () => Show(new VoiceTarget.Role(r))));
         }
 
-        var cast = Cast().Where(c => q.Length == 0 || c.Matches(q)).ToList();
+        var cast = Cast().Where(c => q.Length == 0 || c.SearchMatches(q, c.Voices?.Values.Select(v => VoiceNames.Name(v.Choice)) ?? [])).ToList();
         if (cast.Count == 0)
         {
             list.Children.Add(Header("Characters"));

@@ -10,6 +10,7 @@ struct CastPage: View {
     @State private var showNarrators = false
     /// Show only characters whose gender the book doesn't settle (Casting Style).
     @State private var genderFilter = false
+    @State private var query = ""
     /// Where a ⇧-click run starts.
     @State private var pickAnchor: UUID?
 
@@ -26,6 +27,7 @@ struct CastPage: View {
         // page: a NavigationStack doesn't show an inset placed around it.
         NavigationStack(path: $workspace.castPath) {
             grid
+                .searchable(text: $query, placement: .toolbar, prompt: "Find a character")
                 .safeAreaInset(edge: .top, spacing: 0) { BackgroundAIBar(document: document, page: .cast) }
                 .safeAreaInset(edge: .bottom, spacing: 0) { pickedBar }
                 .navigationDestination(for: UUID.self) { id in
@@ -123,9 +125,10 @@ struct CastPage: View {
 
     /// The characters shown: all, or with Gender to Review on, only those it lists.
     private var shown: [BookCharacter] {
-        guard genderFilter else { return sorted }
+        let found = query.isEmpty ? sorted : sorted.filter { $0.searchMatches(query) }
+        guard genderFilter else { return found }
         let review = Set(CastingStyleRules.genderToReview(document.project, index: document.index))
-        return sorted.filter { review.contains($0.id) }
+        return found.filter { review.contains($0.id) }
     }
 
     private func card(_ c: BookCharacter) -> some View {

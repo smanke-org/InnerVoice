@@ -17,8 +17,9 @@ public sealed partial class ManuscriptPage : Page
     public override PageKind Kind => PageKind.Manuscript;
     public readonly ManuscriptCanvas Canvas = new();
     readonly ScrollViewer scroller;
-    readonly TextBox findBox = new() { PlaceholderText = "Find", Width = 200 };
+    readonly TextBox findBox = new() { PlaceholderText = "Find in manuscript", Width = 260 };
     readonly TextBlock findCount = Ui.Caption("");
+    readonly Border findBar = new() { IsVisible = false };
     readonly Border banner = new();
     readonly StackPanel toolbar;
     readonly ComboBox styleBox = new() { ItemsSource = new[] { "Highlight", "Outline", "Underline" }, Width = 120 };
@@ -32,6 +33,8 @@ public sealed partial class ManuscriptPage : Page
         var grid = new DockPanel();
         DockPanel.SetDock(banner, Dock.Top);
         grid.Children.Add(banner);
+        DockPanel.SetDock(findBar, Dock.Top);
+        grid.Children.Add(findBar);
         DockPanel.SetDock(notice, Dock.Top);
         grid.Children.Add(notice);
         grid.Children.Add(scroller);
@@ -58,11 +61,20 @@ public sealed partial class ManuscriptPage : Page
         var larger = Ui.Button("A+", () => AppSettings.Update(s => s.ReadingFontSize = Math.Min(AppSettings.MaxReadingSize, s.ReadingFontSize + 1)), tip: "Bigger text (Ctrl+=)");
         findBox.KeyDown += (_, e) =>
         {
-            if (e.Key == Key.Enter) { FindNext(e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1); e.Handled = true; }
-            else if (e.Key == Key.Escape) { findBox.Text = ""; Canvas.Focus(); e.Handled = true; }
+            bool shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+            if (e.Key is Key.Enter or Key.F3) { FindNext(shift ? -1 : 1); e.Handled = true; }
+            else if (e.Key == Key.Escape) { CloseFind(); e.Handled = true; }
         };
-        findBox.TextChanged += (_, _) => UpdateSearch();
-        toolbar = Ui.Row(Look.Sm, styleBox, initials, smaller, larger, findBox, findCount);
+        findBox.TextChanged += (_, _) => UpdateSearch(jump: true);
+        findCount.MinWidth = 70;
+        findCount.VerticalAlignment = VerticalAlignment.Center;
+        var prev = Ui.Button("▲", () => FindNext(-1), tip: "Previous match (Shift+Enter, Shift+F3)");
+        var next = Ui.Button("▼", () => FindNext(1), tip: "Next match (Enter, F3)");
+        var close = Ui.Button("✕", CloseFind, tip: "Close (Esc)");
+        findBar.Padding = new Thickness(12, 6);
+        findBar.Child = Ui.Row(Look.Sm, findBox, findCount, prev, next, close);
+        var find = Ui.Button("Find", () => FocusFind(), tip: "Find in the manuscript (Ctrl+F)");
+        toolbar = Ui.Row(Look.Sm, styleBox, initials, smaller, larger, find);
 
         Canvas.LineClicked += OnLineClicked;
         Canvas.ContextRequestedAt += OnContext;
@@ -164,24 +176,19 @@ public sealed partial class ManuscriptPage : Page
 
     // MARK: Find
 
-    void UpdateSearch()
+    void UpdateSearch(bool jump = false)
     {
         Canvas.SearchHits.Clear();
         Canvas.CurrentHit = -1;
         var q = findBox.Text ?? "";
-        if (q.Length >= 2)
+        if (q.Trim().Length > 0)
         {
-            foreach (var p in Document.Project.Chapters.SelectMany(c => c.Paragraphs))
-            {
-                int at = 0;
-                while ((at = p.Text.IndexOf(q, at, StringComparison.CurrentCultureIgnoreCase)) >= 0)
-                {
-                    Canvas.SearchHits.Add((p.Id, new TextSpan(at, q.Length)));
-                    at += q.Length;
-                }
-            }
+            foreach (var m in InnerVoice.Core.TextSearch.Matches(q, Document.Project)) Canvas.SearchHits.Add((m.ParagraphID, m.Range));
+            // Typing lands on the first match from the top of the view, as it's found.
+            if (jump && Canvas.SearchHits.Count > 0) FindNext(1);
         }
-        findCount.Text = q.Length < 2 ? "" : Canvas.SearchHits.Count == 0 ? "Not found" : $"{Canvas.SearchHits.Count:N0} found";
+        findCount.Text = q.Trim().Length == 0 ? "" : Canvas.SearchHits.Count == 0 ? "No matches"
+            : Canvas.CurrentHit >= 0 ? $"{Canvas.CurrentHit + 1:N0} of {Canvas.SearchHits.Count:N0}" : $"{Canvas.SearchHits.Count:N0} found";
         Canvas.InvalidateVisual();
     }
 
@@ -189,15 +196,28 @@ public sealed partial class ManuscriptPage : Page
     {
         if (Canvas.SearchHits.Count == 0) return;
         Canvas.CurrentHit = ((Canvas.CurrentHit + step) % Canvas.SearchHits.Count + Canvas.SearchHits.Count) % Canvas.SearchHits.Count;
-        findCount.Text = $"{Canvas.CurrentHit + 1} of {Canvas.SearchHits.Count:N0}";
-        Canvas.ScrollToParagraph(Canvas.SearchHits[Canvas.CurrentHit].Paragraph);
+        findCount.Text = $"{Canvas.CurrentHit + 1:N0} of {Canvas.SearchHits.Count:N0}";
+        var (paragraph, range) = Canvas.SearchHits[Canvas.CurrentHit];
+        Canvas.ScrollToSpan(paragraph, range);
         Canvas.InvalidateVisual();
     }
 
+    /// Shows the find bar (Ctrl+F) and puts the cursor in it.
     public void FocusFind()
     {
+        findBar.IsVisible = true;
         findBox.Focus();
         findBox.SelectAll();
+        UpdateSearch();
+    }
+
+    /// Esc: hides the bar and clears the highlights.
+    void CloseFind()
+    {
+        findBar.IsVisible = false;
+        findBox.Text = "";
+        UpdateSearch();
+        Canvas.Focus();
     }
 
     public override void Shown() => Canvas.Focus();
