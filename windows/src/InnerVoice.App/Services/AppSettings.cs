@@ -62,6 +62,9 @@ public sealed class AppSettings
     public string? ExportAudioFormat { get; set; }
     public bool ExportAudioSeparateVoices { get; set; }
     public bool ExportAudioRecaps { get; set; }
+    /// Export Speed per engine (raw engine name → speed); a missing engine uses its standard
+    /// speed (ElevenLabs Fastest, the others Slowest).
+    public Dictionary<string, InnerVoice.Core.Speech.ExportSpeed> ExportSpeedByEngine { get; set; } = new();
     public double WindowWidth { get; set; } = 1280;
     public double WindowHeight { get; set; } = 820;
 

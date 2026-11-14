@@ -43,6 +43,7 @@ public sealed partial class SettingsWindow
         pane.Children.Add(Note("Narration is read in the narrator’s voice, chosen on the Voices page; in a first-person book, the narrator character’s voice. Export Audio asks each time."));
 
         pane.Children.Add(PausesSection());
+        pane.Children.Add(ExportSpeedSection());
         pane.Children.Add(EnginesSection());
         if (LocalClones.Shared.All.Count > 0) pane.Children.Add(LocalClonesSection());
         if (ElevenLabsEngine.Shared.IsSetUp && EngineSwitches.Shared.IsOn(VoiceEngine.Elevenlabs)) pane.Children.Add(ClonedVoicesSection());
@@ -72,6 +73,17 @@ public sealed partial class SettingsWindow
     }
 
     static TextBlock Note(string text) => Ui.Caption(text, TextWrapping.Wrap);
+
+    /// How many lines Export Audio makes at once, per engine that's on (the Mac's Export Speed).
+    static Control ExportSpeedSection()
+    {
+        var section = new StackPanel { Spacing = Look.Sm };
+        section.Children.Add(Ui.Headline("Export Speed"));
+        foreach (var engine in ExportSpeeds.Engines.Where(EngineSwitches.Shared.IsOn))
+            section.Children.Add(WideRow(engine.Title(), Export.ExportSpeedPicker.Make(engine)));
+        section.Children.Add(Note("Export Audio can make several lines at once. Slowest makes one at a time and always works; Faster and Fastest save time but might not work correctly with every voice. If an export at a faster speed has trouble with a line, that line is made again on its own. Playing in the app always goes one line at a time."));
+        return section;
+    }
 
     /// The orange Cloud mark wherever ElevenLabs appears.
     public static Border ElevenLabsCloudBadge()

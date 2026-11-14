@@ -148,6 +148,11 @@ public sealed class AudioExportWindow : Window
             ToolTip.SetTip(voices, "Separate saves the narrator, each shared voice and each character with a voice of their own in files of their own. They’re all the same length, so they line up in an audio editor.");
             form.Children.Add(Row("Voices", voices));
         }
+        // Export Speed for each engine the book's voices use (Settings › Voices has them all).
+        var speeds = new StackPanel { Spacing = Look.Sm };
+        foreach (var e in ExportSpeeds.EnginesFor(project, engine))
+            speeds.Children.Add(Ui.Column(2, Ui.Caption(e.Title()), ExportSpeedPicker.Make(e)));
+        if (speeds.Children.Count > 0) form.Children.Add(Row("Speed", speeds));
         var formats = Ui.Row(Look.Md,
             Radio("M4A", "AudioFormat", Format == AudioFormat.M4a, () => Format = AudioFormat.M4a, enabled: AudioEncoders.M4a is not null),
             Radio("WAV", "AudioFormat", Format == AudioFormat.Wav, () => Format = AudioFormat.Wav));
@@ -329,10 +334,16 @@ public sealed class AudioExportWindow : Window
         var files = await Export(folder, name);
         if (files is { Count: > 0 })
         {
+            if (SlowedLines > 0)
+                await Dialogs.Alert(this, "Export Finished One Line at a Time",
+                    $"A line had trouble while several were being made at once, so the rest of the export went one line at a time. The audio is complete. If this keeps happening with {project.EngineInUse().Title()}, choose a slower Export Speed in Settings › Voices.");
             Close();
             Reveal(files[0].Path);
         }
     }
+
+    /// Lines the last export made again on their own after trouble at a faster Export Speed.
+    public int SlowedLines { get; private set; }
 
     /// Writes the files into `folder` (tests call this without the folder picker). Returns
     /// them, or null when stopped or failed (the window says which).
@@ -355,6 +366,8 @@ public sealed class AudioExportWindow : Window
         bar.Value = 0;
         Build();
         double spoken = 0;
+        var stats = new AudioExportStats();
+        SlowedLines = 0;
         try
         {
             var files = await Task.Run(() => AudioExporter.Write(parts, folder, format, resolver, encoder: AudioEncoders.M4a, stem: stem,
@@ -364,7 +377,8 @@ public sealed class AudioExportWindow : Window
                     bar.Value = total == 0 ? 1 : (double)done / total;
                     status.Text = what.Length == 0 ? "Finishing…" : $"Reading {what} ({done:N0} of {total:N0})…";
                 }),
-                ct: source.Token));
+                ct: source.Token, stats: stats));
+            SlowedLines = stats.SlowedLines;
             return files;
         }
         catch (OperationCanceledException)

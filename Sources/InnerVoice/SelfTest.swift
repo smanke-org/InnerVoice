@@ -344,6 +344,20 @@ enum SelfTest {
             let spoken = many.filter { resolver.request(for: $0) != nil }.map(\.id)
             check("Export Audio writes lines in book order while making them in parallel", order == spoken, "\(order.count) of \(spoken.count)")
             print(String(format: "EXPORT TIMING %d lines, %.2f s", many.count, Date().timeIntervalSince(started)))
+            // A line that fails while several are being made is made again alone, and the
+            // rest go one at a time: the file is still complete and in order.
+            SpeechRenderer.shared.clearCache()
+            AudioExporter.testAhead = 3
+            AudioExporter.testFailures = 1
+            var order2: [String] = []
+            _ = try await AudioExporter.write([AudioExporter.Part(name: "Fallback", segments: many)], to: dir, format: .wav, resolver: resolver,
+                                              timing: { _, seg, _, _ in order2.append(seg.id) }) { _, _, _ in }
+            AudioExporter.testAhead = nil
+            check("a line that fails at a faster Export Speed is made again on its own", order2 == spoken && AudioExporter.slowedLines == 1,
+                  "\(order2.count) of \(spoken.count), slowed \(AudioExporter.slowedLines)")
+            check("Export Speed starts at Fastest for ElevenLabs and Slowest on this Mac",
+                  ExportSpeed.standard(.elevenlabs) == .fastest && ExportSpeed.standard(.pocket) == .slowest
+                  && ExportSpeed.slowest.linesAtOnce(.pocket) == 1 && SettingsSync.keys.contains(ExportSpeed.key(.orpheus)))
         } catch {
             check("Export Audio writes lines in book order while making them in parallel", false, error.localizedDescription)
         }
@@ -547,6 +561,88 @@ enum SelfTest {
             }
         }
         for _ in 0..<3 { undo.undo() }
+    }
+
+    /// Export Audio with the on-device models, one line at a time and several at once
+    /// (APP_SELFTEST_PARALLEL, models in APP_VOICE_MODELS): the two files must match.
+    private static func parallelModels(_ doc: InnerVoiceDocument, undo: UndoManager) async {
+        let out = ProcessInfo.processInfo.environment["APP_SELFTEST_AUDIO_OUT"].map { URL(fileURLWithPath: $0) }
+        let dir = out ?? FileManager.default.temporaryDirectory.appending(path: "iv-parallel-selftest")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        func samples(_ url: URL) -> [Float] {
+            guard let b = SpeechRenderer.read(url), let d = b.floatChannelData?[0] else { return [] }
+            return Array(UnsafeBufferPointer(start: d, count: Int(b.frameLength)))
+        }
+        // Long lines (several pieces each) made at once, against one at a time.
+        for engine in [VoiceEngine.pocket, .orpheus] where ModelSpeech.isInstalled(engine) {
+            let voices = engine == .pocket ? VoiceInfo.pocket : VoiceInfo.orpheus
+            let texts = [
+                "The lamp turned slowly above the rocks, and the keeper counted every pass of the beam until morning came. Below him the sea rolled in long grey ridges. He thought of the boat that had not come back, and of the woman who waited at the end of the quay every evening with her hands folded.",
+                "Nobody in the village would say it aloud, but everyone knew the light had failed once before. It was the winter of the great storm, when the glass cracked and the flame went out for nearly an hour. Three ships were lost that night, and the keeper of that time never climbed the stairs again.",
+                "She walked down to the harbor before dawn, when the fishermen were still mending their nets and the gulls had not yet begun to argue. The water was flat and the color of pewter. Somewhere beyond the point a bell was ringing, slow and patient, as if it had all the time in the world.",
+            ]
+            let requests = texts.enumerated().map { n, t in SpeechRequest(text: t, choice: voices[n % voices.count].choice, tone: .neutral, kind: nil) }
+            SpeechRenderer.shared.clearCache()
+            var serial: [Int] = []
+            for r in requests { serial.append(Int((try? await SpeechRenderer.shared.render(r))?.frameLength ?? 0)) }
+            SpeechRenderer.shared.clearCache()
+            let tasks = requests.map { r in Task { try await SpeechRenderer.shared.render(r) } }
+            var parallel: [Int] = []
+            for (n, t) in tasks.enumerated() {
+                let b = try? await t.value
+                parallel.append(Int(b?.frameLength ?? 0))
+                if let b, let out = ProcessInfo.processInfo.environment["APP_SELFTEST_AUDIO_OUT"] {
+                    SpeechRenderer.write(b, to: URL(fileURLWithPath: out).appending(path: "\(engine.rawValue)-longparallel-\(n).caf"))
+                }
+            }
+            print("PARALLEL long \(engine.rawValue) pieces \(texts.map { ModelSpeech.chunks($0).count }) serial \(serial) parallel \(parallel)")
+            check("\(engine.title): long lines made at once match one at a time",
+                  zip(serial, parallel).allSatisfy { abs($0 - $1) < 2400 } && !serial.contains(0), "\(serial) vs \(parallel)")
+        }
+        let savedPauses = PauseSettings.current
+        defer { PauseSettings.current = savedPauses }
+        for split in [true, false] { PauseSettings.current.splitSentences = split
+        for engine in [VoiceEngine.apple, .pocket, .orpheus] where ModelSpeech.isInstalled(engine) {
+            print("PARALLEL sentences split: \(split)")
+            doc.setVoiceEngine(engine, undoManager: undo)
+            let resolver = VoiceResolver(project: doc.project)
+            // Short lines and long ones (split into pieces the model says one after another).
+            let all = doc.project.chapters.indices.flatMap { SpeechScript.segments(chapter: $0, project: doc.project, index: doc.index, includeNarration: true) }
+            let long = all.filter { $0.text.count > 220 }.prefix(4)
+            var segs = Array(all.prefix(8))
+            for (k, l) in long.enumerated() { segs.insert(l, at: min(segs.count, 1 + k * 2)) }
+            print("PARALLEL long pieces: \(long.map { ModelSpeech.chunks($0.text).count })")
+            var files: [Int: [Float]] = [:]
+            var lengths: [Int: [Double]] = [:]
+            for ahead in [1, 3] {
+                SpeechRenderer.shared.clearCache()
+                AudioExporter.testAhead = ahead
+                var each: [Double] = []
+                let start = Date()
+                do {
+                    let urls = try await AudioExporter.write([AudioExporter.Part(name: "\(engine.rawValue)-\(split ? "split" : "whole")-ahead\(ahead)", segments: segs)], to: dir, format: .wav,
+                                                             resolver: resolver, timing: { _, _, a, b in each.append(b - a) }) { _, _, _ in }
+                    files[ahead] = urls.first.map(samples) ?? []
+                    lengths[ahead] = each
+                    print(String(format: "PARALLEL %@ ahead %d: %.1f s", engine.rawValue, ahead, Date().timeIntervalSince(start)))
+                } catch {
+                    check("\(engine.title) exports with \(ahead) at once", false, error.localizedDescription)
+                }
+            }
+            AudioExporter.testAhead = nil
+            let a = files[1] ?? [], b = files[3] ?? []
+            let n = min(a.count, b.count)
+            var diff: Float = 0, energy: Float = 0
+            for i in 0..<n { diff += (a[i] - b[i]) * (a[i] - b[i]); energy += a[i] * a[i] }
+            let ratio = energy > 0 ? sqrt(diff / energy) : 1
+            let lineDiffs = zip(lengths[1] ?? [], lengths[3] ?? []).map { abs($0 - $1) }
+            print("PARALLEL \(engine.rawValue) line lengths serial: \((lengths[1] ?? []).map { String(format: "%.2f", $0) }.joined(separator: " "))")
+            print("PARALLEL \(engine.rawValue) line lengths ahead3: \((lengths[3] ?? []).map { String(format: "%.2f", $0) }.joined(separator: " "))")
+            check("\(engine.title): Export Audio is the same one at a time and several at once",
+                  a.count > 0 && abs(a.count - b.count) < 2400 && ratio < 0.2 && (lineDiffs.max() ?? 0) < 0.1,
+                  String(format: "%d vs %d samples, difference %.0f%%, worst line %.2f s", a.count, b.count, ratio * 100, lineDiffs.max() ?? 0))
+        } }
+        SpeechRenderer.shared.clearCache()
     }
 
     /// Pocket TTS and Orpheus speak real lines (APP_SELFTEST_VOICES=1, with the models in
@@ -1532,6 +1628,7 @@ enum SelfTest {
         // Downloads Pocket TTS into a test folder (never the person's own) for the voice checks.
         if ProcessInfo.processInfo.environment["APP_SELFTEST_GET_POCKET"] != nil { await getPocket() }
         if let dir = ProcessInfo.processInfo.environment["APP_MAKE_STOCK_VOICES"] { await makeStockVoices(to: URL(fileURLWithPath: dir)) }
+        if ProcessInfo.processInfo.environment["APP_SELFTEST_PARALLEL"] != nil { await parallelModels(doc, undo: undo) }
         if ProcessInfo.processInfo.environment["APP_SELFTEST_VOICES"] != nil {
             await modelVoices(doc, undo: undo)
             await oneVoiceTableRead(doc, undo: undo)

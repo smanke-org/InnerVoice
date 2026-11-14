@@ -49,6 +49,8 @@ enum AudioExporter {
         let staging = FileManager.default.temporaryDirectory.appending(path: "InnerVoice Export \(UUID().uuidString)")
         try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: staging) }
+        slowedLines = 0
+        var oneAtATime = false
         for (partIndex, part) in parts.enumerated() where !part.segments.isEmpty {
             var position = 0.0
             // One file (Combined), or one per voice in this part (Separate), in order of first use.
@@ -85,7 +87,7 @@ enum AudioExporter {
                 next = max(next, i)
                 while next < requests.count {
                     guard let request = requests[next] else { next += 1; continue }
-                    guard ahead.count < renderAhead(request.choice.engine) else { break }
+                    guard ahead.count < (oneAtATime ? 1 : renderAhead(request.choice.engine)) else { break }
                     ahead[next] = Task { try await renderWithRetry(request) }
                     next += 1
                 }
@@ -96,7 +98,20 @@ enum AudioExporter {
                 fill(from: i)
                 if requests[i] != nil {
                     let task = ahead.removeValue(forKey: i) ?? Task { try await renderWithRetry(requests[i]!) }
-                    let rendered = try await task.value
+                    let rendered: AVAudioPCMBuffer
+                    do {
+                        rendered = try await task.value
+                    } catch where !Task.isCancelled && !oneAtATime && renderAhead(requests[i]!.choice.engine) > 1 {
+                        // Trouble while several lines were being made: make this one again on
+                        // its own, and the rest of the export one at a time.
+                        for t in ahead.values { t.cancel() }
+                        ahead = [:]
+                        next = i + 1
+                        oneAtATime = true
+                        slowedLines += 1
+                        SpeechLog.write("export: a line failed with several at once (\(error)); going one at a time")
+                        rendered = try await renderWithRetry(requests[i]!)
+                    }
                     fill(from: i + 1)
                     let audio = SpeechAudio.trimmed(rendered)
                     try put(audio, in: stem?(seg) ?? "")
@@ -161,20 +176,29 @@ enum AudioExporter {
         if out.frameLength > 0 { try file.write(from: out) }
     }
 
+    /// Lines the last export made again on their own after trouble at a faster speed.
+    static var slowedLines = 0
+
+    /// Self-test: lines at once for every engine.
+    static var testAhead: Int?
+    /// Self-test: the next renders that fail on purpose.
+    static var testFailures = 0
+
     /// How many lines are made at once for an engine.
     static func renderAhead(_ engine: VoiceEngine) -> Int {
         // Self-test timing: one at a time, as before, to compare.
         if SystemHooks.isTestRun, ProcessInfo.processInfo.environment["INNERVOICE_EXPORT_SERIAL"] != nil { return 1 }
-        return switch engine {
-        case .elevenlabs: 4   // ElevenLabs' Creator plan runs 5 requests at a time; leave one for playback.
-        case .apple: 3
-        case .pocket, .orpheus, .mixed: 2   // One GPU: the second only overlaps the CPU work.
-        }
+        if SystemHooks.isTestRun, let n = testAhead { return n }
+        return ExportSpeed.current(engine == .mixed ? .pocket : engine).linesAtOnce(engine)
     }
 
     /// ElevenLabs answers "busy" when too many requests run at once (another app, or a
     /// smaller plan): wait and try again rather than stopping the export.
     static func renderWithRetry(_ request: SpeechRequest) async throws -> AVAudioPCMBuffer {
+        if SystemHooks.isTestRun, testFailures > 0 {
+            testFailures -= 1
+            throw SpeechError.failed("self-test failure")
+        }
         var wait: UInt64 = 1_000_000_000
         for attempt in 0..<6 {
             do {
@@ -229,6 +253,15 @@ struct AudioExportSheet: View {
     @State private var error: String?
     /// ElevenLabs credits this export would use, and what the plan has left.
     @State private var credits: (needed: Int, lines: Int, left: Int?)?
+
+    /// The engines this book's voices use, for the Export Speed pickers.
+    private var speedEngines: [VoiceEngine] {
+        let engine = document.project.engineInUse
+        guard engine == .mixed else { return [engine] }
+        let used = Set(document.project.characters.compactMap { $0.voice(for: .mixed)?.choice.engine })
+            .union(document.project.settings.narratorVoice(for: .mixed).map { [$0.choice.engine] } ?? [])
+        return ExportSpeed.engines.filter { used.contains($0) }
+    }
 
     private var format: AudioExporter.Format { AudioExporter.Format(rawValue: formatRaw) ?? .m4a }
 
@@ -342,6 +375,7 @@ struct AudioExportSheet: View {
                     }
                     .help("Separate saves the narrator, each shared voice and each character with a voice of their own in files of their own. They’re all the same length, so they line up in an audio editor.")
                 }
+                ForEach(speedEngines, id: \.self) { ExportSpeedPicker(engine: $0) }
                 Picker("Format", selection: $formatRaw) {
                     ForEach(AudioExporter.Format.allCases) { Text($0.rawValue).tag($0.rawValue) }
                 }
@@ -512,6 +546,12 @@ struct AudioExportSheet: View {
                 let urls = try await AudioExporter.write(parts, to: folder, format: format, resolver: resolver, stem: stem) { done, total, what in
                     progress = total == 0 ? 1 : Double(done) / Double(total)
                     status = what.isEmpty ? "Finishing…" : "Reading \(what) (\(done.formatted()) of \(total.formatted()))…"
+                }
+                if AudioExporter.slowedLines > 0 {
+                    let alert = NSAlert()
+                    alert.messageText = "Export Finished One Line at a Time"
+                    alert.informativeText = "A line had trouble while several were being made at once, so the rest of the export went one line at a time. The audio is complete. If this keeps happening with \(document.project.engineInUse.title), choose a slower Export Speed in Settings › Voices."
+                    alert.runModal()
                 }
                 isPresented = false
                 NSWorkspace.shared.activateFileViewerSelecting(urls)

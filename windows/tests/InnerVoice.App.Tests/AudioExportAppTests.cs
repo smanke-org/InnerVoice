@@ -1,10 +1,13 @@
 using System.IO.Compression;
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Xunit;
 using InnerVoice.App.Document;
 using InnerVoice.App.Export;
 using InnerVoice.App.Speech;
+using InnerVoice.App.Windows;
 using InnerVoice.Core;
 using InnerVoice.Core.Speech;
 
@@ -71,6 +74,51 @@ public class AudioExportAppTests
     static void Pump()
     {
         for (int i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
+    }
+
+    [AvaloniaFact]
+    public void ExportSpeedIsChosenPerEngine()
+    {
+        var (doc, folder, encoder) = Setup();
+        try
+        {
+            // ElevenLabs starts at Fastest, the others at Slowest; the export follows the setting.
+            Assert.Equal(ExportSpeed.Fastest, VoiceSetup.SpeedFor(VoiceEngine.Elevenlabs));
+            foreach (var e in new[] { VoiceEngine.Apple, VoiceEngine.Pocket, VoiceEngine.Orpheus })
+                Assert.Equal(ExportSpeed.Slowest, VoiceSetup.SpeedFor(e));
+            Assert.Equal(1, AudioExporter.RenderAhead(VoiceEngine.Apple));
+            Assert.Equal(4, AudioExporter.RenderAhead(VoiceEngine.Elevenlabs));
+            VoiceSetup.SetExportSpeed(VoiceEngine.Apple, ExportSpeed.Faster);
+            Assert.Equal(2, AudioExporter.RenderAhead(VoiceEngine.Apple));
+            Assert.Equal(ExportSpeed.Faster, AppSettings.Current.ExportSpeedByEngine["apple"]);
+
+            // Export Audio: a picker for the book's engine, showing the choice.
+            var w = new AudioExportWindow(doc);
+            w.Show();
+            Pump();
+            var pickers = w.GetLogicalDescendants().OfType<ComboBox>()
+                .Where(b => b.ItemsSource is IEnumerable<string> items && items.Contains(ExportSpeed.Fastest.Title())).ToList();
+            var picker = Assert.Single(pickers);
+            Assert.Equal(1, picker.SelectedIndex);
+            picker.SelectedIndex = 2;
+            Assert.Equal(ExportSpeed.Fastest, VoiceSetup.SpeedFor(VoiceEngine.Apple));
+            Assert.Equal(3, AudioExporter.RenderAhead(VoiceEngine.Apple));
+            w.Close();
+
+            // Settings › Voices: the section and its note.
+            var settings = SettingsWindow.Show(null, "Voices");
+            Pump();
+            var texts = settings.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
+            Assert.Contains("Export Speed", texts);
+            Assert.Contains(texts, t => t is not null && t.StartsWith("Export Audio can make several lines at once.") && t.EndsWith("Playing in the app always goes one line at a time."));
+            Assert.Contains(settings.GetLogicalDescendants().OfType<ComboBox>(), b => b.ItemsSource is IEnumerable<string> items && items.Contains(ExportSpeed.Slowest.Title()));
+            settings.Close();
+        }
+        finally
+        {
+            AppSettings.UpdateQuietly(s => s.ExportSpeedByEngine.Clear());
+            Restore(folder, encoder);
+        }
     }
 
     [AvaloniaFact]

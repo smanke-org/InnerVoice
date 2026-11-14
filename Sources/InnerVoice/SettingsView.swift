@@ -225,6 +225,15 @@ struct VoicesSettings: View {
         }
         PauseSettingsSection()
         Section {
+            ForEach(ExportSpeed.engines.filter { EngineSwitches.shared.isOn($0) }, id: \.self) { ExportSpeedPicker(engine: $0) }
+        } header: {
+            Text("Export Speed")
+        } footer: {
+            Text("Export Audio can make several lines at once. Slowest makes one at a time and always works; Faster and Fastest save time but might not work correctly with every voice. If an export at a faster speed has trouble with a line, that line is made again on its own. Playing in the app always goes one line at a time.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        Section {
             LabeledContent("Apple Voices") {
                 HStack {
                     if EngineSwitches.shared.isOn(.apple) {

@@ -189,15 +189,88 @@ public class AudioExportTests : IDisposable
         try
         {
             var file = Assert.Single(await AudioExporter.Write([new AudioPart("Scene", segs)], Path.Combine(root, "parallel"), AudioFormat.Wav, resolver, renderer,
-                timing: (_, s, b, e) => timings.Add((s, b, e)), progress: (d, _, _) => progress.Add(d), pauses: pauses));
+                timing: (_, s, b, e) => timings.Add((s, b, e)), progress: (d, _, _) => progress.Add(d), pauses: pauses,
+                linesAtOnce: _ => ExportSpeed.Fastest.LinesAtOnce(VoiceEngine.Apple)));
             Assert.Equal(spoken, timings.Select(t => t.Seg));   // book order, not the order they were made
             for (int i = 1; i < timings.Count; i++)
                 Assert.Equal(timings[i - 1].End + pauses.Seconds(timings[i - 1].Seg.Pause), timings[i].Begin, 3);
             Assert.Equal(Enumerable.Range(0, segs.Count).Append(segs.Count), progress);
-            Assert.InRange(system.MostAtOnce, 2, AudioExporter.RenderAhead(VoiceEngine.Apple));
+            Assert.InRange(system.MostAtOnce, 2, 3);
             Assert.Equal(file.Seconds, SpeechAudio.Seconds(WavFile.Read(file.Path)), 2);
         }
         finally { system.Delay = null; }
+    }
+
+    [Fact]
+    public void ExportSpeedDefaults()
+    {
+        Assert.Equal(ExportSpeed.Fastest, ExportSpeeds.Standard(VoiceEngine.Elevenlabs));
+        foreach (var e in new[] { VoiceEngine.Apple, VoiceEngine.Pocket, VoiceEngine.Orpheus })
+            Assert.Equal(ExportSpeed.Slowest, ExportSpeeds.Standard(e));
+        Assert.Equal([VoiceEngine.Apple, VoiceEngine.Pocket, VoiceEngine.Orpheus, VoiceEngine.Elevenlabs], ExportSpeeds.Engines);
+        Assert.Equal(1, ExportSpeed.Slowest.LinesAtOnce(VoiceEngine.Elevenlabs));
+        Assert.Equal(2, ExportSpeed.Faster.LinesAtOnce(VoiceEngine.Apple));
+        Assert.Equal(3, ExportSpeed.Fastest.LinesAtOnce(VoiceEngine.Apple));
+        Assert.Equal(4, ExportSpeed.Fastest.LinesAtOnce(VoiceEngine.Pocket));
+        Assert.Equal(4, ExportSpeed.Fastest.LinesAtOnce(VoiceEngine.Elevenlabs));
+        Assert.Equal("Slowest but most reliable", ExportSpeed.Slowest.Title());
+        Assert.Equal("Faster", ExportSpeed.Faster.Title());
+        Assert.Equal("Fastest (may not work with every voice)", ExportSpeed.Fastest.Title());
+        // Unless the narrator chooses, the export follows those defaults.
+        Assert.Equal(1, AudioExporter.RenderAhead(VoiceEngine.Apple));
+        Assert.Equal(4, AudioExporter.RenderAhead(VoiceEngine.Elevenlabs));
+        // Mix Engines: the engines its voices use.
+        var p = Book();
+        Assert.Equal([VoiceEngine.Pocket], ExportSpeeds.EnginesFor(p, VoiceEngine.Pocket));
+        Assert.Empty(ExportSpeeds.EnginesFor(p, VoiceEngine.Mixed));
+        p.Characters[0].SetVoice(new CastVoice(new VoiceChoice(VoiceEngine.Elevenlabs, "x"), 1, VoiceSource.User), VoiceEngine.Mixed);
+        p.Settings.SetNarratorVoice(new CastVoice(new VoiceChoice(VoiceEngine.Apple, "m"), 1, VoiceSource.User), VoiceEngine.Mixed);
+        Assert.Equal([VoiceEngine.Apple, VoiceEngine.Elevenlabs], ExportSpeeds.EnginesFor(p, VoiceEngine.Mixed));
+    }
+
+    [Fact]
+    public async Task AFailedLineAtAFasterSpeedIsMadeAgainAlone()
+    {
+        var p = LongScene(8);
+        var index = new BookIndex(p);
+        var resolver = new VoiceResolver(p, index: index);
+        var pauses = PauseSettings.Standard;
+        var segs = SpeechScript.Segments(0, p, index, includeNarration: true, pauses: pauses);
+        var spoken = segs.Where(s => resolver.RequestFor(s) is not null).ToList();
+        var texts = spoken.Select(s => resolver.RequestFor(s)!.Text).ToList();
+        var failing = texts[texts.Count / 2];
+        int failures = 0;
+        system.Delay = _ => TimeSpan.FromMilliseconds(10);
+        system.Fail = r => r.Text == failing && Interlocked.Increment(ref failures) == 1 ? new SpeechException("Broken once.") : null;
+        var stats = new AudioExportStats();
+        var timings = new List<SpeechSegment>();
+        var logged = new List<string>();
+        var log = AudioExporter.Log;
+        AudioExporter.Log = logged.Add;
+        try
+        {
+            var file = Assert.Single(await AudioExporter.Write([new AudioPart("Scene", segs)], Path.Combine(root, "fallback"), AudioFormat.Wav, resolver, renderer,
+                timing: (_, s, _, _) => timings.Add(s), pauses: pauses, linesAtOnce: _ => 3, stats: stats));
+            Assert.Equal(spoken, timings);   // complete and in book order
+            Assert.Equal(1, stats.SlowedLines);
+            Assert.Equal(2, failures);       // failed once, then made on its own
+            Assert.Single(logged);
+            Assert.DoesNotContain(failing, logged[0]);
+            Assert.True(SpeechAudio.Seconds(WavFile.Read(file.Path)) > 1);
+            // At the slowest speed nothing is tried again: the failure stops the export.
+            failures = 0;
+            renderer.ClearCache();
+            await Assert.ThrowsAsync<SpeechException>(() => AudioExporter.Write([new AudioPart("Scene", segs)], Path.Combine(root, "slowest"), AudioFormat.Wav,
+                resolver, renderer, pauses: pauses, linesAtOnce: _ => 1, stats: stats));
+            Assert.Equal(1, failures);
+            Assert.Equal(1, stats.SlowedLines);
+        }
+        finally
+        {
+            system.Delay = null;
+            system.Fail = null;
+            AudioExporter.Log = log;
+        }
     }
 
     [Fact]

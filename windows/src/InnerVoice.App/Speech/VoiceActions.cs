@@ -35,7 +35,17 @@ public static class VoiceSetup
         VoiceHooks.Install();
         LoadSwitches();
         PauseSettings.Current = AppPaths.IsTestRun ? PauseSettings.Standard : AppSettings.Current.Pauses ?? PauseSettings.Standard;
+        ExportSpeeds.Current = SpeedFor;
+        AudioExporter.Log = SpeechLog.Write;
     }
+
+    /// Settings › Voices › Export Speed: kept per PC, read when Export Audio starts its lines
+    /// (nothing on screen redraws for it).
+    public static ExportSpeed SpeedFor(VoiceEngine engine) =>
+        AppSettings.Current.ExportSpeedByEngine.TryGetValue(engine.Raw(), out var speed) && Enum.IsDefined(speed) ? speed : ExportSpeeds.Standard(engine);
+
+    public static void SetExportSpeed(VoiceEngine engine, ExportSpeed speed) =>
+        AppSettings.UpdateQuietly(s => s.ExportSpeedByEngine[engine.Raw()] = speed);
 
     static void LoadSwitches()
     {

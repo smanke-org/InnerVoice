@@ -118,6 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MainActor.assumeIsolated { RecentProjects.shared.refresh() }
         }
         SystemHooks.busyReason = { TaggingController.busyReason }
+        ExportSpeed.registerSync()
         SystemHooks.didFinishLaunching()
         if AgentSocket.shouldListen {
             AgentSocket.listen { await AgentRouter.handle($0) }

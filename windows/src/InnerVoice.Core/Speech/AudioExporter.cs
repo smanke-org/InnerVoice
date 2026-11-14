@@ -89,18 +89,24 @@ public sealed class WavWriter : IDisposable
     }
 }
 
+/// What an export had to do differently, for the window to tell the narrator afterward.
+public sealed class AudioExportStats
+{
+    /// Lines made again on their own after trouble at a faster Export Speed.
+    public int SlowedLines { get; set; }
+}
+
 public static class AudioExporter
 {
     /// The files' sample rate, as the Mac's.
     public const int FileRate = 44_100;
 
-    /// How many lines are made at once for an engine.
-    public static int RenderAhead(VoiceEngine engine) => engine switch
-    {
-        VoiceEngine.Elevenlabs => 4,   // ElevenLabs' Creator plan runs 5 requests at a time; leave one for playback.
-        VoiceEngine.Apple => 3,        // Windows' voices
-        _ => 2,                        // Pocket TTS, Orpheus: one model at a time; the second only overlaps the work around it.
-    };
+    /// How many lines are made at once for an engine: its Export Speed (Settings › Voices).
+    public static int RenderAhead(VoiceEngine engine) =>
+        ExportSpeeds.Current(engine == VoiceEngine.Mixed ? VoiceEngine.Pocket : engine).LinesAtOnce(engine);
+
+    /// Where the export notes trouble (the app's speech log). Never the book's text.
+    public static Action<string>? Log { get; set; }
 
     /// The first wait before trying a busy engine again; it doubles each time (1, 2, 4, 8,
     /// 16 seconds). Tests shorten it.
@@ -151,14 +157,21 @@ public static class AudioExporter
     /// file, in seconds (part index, segment, start, end). Each file is made in a local
     /// temporary folder and moved into place when it's finished (cloud folders take a file
     /// over while it's still being written). Always 1× (Play's speed doesn't apply).
+    /// `linesAtOnce` overrides each engine's Export Speed (tests). If a line fails while
+    /// several are being made at once, it's made again on its own and the rest of the export
+    /// goes one line at a time; `stats` hears how many lines that happened to.
     public static async Task<List<ExportedAudio>> Write(
         IReadOnlyList<AudioPart> parts, string folder, AudioFormat format, VoiceResolver resolver,
         SpeechRenderer? renderer = null, IAudioEncoder? encoder = null, Func<SpeechSegment, string>? stem = null,
         Action<int, SpeechSegment, double, double>? timing = null, Action<int, int, string>? progress = null,
-        PauseSettings? pauses = null, CancellationToken ct = default)
+        PauseSettings? pauses = null, CancellationToken ct = default,
+        Func<VoiceEngine, int>? linesAtOnce = null, AudioExportStats? stats = null)
     {
         renderer ??= SpeechRenderer.Shared;
         pauses ??= PauseSettings.Current;
+        linesAtOnce ??= RenderAhead;
+        // After trouble at a faster speed, the rest of the export (every part) goes one line at a time.
+        bool oneAtATime = false;
         if (format == AudioFormat.M4a && encoder is null)
             throw new InvalidOperationException("M4A needs Windows' audio encoder. Choose WAV instead.");
         int total = parts.Sum(p => p.Segments.Count), done = 0;
@@ -195,6 +208,15 @@ public static class AudioExporter
                     var requests = part.Segments.Select(resolver.RequestFor).ToArray();
                     var ahead = new Dictionary<int, Task<float[]>>();
                     var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    // Stops what was made ahead; its token is let go once those have finished.
+                    void Drop(CancellationTokenSource source)
+                    {
+                        source.Cancel();
+                        var left = ahead.Values.ToArray();
+                        ahead.Clear();
+                        _ = Task.WhenAll(left).ContinueWith(_ => source.Dispose(), TaskScheduler.Default);
+                        foreach (var t in left) _ = t.ContinueWith(x => _ = x.Exception, TaskContinuationOptions.OnlyOnFaulted);
+                    }
                     int next = 0;
                     void Fill(int from)
                     {
@@ -202,12 +224,16 @@ public static class AudioExporter
                         while (next < requests.Length)
                         {
                             if (requests[next] is not { } r) { next++; continue; }
-                            if (ahead.Count >= RenderAhead(r.Choice.Engine)) break;
+                            if (ahead.Count >= (oneAtATime ? 1 : linesAtOnce(r.Choice.Engine))) break;
                             ahead[next] = Start(r);
                             next++;
                         }
                     }
-                    Task<float[]> Start(SpeechRequest r) => Task.Run(() => RenderWithRetry(renderer, r, stop.Token), stop.Token);
+                    Task<float[]> Start(SpeechRequest r)
+                    {
+                        var token = stop.Token;
+                        return Task.Run(() => RenderWithRetry(renderer, r, token), token);
+                    }
                     try
                     {
                         for (int i = 0; i < part.Segments.Count; i++)
@@ -219,7 +245,24 @@ public static class AudioExporter
                             if (requests[i] is { } request)
                             {
                                 if (!ahead.Remove(i, out var task)) task = Start(request);
-                                var rendered = await task.ConfigureAwait(false);
+                                float[] rendered;
+                                try
+                                {
+                                    rendered = await task.ConfigureAwait(false);
+                                }
+                                catch (Exception e) when (e is not OperationCanceledException && !ct.IsCancellationRequested
+                                                          && !oneAtATime && linesAtOnce(request.Choice.Engine) > 1)
+                                {
+                                    // Trouble while several lines were being made: make this one again
+                                    // on its own, and the rest of the export one at a time.
+                                    Drop(stop);
+                                    stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                                    next = i + 1;
+                                    oneAtATime = true;
+                                    if (stats is not null) stats.SlowedLines++;
+                                    Log?.Invoke($"export: a line failed with several at once ({e.GetType().Name}: {e.Message}); going one at a time");
+                                    rendered = await RenderWithRetry(renderer, request, stop.Token).ConfigureAwait(false);
+                                }
                                 Fill(i + 1);
                                 var audio = SpeechAudio.Trimmed(rendered);
                                 var samples = SpeechAudio.Resampled(audio, SpeechAudio.SampleRate, FileRate);
@@ -245,10 +288,7 @@ public static class AudioExporter
                     finally
                     {
                         // Stopped, failed or finished: nothing made ahead is wanted any more.
-                        stop.Cancel();
-                        var left = ahead.Values.ToArray();
-                        _ = Task.WhenAll(left).ContinueWith(_ => stop.Dispose(), TaskScheduler.Default);
-                        foreach (var t in left) _ = t.ContinueWith(x => _ = x.Exception, TaskContinuationOptions.OnlyOnFaulted);
+                        Drop(stop);
                     }
                     foreach (var x in writers.Values) x.Writer.Dispose();
                     // Encode (M4A), then move each into the chosen folder.
