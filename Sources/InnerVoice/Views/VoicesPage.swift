@@ -1172,7 +1172,7 @@ struct CloudPermissionAlert: ViewModifier {
             }
             Button("Cancel", role: .cancel) { workspace.askCloudEngine = nil }
         } message: {
-            Text("\(service.title) makes its voices on \(company)’s servers. Every line of “\(document.project.title)” that a \(service.title) voice speaks is sent there as text; a table read or an exported book sends the whole manuscript. Allow it only if you have the right to share this book. You can stop it at any time on the Voices page.")
+            Text("\(service.title) makes its voices on \(company == "ElevenLabs" ? "ElevenLabs’" : company + "’s") servers. Every line of “\(document.project.title)” that \(service == .elevenlabs ? "an" : "a") \(service.title) voice speaks is sent there as text; a table read or an exported book sends the whole manuscript. Allow it only if you have the right to share this book. You can stop it at any time on the Voices page.")
         }
     }
 }
