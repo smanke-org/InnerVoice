@@ -236,8 +236,18 @@ public static partial class AgentHandlers
     {
         ["id"] = Short(p.Id), ["term"] = p.Term, ["sayItAs"] = p.SayItAs, ["notes"] = p.Notes, ["confirmed"] = p.Confirmed, ["matchCase"] = p.MatchCase,
         ["occurrences"] = p.Occurrences, ["first"] = p.FirstParagraphID is { } id ? d.Index.Reference(id) : null,
-        ["hasSample"] = p.AudioFile is not null, ["dismissed"] = p.Dismissed,
+        ["hasSample"] = p.AudioFile is not null, ["dismissed"] = p.Dismissed, ["source"] = "book",
     };
+
+    /// One of This PC's pronunciations (or the book's copy of another computer's).
+    static JObject ListedJSON(ListedPronunciation e) => new()
+    {
+        ["id"] = Short(e.Id), ["term"] = e.Term, ["sayItAs"] = e.SayItAs, ["notes"] = e.Notes, ["matchCase"] = e.MatchCase,
+    };
+
+    /// A file path the agent gave: it must be absolute (the app's own folder is elsewhere).
+    static string AbsolutePath(string path) =>
+        Path.IsPathFullyQualified(path) || path.StartsWith('/') ? path : throw AgentError.Usage("give an absolute path");
 
     static object? JobJSON(ProjectWindow w)
     {

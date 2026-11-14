@@ -17,7 +17,9 @@ The plan and the decisions behind it are in [../docs/WINDOWS-PLAN.md](../docs/WI
 - `src/InnerVoice.Core` — the book model and logic, ported from the Mac's `Sources/InnerVoiceKit`
   (no UI). `Model/` (project.json rules, archive), `Import/` (Word, PDF, RTF, text, Markdown,
   OpenDocument, Pages, EPUB, HTML), rules, dialogue finder, prompts, llama.cpp binding, voices
-  (`Voices.cs`, `ToneRules.cs`, `SpeechScript.cs`, `SeriesVoices.cs`) and `Speech/` (the voice
+  (`Voices.cs`, `ToneRules.cs`, `SpeechScript.cs`, `SeriesVoices.cs`), pronunciations
+  (`PronunciationLists.cs`: This Book's and This PC's lists; `PronunciationFile.cs`: CSV, text and
+  JSON import/export in the Mac's format) and `Speech/` (the voice
   engine interface, renderer and audio cache, resolver, audio DSP, WAV, audio export;
   `Speech/Neural/`: Pocket TTS, Qwen3-TTS and Orpheus on ONNX Runtime, voice packs, the hardware check).
 - `src/InnerVoice.Agent` — the agent interface shared by the app and the CLI (the Mac's
@@ -28,12 +30,16 @@ The plan and the decisions behind it are in [../docs/WINDOWS-PLAN.md](../docs/WI
 - `src/InnerVoice.App` — the Avalonia app: `Agent/` (what each command does, the pipe server,
   link registration), `Document/` (open, save, undo, edits), `Pages/`, `Windows/`, `Controls/`
   (the manuscript view), `AI/`, `Speech/` (Windows Voices, ElevenLabs, the voice model
-  downloads, cloning on this PC, the player), `Export/`, `Help/`.
+  downloads, cloning on this PC, the player, `ComputerPronunciations.cs`: This PC's pronunciation
+  list), `Export/`, `Help/`.
 - `tools/VoiceBench` — measures Pocket TTS, Qwen3-TTS and Orpheus on a computer (`--hardware`, `--bench`, `--clone`).
 - `tools/PocketCheck` — the provenance check for the Pocket TTS ONNX files (every weight is Kyutai's).
 - `tools/MacFixtures` — writes the Mac-made fixtures (the Mac's Pocket TTS sample and a Qwen3-TTS
   book, which opens as Qwen3-TTS and saves back unchanged) with the Mac's own Kit; `make-stock-voices.sh` copies the
-  Mac's stock voice clips into `Resources/StockVoices` as WAV.
+  Mac's stock voice clips into `Resources/StockVoices` as WAV. `make-pronunciation-fixtures.sh`
+  writes the Mac's pronunciation exports, This Mac's list and a book with its copy into
+  `Fixtures/pronunciations`, and checks the Mac reads the files the Windows tests exported there
+  (`KIT_ROOT=<checkout>` takes the Kit from another checkout).
 - `tests/InnerVoice.Core.Tests` — xUnit tests, including golden checks against fixtures the Mac's
   Kit writes (`Fixtures/`).
 - `tests/InnerVoice.App.Tests` — headless app tests and light/dark snapshots of every page.
@@ -97,8 +103,13 @@ way on both.
 - **Voices:** `lines tone`, tones in `lines list`, each character's `voice` (on the engine in use),
   `casting style` shades, `pronunciations set --match-case` and `export --kind pronunciations`
   work as on the Mac. `open` shows the Manuscript for any page the project type doesn't show
-  (Narration Tools hides Voices and Pronunciations; Produce with AI Voices hides Index and the
-  Teleprompter).
+  (Narration Tools hides Voices; Produce with AI Voices hides Index and the Teleprompter).
+- **Pronunciations:** `pronunciations list` gives each item a `source` (book, computer or
+  bookCopy) and says `usesComputerPronunciations`; `pronunciations share [--replace]` adds the
+  book's entries to This PC's list (words it says differently are kept unless `--replace`);
+  `pronunciations computer list`, `computer import <path> [--replace]` and `computer export <path>`
+  (CSV or JSON by the extension) work on This PC's list. Paths are absolute. The help says "This
+  PC" where the Mac's says "This Mac" (`WindowsWording`).
 - **Test copies:** `APP_STORE=<folder>` makes a test copy: its own pipe (named from the folder),
   its settings and models in that folder, and it only opens or saves projects in the temporary
   folder. `INNERVOICE_DEMO=1` opens the sample book at launch; `projects demo` opens another.

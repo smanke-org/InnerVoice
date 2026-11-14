@@ -158,12 +158,12 @@ public class ExportTests
         var csv = Exporter.Csv(new Exporter.Options { Kind = Exporter.Kind.Pronunciations, Format = Exporter.Format.Csv }, doc);
         Assert.Equal("Term,Say It As,Notes,Confirmed,Count\n\"Tresco\",\"TRESS-koh\",\"like the island\",yes,3\n\"aldous\",\"\",\"ask the author\",no,0", csv);
 
-        // File › Export… offers it to books with AI voices, Narrator Scripts to narration
-        // (a project not asked yet shows both).
+        // File › Export… offers it to every book (Pronunciations is in every book type),
+        // Narrator Scripts to narration (a project not asked yet shows both).
         doc.Change("Project Type", p => p.Settings.Purpose = null);
         Assert.Equal(Exporter.Kinds, Exporter.KindsShown(doc.Project));
         doc.Change("Project Type", p => p.Settings.Purpose = ProjectPurpose.Narration);
-        Assert.DoesNotContain(Exporter.Kind.Pronunciations, Exporter.KindsShown(doc.Project));
+        Assert.Contains(Exporter.Kind.Pronunciations, Exporter.KindsShown(doc.Project));
         Assert.Contains(Exporter.Kind.NarratorScript, Exporter.KindsShown(doc.Project));
         doc.Change("Project Type", p => p.Settings.Purpose = ProjectPurpose.AiVoices);
         Assert.Contains(Exporter.Kind.Pronunciations, Exporter.KindsShown(doc.Project));

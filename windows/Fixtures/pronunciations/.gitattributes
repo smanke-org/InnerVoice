@@ -1,0 +1,2 @@
+# Exact bytes: CRLF line ends and a line break inside a quoted CSV field, as the Mac writes them.
+* -text

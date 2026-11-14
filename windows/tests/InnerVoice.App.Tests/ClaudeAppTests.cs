@@ -141,7 +141,7 @@ public class ClaudeAppTests
     }
 
     [AvaloniaFact]
-    public async Task DeliveryHintsAndSpellingsOnlyInBooksWithVoices()
+    public async Task DeliveryHintsOnlyInBooksWithVoices()
     {
         var fake = new FakeAnthropic();
         ClaudeAccount.TestHttp = new HttpClient(fake);
@@ -150,9 +150,10 @@ public class ClaudeAppTests
         {
             account.Save("sk-ant-test", consent: true);
             var doc = ProjectDocument.Unsaved(TestApp.Sample());
-            // The sample is a Narration Tools book: no voices, so neither is offered.
+            // The sample is a Narration Tools book: no voices, so no delivery hints; spellings
+            // go with the Pronunciations page, which every book has.
             Assert.False(AIRunner.Offered(AIRunner.ClaudeJob.Delivery, doc.Project));
-            Assert.False(AIRunner.Offered(AIRunner.ClaudeJob.Spellings, doc.Project));
+            Assert.True(AIRunner.Offered(AIRunner.ClaudeJob.Spellings, doc.Project));
             Assert.True(AIRunner.Offered(AIRunner.ClaudeJob.Cleanup, doc.Project));
             doc.UpdateSettings("Purpose", st => st.Purpose = ProjectPurpose.AiVoices);
             Assert.True(AIRunner.Offered(AIRunner.ClaudeJob.Delivery, doc.Project));

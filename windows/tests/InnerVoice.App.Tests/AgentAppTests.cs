@@ -254,8 +254,9 @@ public class AgentAppTests
             Assert.Equal(PageKind.Pronunciations, App.Current.FrontProject!.Workspace.Page);
             doc.Change("Project Type", p => p.Settings.Purpose = Core.ProjectPurpose.Narration);
             Assert.Equal("manuscript", Ok("open", "voices")["page"]);
-            Assert.Equal("manuscript", Ok("open", "pronunciations")["page"]);
             Assert.Equal(PageKind.Manuscript, App.Current.FrontProject!.Workspace.Page);
+            // Narration Tools books keep how names are said too.
+            Assert.Equal("pronunciations", Ok("open", "pronunciations")["page"]);
             Assert.Equal("record", Ok("open", "teleprompter")["page"]);
             doc.Change("Project Type", p => p.Settings.Purpose = Core.ProjectPurpose.AiVoices);
             Assert.Equal("manuscript", Ok("open", "teleprompter")["page"]);
@@ -397,6 +398,74 @@ public class AgentAppTests
         {
             AgentServer.Stop();
             CloseProjects();
+        }
+    }
+
+    /// This Book's and This PC's pronunciations from the CLI: list with sources, share, and This
+    /// PC's list listed, imported and exported (the Mac's names and fields).
+    [AvaloniaFact]
+    public void PronunciationListsFromTheCli()
+    {
+        Listen();
+        var computer = ComputerPronunciations.Shared;
+        var kept = computer.List.Entries.Select(e => e.Copy()).ToList();
+        var folder = Path.Combine(Path.GetTempPath(), $"iv-pron-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(folder);
+        try
+        {
+            CloseProjects();
+            computer.Change(l => l.Entries.Clear());
+            Ok("projects", "demo");
+            var doc = App.Current.FrontProject!.Document;
+            doc.Change("Add Term", p => p.Pronunciations.Add(new Pronunciation { Term = "Kerensa", SayItAs = "keh-REN-sa", AddedByUser = true }));
+
+            var shared = Ok("pronunciations", "share");
+            Assert.Equal((1L, 0L, 0L, 0L), ((long)shared["added"]!, (long)shared["replaced"]!, (long)shared["kept"]!, (long)shared["unchanged"]!));
+            doc.Change("Edit Pronunciation", p => p.Pronunciations.First(x => x.Term == "Kerensa").SayItAs = "KER-en-sa");
+            Assert.Equal(1L, Ok("pronunciations", "share")["kept"]);
+            Assert.Equal("keh-REN-sa", computer.List.Entry("Kerensa")!.SayItAs);
+            Assert.Equal(1L, Ok("pronunciations", "share", "--replace")["replaced"]);
+            Assert.Equal("KER-en-sa", computer.List.Entry("Kerensa")!.SayItAs);
+
+            // The book's own word, This PC's, and the book's copy of another computer's.
+            computer.Add("Siobhan", "shi-VAWN");
+            doc.ApplyQuietly(p => p.ComputerPronunciations = [new ListedPronunciation("Aoife", "EE-fa", list: "OTHER")]);
+            string Source(string term)
+            {
+                var list = Ok("pronunciations", "list", "--search", term);
+                Assert.Equal(true, list["usesComputerPronunciations"]);
+                return (string)List(list, "pronunciations").Single()["source"]!;
+            }
+            Assert.Equal("book", Source("Kerensa"));
+            Assert.Equal("computer", Source("Siobhan"));
+            Assert.Equal("bookCopy", Source("Aoife"));
+            var mine = Ok("pronunciations", "computer", "list");
+            Assert.Equal(["Kerensa", "Siobhan"], List(mine, "pronunciations").Select(e => (string)e["term"]!));
+            Assert.Equal(false, List(mine, "pronunciations")[0]["matchCase"]);
+
+            // Export by extension; import keeps This PC's unless --replace.
+            var json = Path.Combine(folder, "Pronunciations.json");
+            Assert.Equal(2L, Ok("pronunciations", "computer", "export", json)["words"]);
+            Assert.Equal(2, PronunciationFile.Read(File.ReadAllBytes(json), json).Count);
+            Assert.Equal("usage", ErrorCode(2, "pronunciations", "computer", "export", Path.Combine(folder, "list.txt")));
+            Assert.Equal("usage", ErrorCode(2, "pronunciations", "computer", "export", "relative.csv"));
+            var csv = Path.Combine(folder, "names.csv");
+            File.WriteAllText(csv, "Word,Say It As\nSiobhan,sha-VAHN\nAoife,EE-fa\n");
+            var imported = Ok("pronunciations", "computer", "import", csv);
+            Assert.Equal((1L, 1L), ((long)imported["added"]!, (long)imported["kept"]!));
+            imported = Ok("pronunciations", "computer", "import", csv, "--replace");
+            Assert.Equal((1L, 1L), ((long)imported["replaced"]!, (long)imported["unchanged"]!));
+            Assert.Equal("sha-VAHN", computer.List.Entry("Siobhan")!.SayItAs);
+            // Now This PC has Aoife: the book's copy no longer fills it in.
+            Assert.Equal("computer", Source("Aoife"));
+            Assert.Equal("usage", ErrorCode(2, "pronunciations", "computer", "import", Path.Combine(folder, "missing.csv")));
+        }
+        finally
+        {
+            computer.Change(l => l.Entries = kept);
+            AgentServer.Stop();
+            CloseProjects();
+            Directory.Delete(folder, true);
         }
     }
 

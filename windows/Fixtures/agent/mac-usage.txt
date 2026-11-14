@@ -244,7 +244,7 @@ Start Build Summaries: the model reads about each character (most lines first) a
 
 Example: innervoice summaries start --character Mara --json
 === pronunciations list
-List the pronunciation terms. Returns `pronunciations` (id, term, sayItAs, notes, confirmed, occurrences, first, hasSample).
+List the pronunciation terms the book uses: its own, then This Mac's for words it has none for. Returns `pronunciations` (id, term, sayItAs, notes, confirmed, occurrences, first, hasSample, source: book, computer or bookCopy).
 
   innervoice pronunciations list [--search <string>] [--all] [--limit <integer>] [--offset <integer>] [--project <string>]
 
@@ -255,6 +255,42 @@ List the pronunciation terms. Returns `pronunciations` (id, term, sayItAs, notes
   --project     the project: its name, path or id from `innervoice projects list` (default: the frontmost)
 
 Example: innervoice pronunciations list --json
+=== pronunciations share
+Add the book's pronunciations to This Mac's list, as Book › Add This Book's Pronunciations to This Mac… does. Words This Mac already says differently are kept unless --replace.
+
+  innervoice pronunciations share [--replace] [--project <string>]
+
+  --replace     use the book's pronunciation where This Mac's list says a word differently
+  --project     the project: its name, path or id from `innervoice projects list` (default: the frontmost)
+
+Example: innervoice pronunciations share --json
+=== pronunciations computer list
+List This Mac's pronunciations, the list every book uses. Returns `pronunciations` (id, term, sayItAs, notes, matchCase).
+
+  innervoice pronunciations computer list [--search <string>] [--limit <integer>] [--offset <integer>]
+
+  --search      only words or sayings containing this
+  --limit       at most this many (default 50)
+  --offset      skip this many, for the next page
+
+Example: innervoice pronunciations computer list --json
+=== pronunciations computer import
+Add words to This Mac's list from a CSV, text (word = how to say it) or InnerVoice JSON file. Words already there are kept unless --replace.
+
+  innervoice pronunciations computer import <path> [--replace]
+
+  path          the file, an absolute path
+  --replace     use the file's pronunciation where This Mac's list says a word differently
+
+Example: innervoice pronunciations computer import /Users/me/names.csv --json
+=== pronunciations computer export
+Save This Mac's list to a file: CSV (opens in Numbers and Excel) or JSON, by the file's extension.
+
+  innervoice pronunciations computer export <path>
+
+  path          where to save, an absolute path ending in .csv or .json
+
+Example: innervoice pronunciations computer export /Users/me/Pronunciations.csv --json
 === pronunciations set
 Say how to pronounce a term, as typing in the Pronunciations list does. Adds the term when it isn't there yet.
 

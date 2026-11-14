@@ -36,6 +36,31 @@ that is marked "Dropped" or "Later" is now in scope:
     `characters list/show`, `open voices`, `casting style` shades from the voices, and `export
     --kind pronunciations`. Any page the project type hides shows the Manuscript instead. The
     `not_available` error code is gone. Pronunciations has its own page since 2026-11-13.
+  - Pronunciations, two lists (2026-11-14, with the Mac): `pronunciations list` items carry a
+    `source` (book, computer, bookCopy) and the answer `usesComputerPronunciations`;
+    `pronunciations share [--replace]`, `pronunciations computer list`, `computer import <path>
+    [--replace]` and `computer export <path>` (.csv or .json) work on This PC's list. The Mac's
+    help fixtures (`Fixtures/agent/`) were extended by hand from the Mac's AgentCommands.swift
+    for these commands; remake them from a Mac build when convenient.
+- **Pronunciations: This Book and This PC** (2026-11-14, ported with the Mac's
+  `PronunciationLists.swift`; done): two lists and only two. This Book's entries
+  (`Project.pronunciations`) are saved in the book; This PC's list (the Mac's This Mac) is one
+  list for every book on the computer, kept in `pronunciations.json` beside `settings.json`
+  (`{listID, entries}`, the listID made once; no sync on Windows; test runs keep it in memory).
+  The book's entry wins for the same word. A book can turn the list off
+  (`settings.computerPronunciationsOff`, written only when true). On save each book stores a
+  copy of the computer entries it used (`computerPronunciations`, each with `list` = the listID
+  it came from), so it sounds the same on another computer; on the computer the copy came from,
+  a word deleted from the list is never brought back. Core: `PronunciationLists.cs`,
+  `PronunciationFile.cs` (CSV `Word,Say It As,Match Case,Notes` with CRLF, InnerVoice JSON,
+  TSV and `word = say` text; same bytes as the Mac's CSV, same tree as its JSON, checked both
+  ways by `tools/MacFixtures/make-pronunciation-fixtures.sh` and `PronunciationListsTests`).
+  App: the Pronunciations page shows both lists with a List tag (This Book, This PC, Another
+  Computer, This PC · Not Used, This PC · Off), All / This Book / This PC, Use This PC's
+  Pronunciations, Add This Book's to This PC… (one Keep This PC's / Use This Book's / Cancel
+  question for conflicts), Change for This Book Only; Settings › Pronunciations edits, imports
+  and exports This PC's list; the Book menu has both commands. Narration Tools books show the
+  Pronunciations page too (`ShowsPronunciations` is always true).
   - Links: the Mac registers `innervoice://` but handles no link yet, so the Windows actions are
     new: the words after `innervoice://` name a command and the query its options, limited to
     the ones that only show things (`open`, `lines reveal`, `projects open`). The Mac should get

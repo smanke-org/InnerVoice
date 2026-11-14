@@ -1,0 +1,40 @@
+{
+  "entries" : [
+    {
+      "id" : "00000000-0000-4000-8000-000000000006",
+      "sayItAs" : "EE-fa",
+      "term" : "aoife"
+    },
+    {
+      "id" : "00000000-0000-4000-8000-000000000001",
+      "notes" : "Cornish",
+      "sayItAs" : "keh-REN-sa",
+      "term" : "Kerensa"
+    },
+    {
+      "id" : "00000000-0000-4000-8000-000000000003",
+      "sayItAs" : "HLAN-vire",
+      "term" : "Llanfair, PG"
+    },
+    {
+      "id" : "00000000-0000-4000-8000-000000000004",
+      "notes" : "Irish\nTwo lines",
+      "sayItAs" : "shi-VAWN",
+      "term" : "Siobhan"
+    },
+    {
+      "id" : "00000000-0000-4000-8000-000000000002",
+      "matchCase" : true,
+      "notes" : "The name, \"not\" the verb",
+      "sayItAs" : "Will",
+      "term" : "Will"
+    },
+    {
+      "id" : "00000000-0000-4000-8000-000000000005",
+      "sayItAs" : "ZO-ee",
+      "term" : "Zoë"
+    }
+  ],
+  "format" : "InnerVoice Pronunciations",
+  "version" : 1
+}

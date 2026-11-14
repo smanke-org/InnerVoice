@@ -68,6 +68,41 @@ public static class Dialogs
         if (owner is not null) await dialog.ShowDialog(owner); else dialog.Show();
     }
 
+    /// A question with several answers, then Cancel, left to right: the index of the answer
+    /// picked, or -1 for Cancel. `defaultIndex` is the answer Enter picks.
+    public static async Task<int> Choose(Visual from, string title, string message, string[] actions, string cancel = "Cancel", int defaultIndex = 0)
+    {
+        var owner = Owner(from);
+        int result = -1;
+        var dialog = new Window
+        {
+            Title = title, Width = 460, SizeToContent = SizeToContent.Height, CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner, ShowInTaskbar = false,
+        };
+        var buttons = Ui.Row(Look.Sm);
+        buttons.HorizontalAlignment = HorizontalAlignment.Right;
+        for (int i = 0; i < actions.Length; i++)
+        {
+            int index = i;
+            var b = new Button { Content = actions[i], IsDefault = i == defaultIndex };
+            if (i == defaultIndex) b.Classes.Add("accent");
+            b.Click += (_, _) => { result = index; dialog.Close(); };
+            buttons.Children.Add(b);
+        }
+        var no = new Button { Content = cancel, IsCancel = true };
+        no.Click += (_, _) => dialog.Close();
+        buttons.Children.Add(no);
+        var content = new StackPanel { Margin = new Thickness(Look.Xl), Spacing = Look.Md };
+        var head = Ui.Headline(title);
+        head.TextWrapping = Avalonia.Media.TextWrapping.Wrap;
+        content.Children.Add(head);
+        if (message.Length > 0) content.Children.Add(Ui.Text(message, 13, wrap: Avalonia.Media.TextWrapping.Wrap));
+        content.Children.Add(buttons);
+        dialog.Content = content;
+        if (owner is not null) await dialog.ShowDialog(owner); else dialog.Show();
+        return result;
+    }
+
     /// Asks for one line of text; null when cancelled.
     public static async Task<string?> Ask(Visual from, string title, string message, string action, string initial = "", string? watermark = null)
     {

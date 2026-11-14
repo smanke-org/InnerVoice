@@ -480,6 +480,15 @@ public sealed class ProjectSettings : ModelObject
     public AppleDate? CloudVoicesAllowed { get; set; }
     /// The voice for each shared role (men, women, other), per engine: role → engine → voice.
     public Dictionary<string, Dictionary<string, CastVoice>>? RoleVoices { get; set; }
+    /// True when the narrator turned off "Use This PC's Pronunciations" for this book; null
+    /// (older files, and the usual case) is on (PronunciationLists.cs).
+    public bool? ComputerPronunciationsOff { get; set; }
+
+    [JsonIgnore] public bool UsesComputerPronunciations
+    {
+        get => ComputerPronunciationsOff != true;
+        set => ComputerPronunciationsOff = value ? null : true;
+    }
 
     [JsonIgnore] public VoiceEngine Engine => VoiceEngine ?? Core.VoiceEngine.Apple;
 
@@ -516,7 +525,8 @@ public sealed class ProjectSettings : ModelObject
         CastingStyle = CastingStyle, NarrationRole = NarrationRole, MinorVoices = MinorVoices, ShadeStrength = ShadeStrength,
         NarratorGender = NarratorGender, CloudTextAllowed = CloudTextAllowed, ReviewCloudAI = ReviewCloudAI,
         VoiceEngine = VoiceEngine, NarratorVoices = CastVoice.CopyMap(NarratorVoices), CloudVoicesAllowed = CloudVoicesAllowed,
-        RoleVoices = RoleVoices?.ToDictionary(kv => kv.Key, kv => CastVoice.CopyMap(kv.Value)!), Extra = CopyExtra(),
+        RoleVoices = RoleVoices?.ToDictionary(kv => kv.Key, kv => CastVoice.CopyMap(kv.Value)!),
+        ComputerPronunciationsOff = ComputerPronunciationsOff, Extra = CopyExtra(),
     };
 }
 
@@ -564,10 +574,14 @@ public sealed class Project : ModelObject
     public List<Line> Lines { get; set; } = [];
     public List<BookCharacter> Characters { get; set; } = [];
     public List<Narrator> Narrators { get; set; } = [];
-    /// How the AI voices say hard words (the Pronunciations page, for books made with AI voices).
-    /// Recorded marks and retakes from older versions and the Mac: kept in the file and carried
+    /// How the voices say hard words: This Book's list on the Pronunciations page (every book
+    /// type). Recorded marks and retakes from older versions and the Mac: kept in the file and carried
     /// through revisions, but nothing in the Windows app shows or edits them.
     public List<Pronunciation> Pronunciations { get; set; } = [];
+    /// The book's copy of the computer's pronunciations it used when last saved, so it sounds the
+    /// same on another computer (PronunciationLists.cs). Not edited directly; null when it never
+    /// used any.
+    public List<ListedPronunciation>? ComputerPronunciations { get; set; }
     public HashSet<Guid> Recorded { get; set; } = [];
     public List<Retake> Retakes { get; set; } = [];
     public ProjectSettings Settings { get; set; } = new();
@@ -607,13 +621,13 @@ public sealed class Project : ModelObject
 
     /// Produce with AI Voices.
     [JsonIgnore] public bool IsAIVoicesProject => Settings.Purpose == ProjectPurpose.AiVoices;
-    /// As on the Mac (`Views/ProjectType.swift`): voices, Play, Export Audio and the
-    /// pronunciation guide belong to every project type but Narration Tools; the narration
-    /// tools (Index, Teleprompter, narrators, Narrator Scripts) to every type but Produce with
-    /// AI Voices. null (not asked yet) shows everything.
+    /// As on the Mac (`Views/ProjectType.swift`): voices, Play and Export Audio belong to every
+    /// project type but Narration Tools; the narration tools (Index, Teleprompter, narrators,
+    /// Narrator Scripts) to every type but Produce with AI Voices; Pronunciations to every type
+    /// (narrators keep how names are said too). null (not asked yet) shows everything.
     [JsonIgnore] public bool ShowsVoices => Settings.Purpose != ProjectPurpose.Narration;
     [JsonIgnore] public bool ShowsNarrationTools => Settings.Purpose != ProjectPurpose.AiVoices;
-    [JsonIgnore] public bool ShowsPronunciations => Settings.Purpose != ProjectPurpose.Narration;
+    [JsonIgnore] public bool ShowsPronunciations => true;
 
     public Project Copy() => new()
     {
@@ -621,6 +635,7 @@ public sealed class Project : ModelObject
         Chapters = Chapters.ConvertAll(c => c.Copy()), Lines = Lines.ConvertAll(l => l.Copy()),
         Characters = Characters.ConvertAll(c => c.Copy()), Narrators = Narrators.ConvertAll(n => n.Copy()),
         Pronunciations = Pronunciations.ConvertAll(p => p.Copy()), Recorded = [.. Recorded],
+        ComputerPronunciations = ComputerPronunciations?.ConvertAll(e => e.Copy()),
         Retakes = Retakes.ConvertAll(r => r.Copy()), Settings = Settings.Copy(), SummariesBuilt = SummariesBuilt,
         LastTagged = LastTagged, Revisions = Revisions.ConvertAll(r => r.Copy()), TonesTagged = TonesTagged, VoicesCast = VoicesCast,
         Extra = CopyExtra(),

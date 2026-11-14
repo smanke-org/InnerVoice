@@ -59,7 +59,7 @@ public static partial class AgentHandlers
                 _ => throw AgentError.Usage($"no page \"{raw}\". Pages: manuscript, cast, voices, index, pronunciations, teleprompter, review, revisions"),
             };
             // As the Mac's window does when a page isn't shown for the project type (Narration
-            // Tools hides Voices and Pronunciations, Produce with AI Voices hides Index and the
+            // Tools hides Voices, Produce with AI Voices hides Index and the
             // Teleprompter): the Manuscript instead.
             var shown = page is { } k && w.VisiblePages().Contains(k) ? k : PageKind.Manuscript;
             w.Workspace.Go(shown);
@@ -533,9 +533,58 @@ public static partial class AgentHandlers
             var (w, d) = Project(args);
             IEnumerable<Pronunciation> terms = d.Project.Pronunciations;
             if (args.Bool("all") != true) terms = terms.Where(t => !t.Dismissed);
+            var search = args.String("search") is { Length: > 0 } s ? s : null;
+            if (search is not null)
+                terms = terms.Where(t => PronunciationText.Contains(t.Term, search) || PronunciationText.Contains(t.SayItAs, search));
+            var items = terms.Select(t => PronunciationJSON(t, d)).ToList();
+            // Then This PC's (or the book's copy of another computer's) for words it has none for.
+            var own = PronunciationLists.BookKeys(d.Project);
+            foreach (var (e, source) in PronunciationLists.ComputerEntries(d.Project, ComputerPronunciations.Shared.List))
+            {
+                if (own.Contains(e.Key)) continue;
+                if (search is not null && !PronunciationText.Contains(e.Term, search) && !PronunciationText.Contains(e.SayItAs, search)) continue;
+                var j = ListedJSON(e);
+                j["source"] = source == PronunciationSource.BookCopy ? "bookCopy" : "computer";
+                items.Add(j);
+            }
+            return Page(items, args, "pronunciations",
+                new JObject { ["project"] = Name(w), ["usesComputerPronunciations"] = d.Project.Settings.UsesComputerPronunciations }, j => j);
+        });
+
+        add("pronunciations share", args =>
+        {
+            var (w, d) = Project(args);
+            var conflict = args.Bool("replace") == true ? PronunciationConflict.Replace : PronunciationConflict.KeepExisting;
+            var r = ComputerPronunciations.Shared.Merge(PronunciationLists.BookEntries(d.Project), conflict);
+            return new JObject { ["project"] = Name(w), ["added"] = r.Added, ["replaced"] = r.Replaced, ["kept"] = r.Kept, ["unchanged"] = r.Unchanged };
+        });
+
+        add("pronunciations computer list", args =>
+        {
+            var list = ComputerPronunciations.Shared.List.Sorted;
             if (args.String("search") is { Length: > 0 } search)
-                terms = terms.Where(t => t.Term.Contains(search, StringComparison.CurrentCultureIgnoreCase) || t.SayItAs.Contains(search, StringComparison.CurrentCultureIgnoreCase));
-            return Page(terms.ToList(), args, "pronunciations", new JObject { ["project"] = Name(w) }, t => PronunciationJSON(t, d));
+                list = list.Where(e => PronunciationText.Contains(e.Term, search) || PronunciationText.Contains(e.SayItAs, search)).ToList();
+            return Page(list, args, "pronunciations", new JObject(), ListedJSON);
+        });
+
+        add("pronunciations computer import", args =>
+        {
+            var path = AbsolutePath(args.Required("path"));
+            var name = Path.GetFileName(path);
+            List<ListedPronunciation> entries;
+            try { entries = PronunciationFile.Read(File.ReadAllBytes(path), name); }
+            catch (Exception e) { throw AgentError.Usage($"can't import {name}: {e.Message}"); }
+            var conflict = args.Bool("replace") == true ? PronunciationConflict.Replace : PronunciationConflict.KeepExisting;
+            var r = ComputerPronunciations.Shared.Merge(entries, conflict);
+            return new JObject { ["file"] = path, ["added"] = r.Added, ["replaced"] = r.Replaced, ["kept"] = r.Kept, ["unchanged"] = r.Unchanged };
+        });
+
+        add("pronunciations computer export", args =>
+        {
+            var path = AbsolutePath(args.Required("path"));
+            if (PronunciationFile.FormatFor(path) is null) throw AgentError.Usage("the file must end in .csv or .json");
+            int words = ComputerPronunciations.Shared.Export(path);
+            return new JObject { ["file"] = path, ["words"] = words };
         });
 
         add("pronunciations set", args =>
