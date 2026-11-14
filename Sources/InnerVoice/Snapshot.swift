@@ -365,6 +365,31 @@ enum Snapshot {
                         capture(w, "\(dir)/elevenlabs-setup-\(mode).png")
                         w.close()
                     }
+                    // Gemini TTS setup, and the new engine rows (Settings › Voices › Engines).
+                    for mode in ["light", "dark"] {
+                        NSApp.appearance = NSAppearance(named: mode == "light" ? .aqua : .darkAqua)
+                        let host = NSHostingController(rootView: GeminiSetupSheet(isPresented: .constant(true)))
+                        let w = NSWindow(contentViewController: host)
+                        w.styleMask = [.titled]
+                        w.makeKeyAndOrderFront(nil)
+                        try? await Task.sleep(for: .seconds(1.5))
+                        capture(w, "\(dir)/gemini-setup-\(mode).png")
+                        w.close()
+                        let rows = NSHostingController(rootView: Form {
+                            Section("Engines") {
+                                VoicePackRow(pack: .qwen)
+                                VoicePackRow(pack: .chatterbox)
+                                ElevenLabsRow()
+                                GeminiRow()
+                            }
+                        }.formStyle(.grouped).frame(width: 620, height: 760))
+                        let rw = NSWindow(contentViewController: rows)
+                        rw.styleMask = [.titled]
+                        rw.makeKeyAndOrderFront(nil)
+                        try? await Task.sleep(for: .seconds(1.2))
+                        capture(rw, "\(dir)/settings-engines-new-\(mode).png")
+                        rw.close()
+                    }
                     // Clone a Voice: filled in, and the voice made.
                     let main = document.project.characters.max(by: { (document.index.stats[$0.id]?.lines ?? 0) < (document.index.stats[$1.id]?.lines ?? 0) })
                     let target: VoiceTarget = main.map { .character($0.id) } ?? .narrator
