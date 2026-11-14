@@ -10,7 +10,7 @@ namespace InnerVoice.App.Windows;
 /// The window's menu bar and keyboard shortcuts.
 public sealed partial class ProjectWindow
 {
-    MenuItem undoItem = null!, redoItem = null!;
+    MenuItem undoItem = null!, redoItem = null!, findItem = null!;
 
     Menu BuildMenu()
     {
@@ -54,12 +54,15 @@ public sealed partial class ProjectWindow
             undoItem.IsEnabled = Document.UndoName is not null;
             redoItem.Header = Document.RedoName is { } r ? $"_Redo {r}" : "_Redo";
             redoItem.IsEnabled = Document.RedoName is not null;
+            findItem.Header = FindsCharacter ? "_Find a Character" : "_Find in Manuscript…";
         };
         edit.Items.Add(undoItem);
         edit.Items.Add(redoItem);
         edit.Items.Add(new Separator());
-        edit.Items.Add(Item("_Find in Manuscript…", "Ctrl+F", FindInManuscript));
-        // Ctrl+Shift+F does the same (the Mac's ⌘F and ⇧⌘F).
+        // Ctrl+F finds a character on the Cast and Voices pages (their own field), and in the manuscript elsewhere.
+        findItem = Item("_Find in Manuscript…", "Ctrl+F", Find);
+        edit.Items.Add(findItem);
+        // Ctrl+Shift+F is always Find in Manuscript (the Mac's ⇧⌘F).
         KeyBindings.Add(new KeyBinding { Gesture = KeyGesture.Parse("Ctrl+Shift+F"), Command = new Relay(FindInManuscript) });
         edit.Items.Add(Item("Find _Next", "F3", () => (Get(PageKind.Manuscript) as ManuscriptPage)?.FindNext(1)));
         edit.Items.Add(Item("Find _Previous", "Shift+F3", () => (Get(PageKind.Manuscript) as ManuscriptPage)?.FindNext(-1)));
@@ -110,6 +113,15 @@ public sealed partial class ProjectWindow
         AddHelpItems(help);
         menu.Items.Add(help);
         return menu;
+    }
+
+    bool FindsCharacter => Workspace.Page is PageKind.Cast || (Workspace.Page is PageKind.Voices && Document.Project.ShowsVoices);
+
+    void Find()
+    {
+        if (!FindsCharacter) { FindInManuscript(); return; }
+        if (Workspace.Page is PageKind.Cast) (Get(PageKind.Cast) as CastPage)?.FocusCharacterFind();
+        else (Get(PageKind.Voices) as VoicesPage)?.FocusCharacterFind();
     }
 
     void FindInManuscript()

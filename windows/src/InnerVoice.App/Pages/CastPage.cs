@@ -19,7 +19,14 @@ public sealed partial class CastPage : Page
     readonly Button back;
     readonly Button narrators;
     readonly StackPanel toolbar;
-    readonly TextBox findBox = new() { PlaceholderText = "Find a character", Width = 200 };
+    // Inline at the top of the card area (as on the Mac). These stay put while the cards refill,
+    // so the find field keeps focus as the narrator types.
+    readonly CharacterFindBox find = new();
+    readonly StackPanel listColumn = new();
+    readonly StackPanel results = new();
+    readonly ScrollViewer listScroll;
+    readonly DockPanel listDock = new();
+    Control? pickedBar;
 
     public CastPage(ProjectDocument document, Workspace workspace) : base(document, workspace)
     {
@@ -27,12 +34,28 @@ public sealed partial class CastPage : Page
         back = Ui.Button("‹ Cast", () => { Workspace.SelectedCharacter = null; Refresh(false); }, tip: "Back to the cast");
         narrators = Ui.Button("Narrators…", () => { if (TopLevel.GetTopLevel(this) is Window w) InnerVoice.App.Windows.NarratorsWindow.Show(w, Document); },
             tip: "Who reads the book, and which characters each narrator reads");
-        findBox.TextChanged += (_, _) => Refresh(false);
-        toolbar = Ui.Row(Look.Sm, back, sortBox, findBox, narrators);
+        // Left-aligned, up to 360 px wide (narrower only when the page is).
+        var findRow = new Grid { ColumnDefinitions = new ColumnDefinitions("1000*,*"), Margin = new Thickness(Look.Xl, Look.Xl, Look.Xl, 0) };
+        findRow.ColumnDefinitions[0].MaxWidth = 360;
+        findRow.Children.Add(find.Box);
+        listColumn.Children.Add(findRow);
+        listColumn.Children.Add(results);
+        listScroll = Ui.Scroll(listColumn);
+        listDock.Children.Add(listScroll);
+        find.Changed += () => Refresh(false);
+        toolbar = Ui.Row(Look.Sm, back, sortBox, narrators);
         Refresh(true);
     }
 
     public override Control Toolbar => toolbar;
+    /// Ctrl+F on the Cast page: back to the cards, cursor in Find a character.
+    public void FocusCharacterFind()
+    {
+        if (Workspace.SelectedCharacter is not null) { Workspace.SelectedCharacter = null; Refresh(false); }
+        if (Document.Project.Characters.Count > 0)
+            Avalonia.Threading.Dispatcher.UIThread.Post(find.FocusField, Avalonia.Threading.DispatcherPriority.Loaded);
+    }
+
     public override string Subtitle => $"{Document.Project.Characters.Count} characters";
 
     public void ShowCharacter(Guid id)
@@ -63,14 +86,12 @@ public sealed partial class CastPage : Page
         {
             back.IsVisible = true;
             sortBox.IsVisible = false;
-            findBox.IsVisible = false;
             Content = Detail(c);
             return;
         }
         Workspace.SelectedCharacter = null;
         back.IsVisible = false;
         sortBox.IsVisible = true;
-        findBox.IsVisible = p.Characters.Count > 0;
         if (p.Characters.Count == 0)
         {
             Content = Ui.Empty("No Characters Yet", "Tag Speakers finds the cast as it reads the book. You can also assign a line to a new character.");
@@ -85,7 +106,15 @@ public sealed partial class CastPage : Page
         };
         var shown = Filtered(ordered).ToList();
         shownOrder = shown.Select(x => x.Id).ToList();
-        var column = new StackPanel();
+        // Only the part under the find field is rebuilt.
+        var column = results;
+        column.Children.Clear();
+        if (find.Query.Length > 0 && shown.Count == 0)
+            column.Children.Add(new TextBlock
+            {
+                Text = find.NoMatchText, Foreground = Look.Brush(Look.SecondaryInk), TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(Look.Xl, Look.Sm, Look.Xl, 0),
+            });
         column.Children.Add(StyleBar());
         if (Duplicates.Pairs(p) is { Count: > 0 } dups) column.Children.Add(DuplicatesNote(dups));
         if (p.Settings.CastingStyle == CastingStyle.Shared)
@@ -99,13 +128,14 @@ public sealed partial class CastPage : Page
             column.Children.Add(wrap);
         }
         var pickedNow = shownOrder.Where(picked.Contains).ToList();
-        if (pickedNow.Count == 0) { Content = Ui.Scroll(column); return; }
-        var dock = new DockPanel();
-        var bar = PickedBar(pickedNow);
-        DockPanel.SetDock(bar, Dock.Bottom);
-        dock.Children.Add(bar);
-        dock.Children.Add(Ui.Scroll(column));
-        Content = dock;
+        if (pickedBar is not null) { listDock.Children.Remove(pickedBar); pickedBar = null; }
+        if (pickedNow.Count > 0)
+        {
+            pickedBar = PickedBar(pickedNow);
+            DockPanel.SetDock(pickedBar, Dock.Bottom);
+            listDock.Children.Insert(0, pickedBar);
+        }
+        Content = listDock;
     }
 
     Control Card(BookCharacter c)

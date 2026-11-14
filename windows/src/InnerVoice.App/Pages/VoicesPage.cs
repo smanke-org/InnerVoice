@@ -32,12 +32,16 @@ public sealed partial class VoicesPage : Page
     readonly StackPanel toolbar;
     readonly Button playButton;
     string voiceQuery = "";
-    readonly TextBox search = new() { PlaceholderText = "Find a character", Margin = new Thickness(Look.Md, Look.Sm) };
+    // Find a character: at the very top of the list column, above Casting Style (as on the Mac).
+    readonly CharacterFindBox find = new();
     readonly StackPanel list = new();
     readonly ContentControl detail = new();
     bool updating;
 
     public VoiceTarget Target { get; private set; } = VoiceTarget.Narrator;
+
+    /// Ctrl+F on the Voices page: the cursor goes to Find a character.
+    public void FocusCharacterFind() => find.FocusField();
 
     public VoicesPage(ProjectDocument document, Workspace workspace) : base(document, workspace)
     {
@@ -54,17 +58,18 @@ public sealed partial class VoicesPage : Page
         playButton = Ui.Button("Play", TogglePlay, tip: "Hear the voice of the one selected");
         var help = Ui.Button("?", () => Help.HelpWindow.Show(Help.HelpTopic.Voices), tip: "Help: Voices & Listening");
         toolbar = Ui.Row(Look.Sm, engineBox, castAgain, series, playButton, help);
-        search.TextChanged += (_, _) => BuildList();
+        find.Changed += BuildList;
         SpeechPlayer.Shared.Changed += UpdatePlayButton;
         VoiceHooks.EnginesUpdated += () => Refresh(false);
         DetachedFromVisualTree += (_, _) => SpeechPlayer.Shared.Changed -= UpdatePlayButton;
 
         var left = new DockPanel { Width = 290 };
+        find.Box.Margin = new Thickness(Look.Md, Look.Md, Look.Md, 0);
+        DockPanel.SetDock(find.Box, Dock.Top);
+        left.Children.Add(find.Box);
         var styleBar = StyleBar();
         DockPanel.SetDock(styleBar, Dock.Top);
         left.Children.Add(styleBar);
-        DockPanel.SetDock(search, Dock.Top);
-        left.Children.Add(search);
         left.Children.Add(Ui.Scroll(list));
         var leftBorder = new Border
         {
@@ -230,7 +235,9 @@ public sealed partial class VoicesPage : Page
         var engine = Engine;
         var resolver = VoiceSetup.Resolver(Document);
         var readers = Readers();
-        var q = search.Text?.Trim() ?? "";
+        var q = find.Query;
+        // Every casting style lists through here, so the search reaches all of them.
+        var cast = Cast().Where(find.Matches).ToList();
 
         list.Children.Add(Header("Narration"));
         var pov = VoiceResolver.PovNarrator(p, engine, EngineSwitches.Shared);
@@ -240,16 +247,17 @@ public sealed partial class VoicesPage : Page
         list.Children.Add(Row("Narrator", null, narratorCaption, false, Target is VoiceTarget.NarratorVoice, () => Show(VoiceTarget.Narrator)));
         foreach (var r in CastingStyleRules.SharedRolesNeeded(p.Settings))
         {
+            // While searching, a shared voice nobody found is read with is left out; the Narrator always stays.
+            if (q.Length > 0 && !cast.Any(c => readers.GetValueOrDefault(c.Id, VoiceRole.Own) == r)) continue;
             var v = p.Settings.RoleVoice(r, engine);
             list.Children.Add(Row(r.VoiceTitle(), null, v is null ? "No voice yet" : VoiceNames.Name(v.Choice), v is null,
                                   Target is VoiceTarget.Role rr && rr.Value == r, () => Show(new VoiceTarget.Role(r))));
         }
 
-        var cast = Cast().Where(c => q.Length == 0 || c.SearchMatches(q, c.Voices?.Values.Select(v => VoiceNames.Name(v.Choice)) ?? [])).ToList();
         if (cast.Count == 0)
         {
             list.Children.Add(Header("Characters"));
-            list.Children.Add(Pad(Ui.Caption(q.Length > 0 ? "No match." : "Characters with lines show here after Tag Speakers.", TextWrapping.Wrap)));
+            list.Children.Add(Pad(Ui.Caption(q.Length > 0 ? find.NoMatchText : "Characters with lines show here after Tag Speakers.", TextWrapping.Wrap)));
             return;
         }
         list.Children.Add(Header("Characters"));

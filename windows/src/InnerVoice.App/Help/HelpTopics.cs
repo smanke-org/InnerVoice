@@ -245,7 +245,7 @@ public static class HelpContent
             T("Open the Voices page (Ctrl+5) to hear and change them. Click a character, then Play any voice: it says one of that character's own lines. Click Use to give them that voice, or Confirm to keep the one casting picked. Speed and pitch make a Windows voice older, younger or more distinct. Cast Voices Again chooses every voice again; voices you chose stay."),
             T("The Narrator is always first. The narrator's voice reads the narration, every line nobody is cast for, and letters, signs and other written text (Settings › Voices can give written text to the character who wrote it). Give a minor character Same as Narrator and their lines are read in the narrator's voice. In a first-person book the narration uses the voice of the character who tells the story, unless you choose a separate narrator voice."),
             T("A red dot means casting wasn't sure, usually because the book hasn't said whether the character is a woman or a man. Choose the gender on the Cast page, or listen and Confirm."),
-            T("Find a character on the Cast page or the Voices page by name, nickname or initials, or by words in their notes, Voice Notes, or the voice they're cast with. Under All Voices, Find a voice looks through each voice's name, accent and description."),
+            T("Find a character with the field at the top of the Cast page (above the cards) or the Voices page (above Casting Style), or press Ctrl+F there: type a name, nickname or initials, or words from their notes, Voice Notes, or the voice they're cast with. It filters every casting style; the Narrator always stays in the Voices list. Esc or the ✕ clears it. Under All Voices, Find a voice looks through each voice's name, accent and description."),
             H("Casting Style"),
             T("Choose how the book shares its voices at the top of the Voices page: One Voice (the narrator's voice plays everyone, a little lower for men and higher for women; adjust each character's Shade, or give them a voice of their own), Narrator + Two Voices (a narrator, one voice for every man, one for every woman, and one for anyone else), or Full Cast (a voice per character). Changing it keeps every voice."),
             T("A shade changes the narrator's pitch and pace for a character. Pocket TTS shifts the short clip it copies the narrator's voice from, so a shaded character still sounds like the narrator; the other engines shift the finished line."),
@@ -310,7 +310,7 @@ public static class HelpContent
             T("Index lists each character's lines by chapter. Click a line to go to it in the manuscript."),
             H("Show in Index"),
             T("Each character has a Show in Index switch. Main characters with a large share of the lines start hidden, so the index stays useful for finding the smaller parts; turn them on whenever you like. Show All and Hide All switch every character at once."),
-            Tip("Ctrl+F (or Ctrl+Shift+F, or Edit › Find in Manuscript…) opens the find bar: it ignores capitals and accents, and straight and curly quotes match each other. Enter or F3 goes to the next match, Shift+Enter or Shift+F3 to the one before, and Esc closes the bar."),
+            Tip("Ctrl+F (or Ctrl+Shift+F, or Edit › Find in Manuscript…) opens the find bar (on the Cast and Voices pages, Ctrl+F finds a character instead): it ignores capitals and accents, and straight and curly quotes match each other. Enter or F3 goes to the next match, Shift+Enter or Shift+F3 to the one before, and Esc closes the bar."),
         ],
 
         HelpTopic.Pronunciations =>
@@ -451,6 +451,7 @@ public static class HelpContent
                 ("Ctrl+C", "Copy"),
                 ("Delete", "Delete Text…"),
                 ("Ctrl+F or Ctrl+Shift+F", "Find in Manuscript"),
+                ("Ctrl+F on Cast or Voices", "Find a character: the field at the top of the page filters by name, notes or voice; Esc clears it"),
                 ("Enter or F3", "Next match"),
                 ("Shift+Enter or Shift+F3", "Previous match"),
                 ("Esc", "Close the find bar"),

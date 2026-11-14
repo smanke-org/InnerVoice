@@ -10,7 +10,7 @@ struct CastPage: View {
     @State private var showNarrators = false
     /// Show only characters whose gender the book doesn't settle (Casting Style).
     @State private var genderFilter = false
-    @State private var query = ""
+    @State private var query = ProcessInfo.processInfo.environment["APP_SNAPSHOT_FIND"] ?? ""
     /// Where a ⇧-click run starts.
     @State private var pickAnchor: UUID?
 
@@ -27,7 +27,6 @@ struct CastPage: View {
         // page: a NavigationStack doesn't show an inset placed around it.
         NavigationStack(path: $workspace.castPath) {
             grid
-                .searchable(text: $query, placement: .toolbar, prompt: "Find a character")
                 .safeAreaInset(edge: .top, spacing: 0) { BackgroundAIBar(document: document, page: .cast) }
                 .safeAreaInset(edge: .bottom, spacing: 0) { pickedBar }
                 .navigationDestination(for: UUID.self) { id in
@@ -64,6 +63,16 @@ struct CastPage: View {
             }
         } else {
             ScrollView {
+                FindField(prompt: "Find a character", text: $query, focusRequest: workspace.listFindRequest)
+                    .frame(maxWidth: 360)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding([.horizontal, .top], Space.margin)
+                if !query.isEmpty, shown.isEmpty {
+                    Text("No characters match “\(query)”.")
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, Space.margin)
+                }
                 if narration {
                     CastingStyleHeader(document: document, genderFilter: $genderFilter, narration: true)
                         .frame(maxWidth: 560, alignment: .leading)

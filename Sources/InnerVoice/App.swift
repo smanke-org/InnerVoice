@@ -185,10 +185,15 @@ struct FileCommands: Commands {
             }
         }
         CommandGroup(after: .textEditing) {
-            Button("Find in Manuscript…") {
+            Button(focus.map { [.cast, .voices].contains($0.workspace.page) } == true ? "Find a Character" : "Find in Manuscript…") {
                 guard let f = focus else { return }
-                f.workspace.page = .manuscript
-                f.workspace.findRequest = UUID()
+                // Cast and Voices search their own lists; anywhere else, the manuscript.
+                if [.cast, .voices].contains(f.workspace.page) {
+                    f.workspace.listFindRequest = UUID()
+                } else {
+                    f.workspace.page = .manuscript
+                    f.workspace.findRequest = UUID()
+                }
             }
             .keyboardShortcut("f", modifiers: [.command, .shift])
             .disabled(focus == nil)

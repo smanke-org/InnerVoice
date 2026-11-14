@@ -261,6 +261,8 @@ final class Workspace {
     var reveal: Reveal?
     /// Edit › Find in Manuscript: a new token opens the Manuscript's find bar.
     var findRequest: UUID?
+    /// Find on the Cast or Voices page: puts the cursor in that page's search field.
+    var listFindRequest: UUID?
     /// A Pronunciations entry to select when that page shows (Fix Pronunciation…).
     var focusPronunciation: UUID?
     /// Character opened in the Cast page.

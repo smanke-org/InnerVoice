@@ -393,6 +393,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
             .heading("Manuscript"),
             .keys([
                 ("⇧⌘F", "Find in Manuscript (⌘F in the manuscript; ⌘G and ⇧⌘G for next and previous)"),
+                ("⌘F on Cast or Voices", "Find a character: the field at the top of the page filters by name, notes or voice; Esc clears it"),
                 ("⌘↓", "Next Line That Needs You"),
                 ("⌘↑", "Previous Line That Needs You"),
                 ("Return", "Assign To for the focused line"),

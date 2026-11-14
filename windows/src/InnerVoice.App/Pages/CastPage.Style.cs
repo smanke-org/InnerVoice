@@ -97,9 +97,7 @@ public sealed partial class CastPage
     /// The cards shown: everyone (or whom the search finds), or with the filter, only genders to review.
     IEnumerable<BookCharacter> Filtered(IEnumerable<BookCharacter> ordered)
     {
-        var q = findBox.Text?.Trim() ?? "";
-        if (q.Length > 0)
-            ordered = ordered.Where(c => c.SearchMatches(q, c.Voices?.Values.Select(v => InnerVoice.Core.Speech.VoiceNames.Name(v.Choice)) ?? [])).ToList();
+        if (find.Query.Length > 0) ordered = ordered.Where(find.Matches).ToList();
         if (!genderFilter) return ordered;
         var review = CastingStyleRules.GenderToReview(Document.Project, Document.Index).ToHashSet();
         return ordered.Where(c => review.Contains(c.Id));
@@ -115,7 +113,8 @@ public sealed partial class CastPage
         foreach (var r in new[] { VoiceRole.Narrator, VoiceRole.Men, VoiceRole.Women, VoiceRole.Other, VoiceRole.Own })
         {
             var members = shown.Where(c => (readers.TryGetValue(c.Id, out var x) ? x : VoiceRole.Own) == r).ToList();
-            if (members.Count == 0 && (r is VoiceRole.Own or VoiceRole.Other || genderFilter)) continue;
+            // While finding a character, a part with nobody found is left out too.
+            if (members.Count == 0 && (r is VoiceRole.Own or VoiceRole.Other || genderFilter || find.Query.Length > 0)) continue;
             var who = p.Narrators.FirstOrDefault(n => n.Role == r) ?? (r == VoiceRole.Other ? CastingStyleRules.NarrationNarrator(p) : null);
             var title = r switch { VoiceRole.Narrator => "Read by the Narrator", VoiceRole.Own => "A Narrator of Their Own", _ => r.Title() };
             var lines = members.Sum(c => Document.Index.StatsFor(c.Id)?.Lines ?? 0);

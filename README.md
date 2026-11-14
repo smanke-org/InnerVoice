@@ -14,8 +14,6 @@ No more highlighter pens, character notes in a separate document, or hunting for
 2. Drag InnerVoice to Applications.
 3. Open InnerVoice and drop a manuscript on the Welcome window.
 
-InnerVoice is in beta.
-
 The first time you click Tag Speakers, InnerVoice suggests an AI model for your Mac's memory and downloads it once (2.5 to 19 GB). Requires macOS 26 or later on Apple silicon. Free.
 
 ## Features

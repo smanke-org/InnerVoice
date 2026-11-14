@@ -9,7 +9,7 @@ struct VoicesPage: View {
     @ObservedObject var document: InnerVoiceDocument
     @Bindable var workspace: Workspace
     @Environment(\.undoManager) private var undoManager
-    @State private var query = ""
+    @State private var query = ProcessInfo.processInfo.environment["APP_SNAPSHOT_FIND"] ?? ""
     /// Show only characters whose gender the book doesn't settle.
     @State private var genderFilter = false
     /// The characters picked, in list order.
@@ -35,6 +35,9 @@ struct VoicesPage: View {
     var body: some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
+                FindField(prompt: "Find a character", text: $query, focusRequest: workspace.listFindRequest)
+                    .padding([.horizontal, .top], Space.md)
+                    .padding(.bottom, Space.xs)
                 CastingStyleHeader(document: document, genderFilter: $genderFilter)
                 Divider()
                 list
@@ -192,7 +195,11 @@ struct VoicesPage: View {
                 CastingStyleMenu(document: document, character: c)
             }
         }
-        .searchable(text: $query, placement: .sidebar, prompt: "Find a character")
+        .overlay {
+            if !query.isEmpty, groups.allSatisfy({ $0.characters.isEmpty }) {
+                Text("No characters match “\(query)”.").foregroundStyle(.secondary).padding(.top, 120)
+            }
+        }
     }
 
     private func row(name: String, color: Color?, voice: CastVoice?, needs: Bool, pov: BookCharacter? = nil,
