@@ -6,6 +6,7 @@
 //   apple       Windows' built-in voices (App/Speech/WindowsVoices.cs; the Mac's Apple voices)
 //   elevenlabs  ElevenLabs, in the cloud (App/Speech/ElevenLabs.cs)
 //   pocket      Pocket TTS through ONNX Runtime (Speech/Neural)
+//   qwen        Qwen3-TTS through ONNX Runtime (Speech/Neural)
 //   orpheus     Orpheus through ONNX Runtime (Speech/Neural)
 //
 // The renderer (SpeechRenderer) owns caching, shading the engine can't do itself, and the
@@ -105,7 +106,7 @@ public interface IVoiceEngine
     VoiceInfo? Info(VoiceChoice choice);
 
     /// The engine changes pitch itself for a shade (the system voices take a pitch setting;
-    /// Pocket TTS shifts the clip it clones from). When false, the renderer shifts the
+    /// Pocket TTS shifts the clip it clones from, Qwen3-TTS its voice sample). When false, the renderer shifts the
     /// finished audio.
     bool ShadesPitch { get; }
 
@@ -125,7 +126,7 @@ public interface IVoiceEngine
 }
 
 /// The engines this computer has, by `VoiceEngine` value. The app registers its engines at
-/// startup (and tests register fakes): Pocket TTS and Orpheus among them.
+/// startup (and tests register fakes): Pocket TTS, Qwen3-TTS and Orpheus among them.
 public static class VoiceEngineRegistry
 {
     static readonly Dictionary<VoiceEngine, IVoiceEngine> engines = [];
@@ -156,6 +157,8 @@ public static class VoiceEngineRegistry
     {
         // Stock voices need no engine to be named.
         VoiceEngine.Pocket when Get(VoiceEngine.Pocket) is null => VoiceInfo.Pocket.FirstOrDefault(v => v.VoiceID == choice.VoiceID),
+        // Qwen3-TTS presets need no engine to be named.
+        VoiceEngine.Qwen when Get(VoiceEngine.Qwen) is null => VoiceInfo.QwenPreset(choice.VoiceID),
         VoiceEngine.Orpheus when Get(VoiceEngine.Orpheus) is null => VoiceInfo.Orpheus.FirstOrDefault(v => v.VoiceID == choice.VoiceID),
         _ => Get(choice.Engine)?.Info(choice),
     };

@@ -22,11 +22,10 @@ public enum VocalSound { Laugh, Chuckle, Sigh, Gasp, Groan, Sniffle, Yawn, Cough
 
 /// A text-to-speech engine. Raw values match the Mac's `VoiceEngine`.
 ///
-/// Projects made before Pocket TTS may say "qwen" (Qwen3-TTS, retired 2026-11-13): it reads as
-/// `Pocket`, and `LegacyVoices.Migrate` turns that engine's voices into Pocket TTS ones when the
-/// project is opened. Any other engine this version doesn't know (a project saved by a newer
-/// InnerVoice) reads as `Mixed`, which names no voices: those characters fall back to the
-/// narrator's voice instead of the whole project failing to open (`VoiceEngineConverter`).
+/// A Mac test build briefly saved "chatterbox" (never released): it reads as `Pocket`. Any other
+/// engine this version doesn't know (a project saved by a newer InnerVoice) reads as `Mixed`,
+/// which names no voices: those characters fall back to the narrator's voice instead of the
+/// whole project failing to open (`VoiceEngineConverter`).
 [JsonConverter(typeof(VoiceEngineConverter))]
 public enum VoiceEngine
 {
@@ -34,6 +33,9 @@ public enum VoiceEngine
     Apple,
     /// Pocket TTS (Kyutai), on this PC: every voice cloned from a short clip.
     Pocket,
+    /// Qwen3-TTS (Alibaba's Qwen team), on this PC: voices designed from a description, ready-made
+    /// presets and clones.
+    Qwen,
     Orpheus,
     /// ElevenLabs, in the cloud: the only engine that sends text off the computer. Off until
     /// the narrator sets it up, and each book must allow it.
@@ -115,21 +117,19 @@ public static class Tones
 public static class VoiceEngines
 {
     /// The engines that make sound (everything but Mixed).
-    public static readonly VoiceEngine[] Engines = [VoiceEngine.Apple, VoiceEngine.Pocket, VoiceEngine.Orpheus, VoiceEngine.Elevenlabs];
+    public static readonly VoiceEngine[] Engines = [VoiceEngine.Apple, VoiceEngine.Pocket, VoiceEngine.Qwen, VoiceEngine.Orpheus, VoiceEngine.Elevenlabs];
 
-    /// The raw value older projects use for Qwen3-TTS, the engine Pocket TTS replaced.
-    public const string RetiredQwen = "qwen";
     /// A Mac test build briefly saved its on-device engine as "chatterbox" (never released): it
     /// reads as Pocket TTS too.
     public const string UnreleasedTestEngine = "chatterbox";
 
-    /// The engine a raw value in a file means: a known one, "qwen" and "chatterbox" as Pocket
-    /// TTS, anything else as Mixed (as the Mac's `VoiceEngine.init(from:)`).
+    /// The engine a raw value in a file means: a known one, "chatterbox" as Pocket TTS, anything
+    /// else as Mixed (as the Mac's `VoiceEngine.init(from:)`).
     public static VoiceEngine FromFile(string? raw) =>
         Parse(raw) is { } e && raw == e.Raw() ? e
-            : raw is RetiredQwen or UnreleasedTestEngine ? VoiceEngine.Pocket : VoiceEngine.Mixed;
+            : raw is UnreleasedTestEngine ? VoiceEngine.Pocket : VoiceEngine.Mixed;
 
-    /// The raw value stored in the file ("apple", "pocket", "orpheus", "elevenlabs", "mixed").
+    /// The raw value stored in the file ("apple", "pocket", "qwen", "orpheus", "elevenlabs", "mixed").
     public static string Raw(this VoiceEngine e) => e.ToString().ToLowerInvariant();
 
     public static VoiceEngine? Parse(string? raw) =>
@@ -143,6 +143,7 @@ public static class VoiceEngines
     {
         VoiceEngine.Apple => "Windows Voices",
         VoiceEngine.Pocket => "Pocket TTS",
+        VoiceEngine.Qwen => "Qwen3-TTS",
         VoiceEngine.Orpheus => "Orpheus",
         VoiceEngine.Elevenlabs => "ElevenLabs",
         _ => "Mix Engines",
@@ -177,10 +178,9 @@ public sealed class VoiceChoice : ModelObject, IEquatable<VoiceChoice>
 {
     public VoiceEngine Engine { get; set; }
     /// Windows/Apple: the voice identifier. Orpheus: the voice name. Pocket TTS: "stock:<name>"
-    /// or "clone:<id>". ElevenLabs: its voice ID.
+    /// or "clone:<id>". Qwen3-TTS: "design", "preset:…" or "clone:…". ElevenLabs: its voice ID.
     public string VoiceID { get; set; } = "";
-    /// A description of the voice ("A woman in her sixties…"). Written by Qwen3-TTS (retired)
-    /// and kept in the file format; no engine speaks from it now.
+    /// Qwen3-TTS designs a voice from this description ("A woman in her sixties…").
     public string? Design { get; set; }
     /// Speed and pitch, 1 is the voice's own.
     public double? Rate { get; set; }
@@ -249,7 +249,7 @@ public sealed record VoiceInfo(
     int Quality = 0,
     /// A short description for the voice list ("Bright, conversational").
     string Detail = "",
-    /// A description of the voice, when there is one (kept in the file format).
+    /// Qwen3-TTS: the description the voice is designed from.
     string? Design = null,
     /// A voice cloned from someone's recordings (ElevenLabs' cloned or professional voices,
     /// and "clone:" voices): listed first and never cast.
@@ -298,6 +298,31 @@ public sealed record VoiceInfo(
         ("leo", "Leo", Gender.Male, VoiceAge.Young, 2, "Steady, relaxed"), ("dan", "Dan", Gender.Male, VoiceAge.Young, 2, "Deep, easygoing"),
         ("zac", "Zac", Gender.Male, VoiceAge.Young, 2, "Energetic, youthful"),
     }.Select(v => new VoiceInfo(VoiceEngine.Pocket, PocketVoice.StockPrefix + v.Id, v.Name, v.G, v.A, "American", v.Quality, v.Detail)).ToList();
+
+    /// Ready-made Qwen3-TTS voices: a description each, for characters the book says little
+    /// about and for choosing from a list. Any other description works too.
+    public static readonly IReadOnlyList<VoiceInfo> QwenPresets = new (string Id, string Name, Gender G, VoiceAge A, string Accent, string Detail, string Design)[]
+    {
+        ("narrator", "Audiobook Narrator", Gender.Neutral, VoiceAge.Adult, "American", "Calm, clear, measured", "A calm, clear audiobook narrator with a warm, measured voice."),
+        ("storyteller", "Warm Storyteller", Gender.Female, VoiceAge.Adult, "American", "Warm, low, unhurried", "A woman in her forties with a warm, low, unhurried voice."),
+        ("bright", "Bright Young Woman", Gender.Female, VoiceAge.Young, "American", "Bright, clear, lively", "A young woman with a bright, clear, lively voice."),
+        ("soft", "Soft-Spoken", Gender.Female, VoiceAge.Young, "American", "Soft, gentle, breathy", "A young woman with a soft, gentle, slightly breathy voice."),
+        ("brisk", "Brisk Professional", Gender.Female, VoiceAge.Adult, "American", "Crisp, confident", "A woman in her thirties with a crisp, confident, brisk voice."),
+        ("dame", "Grand Dame", Gender.Female, VoiceAge.Older, "British", "Rich, commanding, cultured", "An older woman with a rich, commanding, cultured voice, speaking English with a British accent."),
+        ("grandmother", "Kind Grandmother", Gender.Female, VoiceAge.Older, "American", "Soft, kind, a little creaky", "An older woman with a soft, kind, slightly creaky voice."),
+        ("lass", "Highland Lass", Gender.Female, VoiceAge.Young, "Scottish", "Light, musical", "A young woman with a light, musical voice, speaking English with a Scottish accent."),
+        ("girl", "Little Girl", Gender.Female, VoiceAge.Child, "American", "High, eager", "A young girl with a high, eager voice."),
+        ("baritone", "Easy Baritone", Gender.Male, VoiceAge.Adult, "American", "Warm, easygoing", "A man in his forties with a warm, easygoing baritone voice."),
+        ("hero", "Young Hero", Gender.Male, VoiceAge.Young, "American", "Earnest, energetic", "A young man with an earnest, energetic, clear voice."),
+        ("gentleman", "Gentleman", Gender.Male, VoiceAge.Adult, "British", "Refined, measured", "A man with a refined, measured voice, speaking English with a British accent."),
+        ("elder", "Gravelly Elder", Gender.Male, VoiceAge.Older, "American", "Deep, gravelly", "An older man with a deep, gravelly voice."),
+        ("sailor", "Weathered Sailor", Gender.Male, VoiceAge.Older, "Irish", "Rough, booming", "A man in his fifties with a rough, weathered, booming voice, speaking English with an Irish accent."),
+        ("clerk", "Nervous Clerk", Gender.Male, VoiceAge.Young, "American", "Thin, quick, nervous", "A young man with a thin, quick, nervous voice."),
+        ("boy", "Little Boy", Gender.Male, VoiceAge.Child, "American", "High, cheerful", "A young boy with a high, cheerful voice."),
+    }.Select(v => new VoiceInfo(VoiceEngine.Qwen, "preset:" + v.Id, v.Name, v.G, v.A, v.Accent, 2, v.Detail, v.Design)).ToList();
+
+    /// The ready-made Qwen3-TTS voice with this voiceID ("preset:narrator"), if it is one.
+    public static VoiceInfo? QwenPreset(string voiceID) => QwenPresets.FirstOrDefault(v => v.VoiceID == voiceID);
 }
 
 /// What the book says a character should sound like, read from the summary and the lines.
@@ -480,7 +505,7 @@ public static class VoiceCasting
         return s;
     }
 
-    /// A description of the voice the profile asks for: ElevenLabs' Voice Design starts from it.
+    /// A description Qwen3-TTS designs a voice from (ElevenLabs' Voice Design starts from it too).
     public static string Describe(CastingProfile p, string name)
     {
         string who = (p.Gender, p.Age) switch
@@ -498,7 +523,7 @@ public static class VoiceCasting
             _ => "An adult",
         };
         var parts = new List<string> { who };
-        // Something about the voice itself, so the designed voice isn't a thin one.
+        // Something about the voice itself, so Qwen3-TTS doesn't make a thin one.
         string? pitch = p.PitchLean < 0 ? "low-pitched" : p.PitchLean > 0 ? "high-pitched" : null;
         // Timbre words that only repeat the pitch ("low" after "low-pitched") are left out.
         var timbre = p.Timbre.Where(t => pitch is null || !new[] { "low", "deep", "high", "higher", "lower" }.Contains(t.ToLowerInvariant())).ToList();
@@ -591,6 +616,12 @@ public static class VoiceCasting
         string? narratorID = null;
         if (project.Settings.NarratorVoice(engine) is { } n && (n.Source == VoiceSource.User || keeping))
             narratorID = n.Choice.VoiceID;
+        else if (engine == VoiceEngine.Qwen && VoiceInfo.QwenPresets.Count > 0)
+        {
+            var preset = VoiceInfo.QwenPresets[0];
+            narratorID = preset.VoiceID;
+            project.Settings.SetNarratorVoice(new CastVoice(preset.Choice, 0.9, VoiceSource.Auto), engine);
+        }
         else if (voices.OrderByDescending(v => v.Quality).ThenByDescending(v => v.Gender == Gender.Neutral ? 1 : 0).FirstOrDefault() is { } best)
         {
             narratorID = best.VoiceID;
@@ -603,6 +634,16 @@ public static class VoiceCasting
             if (project.Character(id) is not { } c || Kept(c)) continue;
             var p = Profile(c, project, index);
             var chapters = ChaptersOf(id);
+            if (engine == VoiceEngine.Qwen && (p.Timbre.Count > 0 || p.Accent is not null || VoiceDescription.Notes(c) is not null))
+            {
+                // The book or the Voice Notes say how they sound: a voice designed from that
+                // (the notes are added when it speaks, so editing them changes the voice).
+                // Characters nothing describes get a distinct ready-made voice below.
+                var designed = new VoiceChoice(VoiceEngine.Qwen, "design", Describe(p, c.Name));
+                c.SetVoice(new CastVoice(designed, Confidence(p, 0), VoiceSource.Auto), engine);
+                count++;
+                continue;
+            }
             (VoiceInfo Voice, double Score, double Shared)? pick = null;
             foreach (var v in voices)
             {

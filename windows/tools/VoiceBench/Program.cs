@@ -1,8 +1,9 @@
 // VoiceBench: measures the local voices on this computer (README.md beside this file).
 //   VoiceBench --hardware                          what the hardware check sees, and its verdicts
-//   VoiceBench --bench <Voice Models> <out> [pocket|orpheus]
+//   VoiceBench --bench <Voice Models> <out> [pocket|qwen|orpheus]
 //                                                  speaks the stock voices, Tara in every tone and
-//                                                  as a child, a clone, and Orpheus's lines
+//                                                  as a child, a clone, Qwen3-TTS's sample and
+//                                                  lines, and Orpheus's lines
 //   VoiceBench --clone <Voice Models> <recording.wav> <out>
 //                                                  clones a voice from a recording, like Clone a
 //                                                  Voice › On This PC, and speaks with it
@@ -20,7 +21,7 @@ switch (args)
 {
     case ["--hardware"]:
         Console.WriteLine(hw);
-        foreach (var e in new[] { VoiceEngine.Pocket, VoiceEngine.Orpheus })
+        foreach (var e in new[] { VoiceEngine.Pocket, VoiceEngine.Qwen, VoiceEngine.Orpheus })
             Console.WriteLine($"{e.Title()}: {VoiceHardwareCheck.Fit(hw, e)}. {VoiceHardwareCheck.Warning(hw, e) ?? "No warning."}");
         break;
 
@@ -50,7 +51,7 @@ switch (args)
         break;
 
     default:
-        Console.WriteLine("VoiceBench --hardware | --bench <Voice Models folder> <output folder> [pocket|orpheus] | --clone <Voice Models folder> <recording.wav> <output folder> | --probe <model.onnx>… | --check <file.wav>…");
+        Console.WriteLine("VoiceBench --hardware | --bench <Voice Models folder> <output folder> [pocket|qwen|orpheus] | --clone <Voice Models folder> <recording.wav> <output folder> | --probe <model.onnx>… | --check <file.wav>…");
         break;
 }
 
@@ -100,6 +101,27 @@ void Bench(string models, string outDir, string[] only)
             Measure("Pocket TTS lines (Dan)", lines.Select((l, i) => ((i + 1).ToString(), new SpeechRequest { Text = l, Choice = new VoiceChoice(VoiceEngine.Pocket, "stock:dan") })),
                     r => Speak(engine, r), "pocket-line");
             NeuralModels.Shared.Unload(VoiceEngine.Pocket);
+        }
+    }
+    if (only.Length == 0 || only.Contains("qwen"))
+    {
+        if (!VoicePacks.IsInstalled(VoicePacks.Qwen)) Console.WriteLine("Qwen3-TTS isn't in that folder.");
+        else
+        {
+            var engine = new QwenEngine();
+            var load = Stopwatch.StartNew();
+            NeuralModels.Shared.Design();
+            Console.WriteLine($"Qwen3-TTS VoiceDesign loaded in {load.Elapsed.TotalSeconds:0.0} s on {Onnx.LastDevice}");
+            var choice = VoiceInfo.QwenPresets.First(v => v.VoiceID == "preset:baritone").Choice;
+            var sw = Stopwatch.StartNew();
+            var sample = QwenSamples.Sample(choice.Design!, Tone.Neutral, default);
+            Report("Qwen3-TTS voice sample (VoiceDesign 1.7B)", sample.Audio, sw.Elapsed.TotalSeconds, Path.Combine(outDir, "qwen-sample.wav"));
+            load.Restart();
+            NeuralModels.Shared.Clone();
+            Console.WriteLine($"Qwen3-TTS Base loaded in {load.Elapsed.TotalSeconds:0.0} s on {Onnx.LastDevice}");
+            Measure("Qwen3-TTS line (Base 0.6B clone)", lines.Select((l, i) => ((i + 1).ToString(), new SpeechRequest { Text = l, Choice = choice })),
+                    r => engine.Render(r, default).Result, "qwen-line");
+            NeuralModels.Shared.Unload(VoiceEngine.Qwen);
         }
     }
     if (only.Length == 0 || only.Contains("orpheus"))

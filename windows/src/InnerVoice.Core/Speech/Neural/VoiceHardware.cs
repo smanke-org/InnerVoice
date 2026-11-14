@@ -1,5 +1,5 @@
 // The hardware check for the local voices: what this PC has (graphics card, its own video
-// memory, memory, processor), whether Pocket TTS or Orpheus will be usable on it, and the
+// memory, memory, processor), whether Pocket TTS, Qwen3-TTS or Orpheus will be usable on it, and the
 // plain warning shown before a download or the first use on a weak PC.
 
 using System.Runtime.InteropServices;
@@ -44,15 +44,15 @@ public static class VoiceHardwareCheck
 
     /// The voices run on the graphics card here.
     public static bool UsesGpu(VoiceHardware hw) => hw.HasGpu && hw.GpuMemoryGB >= MinimumGpuGB;
-    public const int RecommendedMemoryGB = 16;
+    public const int RecommendedMemoryGB = 16, LargeModelsMemoryGB = 32;
 
     public const string Recommended =
-        "Pocket TTS is small (about 2 GB of memory while it speaks) and runs well on the processor of most PCs with 8 GB of memory. For Orpheus, the best experience: a DirectX 12 graphics card with 8 GB or more of video memory (NVIDIA GeForce RTX 3060 or AMD Radeon RX 6700 XT class and up) and 16 GB of memory.";
+        "Pocket TTS is small (about 2 GB of memory while it speaks) and runs well on the processor of most PCs with 8 GB of memory. For Qwen3-TTS and Orpheus, the best experience: a DirectX 12 graphics card with 8 GB or more of video memory (NVIDIA GeForce RTX 3060 or AMD Radeon RX 6700 XT class and up) and 16 GB of memory, or 32 GB to keep Qwen3-TTS and Orpheus loaded together.";
 
     /// Measured on a Mac's processor (Apple M5 Max, ONNX Runtime CPU, 2026-11-13; see
     /// docs/WINDOWS-PLAN.md): seconds of speech made per second. A PC's processor is likely
     /// slower; these need checking on real PCs, with and without a graphics card.
-    public static double CpuSpeed(VoiceEngine e) => e == VoiceEngine.Orpheus ? 0.13 : 6;
+    public static double CpuSpeed(VoiceEngine e) => e switch { VoiceEngine.Orpheus => 0.13, VoiceEngine.Qwen => 0.9, _ => 6 };
 
     public static VoiceFit Fit(VoiceHardware hw, VoiceEngine engine)
     {

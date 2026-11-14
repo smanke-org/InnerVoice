@@ -169,6 +169,34 @@ public class VoiceTests
         Assert.Equal(Gender.Female, VoiceInfo.Orpheus.First(v => v.VoiceID == edda.Voice(VoiceEngine.Orpheus)?.Choice.VoiceID).Gender);
     }
 
+    [Fact]
+    public void QwenVoicesAreDesignedFromTheSummary()
+    {
+        var p = CastingProject();
+        VoiceCasting.Cast(p, new BookIndex(p), VoiceEngine.Qwen, []);
+        var design = Named(p, "Edda Voss").Voice(VoiceEngine.Qwen)?.Choice.Design ?? "";
+        Assert.Contains("older woman", design);
+        Assert.Contains("Scottish", design);
+        // The narrator gets the "narrator" preset.
+        Assert.Equal("preset:narrator", p.Settings.NarratorVoice(VoiceEngine.Qwen)?.Choice.VoiceID);
+        Assert.NotNull(p.Settings.NarratorVoice(VoiceEngine.Qwen)?.Choice.Design);
+    }
+
+    [Fact]
+    public void QwenGivesThinCharactersDistinctPresets()
+    {
+        var p = Make("“Where is it?” asked Ann.", "“Gone,” said Bea.", "“Look again,” said Ann.", "“I did,” said Bea.");
+        var index = new BookIndex(p);
+        VoiceCasting.Cast(p, index, VoiceEngine.Qwen, VoiceInfo.QwenPresets);
+        var speaking = p.Characters.Where(c => (index.StatsFor(c.Id)?.Lines ?? 0) > 0).ToList();
+        var ids = speaking.Select(c => c.Voice(VoiceEngine.Qwen)?.Choice.VoiceID).OfType<string>().ToList();
+        Assert.Equal(speaking.Count, ids.Count);
+        // The book says nothing about how they sound: ready-made voices, and not the same one.
+        Assert.All(ids, id => Assert.StartsWith("preset:", id));
+        Assert.Equal(ids.Count, ids.Distinct().Count());
+        Assert.All(speaking, c => Assert.False(string.IsNullOrEmpty(c.Voice(VoiceEngine.Qwen)?.Choice.Design)));
+    }
+
     /// The Mac's pocketCastsStockVoicesByGenderAndAge.
     [Fact]
     public void PocketCastsStockVoicesByGenderAndAge()
@@ -207,10 +235,10 @@ public class VoiceTests
     public void MixedCastingUsesRealEngines()
     {
         var p = Make("“Where is it?” asked Ann.", "“Gone,” said Bea.", "“Hush,” said Cal.");
-        VoiceCasting.Cast(p, new BookIndex(p), VoiceEngine.Mixed, [.. VoiceInfo.Pocket, .. VoiceInfo.Orpheus]);
+        VoiceCasting.Cast(p, new BookIndex(p), VoiceEngine.Mixed, [.. VoiceInfo.Pocket, .. VoiceInfo.QwenPresets, .. VoiceInfo.Orpheus]);
         var choices = p.Characters.Select(c => c.Voice(VoiceEngine.Mixed)?.Choice).OfType<VoiceChoice>().ToList();
         Assert.NotEmpty(choices);
-        Assert.All(choices, c => Assert.True(c.Engine is VoiceEngine.Pocket or VoiceEngine.Orpheus));
+        Assert.All(choices, c => Assert.True(c.Engine is VoiceEngine.Pocket or VoiceEngine.Qwen or VoiceEngine.Orpheus));
         Assert.NotEqual(VoiceEngine.Mixed, p.Settings.NarratorVoice(VoiceEngine.Mixed)?.Choice.Engine);
     }
 
@@ -297,7 +325,7 @@ public class VoiceTests
     [Fact]
     public void EngineRawValuesMatchTheMac()
     {
-        Assert.Equal(["apple", "pocket", "orpheus", "elevenlabs", "mixed"], Enum.GetValues<VoiceEngine>().Select(e => e.Raw()));
+        Assert.Equal(["apple", "pocket", "qwen", "orpheus", "elevenlabs", "mixed"], Enum.GetValues<VoiceEngine>().Select(e => e.Raw()));
         Assert.Equal("Windows Voices", VoiceEngine.Apple.Title());
         Assert.True(VoiceEngine.Elevenlabs.IsCloud());
         Assert.Equal(VoiceEngine.Elevenlabs, VoiceEngines.Parse("elevenlabs"));

@@ -12,7 +12,7 @@ public static class ExportSpeeds
     public static readonly ExportSpeed[] All = Enum.GetValues<ExportSpeed>();
 
     /// The engines with a speed of their own (Mix Engines uses each voice's engine).
-    public static readonly VoiceEngine[] Engines = [VoiceEngine.Apple, VoiceEngine.Pocket, VoiceEngine.Orpheus, VoiceEngine.Elevenlabs];
+    public static readonly VoiceEngine[] Engines = [VoiceEngine.Apple, VoiceEngine.Pocket, VoiceEngine.Qwen, VoiceEngine.Orpheus, VoiceEngine.Elevenlabs];
 
     public static string Title(this ExportSpeed s) => s switch
     {
