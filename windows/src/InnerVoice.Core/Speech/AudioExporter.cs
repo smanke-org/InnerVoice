@@ -132,7 +132,13 @@ public static class AudioExporter
     /// the audio cache (ElevenLabs charges about a credit a character), and how many lines
     /// that is. Reads only; nothing is sent.
     public static (long Needed, int Lines) CreditsNeeded(IEnumerable<AudioPart> parts, VoiceResolver resolver, SpeechRenderer? renderer = null,
-                                                             CancellationToken ct = default)
+                                                             CancellationToken ct = default) =>
+        CloudCharacters(parts, resolver, VoiceEngine.Elevenlabs, renderer, ct);
+
+    /// The characters a cloud engine would be sent for the lines not made yet (only the lines
+    /// the book allows it), and how many lines: ElevenLabs' credits, Gemini TTS's cost estimate.
+    public static (long Needed, int Lines) CloudCharacters(IEnumerable<AudioPart> parts, VoiceResolver resolver, VoiceEngine engine,
+                                                           SpeechRenderer? renderer = null, CancellationToken ct = default)
     {
         renderer ??= SpeechRenderer.Shared;
         long needed = 0;
@@ -140,7 +146,7 @@ public static class AudioExporter
         foreach (var seg in parts.SelectMany(p => p.Segments))
         {
             if (++n % 500 == 0) ct.ThrowIfCancellationRequested();
-            if (resolver.RequestFor(seg) is not { } r || r.Choice.Engine != VoiceEngine.Elevenlabs) continue;
+            if (resolver.RequestFor(seg) is not { } r || r.Choice.Engine != engine || !r.CloudAllowed) continue;
             int count = r.Text.Trim().Length;
             if (count == 0 || renderer.IsCached(r)) continue;
             needed += count;

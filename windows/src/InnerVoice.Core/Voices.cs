@@ -22,8 +22,9 @@ public enum VocalSound { Laugh, Chuckle, Sigh, Gasp, Groan, Sniffle, Yawn, Cough
 
 /// A text-to-speech engine. Raw values match the Mac's `VoiceEngine`.
 ///
-/// A Mac test build briefly saved "chatterbox" (never released): it reads as `Pocket`. Any other
-/// engine this version doesn't know (a project saved by a newer InnerVoice) reads as `Mixed`,
+/// "chatterbox" is a real engine since 2026-11-14 (an unreleased Mac test build's books used the
+/// same "stock:"/"clone:" voice IDs, so they speak with it as saved). Any engine this version
+/// doesn't know (a project saved by a newer InnerVoice) reads as `Mixed`,
 /// which names no voices: those characters fall back to the narrator's voice instead of the
 /// whole project failing to open (`VoiceEngineConverter`).
 [JsonConverter(typeof(VoiceEngineConverter))]
@@ -37,9 +38,16 @@ public enum VoiceEngine
     /// presets and clones.
     Qwen,
     Orpheus,
-    /// ElevenLabs, in the cloud: the only engine that sends text off the computer. Off until
-    /// the narrator sets it up, and each book must allow it.
+    /// ElevenLabs, in the cloud: sends text to ElevenLabs. Off until the narrator sets it up,
+    /// and each book must allow it.
     Elevenlabs,
+    /// Google's Gemini TTS, in the cloud: sends text to Google. Off until the narrator sets it
+    /// up, and each book must allow it (`ProjectSettings.GoogleVoicesAllowed`).
+    Gemini,
+    /// Chatterbox (Resemble AI, MIT) on this PC: clones every voice from a short clip. Its
+    /// speech tokenizer and speaker encoder come from Alibaba research, so it's labeled like
+    /// Qwen3-TTS.
+    Chatterbox,
     /// Not an engine itself: each character can have a voice from any engine that's on. A
     /// voice's own `VoiceChoice.Engine` is always a real one.
     Mixed,
@@ -117,26 +125,34 @@ public static class Tones
 public static class VoiceEngines
 {
     /// The engines that make sound (everything but Mixed).
-    public static readonly VoiceEngine[] Engines = [VoiceEngine.Apple, VoiceEngine.Pocket, VoiceEngine.Qwen, VoiceEngine.Orpheus, VoiceEngine.Elevenlabs];
+    public static readonly VoiceEngine[] Engines = [VoiceEngine.Apple, VoiceEngine.Pocket, VoiceEngine.Qwen, VoiceEngine.Chatterbox, VoiceEngine.Orpheus, VoiceEngine.Elevenlabs, VoiceEngine.Gemini];
 
-    /// A Mac test build briefly saved its on-device engine as "chatterbox" (never released): it
-    /// reads as Pocket TTS too.
-    public const string UnreleasedTestEngine = "chatterbox";
-
-    /// The engine a raw value in a file means: a known one, "chatterbox" as Pocket TTS, anything
-    /// else as Mixed (as the Mac's `VoiceEngine.init(from:)`).
+    /// The engine a raw value in a file means: a known one, anything else as Mixed (as the
+    /// Mac's `VoiceEngine.init(from:)`).
     public static VoiceEngine FromFile(string? raw) =>
-        Parse(raw) is { } e && raw == e.Raw() ? e
-            : raw is UnreleasedTestEngine ? VoiceEngine.Pocket : VoiceEngine.Mixed;
+        Parse(raw) is { } e && raw == e.Raw() ? e : VoiceEngine.Mixed;
 
-    /// The raw value stored in the file ("apple", "pocket", "qwen", "orpheus", "elevenlabs", "mixed").
+    /// The raw value stored in the file ("apple", "pocket", "qwen", "chatterbox", "orpheus",
+    /// "elevenlabs", "gemini", "mixed").
     public static string Raw(this VoiceEngine e) => e.ToString().ToLowerInvariant();
 
     public static VoiceEngine? Parse(string? raw) =>
         Enum.TryParse<VoiceEngine>(raw, ignoreCase: true, out var e) && Enum.IsDefined(e) && !int.TryParse(raw, out _) ? e : null;
 
     /// Sends the book's text to a company's servers to make the audio.
-    public static bool IsCloud(this VoiceEngine e) => e == VoiceEngine.Elevenlabs;
+    public static bool IsCloud(this VoiceEngine e) => e is VoiceEngine.Elevenlabs or VoiceEngine.Gemini;
+
+    /// The company a cloud engine sends text to ("ElevenLabs", "Google"); null on this PC.
+    public static string? CloudCompany(this VoiceEngine e) => e switch
+    {
+        VoiceEngine.Elevenlabs => "ElevenLabs",
+        VoiceEngine.Gemini => "Google",
+        _ => null,
+    };
+
+    /// Engines on this PC whose parts were developed in China (Qwen3-TTS; Chatterbox's speech
+    /// tokenizer and speaker encoder). Labeled wherever they're offered.
+    public static bool HasChineseOrigin(this VoiceEngine e) => e is VoiceEngine.Qwen or VoiceEngine.Chatterbox;
 
     /// "Windows Voices" for the system engine (the Mac says "Apple Voices").
     public static string Title(this VoiceEngine e) => e switch
@@ -146,6 +162,8 @@ public static class VoiceEngines
         VoiceEngine.Qwen => "Qwen3-TTS",
         VoiceEngine.Orpheus => "Orpheus",
         VoiceEngine.Elevenlabs => "ElevenLabs",
+        VoiceEngine.Gemini => "Gemini TTS",
+        VoiceEngine.Chatterbox => "Chatterbox",
         _ => "Mix Engines",
     };
 
@@ -298,6 +316,12 @@ public sealed record VoiceInfo(
         ("leo", "Leo", Gender.Male, VoiceAge.Young, 2, "Steady, relaxed"), ("dan", "Dan", Gender.Male, VoiceAge.Young, 2, "Deep, easygoing"),
         ("zac", "Zac", Gender.Male, VoiceAge.Young, 2, "Energetic, youthful"),
     }.Select(v => new VoiceInfo(VoiceEngine.Pocket, PocketVoice.StockPrefix + v.Id, v.Name, v.G, v.A, "American", v.Quality, v.Detail)).ToList();
+
+    /// Chatterbox's voices: its own (`ChatterboxVoice.BuiltInID`), then Pocket TTS's stock
+    /// voices (the same clips). After `Pocket`: static fields start in the order written.
+    public static readonly IReadOnlyList<VoiceInfo> Chatterbox =
+        new[] { new VoiceInfo(VoiceEngine.Chatterbox, ChatterboxVoice.BuiltInID, "Chatterbox", Gender.Female, VoiceAge.Adult, "American", 3, "The engine’s own voice; calm, clear") }
+            .Concat(Pocket.Select(v => v with { Engine = VoiceEngine.Chatterbox })).ToList();
 
     /// Ready-made Qwen3-TTS voices: a description each, for characters the book says little
     /// about and for choosing from a list. Any other description works too.
@@ -659,9 +683,9 @@ public static class VoiceCasting
                 continue;
             }
             var choice = AgeAdjusted(chosen.Voice, p.Age);
-            // The system's voices and Pocket TTS can't take a description: the brief's pitch and
-            // pace nudge them (for Pocket TTS, about a semitone and 6% a step).
-            if ((chosen.Voice.Engine == VoiceEngine.Apple || chosen.Voice.Engine == VoiceEngine.Pocket) && (p.PitchLean != 0 || p.PaceLean != 0))
+            // The system's voices, Pocket TTS and Chatterbox can't take a description: the brief's
+            // pitch and pace nudge them (for the clip engines, about a semitone and 6% a step).
+            if (chosen.Voice.Engine is VoiceEngine.Apple or VoiceEngine.Pocket or VoiceEngine.Chatterbox && (p.PitchLean != 0 || p.PaceLean != 0))
             {
                 choice.Pitch = Math.Round((choice.Pitch ?? 1) * (1 + 0.06 * p.PitchLean) * 100, MidpointRounding.AwayFromZero) / 100;
                 choice.Rate = Math.Round((choice.Rate ?? 1) * (1 + 0.06 * p.PaceLean) * 100, MidpointRounding.AwayFromZero) / 100;
@@ -696,7 +720,7 @@ public static class VoiceCasting
                     case VoiceAge.Older: choice.Pitch = 0.88; choice.Rate = 0.92; break;
                 }
                 break;
-            case VoiceEngine.Pocket when !voice.VoiceID.StartsWith(PocketVoice.ClonePrefix, StringComparison.Ordinal):
+            case VoiceEngine.Pocket or VoiceEngine.Chatterbox when !voice.VoiceID.StartsWith(PocketVoice.ClonePrefix, StringComparison.Ordinal):
                 switch (a)
                 {
                     case VoiceAge.Child: choice.Pitch = 1.19; choice.Rate = 1.05; break;

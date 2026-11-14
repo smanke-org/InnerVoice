@@ -33,7 +33,19 @@ public static class CloudInUse
         return engine == VoiceEngine.Elevenlabs || (engine == VoiceEngine.Mixed && EngineSwitches.Shared.IsOn(VoiceEngine.Elevenlabs));
     }
 
-    public static bool Any(Project project) => Claude() || ElevenLabs(project);
+    /// Whether Gemini TTS is set up (a key and the narrator's yes); the engine sets this.
+    public static Func<bool> GeminiSetUp { get; set; } = () => false;
+
+    /// The book shows voices and allows Google, Gemini TTS is set up, and it's the book's
+    /// engine or one of Mix Engines'.
+    public static bool Gemini(Project project)
+    {
+        if (!project.ShowsVoices || project.Settings.GoogleVoicesAllowed is null || !GeminiSetUp()) return false;
+        var engine = Speech.VoiceSetup.EngineInUse(project);
+        return engine == VoiceEngine.Gemini || (engine == VoiceEngine.Mixed && EngineSwitches.Shared.IsOn(VoiceEngine.Gemini));
+    }
+
+    public static bool Any(Project project) => Claude() || ElevenLabs(project) || Gemini(project);
 }
 
 /// The toolbar's Cloud Usage popover: for each cloud model, tokens in and out (characters for
@@ -62,9 +74,11 @@ public sealed class CloudUsageView : UserControl
     void Build()
     {
         var book = allBooks ? null : project.UsageKey();
-        bool showClaude = CloudInUse.Claude(), showEleven = CloudInUse.ElevenLabs(project);
+        bool showClaude = CloudInUse.Claude(), showEleven = CloudInUse.ElevenLabs(project), showGemini = CloudInUse.Gemini(project);
         var records = CloudUsageStore.Shared.Records
-            .Where(r => (r.Service == CloudService.Claude && showClaude) || (r.Service == CloudService.Elevenlabs && showEleven)).ToList();
+            .Where(r => (r.Service == CloudService.Claude && showClaude) || (r.Service == CloudService.Elevenlabs && showEleven)
+                        || (r.Service == CloudService.Google && showGemini)).ToList();
+        var services = new[] { showClaude ? "Anthropic" : null, showEleven ? "ElevenLabs" : null, showGemini ? "Google" : null }.OfType<string>().ToList();
         var totals = CloudUsage.Totals(records, book);
         var days = CloudUsage.ByDay(records, book);
         var mm = ModelManager.Shared;
@@ -81,7 +95,9 @@ public sealed class CloudUsageView : UserControl
         var head = new DockPanel();
         DockPanel.SetDock(switcher, Dock.Right);
         head.Children.Add(switcher);
-        head.Children.Add(Ui.Row(Look.Sm, Ui.Text("Cloud Usage", 16, FontWeight.SemiBold), SettingsWindow.CloudBadge()));
+        var badge = SettingsWindow.CloudBadge();
+        ToolTip.SetTip(badge, "Uses the internet: text is sent to " + (services.Count <= 2 ? string.Join(" and ", services) : string.Join(", ", services.SkipLast(1)) + " and " + services[^1]));
+        head.Children.Add(Ui.Row(Look.Sm, Ui.Text("Cloud Usage", 16, FontWeight.SemiBold), badge));
         panel.Children.Add(head);
 
         if (showClaude)
@@ -125,6 +141,19 @@ public sealed class CloudUsageView : UserControl
             panel.Children.Add(Section("ElevenLabs", col));
         }
 
+        if (showGemini)
+        {
+            var g = totals.Where(t => t.Service == CloudService.Google).ToList();
+            var col = new StackPanel { Spacing = Look.Sm };
+            if (g.Count == 0) col.Children.Add(Empty("No Gemini voices made yet" + (allBooks ? "." : " for this book.")));
+            foreach (var t in g)
+                col.Children.Add(ModelRow(t.Model, t.Model == Speech.GeminiVoices.Shared.Model.Raw(),
+                    [("Characters", t.Characters), ("Seconds of audio", (long)(t.AudioSeconds ?? 0)), ("Requests", t.Requests)],
+                    t.Cost is { } c ? c.ToString("$#,##0.00##", Us) : "Price not known"));
+            col.Children.Add(Ui.Caption("Costs are worked out from Google’s paid-tier list prices (which double on January 1, 2027) and may differ from your bill. Your spending is in Google AI Studio.", TextWrapping.Wrap));
+            panel.Children.Add(Section("Gemini TTS", col));
+        }
+
         if (days.Count > 0)
         {
             // One color per model, the same in both charts, with one legend above them.
@@ -134,7 +163,7 @@ public sealed class CloudUsageView : UserControl
                 legend.Children.Add(Ui.Row(Look.Xs, Ui.Dot(hex), Ui.Caption(model)).Also(r => r.Margin = new Thickness(0, 0, Look.Md, 0)));
             panel.Children.Add(Ui.Column(Look.Xs, Ui.Headline("By day"), legend));
             panel.Children.Add(Chart(days, colors, r => r.Service == CloudService.Claude ? r.TotalTokens : r.Characters,
-                showClaude && showEleven ? "Tokens (Claude) / characters (ElevenLabs)" : showClaude ? "Tokens" : "Characters", 170, money: false));
+                showClaude && (showEleven || showGemini) ? "Tokens (Claude) / characters (voices)" : showClaude ? "Tokens" : "Characters", 170, money: false));
             var costDays = days.Where(d => d.Cost is not null).ToList();
             if (costDays.Count > 0)
             {
@@ -157,8 +186,12 @@ public sealed class CloudUsageView : UserControl
         });
     }
 
-    static string Label(CloudUsageRecord r) =>
-        r.Service == CloudService.Claude ? ClaudeAccount.Shared.NameOf(r.Model) : $"ElevenLabs ({r.Model})";
+    static string Label(CloudUsageRecord r) => r.Service switch
+    {
+        CloudService.Claude => ClaudeAccount.Shared.NameOf(r.Model),
+        CloudService.Elevenlabs => $"ElevenLabs ({r.Model})",
+        _ => $"Gemini ({r.Model})",
+    };
 
     /// Bars by day, stacked by model, in the app's colors for the light or dark look.
     static Control Chart(List<CloudUsageRecord> days, Dictionary<string, string> colors, Func<CloudUsageRecord, double> value, string axis, double height, bool money)

@@ -58,19 +58,27 @@ public sealed partial class VoicesPage
             yield return Notice($"{p.Settings.Engine.Title()} is turned off in Settings › Voices, so this project uses {engine.Title()}.");
         if (engine != VoiceEngine.Mixed && VoiceEngineRegistry.Get(engine) is { IsReady: false } e)
             yield return Notice(e.NotReadyReason ?? $"{engine.Title()} isn’t downloaded yet, so these voices can’t be heard.");
-        bool cloud = engine.IsCloud() || (engine == VoiceEngine.Mixed && p.Settings.CloudVoicesAllowed is not null && EngineSwitches.Shared.IsOn(VoiceEngine.Elevenlabs));
-        if (cloud)
+        // Each cloud engine's company separately (the Mac's CloudNotice): a reminder and a way
+        // to stop while it's in use, or a way to include it in the mix.
+        foreach (var service in new[] { VoiceEngine.Elevenlabs, VoiceEngine.Gemini })
         {
-            var stop = Ui.Button("Stop Sending This Book", () => Document.SetCloudVoicesAllowed(false),
-                tip: "No more of this book’s text goes to ElevenLabs. Its ElevenLabs voices fall back to the narrator’s.");
-            yield return Ui.Card(Ui.Column(Look.Sm,
-                Ui.Text("This book uses ElevenLabs, in the cloud: every line its voices speak is sent to ElevenLabs as text.", wrap: TextWrapping.Wrap),
-                stop), Look.Md);
-        }
-        else if (engine == VoiceEngine.Mixed && p.Settings.CloudVoicesAllowed is null && EngineSwitches.Shared.IsOn(VoiceEngine.Elevenlabs))
-        {
-            var include = Ui.Button("Include ElevenLabs…", async () => { if (await AskCloud()) Document.SetCloudVoicesAllowed(true); });
-            yield return Ui.Card(Ui.Column(Look.Sm, Ui.Caption("ElevenLabs voices aren’t in the mix: this book hasn’t allowed its text to be sent to ElevenLabs.", TextWrapping.Wrap), include), Look.Md);
+            var company = service.CloudCompany()!;
+            bool allowed = p.Settings.AllowsCloud(service), on = EngineSwitches.Shared.IsOn(service);
+            if (allowed && (engine == service || (engine == VoiceEngine.Mixed && on)))
+            {
+                var stop = Ui.Button("Stop Sending This Book", () => Document.SetCloudAllowed(service, false),
+                    tip: $"No more of this book’s text goes to {company}. Its {service.Title()} voices fall back to the narrator’s.");
+                yield return Ui.Card(Ui.Column(Look.Sm,
+                    Ui.Text(engine == VoiceEngine.Mixed
+                        ? $"{service.Title()} voices are made in the cloud: the lines they speak from this book are sent to {company}."
+                        : $"This book uses {service.Title()}, in the cloud: every line its voices speak is sent to {company} as text.", wrap: TextWrapping.Wrap),
+                    stop), Look.Md);
+            }
+            else if (engine == VoiceEngine.Mixed && on && !allowed)
+            {
+                var include = Ui.Button($"Include {service.Title()}…", async () => { if (await AskCloud(service)) Document.SetCloudAllowed(service, true); });
+                yield return Ui.Card(Ui.Column(Look.Sm, Ui.Caption($"{service.Title()} voices aren’t in the mix: this book hasn’t allowed its text to be sent to {company}.", TextWrapping.Wrap), include), Look.Md);
+            }
         }
     }
 
@@ -213,7 +221,7 @@ public sealed partial class VoicesPage
         column.Children.Add(all);
         if (OpenCloneVoice is not null)
             column.Children.Add(Ui.Row(Look.Sm, Ui.Button("Clone a Voice…", () => OpenCloneVoice(this, c?.Id)),
-                Ui.Caption("Make a voice from a recording of a real person, with their consent: on this PC with Pocket TTS or Qwen3-TTS (free, nothing leaves the PC), or with ElevenLabs. Every project can use it.", TextWrapping.Wrap)));
+                Ui.Caption("Make a voice from a recording of a real person, with their consent: on this PC with Pocket TTS, Qwen3-TTS or Chatterbox (free, nothing leaves the PC), or with ElevenLabs. Every project can use it.", TextWrapping.Wrap)));
     }
 
     static string Describe(VoiceInfo v)
@@ -343,6 +351,7 @@ public sealed partial class VoicesPage
         string note = engine switch
         {
             VoiceEngine.Pocket => "Pocket TTS shifts the clip it copies the narrator’s voice from, so it stays the same voice.",
+            VoiceEngine.Chatterbox => "Chatterbox shifts the clip it copies the narrator’s voice from, so it stays the same voice.",
             VoiceEngine.Qwen => "Qwen3-TTS shifts the narrator’s voice sample, so it stays the same voice.",
             VoiceEngine.Apple => "Windows Voices change pitch and speed.",
             _ => $"{engine.Title()} shifts the finished audio. Keep it within 2 to sound natural.",

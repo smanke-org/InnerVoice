@@ -58,12 +58,17 @@ public sealed class AppSettings
     public DateTime? ElevenLabsConsent { get; set; }
     /// ElevenLabs' voice list as last fetched, so the Voices page shows it without asking.
     public List<CachedVoice>? ElevenLabsVoices { get; set; }
+    /// When the narrator agreed to send book text to Google for Gemini TTS (the key is in
+    /// Credential Manager).
+    public DateTime? GeminiConsent { get; set; }
+    /// The Gemini TTS model ("gemini-3.8-flash-tts" or the Flash-Lite one); null: Flash.
+    public string? GeminiModel { get; set; }
     /// Export Audio's last choices.
     public string? ExportAudioFormat { get; set; }
     public bool ExportAudioSeparateVoices { get; set; }
     public bool ExportAudioRecaps { get; set; }
     /// Export Speed per engine (raw engine name → speed); a missing engine uses its standard
-    /// speed (ElevenLabs Fastest, the others Slowest).
+    /// speed (the cloud engines Fastest, the others Slowest).
     public Dictionary<string, InnerVoice.Core.Speech.ExportSpeed> ExportSpeedByEngine { get; set; } = new();
     public double WindowWidth { get; set; } = 1280;
     public double WindowHeight { get; set; } = 820;

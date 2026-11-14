@@ -12,7 +12,7 @@ public static class ExportSpeeds
     public static readonly ExportSpeed[] All = Enum.GetValues<ExportSpeed>();
 
     /// The engines with a speed of their own (Mix Engines uses each voice's engine).
-    public static readonly VoiceEngine[] Engines = [VoiceEngine.Apple, VoiceEngine.Pocket, VoiceEngine.Qwen, VoiceEngine.Orpheus, VoiceEngine.Elevenlabs];
+    public static readonly VoiceEngine[] Engines = VoiceEngines.Engines;
 
     public static string Title(this ExportSpeed s) => s switch
     {
@@ -29,9 +29,9 @@ public static class ExportSpeeds
         _ => engine == VoiceEngine.Apple ? 3 : 4,
     };
 
-    /// ElevenLabs gains the most (it waits on the network) and works at full speed; the
+    /// The cloud engines gain the most (they wait on the network) and work at full speed; the
     /// voices on this PC gain little, so they start one at a time.
-    public static ExportSpeed Standard(VoiceEngine engine) => engine == VoiceEngine.Elevenlabs ? ExportSpeed.Fastest : ExportSpeed.Slowest;
+    public static ExportSpeed Standard(VoiceEngine engine) => engine.IsCloud() ? ExportSpeed.Fastest : ExportSpeed.Slowest;
 
     /// The narrator's choice for an engine; the app points this at its settings.
     public static Func<VoiceEngine, ExportSpeed> Current { get; set; } = Standard;

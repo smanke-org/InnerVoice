@@ -13,6 +13,11 @@ that is marked "Dropped" or "Later" is now in scope:
   - Windows built-in voices (the stand-in for Apple's voices: instant, no download, the
     fallback on slow PCs).
   - ElevenLabs (cloud, same consent gates as the Mac).
+  - Gemini TTS (cloud, Google; 2026-11-14): the same gates, with its own per-book yes
+    (`googleVoicesAllowed`), as the Mac.
+  - Chatterbox (2026-11-14): onnx-community/chatterbox-ONNX on ONNX Runtime (MIT), labeled
+    "Uses parts developed in China · Runs on this PC". The export has no CFG pass, so the Mac's
+    CFG weight becomes a slight slowdown; tones set the emotion exaggeration as on the Mac.
   - Pocket TTS, Qwen3-TTS and Orpheus, the same models as the Mac, through ONNX Runtime with
     DirectML (any DirectX 12 GPU), with a CPU fallback. Same voices and clone behavior; where a
     model part won't export, say so and match the Mac as closely as possible. (Qwen3-TTS was

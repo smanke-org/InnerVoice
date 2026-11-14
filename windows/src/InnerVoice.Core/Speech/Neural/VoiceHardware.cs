@@ -47,12 +47,12 @@ public static class VoiceHardwareCheck
     public const int RecommendedMemoryGB = 16, LargeModelsMemoryGB = 32;
 
     public const string Recommended =
-        "Pocket TTS is small (about 2 GB of memory while it speaks) and runs well on the processor of most PCs with 8 GB of memory. For Qwen3-TTS and Orpheus, the best experience: a DirectX 12 graphics card with 8 GB or more of video memory (NVIDIA GeForce RTX 3060 or AMD Radeon RX 6700 XT class and up) and 16 GB of memory, or 32 GB to keep Qwen3-TTS and Orpheus loaded together.";
+        "Pocket TTS is small (about 2 GB of memory while it speaks) and runs well on the processor of most PCs with 8 GB of memory. For Qwen3-TTS, Chatterbox and Orpheus, the best experience: a DirectX 12 graphics card with 8 GB or more of video memory (NVIDIA GeForce RTX 3060 or AMD Radeon RX 6700 XT class and up) and 16 GB of memory, or 32 GB to keep two of them loaded together.";
 
     /// Measured on a Mac's processor (Apple M5 Max, ONNX Runtime CPU, 2026-11-13; see
     /// docs/WINDOWS-PLAN.md): seconds of speech made per second. A PC's processor is likely
     /// slower; these need checking on real PCs, with and without a graphics card.
-    public static double CpuSpeed(VoiceEngine e) => e switch { VoiceEngine.Orpheus => 0.13, VoiceEngine.Qwen => 0.9, _ => 6 };
+    public static double CpuSpeed(VoiceEngine e) => e switch { VoiceEngine.Orpheus => 0.13, VoiceEngine.Qwen => 0.9, VoiceEngine.Chatterbox => 0.9, _ => 6 };
 
     public static VoiceFit Fit(VoiceHardware hw, VoiceEngine engine)
     {
@@ -84,7 +84,7 @@ public static class VoiceHardwareCheck
             why = $"The graphics card ({hw.GpuName}) has {hw.GpuMemoryGB:0.#} GB of video memory; {name} works best with {card:0} GB or more. Expect lines to come slower than they play.";
         else
             why = $"This PC has {hw.MemoryGB} GB of memory; {name} works best with {pack?.RecommendedMemoryGB ?? RecommendedMemoryGB} GB or more. Expect lines to come slower than they play.";
-        return why + " Windows Voices are fast on any PC, and ElevenLabs runs in the cloud.";
+        return why + " Windows Voices are fast on any PC, and ElevenLabs and Gemini TTS run in the cloud.";
     }
 
     static string Pace(VoiceEngine e)

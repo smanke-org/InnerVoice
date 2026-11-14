@@ -22,8 +22,8 @@ public sealed class EngineSwitches
         if (VoiceEngines.Engines.All(Off.Contains)) Off.Clear();
     }
 
-    /// This computer has the engine (part B adds the local models). ElevenLabs counts as on
-    /// only once it's set up (a key and the narrator's yes).
+    /// This computer has the engine (part B adds the local models). A cloud engine counts as
+    /// on only once it's set up (a key and the narrator's yes).
     public bool IsOn(VoiceEngine e) =>
         e != VoiceEngine.Mixed && VoiceEngineRegistry.Get(e) is { } engine && !Off.Contains(e) && (!e.IsCloud() || engine.IsReady);
 
@@ -67,25 +67,27 @@ public sealed class EngineSwitches
         var enabled = Enabled;
         var local = enabled.Where(e => !e.IsCloud()).ToList();
         if (chosen == VoiceEngine.Mixed) return enabled.Count > 1 ? VoiceEngine.Mixed : enabled.FirstOrDefault(VoiceEngine.Apple);
-        // A cloud engine only for a book that allows it.
-        if (chosen.IsCloud() && project.Settings.CloudVoicesAllowed is null) return local.FirstOrDefault(VoiceEngine.Apple);
+        // A cloud engine only for a book that allows that company.
+        if (!project.Settings.AllowsCloud(chosen)) return local.FirstOrDefault(VoiceEngine.Apple);
         return IsOn(chosen) ? chosen : local.Count > 0 ? local[0] : enabled.Count > 0 ? enabled[0] : chosen;
     }
 
-    /// An engine's voices. Mixing includes ElevenLabs only for a book that allows it.
+    /// An engine's voices. Mixing includes a cloud engine only for a book that allows that company.
     public IReadOnlyList<VoiceInfo> VoicesFor(VoiceEngine engine, Project? project = null) => engine switch
     {
-        VoiceEngine.Mixed => VoiceEngines.Engines.Where(e => Usable(e) && (!e.IsCloud() || project?.Settings.CloudVoicesAllowed is not null))
+        VoiceEngine.Mixed => VoiceEngines.Engines.Where(e => Usable(e) && (!e.IsCloud() || project?.Settings.AllowsCloud(e) == true))
             .SelectMany(e => VoiceEngineRegistry.VoicesOf(e)).ToList(),
         _ => VoiceEngineRegistry.VoicesOf(engine),
     };
 
-    /// A voice when nothing is cast yet: the best system voice, Orpheus's first, Pocket TTS's own
-    /// voice, or Qwen3-TTS's narrator preset.
+    /// A voice when nothing is cast yet: the best system voice, Orpheus's first, Pocket TTS's or
+    /// Chatterbox's own voice, Qwen3-TTS's narrator preset, or Gemini's first.
     public VoiceChoice? Fallback(VoiceEngine engine) => engine switch
     {
         VoiceEngine.Orpheus => new VoiceChoice(VoiceEngine.Orpheus, "tara"),
         VoiceEngine.Pocket => VoiceInfo.Pocket[0].Choice,
+        VoiceEngine.Chatterbox => VoiceInfo.Chatterbox[0].Choice,
+        VoiceEngine.Gemini => GeminiTTS.Voices[0].Choice,
         VoiceEngine.Qwen => VoiceInfo.QwenPresets[0].Choice,
         VoiceEngine.Mixed => Enabled.Select(Fallback).FirstOrDefault(c => c is not null),
         _ => VoiceEngineRegistry.VoicesOf(engine).FirstOrDefault()?.Choice,
@@ -124,8 +126,8 @@ public sealed class VoiceResolver
     public Dictionary<Guid, Shade> Shades { get; } = [];
     /// An audition of a shade (Voices page): every line of it is said with this shade.
     public Shade? AuditionShade { get; set; }
-    /// The book allows its text to go to ElevenLabs.
-    public bool CloudAllowed { get; }
+    /// The cloud engines this book allows its text to go to (each company has its own yes).
+    public HashSet<VoiceEngine> CloudAllowed { get; }
     public string UsageBook { get; }
     /// Whether letters, signs and other written text are read by the narrator
     /// (Settings › Voices) rather than the character who wrote them.
@@ -140,8 +142,8 @@ public sealed class VoiceResolver
         var e = engine ?? switches.InUse(project);
         Engine = e;
         WrittenByNarrator = writtenByNarrator;
-        // ElevenLabs only for a book that allows its text to be sent.
-        Usable = VoiceEngines.Engines.Where(x => switches.Usable(x) && (!x.IsCloud() || project.Settings.CloudVoicesAllowed is not null)).ToHashSet();
+        // A cloud engine only for a book that allows its text to go to that company.
+        Usable = VoiceEngines.Engines.Where(x => switches.Usable(x) && project.Settings.AllowsCloud(x)).ToHashSet();
         foreach (var c in project.Characters)
             if (c.Voice(e)?.Choice is { } v) Characters[c.Id] = WithNotes(v, c);
         // Casting Style: a character read by the narrator or a shared voice (Men, Women,
@@ -161,7 +163,7 @@ public sealed class VoiceResolver
                     break;
             }
         }
-        CloudAllowed = project.Settings.CloudVoicesAllowed is not null;
+        CloudAllowed = VoiceEngines.Engines.Where(x => x.IsCloud() && project.Settings.AllowsCloud(x)).ToHashSet();
         UsageBook = project.UsageKey();
         // The narrator's voice: one the narrator chose; else, in a first-person book, the POV
         // character's; else the one casting picked; else any voice that works.
@@ -189,7 +191,7 @@ public sealed class VoiceResolver
     {
         if (project.Settings.NarratorVoice(engine)?.Source == VoiceSource.User) return null;
         if (project.Character(project.Settings.PovCharacterID) is not { } pov || pov.Voice(engine)?.Choice is not { } v || v.IsNarrator
-            || !switches.Usable(v.Engine) || (v.Engine.IsCloud() && project.Settings.CloudVoicesAllowed is null)) return null;
+            || !switches.Usable(v.Engine) || !project.Settings.AllowsCloud(v.Engine)) return null;
         return pov;
     }
 
@@ -231,10 +233,10 @@ public sealed class VoiceResolver
         {
             Text = segment.Text, Choice = choice,
             Tone = segment.SpeakerID is null && segment.LineID is null ? Tone.Neutral : segment.Tone,
-            Kind = segment.LineID is null ? null : segment.Kind, Sound = segment.Sound, CloudAllowed = CloudAllowed,
+            Kind = segment.LineID is null ? null : segment.Kind, Sound = segment.Sound, CloudAllowed = CloudAllowed.Contains(choice.Engine),
             Shade = ShadeFor(segment, choice),
-            // Delivery hints are ElevenLabs' audio tags: never sent to another engine.
-            Delivery = choice.Engine == VoiceEngine.Elevenlabs && segment.LineID is not null ? segment.Delivery : null,
+            // Delivery hints go only to the cloud engines that take directions.
+            Delivery = choice.Engine is VoiceEngine.Elevenlabs or VoiceEngine.Gemini && segment.LineID is not null ? segment.Delivery : null,
             UsageBook = UsageBook,
         };
     }

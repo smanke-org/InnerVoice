@@ -14,7 +14,8 @@ using InnerVoice.Core.Speech.Neural;
 namespace InnerVoice.App.Windows;
 
 /// Settings › Voices, the Mac's VoicesSettings: Table Read, Pauses (with Try It), the engines
-/// (Windows Voices, ElevenLabs marked Cloud), Cloned Voices, and the saved audio.
+/// (Windows Voices, the voice models, ElevenLabs and Gemini TTS marked Cloud), Cloned Voices,
+/// and the saved audio.
 public sealed partial class SettingsWindow
 {
     bool refreshedElevenLabsVoices;
@@ -85,12 +86,31 @@ public sealed partial class SettingsWindow
     /// marked wherever it's offered, as the Mac's LocalOriginBadge).
     public const string LocalOriginTag = "Developed in China · Runs on this PC";
     public const string LocalOriginDetail = "Qwen3-TTS comes from Alibaba’s Qwen team in China. It runs entirely on this PC from open model files (Apache 2.0): your book’s text and the audio never leave the PC, and it never connects to Alibaba or any server in China. The only network use is the one-time model download from Hugging Face.";
+    /// Chatterbox's mark: made in the US, with parts from Alibaba research (the Mac's text, "this PC").
+    public const string ChatterboxOriginTag = "Uses parts developed in China · Runs on this PC";
+    public const string ChatterboxOriginDetail = "Chatterbox comes from Resemble AI in the US, but its speech tokenizer and part of its voice decoder come from Alibaba’s CosyVoice research, and its speaker encoder from Alibaba’s 3D-Speaker, both in China. It runs entirely on this PC from open model files (MIT): your book’s text and the audio never leave the PC, and it never connects to Resemble, Alibaba or any server in China. The only network use is the one-time model download from Hugging Face.";
 
-    /// The green "Developed in China · Runs on this PC" mark beside Qwen3-TTS.
-    public static Border LocalOriginBadge()
+    /// The origin mark's words for an engine with parts from China (Qwen3-TTS or Chatterbox).
+    public static string OriginTag(VoiceEngine e) => e == VoiceEngine.Chatterbox ? ChatterboxOriginTag : LocalOriginTag;
+    public static string OriginDetail(VoiceEngine e) => e == VoiceEngine.Chatterbox ? ChatterboxOriginDetail : LocalOriginDetail;
+
+    /// The green "Developed in China · Runs on this PC" mark beside Qwen3-TTS, or "Uses parts
+    /// developed in China · Runs on this PC" beside Chatterbox.
+    public static Border LocalOriginBadge(VoiceEngine engine = VoiceEngine.Qwen)
     {
-        var pill = Ui.Pill(LocalOriginTag, Look.Recorded);
-        ToolTip.SetTip(pill, LocalOriginDetail);
+        var pill = Ui.Pill(OriginTag(engine), Look.Recorded);
+        ToolTip.SetTip(pill, OriginDetail(engine));
+        return pill;
+    }
+
+    /// The orange Cloud mark for a cloud voice engine's company ("ElevenLabs", "Google").
+    public static Border CompanyCloudBadge(string company) => company == "ElevenLabs" ? ElevenLabsCloudBadge() : GoogleCloudBadge();
+
+    /// The orange Cloud mark wherever Gemini TTS appears.
+    public static Border GoogleCloudBadge()
+    {
+        var pill = Ui.Pill("Cloud", Look.Retake);
+        ToolTip.SetTip(pill, "Made on Google’s computers, not this PC");
         return pill;
     }
 
@@ -244,12 +264,13 @@ public sealed partial class SettingsWindow
         wCol.Children.Add(wActions);
         col.Children.Add(Ui.Card(wCol, Look.Md));
 
-        // Pocket TTS, Qwen3-TTS and Orpheus: downloaded voice models that run on this PC.
+        // Pocket TTS, Qwen3-TTS, Chatterbox and Orpheus: downloaded voice models that run on this PC.
         foreach (var pack in VoicePacks.Packs) col.Children.Add(LocalModelCard(pack));
         col.Children.Add(HardwareCard());
 
         col.Children.Add(ElevenLabsRow());
-        col.Children.Add(Note("Windows Voices, Pocket TTS, Qwen3-TTS and Orpheus run on this PC; downloading them is the only time they use the internet. ElevenLabs is different: it makes its voices in the cloud, so the text it speaks is sent to ElevenLabs, and each book asks first. Choose the engine for each project on its Voices page; turn an engine off to hide it there."));
+        col.Children.Add(GeminiRow());
+        col.Children.Add(Note("Windows Voices, Pocket TTS, Qwen3-TTS, Chatterbox and Orpheus run on this PC; downloading them is the only time they use the internet. ElevenLabs and Gemini TTS are different: they make their voices in the cloud, so the text they speak is sent to ElevenLabs or Google, and each book asks first, for each company. Choose the engine for each project on its Voices page; turn an engine off to hide it there."));
         return col;
     }
 
@@ -373,18 +394,19 @@ public sealed partial class SettingsWindow
 
     static readonly Color Caution = Color.Parse("#B8860B");
 
-    /// Pocket TTS, Qwen3-TTS or Orpheus: what it does, Download (with progress, Cancel) or
-    /// Installed (Remove), where it runs, and the hardware warning when this PC is weak for it.
-    /// Qwen3-TTS says where it comes from and that it stays on this PC (LocalOriginBadge).
+    /// Pocket TTS, Qwen3-TTS, Chatterbox or Orpheus: what it does, Download (with progress,
+    /// Cancel) or Installed (Remove), where it runs, and the hardware warning when this PC is
+    /// weak for it. Qwen3-TTS and Chatterbox say where they come from and that they stay on this
+    /// PC (LocalOriginBadge).
     Control LocalModelCard(VoicePack pack)
     {
         var models = VoiceModels.Shared;
         var e = pack.Engine;
         var title = Ui.Row(Look.Sm, Ui.Text(pack.Title, 14, FontWeight.SemiBold),
-                           e == VoiceEngine.Qwen ? LocalOriginBadge() : Ui.Caption("Runs on this PC"));
+                           e.HasChineseOrigin() ? LocalOriginBadge(e) : Ui.Caption("Runs on this PC"));
         if (models.IsInstalled(e)) title.Children.Add(Ui.Pill("Installed", Look.Gray));
         var col = Ui.Column(Look.Xs, title, Ui.Text(pack.Summary, 12, wrap: TextWrapping.Wrap));
-        if (e == VoiceEngine.Qwen) col.Children.Add(Ui.Caption(LocalOriginDetail, TextWrapping.Wrap));
+        if (e.HasChineseOrigin()) col.Children.Add(Ui.Caption(OriginDetail(e), TextWrapping.Wrap));
         var actions = Ui.Row(Look.Sm);
         switch (models.States.GetValueOrDefault(e))
         {
@@ -473,7 +495,7 @@ public sealed partial class SettingsWindow
             row.Children.Add(label);
             col.Children.Add(row);
         }
-        col.Children.Add(Note("Pocket TTS and Qwen3-TTS speak these from a short recording kept on this PC, so every project here can use them. Casting never chooses them on its own."));
+        col.Children.Add(Note("Pocket TTS, Qwen3-TTS and Chatterbox speak these from a short recording kept on this PC, so every project here can use them. Casting never chooses them on its own."));
         return col;
     }
 
