@@ -95,7 +95,8 @@ enum VoiceCatalog {
         switch engine {
         case .apple: appleVoices()
         case .orpheus: VoiceInfo.orpheus
-        case .pocket: LocalClones.shared.voices + VoiceInfo.pocket
+        case .pocket: LocalClones.shared.voices(on: .pocket) + VoiceInfo.pocket
+        case .qwen: LocalClones.shared.voices(on: .qwen) + VoiceInfo.qwenPresets
         case .elevenlabs: ElevenLabs.shared.voices
         // Every engine that's on and ready, best first within each.
         case .mixed: VoiceEngine.engines.filter { EngineSwitches.shared.usable($0) && (!$0.isCloud || project?.settings.cloudVoicesAllowed != nil) }
@@ -111,16 +112,27 @@ enum VoiceCatalog {
                 AVSpeechSynthesisVoice(identifier: choice.voiceID).map(info).map { v in appleByID[choice.voiceID] = v; return v }
             }
         case .orpheus: VoiceInfo.orpheus.first { $0.voiceID == choice.voiceID }
-        case .pocket: LocalClones.shared.clone(for: choice.voiceID).map(LocalClones.info)
+        case .pocket: LocalClones.shared.clone(for: choice.voiceID).map { LocalClones.info($0) }
             ?? VoiceInfo.pocket.first { $0.voiceID == choice.voiceID }
+        case .qwen: LocalClones.shared.clone(for: choice.voiceID).map { LocalClones.info($0, engine: .qwen) }
+            ?? VoiceInfo.qwenPresets.first { $0.voiceID == choice.voiceID }
         case .elevenlabs: ElevenLabs.shared.voices.first { $0.voiceID == choice.voiceID }
         case .mixed: nil
         }
     }
 
-    /// "Ava (Premium)", "Tara".
+    /// "Ava (Premium)", "Tara", or the start of a Qwen3-TTS design.
     static func name(of choice: VoiceChoice) -> String {
         if choice.isNarrator { return "Same as Narrator" }
+        if choice.engine == .qwen, choice.voiceID == QwenVoice.designID {
+            // Short enough for a list row, cut at a word.
+            return choice.design.map { d in
+                guard d.count > 48 else { return d }
+                let head = d.prefix(47)
+                let cut = head.lastIndex(of: " ").map { head[..<$0] } ?? head
+                return cut.trimmingCharacters(in: CharacterSet(charactersIn: " ,;")) + "…"
+            } ?? "Designed voice"
+        }
         guard let v = info(for: choice) else { return "Missing voice" }
         return v.name
     }

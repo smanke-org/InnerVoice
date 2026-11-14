@@ -312,7 +312,7 @@ enum Snapshot {
                     workspace.castPath = []
                 }
                 if let main = document.project.characters.max(by: { (document.index.stats[$0.id]?.lines ?? 0) < (document.index.stats[$1.id]?.lines ?? 0) }) {
-                    for engine in [VoiceEngine.orpheus, .pocket, .mixed] {
+                    for engine in [VoiceEngine.orpheus, .pocket, .qwen, .mixed] {
                         await shot("voices-\(engine.rawValue)", settle: 1.2) {
                             document.setVoiceEngine(engine, undoManager: nil)
                             workspace.voiceTarget = .character(main.id)

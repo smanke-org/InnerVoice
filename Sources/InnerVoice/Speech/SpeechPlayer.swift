@@ -21,7 +21,7 @@ struct VoiceResolver {
         let usable = Set(VoiceEngine.engines.filter { EngineSwitches.shared.usable($0) && (!$0.isCloud || project.settings.cloudVoicesAllowed != nil) })
         var map: [UUID: VoiceChoice] = [:]
         for c in project.characters {
-            if let v = c.voice(for: e)?.choice { map[c.id] = v }
+            if let v = c.voice(for: e)?.choice { map[c.id] = Self.withNotes(v, c) }
         }
         // Casting Style (docs/CASTING-STYLE.md): a character read by the narrator or a shared
         // voice (Men, Women, Other) speaks in that voice; Own Voice keeps their own.
@@ -83,9 +83,16 @@ struct VoiceResolver {
         return shades[id]
     }
 
-    // Voice Notes don't reach the on-device engines when they speak: Pocket TTS, Orpheus and
-    // Apple's voices can't take a description. ElevenLabs gets the notes once, when it
-    // designs a voice from them (Voice Design, on the narrator's click).
+    /// Qwen3-TTS designs a voice from a description: the character's Voice Notes go with it,
+    /// so what the narrator writes there shapes how they sound. (ElevenLabs gets the notes
+    /// once, when it designs a voice for them; Pocket TTS, Orpheus and Apple's voices can't
+    /// take a description.)
+    static func withNotes(_ v: VoiceChoice, _ c: BookCharacter?) -> VoiceChoice {
+        guard let c, v.engine == .qwen, v.voiceID == QwenVoice.designID else { return v }
+        var out = v
+        out.design = VoiceDescription.design(base: v.design ?? "", character: c)
+        return out
+    }
 
     /// The book allows its text to go to ElevenLabs.
     var cloudAllowed = false
@@ -106,14 +113,15 @@ struct VoiceResolver {
         return pov
     }
 
-    /// A voice when nothing is cast yet: the best Apple voice, Orpheus's first, or
-    /// Pocket TTS's own voice.
+    /// A voice when nothing is cast yet: the best Apple voice, Orpheus's first, Pocket TTS's
+    /// own voice, or Qwen3-TTS's narrator.
     @MainActor
     static func fallback(_ engine: VoiceEngine) -> VoiceChoice? {
         switch engine {
         case .apple: VoiceCatalog.appleVoices().first.map { VoiceChoice(engine: .apple, voiceID: $0.voiceID) }
         case .orpheus: VoiceChoice(engine: .orpheus, voiceID: "tara")
         case .pocket: VoiceInfo.pocket.first?.choice
+        case .qwen: VoiceInfo.qwenPresets.first?.choice
         case .elevenlabs: ElevenLabs.shared.voices.first?.choice
         case .mixed: EngineSwitches.shared.enabled.first.flatMap { $0 == .mixed ? nil : fallback($0) }
         }
@@ -354,7 +362,7 @@ enum PlayCommand {
                                 text: SpeechScript.apply([], to: text), tone: sampleTone, kind: .spoken, pauseAfter: 0)
         seg.pause = .none
         var resolver = VoiceResolver(project: project, engine: choice.isNarrator ? nil : choice.engine, index: index)
-        if !choice.isNarrator { resolver.narrator = choice }
+        if !choice.isNarrator { resolver.narrator = VoiceResolver.withNotes(choice, character) }
         resolver.auditionShade = shade
         resolver.characters = [:]
         SpeechPlayer.shared.play([seg], resolver: resolver)

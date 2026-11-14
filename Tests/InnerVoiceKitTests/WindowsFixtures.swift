@@ -563,15 +563,12 @@ import Testing
             .deletingLastPathComponent().appending(path: "windows/Fixtures/sample-windows.innervoice")
         guard let data = try? Data(contentsOf: url) else { return }
         let contents = try ProjectArchive.read(data)
-        var p = try JSONDecoder().decode(Project.self, from: contents.projectJSON)
+        let p = try JSONDecoder().decode(Project.self, from: contents.projectJSON)
         #expect(p.settings.purpose == .aiVoices)
-        // Saved with Qwen3-TTS: the engine reads as Pocket TTS, and opening it (migrate)
-        // turns the designed voice, the narrator's own choice, into a stock voice that stays his.
-        #expect(p.settings.voiceEngine == .pocket)
-        #expect(p.characters.contains { $0.voices?[VoiceEngine.retiredQwen]?.choice.voiceID == "design" })
-        #expect(LegacyVoices.migrate(&p))
-        #expect(!LegacyVoices.needsMigration(p))
-        #expect(p.characters.contains { $0.voice(for: .pocket).map { $0.source == .user && $0.choice.voiceID.hasPrefix("stock:") } == true })
+        // Saved with Qwen3-TTS: it opens with its Qwen3-TTS voices (the designed voice, the
+        // narrator's own choice, included).
+        #expect(p.settings.voiceEngine == .qwen)
+        #expect(p.characters.contains { $0.voice(for: .qwen).map { $0.choice.voiceID == "design" && $0.source == .user } == true })
         #expect(p.lines.contains { $0.tone != nil })
         #expect(contents.audio["Kerensa.m4a"] != nil)
         print("WindowsFixtures: read the Windows-saved project, \(p.lines.count) lines")

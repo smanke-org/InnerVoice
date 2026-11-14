@@ -1,6 +1,6 @@
 # Casting Style: feature plan
 
-Status: phases 0–6 done (2026-11-12). 2026-11-13: Pocket TTS (Kyutai) replaced Qwen3-TTS (no Chinese models; Chatterbox was tried first and dropped, as parts of it come from Alibaba research); Qwen notes below are kept as the record of the shading spike. Left: phase 7 (suggestions), ElevenLabs remixing (needs the narrator's OK), the Characters step count. (Texture words for Qwen3-TTS are dropped: Pocket TTS can't take words.) Mockups: the "InnerVoice Casting Style Mockups"
+Status: phases 0–6 done (2026-11-12). 2026-11-14: Qwen3-TTS is back beside Pocket TTS at the user's request (labeled in Settings as developed in China and running on the Mac); it shades by shifting its voice sample, as tested below. 2026-11-13: Pocket TTS (Kyutai) replaced Qwen3-TTS (no Chinese models; Chatterbox was tried first and dropped, as parts of it come from Alibaba research); Qwen notes below are kept as the record of the shading spike. Left: phase 7 (suggestions), ElevenLabs remixing (needs the narrator's OK), the Characters step count. (Texture words for Qwen3-TTS are dropped: Pocket TTS can't take words.) Mockups: the "InnerVoice Casting Style Mockups"
 design canvas (private Claude artifact; ask for the link).
 
 ## 1. What and why

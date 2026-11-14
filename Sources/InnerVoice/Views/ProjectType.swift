@@ -113,8 +113,8 @@ struct ProjectTypeSheet: View {
                     engineRow(e)
                 }
             }
-            if !EngineSwitches.shared.usable(.pocket) || !EngineSwitches.shared.usable(.orpheus) {
-                Text("More natural voices (Pocket TTS, Orpheus) are a free download in Settings › Voices, and you can switch engines later on the Voices page.")
+            if !EngineSwitches.shared.usable(.pocket) || !EngineSwitches.shared.usable(.qwen) || !EngineSwitches.shared.usable(.orpheus) {
+                Text("More natural voices (Pocket TTS, Qwen3-TTS, Orpheus) are a free download in Settings › Voices, and you can switch engines later on the Voices page.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -141,7 +141,7 @@ struct ProjectTypeSheet: View {
         }
         .onAppear {
             // Start from the best engine that's ready on this Mac.
-            engine = [.pocket, .orpheus, .apple].first { EngineSwitches.shared.usable($0) } ?? .apple
+            engine = [.qwen, .pocket, .orpheus, .apple].first { EngineSwitches.shared.usable($0) } ?? .apple
         }
     }
 
@@ -155,6 +155,7 @@ struct ProjectTypeSheet: View {
                     HStack(spacing: Space.xs) {
                         Text(e.title)
                         if e.isCloud { CloudBadge() }
+                        if e == .qwen { LocalOriginBadge() }
                     }
                     Text(engineDetail(e)).font(.caption).foregroundStyle(.secondary)
                 }
@@ -171,6 +172,7 @@ struct ProjectTypeSheet: View {
         switch e {
         case .apple: "Built in, ready now. Can’t act out tones."
         case .pocket: "Nine stock voices and the voices you clone, acted in each tone."
+        case .qwen: "A voice designed for each character from the book and your Voice Notes, acted in each tone."
         case .orpheus: "Eight natural voices that act out the words."
         case .elevenlabs: "Natural voices in the cloud, from your ElevenLabs account."
         case .mixed: ""

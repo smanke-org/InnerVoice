@@ -54,7 +54,7 @@ struct RenderedAudio: @unchecked Sendable {
     let buffer: AVAudioPCMBuffer
 }
 
-/// Audio in the app's one format: 24 kHz mono, 32-bit float (what Pocket TTS and Orpheus
+/// Audio in the app's one format: 24 kHz mono, 32-bit float (what Pocket TTS, Qwen3-TTS and Orpheus
 /// make; Apple's voices are converted).
 nonisolated enum SpeechAudio {
     static let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 24_000, channels: 1, interleaved: false)!
@@ -136,17 +136,21 @@ final class SpeechRenderer {
         var buffer: AVAudioPCMBuffer
         switch request.choice.engine {
         case .apple: buffer = try await AppleSpeech.render(request)
-        case .pocket, .orpheus: buffer = try await ModelSpeech.render(request)
+        case .pocket, .qwen, .orpheus: buffer = try await ModelSpeech.render(request)
         case .elevenlabs: buffer = try await ElevenLabs.shared.render(request, allowed: request.cloudAllowed)
         case .mixed: throw SpeechError.engineUnavailable(.mixed)
         }
         // Shading: Apple's voices did it themselves; Pocket TTS shifted the clip it cloned
         // from, so only the pace is left (with casting's speed for the character's age, and
         // the tone's: Pocket TTS has no speed of its own); Orpheus and ElevenLabs shift the
-        // finished audio.
+        // finished audio. Qwen3-TTS shifted its voice sample too, so its pace and the
+        // narrator's speed are left (it acts the tone itself).
         let s = request.shade ?? Shade()
         switch request.choice.engine {
         case .apple, .mixed: break
+        case .qwen:
+            let rate = (request.choice.rate ?? 1) * ShadeAudio.paceRate(s.pace)
+            if abs(rate - 1) > 0.001 { buffer = try ShadeAudio.apply(buffer, semitones: 0, rate: rate) }
         case .pocket:
             let tone = PocketDelivery.for(request.tone, narration: request.kind == nil)
             let rate = (request.choice.rate ?? 1) * ShadeAudio.paceRate(s.pace) * tone.rate

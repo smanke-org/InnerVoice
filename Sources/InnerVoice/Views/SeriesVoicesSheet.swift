@@ -145,7 +145,7 @@ struct SeriesVoicesSheet: View {
             .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
             VStack(alignment: .leading, spacing: Space.xs) {
                 Toggle("Bring their Voice Notes too", isOn: $options.voiceNotes)
-                Text("Casting and ElevenLabs' Voice Design read what they say about how a character sounds. It replaces the Voice Notes of the matched characters here.")
+                Text("Qwen3-TTS designs voices from Voice Notes, so this keeps those voices the same; casting and ElevenLabs' Voice Design read them too. It replaces the Voice Notes of the matched characters here.")
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     .padding(.leading, 20)
                 if let e = old.settings.voiceEngine, e != document.project.settings.engine {

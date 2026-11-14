@@ -35,7 +35,7 @@ enum ExportSpeed: String, CaseIterable, Identifiable {
         UserDefaults.standard.string(forKey: key(engine)).flatMap(ExportSpeed.init(rawValue:)) ?? standard(engine)
     }
 
-    static let engines: [VoiceEngine] = [.apple, .pocket, .orpheus, .elevenlabs]
+    static let engines: [VoiceEngine] = [.apple, .pocket, .qwen, .orpheus, .elevenlabs]
 
     /// The speed settings go to the person's other Macs with their other settings.
     static func registerSync() {

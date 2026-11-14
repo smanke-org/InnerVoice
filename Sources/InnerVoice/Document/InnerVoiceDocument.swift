@@ -37,18 +37,6 @@ nonisolated final class InnerVoiceDocument: ReferenceFileDocument {
         shadeCache = s
         return s
     }
-    /// The project was read with Qwen3-TTS voices and they became Pocket TTS voices.
-    var migratedVoices = false
-
-    /// Marks the window's document edited once after a voice migration, so the next save
-    /// (or autosave) writes it. Its NSDocument is found by file URL, after launch.
-    @MainActor func markMigrationEdited(fileURL: URL?) {
-        guard migratedVoices, let fileURL, AppState.launched else { return }
-        guard let ns = NSDocumentController.shared.documents.first(where: { $0.fileURL?.standardizedFileURL == fileURL.standardizedFileURL }) else { return }
-        migratedVoices = false
-        ns.updateChangeCount(.changeDone)
-    }
-
     /// Lookups over the project, rebuilt with every change.
     private(set) var index: BookIndex
     /// Pronunciation samples by file name.
@@ -87,11 +75,7 @@ nonisolated final class InnerVoiceDocument: ReferenceFileDocument {
         } else {
             throw CocoaError(.fileReadCorruptFile)
         }
-        var p = try Self.decoder.decode(Project.self, from: contents.projectJSON)
-        // A project from before Pocket TTS: its Qwen3-TTS voices become Pocket TTS voices as
-        // it's read (no undo step: there's nothing to go back to). The window marks the
-        // project edited so the change is saved (`markMigrationEdited`).
-        migratedVoices = LegacyVoices.migrate(&p)
+        let p = try Self.decoder.decode(Project.self, from: contents.projectJSON)
         project = p
         index = BookIndex(p)
         audio = contents.audio
@@ -110,9 +94,7 @@ nonisolated final class InnerVoiceDocument: ReferenceFileDocument {
         } else {
             throw CocoaError(.fileReadCorruptFile)
         }
-        var p = try decoder.decode(Project.self, from: contents.projectJSON)
-        LegacyVoices.migrate(&p)
-        return p
+        return try decoder.decode(Project.self, from: contents.projectJSON)
     }
 
     /// A project saved as a package (Inner Voice 0.1.0).

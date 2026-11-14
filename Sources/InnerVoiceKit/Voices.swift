@@ -1,7 +1,7 @@
 import Foundation
 import Synchronization
 
-/// How a line is said. Speech engines that can act (Pocket TTS, Orpheus, ElevenLabs) use it;
+/// How a line is said. Speech engines that can act (Pocket TTS, Qwen3-TTS, Orpheus, ElevenLabs) use it;
 /// Apple's voices only change speed, pitch and loudness a little.
 public enum Tone: String, Codable, CaseIterable, Identifiable, Sendable {
     case neutral, excited, confused, sad, angry, whispered, scared, tender, sarcastic
@@ -86,13 +86,14 @@ public enum ToneSource: String, Codable, Sendable {
 
 /// A text-to-speech engine. All but ElevenLabs run on the Mac.
 ///
-/// Projects made before Pocket TTS may say "qwen" (Qwen3-TTS, retired 2026-11-13): it reads as
-/// `.pocket`, and `LegacyVoices.migrate` turns that engine's voices into Pocket TTS ones
-/// when the project is read. Any other engine this version doesn't know (a project saved by a
-/// newer InnerVoice) reads as `.mixed`, which names no voices: those characters fall back to
-/// the narrator's voice instead of the whole project failing to open.
+/// Qwen3-TTS ("qwen") was retired on 2026-11-13 and came back on 2026-11-14 beside Pocket TTS:
+/// books 1.0.0–1.0.2 opened had their Qwen3-TTS voices turned into Pocket TTS ones and keep
+/// them; books they never opened still say "qwen" and keep their Qwen3-TTS voices. Any engine
+/// this version doesn't know (a project saved by a newer InnerVoice) reads as `.mixed`, which
+/// names no voices: those characters fall back to the narrator's voice instead of the whole
+/// project failing to open.
 public enum VoiceEngine: String, Codable, CaseIterable, Identifiable, Sendable {
-    case apple, pocket, orpheus
+    case apple, pocket, qwen, orpheus
     /// ElevenLabs, in the cloud: the only engine that sends text off the Mac. Off until the
     /// narrator sets it up, and each book must allow it.
     case elevenlabs
@@ -102,8 +103,6 @@ public enum VoiceEngine: String, Codable, CaseIterable, Identifiable, Sendable {
 
     public var id: String { rawValue }
 
-    /// The raw value older projects use for Qwen3-TTS, the engine Pocket TTS replaced.
-    public static let retiredQwen = "qwen"
     /// A test build briefly saved its on-device engine as "chatterbox" (never released): it
     /// reads as Pocket TTS too.
     static let unreleasedTestEngine = "chatterbox"
@@ -113,12 +112,12 @@ public enum VoiceEngine: String, Codable, CaseIterable, Identifiable, Sendable {
         if let known = VoiceEngine(rawValue: raw) {
             self = known
         } else {
-            self = raw == Self.retiredQwen || raw == Self.unreleasedTestEngine ? .pocket : .mixed
+            self = raw == Self.unreleasedTestEngine ? .pocket : .mixed
         }
     }
 
     /// The engines that make sound (everything but `.mixed`).
-    public static let engines: [VoiceEngine] = [.apple, .pocket, .orpheus, .elevenlabs]
+    public static let engines: [VoiceEngine] = [.apple, .pocket, .qwen, .orpheus, .elevenlabs]
 
     /// Sends the book's text to a company's servers to make the audio.
     public var isCloud: Bool { self == .elevenlabs }
@@ -127,6 +126,7 @@ public enum VoiceEngine: String, Codable, CaseIterable, Identifiable, Sendable {
         switch self {
         case .apple: "Apple Voices"
         case .pocket: "Pocket TTS"
+        case .qwen: "Qwen3-TTS"
         case .orpheus: "Orpheus"
         case .elevenlabs: "ElevenLabs"
         case .mixed: "Mix Engines"
@@ -141,10 +141,11 @@ public enum VoiceEngine: String, Codable, CaseIterable, Identifiable, Sendable {
 public struct VoiceChoice: Codable, Hashable, Sendable {
     public var engine: VoiceEngine
     /// Apple: the voice identifier. Orpheus: the voice name. Pocket TTS: "stock:<name>" or
-    /// "clone:<id>". ElevenLabs: its voice ID.
+    /// "clone:<id>". Qwen3-TTS: "preset:<name>", "design" or "clone:<id>". ElevenLabs: its
+    /// voice ID.
     public var voiceID: String
-    /// A description of the voice ("A woman in her sixties…"). Written by Qwen3-TTS (retired)
-    /// and kept in the file format; no engine speaks from it now.
+    /// A description of the voice ("A woman in her sixties…"): Qwen3-TTS designs the voice
+    /// from it (with the character's Voice Notes added when it speaks).
     public var design: String?
     /// Speed and pitch, 1 is the voice's own.
     public var rate: Double?
@@ -225,7 +226,7 @@ public struct VoiceInfo: Hashable, Identifiable, Sendable {
     public var quality: Int
     /// A short description for the voice list ("Bright, conversational").
     public var detail: String
-    /// A description of the voice, when there is one (kept in the file format).
+    /// Qwen3-TTS: the description the voice is designed from.
     public var design: String?
 
     public var id: String { engine.rawValue + ":" + voiceID }
@@ -276,6 +277,36 @@ public struct VoiceInfo: Hashable, Identifiable, Sendable {
         ("zac", "Zac", .male, .young, 2, "Energetic, youthful"),
     ].map { VoiceInfo(engine: .pocket, voiceID: PocketVoice.stockPrefix + $0.0, name: $0.1, gender: $0.2, age: $0.3,
                       accent: "American", quality: $0.4, detail: $0.5) }
+
+    /// Ready-made Qwen3-TTS voices: a description each, for characters the book says little
+    /// about and for choosing from a list. Any other description works too.
+    public static let qwenPresets: [VoiceInfo] = [
+        ("narrator", "Audiobook Narrator", VoiceGender.neutral, VoiceAge.adult, "American", "Calm, clear, measured", "A calm, clear audiobook narrator with a warm, measured voice."),
+        ("storyteller", "Warm Storyteller", .female, .adult, "American", "Warm, low, unhurried", "A woman in her forties with a warm, low, unhurried voice."),
+        ("bright", "Bright Young Woman", .female, .young, "American", "Bright, clear, lively", "A young woman with a bright, clear, lively voice."),
+        ("soft", "Soft-Spoken", .female, .young, "American", "Soft, gentle, breathy", "A young woman with a soft, gentle, slightly breathy voice."),
+        ("brisk", "Brisk Professional", .female, .adult, "American", "Crisp, confident", "A woman in her thirties with a crisp, confident, brisk voice."),
+        ("dame", "Grand Dame", .female, .older, "British", "Rich, commanding, cultured", "An older woman with a rich, commanding, cultured voice, speaking English with a British accent."),
+        ("grandmother", "Kind Grandmother", .female, .older, "American", "Soft, kind, a little creaky", "An older woman with a soft, kind, slightly creaky voice."),
+        ("lass", "Highland Lass", .female, .young, "Scottish", "Light, musical", "A young woman with a light, musical voice, speaking English with a Scottish accent."),
+        ("girl", "Little Girl", .female, .child, "American", "High, eager", "A young girl with a high, eager voice."),
+        ("baritone", "Easy Baritone", .male, .adult, "American", "Warm, easygoing", "A man in his forties with a warm, easygoing baritone voice."),
+        ("hero", "Young Hero", .male, .young, "American", "Earnest, energetic", "A young man with an earnest, energetic, clear voice."),
+        ("gentleman", "Gentleman", .male, .adult, "British", "Refined, measured", "A man with a refined, measured voice, speaking English with a British accent."),
+        ("elder", "Gravelly Elder", .male, .older, "American", "Deep, gravelly", "An older man with a deep, gravelly voice."),
+        ("sailor", "Weathered Sailor", .male, .older, "Irish", "Rough, booming", "A man in his fifties with a rough, weathered, booming voice, speaking English with an Irish accent."),
+        ("clerk", "Nervous Clerk", .male, .young, "American", "Thin, quick, nervous", "A young man with a thin, quick, nervous voice."),
+        ("boy", "Little Boy", .male, .child, "American", "High, cheerful", "A young boy with a high, cheerful voice."),
+    ].map { VoiceInfo(engine: .qwen, voiceID: QwenVoice.presetPrefix + $0.0, name: $0.1, gender: $0.2, age: $0.3, accent: $0.4, quality: 2, detail: $0.5, design: $0.6) }
+}
+
+/// Qwen3-TTS voice IDs (Alibaba's Qwen team; Apache 2.0; runs on the Mac). A ready-made
+/// voice is "preset:<name>", a voice designed from the character's description is "design"
+/// (the description is `VoiceChoice.design`), and a voice cloned on this Mac is "clone:<id>",
+/// the same recording Pocket TTS speaks.
+public enum QwenVoice {
+    public static let presetPrefix = "preset:"
+    public static let designID = "design"
 }
 
 /// What the book says a character should sound like, read from the summary and the lines.
@@ -625,6 +656,9 @@ public enum VoiceCasting {
         var narratorID: String?
         if let n = project.settings.narratorVoice(for: engine), n.source == .user || keeping {
             narratorID = n.choice.voiceID
+        } else if engine == .qwen, let preset = VoiceInfo.qwenPresets.first {
+            narratorID = preset.voiceID
+            project.settings.setNarratorVoice(CastVoice(choice: preset.choice, confidence: 0.9, source: .auto), for: engine)
         } else if let best = voices.sorted(by: { ($0.quality, $0.gender == .neutral ? 1 : 0) > ($1.quality, $1.gender == .neutral ? 1 : 0) }).first {
             narratorID = best.voiceID
             project.settings.setNarratorVoice(CastVoice(choice: best.choice, confidence: 0.9, source: .auto), for: engine)
@@ -636,6 +670,15 @@ public enum VoiceCasting {
             if kept(project.characters[i]) { continue }
             let p = profile(project.characters[i], project: project, index: index)
             let chapters = index.stats[c.id]?.chapters ?? []
+            if engine == .qwen, !p.timbre.isEmpty || p.accent != nil || VoiceDescription.notes(project.characters[i]) != nil {
+                // The book or the Voice Notes say how they sound: a voice designed from that
+                // (the notes are added when it speaks, so editing them changes the voice).
+                // Characters nothing describes get a distinct ready-made voice below.
+                let choice = VoiceChoice(engine: .qwen, voiceID: QwenVoice.designID, design: describe(p, name: c.name))
+                project.characters[i].setVoice(CastVoice(choice: choice, confidence: confidence(p, sharedOverlap: 0), source: .auto), for: engine)
+                count += 1
+                continue
+            }
             var best: (VoiceInfo, Double, Double)?
             for v in voices {
                 var s = score(v, p)

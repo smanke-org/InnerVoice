@@ -288,6 +288,7 @@ enum SelfTest {
         check("turning it back on brings the project's own engine back", doc.project.engineInUse == .orpheus)
         switches.set(.apple, on: false)
         switches.set(.pocket, on: false)
+        switches.set(.qwen, on: false)
         switches.set(.orpheus, on: false)
         check("the last engine that's on stays on", switches.isOn(.orpheus) && !switches.canTurnOff(.orpheus) && switches.enabled == [.orpheus])
         for e in VoiceEngine.engines { switches.set(e, on: true) }
@@ -529,6 +530,57 @@ enum SelfTest {
         return kr == KERN_SUCCESS ? info.phys_footprint : 0
     }
 
+    /// Qwen3-TTS in detail (APP_SELFTEST_VOICES, with Qwen3-TTS in APP_VOICE_MODELS): casting
+    /// designs voices from what the book says, a designed voice records one sample per tone
+    /// (kept in Voice Models/Samples) and speaks every line from it, the Voice Notes go into
+    /// the design, a ready-made voice speaks, and a shade makes its own shifted sample.
+    private static func qwenVoices(_ doc: InnerVoiceDocument, out: URL?) async {
+        let speaking = doc.project.characters.filter { (doc.index.stats[$0.id]?.lines ?? 0) > 0 }
+        let voices = speaking.compactMap { $0.voice(for: .qwen)?.choice }
+        check("Qwen3-TTS: casting designs voices or gives ready-made ones",
+              voices.allSatisfy { $0.voiceID == QwenVoice.designID ? $0.design?.isEmpty == false : $0.voiceID.hasPrefix(QwenVoice.presetPrefix) }
+              && doc.project.settings.narratorVoice(for: .qwen)?.choice.voiceID == "preset:narrator",
+              voices.map { $0.voiceID == QwenVoice.designID ? "design" : $0.voiceID }.joined(separator: ", "))
+        if let c = speaking.first {
+            var noted = c
+            noted.voiceNotes = "Speaks with a slow, smoky drawl."
+            let withNotes = VoiceResolver.withNotes(VoiceChoice(engine: .qwen, voiceID: QwenVoice.designID, design: "A woman in her forties."), noted)
+            check("Qwen3-TTS: a character's Voice Notes go into their voice's design", withNotes.design?.contains("smoky drawl") == true, withNotes.design ?? "")
+        }
+        let design = "A man in his fifties with a deep, calm voice."
+        let samples = QwenSamples.folder
+        let before = (try? FileManager.default.contentsOfDirectory(atPath: samples.path).count) ?? 0
+        for (n, tone) in [Tone.neutral, .angry].enumerated() {
+            let request = SpeechRequest(text: "I told you the boat would not wait for anyone, and it did not.",
+                                        choice: VoiceChoice(engine: .qwen, voiceID: QwenVoice.designID, design: design), tone: tone, kind: .spoken)
+            do {
+                let start = Date()
+                let audio = try await SpeechRenderer.shared.render(request)
+                let seconds = Double(audio.frameLength) / audio.format.sampleRate
+                check("Qwen3-TTS speaks a designed voice (\(tone.rawValue))", seconds > 1 && seconds < 15,
+                      String(format: "%.1f s of audio in %.1f s", seconds, Date().timeIntervalSince(start)))
+                if let out { SpeechRenderer.write(audio, to: out.appending(path: "qwen-design-\(n).caf")) }
+            } catch {
+                check("Qwen3-TTS speaks a designed voice (\(tone.rawValue))", false, error.localizedDescription)
+            }
+        }
+        let after = (try? FileManager.default.contentsOfDirectory(atPath: samples.path).count) ?? 0
+        check("Qwen3-TTS keeps one voice sample per tone", after - before == 2, "\(after - before) new samples")
+        if let preset = VoiceInfo.qwenPresets.first(where: { $0.voiceID == "preset:lass" }) {
+            var request = SpeechRequest(text: "Come in out of the rain, the kettle's on.", choice: preset.choice, tone: .tender, kind: .spoken)
+            request.shade = Shade(pitch: 2, pace: 0)
+            do {
+                let audio = try await SpeechRenderer.shared.render(request)
+                let seconds = Double(audio.frameLength) / audio.format.sampleRate
+                let shaded = (try? FileManager.default.contentsOfDirectory(atPath: samples.path).contains { $0.hasSuffix("-shade2.caf") }) ?? false
+                check("Qwen3-TTS speaks a ready-made voice, shaded from its own sample", seconds > 0.8 && shaded, String(format: "%.1f s", seconds))
+                if let out { SpeechRenderer.write(audio, to: out.appending(path: "qwen-preset-lass-shaded.caf")) }
+            } catch {
+                check("Qwen3-TTS speaks a ready-made voice, shaded from its own sample", false, error.localizedDescription)
+            }
+        }
+    }
+
     /// One Voice with Pocket TTS (APP_SELFTEST_VOICES): the opening of the sample book read by
     /// Tara, shaded and unshaded, saved in APP_SELFTEST_AUDIO_OUT for listening.
     private static func oneVoiceTableRead(_ doc: InnerVoiceDocument, undo: UndoManager) async {
@@ -651,7 +703,7 @@ enum SelfTest {
         let out = ProcessInfo.processInfo.environment["APP_SELFTEST_AUDIO_OUT"].map { URL(fileURLWithPath: $0) }
         if let out { try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true) }
         SpeechRenderer.shared.clearCache()
-        for engine in [VoiceEngine.orpheus, .pocket] {
+        for engine in [VoiceEngine.orpheus, .pocket, .qwen] {
             guard ModelSpeech.isInstalled(engine) else {
                 check("\(engine.title) is downloaded", false, VoicePack.folder.path)
                 continue
@@ -699,6 +751,7 @@ enum SelfTest {
                 check("\(engine.title): a line plays at once the second time", Date().timeIntervalSince(start) < 0.5, String(format: "%.2f s, cached: %@", Date().timeIntervalSince(start), SpeechRenderer.shared.isCached(request) ? "yes" : "no"))
             }
             if engine == .pocket { await pocketVoices(out: out) }
+            if engine == .qwen { await qwenVoices(doc, out: out) }
         }
         // Mix Engines: each character can have a voice from any engine; two engines take turns.
         if ModelSpeech.isInstalled(.pocket), ModelSpeech.isInstalled(.orpheus) {
@@ -764,30 +817,21 @@ enum SelfTest {
         check("every Pocket TTS stock voice has its clip in the app", missing.isEmpty, missing.joined(separator: ", "))
         check("mlx-audio's default cache is the voice models folder",
               ProcessInfo.processInfo.environment["HF_HUB_CACHE"] == VoicePack.folder.path, ProcessInfo.processInfo.environment["HF_HUB_CACHE"] ?? "unset")
-        check("Qwen3-TTS is no longer an engine", !VoiceEngine.engines.map(\.rawValue).contains(VoiceEngine.retiredQwen) && VoicePack.pack(for: .pocket) != nil)
         check("Pocket TTS downloads one repository, Kyutai's model", VoicePack.pocket.repos == ["mlx-community/pocket-tts"])
-        // Remove Old Voice Files, in the test folder only: Qwen3-TTS's leftovers are found and
-        // removed, and nothing else in the folder is touched.
-        if ProcessInfo.processInfo.environment["APP_VOICE_MODELS"] != nil {
-            let fm = FileManager.default
-            let fakes = [VoicePack.folder.appending(path: "mlx-audio/mlx-community_Qwen3-TTS-test"), VoicePack.folder.appending(path: "Samples")]
-            for f in fakes {
-                try? fm.createDirectory(at: f, withIntermediateDirectories: true)
-                try? Data(count: 4096).write(to: f.appending(path: "x.bin"))
-            }
-            let manager = VoiceModelManager.shared
-            manager.checkOldFiles()
-            check("Settings finds the old Qwen3-TTS files", manager.oldFiles.map { Set($0.urls.map(\.lastPathComponent)) == Set(fakes.map(\.lastPathComponent)) && $0.bytes > 0 } == true,
-                  manager.oldFiles?.urls.map(\.lastPathComponent).joined(separator: ", ") ?? "none")
-            let before = (try? fm.contentsOfDirectory(atPath: VoicePack.folder.appending(path: "mlx-audio").path).filter { !$0.contains("Qwen3-TTS") }) ?? []
-            manager.removeOldFiles()
-            let after = (try? fm.contentsOfDirectory(atPath: VoicePack.folder.appending(path: "mlx-audio").path)) ?? []
-            check("Remove Old Voice Files takes only the Qwen3-TTS files", manager.oldFiles == nil && fakes.allSatisfy { !fm.fileExists(atPath: $0.path) } && Set(after) == Set(before))
-        }
+        // Qwen3-TTS is back beside Pocket TTS (2026-11-14): an engine, a pack of its two
+        // models, sixteen ready-made voices, and its Settings row says where it comes from.
+        check("Qwen3-TTS is an engine again, with its two models",
+              VoiceEngine.engines.contains(.qwen) && VoicePack.pack(for: .qwen)?.repos == [VoicePack.qwenDesignRepo, VoicePack.qwenCloneRepo])
+        check("Qwen3-TTS has its sixteen ready-made voices", VoiceInfo.qwenPresets.count == 16
+              && Set(VoiceInfo.qwenPresets.map(\.voiceID)).count == 16 && VoiceInfo.qwenPresets.allSatisfy { $0.design?.isEmpty == false })
+        check("Settings says Qwen3-TTS was developed in China and runs on this Mac",
+              LocalOriginBadge.text.contains("China") && LocalOriginBadge.text.contains("Runs on this Mac")
+              && LocalOriginBadge.detail.contains("never leave the Mac"))
     }
 
-    /// A book saved with Qwen3-TTS voices opens with Pocket TTS voices: read from disk the
-    /// way Use Voices from Another Project reads one (the window's own read does the same).
+    /// A book saved with Qwen3-TTS voices opens with them (1.0.0–1.0.2 turned them into
+    /// Pocket TTS voices; that's over): read from disk the way Use Voices from Another
+    /// Project reads one (the window's own read does the same).
     private static func oldBookMigrates() async {
         var p = SeedData.project()
         guard let i = p.characters.indices.first else { return }
@@ -807,12 +851,13 @@ enum SelfTest {
             try InnerVoiceDocument.archive(.init(project: old, audio: [:], original: nil)).write(to: url)
             let read = try InnerVoiceDocument.readProject(at: url)
             try? FileManager.default.removeItem(at: url)
-            let v = read.character(id)?.voice(for: .pocket)
-            check("a book saved with Qwen3-TTS opens with Pocket TTS voices",
-                  read.settings.engine == .pocket && v?.choice.voiceID == "stock:tara" && v?.source == .user && !LegacyVoices.needsMigration(read),
+            let v = read.character(id)?.voice(for: .qwen)
+            check("a book saved with Qwen3-TTS opens with its Qwen3-TTS voices",
+                  read.settings.engine == .qwen && v?.choice.voiceID == "preset:storyteller" && v?.source == .user
+                  && read.character(id)?.voice(for: .pocket) == nil,
                   v?.choice.voiceID ?? "no voice")
         } catch {
-            check("a book saved with Qwen3-TTS opens with Pocket TTS voices", false, error.localizedDescription)
+            check("a book saved with Qwen3-TTS opens with its Qwen3-TTS voices", false, error.localizedDescription)
         }
     }
 

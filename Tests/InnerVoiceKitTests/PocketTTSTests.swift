@@ -2,8 +2,9 @@ import Foundation
 import Testing
 @testable import InnerVoiceKit
 
-/// Pocket TTS replaced Qwen3-TTS (2026-11-13): old books switch on read, the tones, and
-/// decoding engine values this version doesn't know.
+/// Pocket TTS beside Qwen3-TTS (Qwen3-TTS was set aside 2026-11-13 and came back
+/// 2026-11-14): books saved with Qwen3-TTS keep their voices, the tones, and decoding engine
+/// values this version doesn't know.
 @Suite struct PocketTTSTests {
     static func book(_ paragraphs: [String]) -> ImportedBook {
         ImportedBook(title: "Test", chapters: [Chapter(title: "Chapter 1", paragraphs: paragraphs.map { Paragraph(text: $0) })])
@@ -58,91 +59,33 @@ import Testing
 
     static func character(_ p: Project, _ name: String) -> BookCharacter { p.characters.first { $0.name == name }! }
 
-    @Test func oldEngineReadsAsPocketTTS() throws {
+    @Test func booksSavedWithQwenKeepTheirQwenVoices() throws {
         let p = try Self.oldProject()
-        #expect(p.settings.voiceEngine == .pocket)
-        // The voices still sit under "qwen" until migrated.
-        #expect(LegacyVoices.needsMigration(p))
-        #expect(Self.character(p, "Mara Quinn").voices?["qwen"]?.choice.engine == .pocket)
-    }
-
-    @Test func oldBooksSwitchToPocketTTS() throws {
-        var p = try Self.oldProject()
-        #expect(LegacyVoices.migrate(&p))
-        #expect(!LegacyVoices.needsMigration(p))
-        #expect(p.characters.allSatisfy { $0.voices?["qwen"] == nil })
-
-        // Ready-made → nearest stock voice (Kind Grandmother → Mia, an older woman: lower and
-        // slower), the narrator's own speed and pitch kept on top, still the narrator's choice.
-        let edda = try #require(Self.character(p, "Edda Voss").voice(for: .pocket))
-        #expect(edda.choice.voiceID == "stock:mia" && edda.source == .user)
-        #expect(edda.choice.pitch == 0.85 && edda.choice.rate == 0.92)
-        #expect(edda.choice.design == nil)
-
-        // Designed → the stock voice casting picks for that character, a woman's for Mara.
-        let mara = try #require(Self.character(p, "Mara Quinn").voice(for: .pocket))
-        #expect(mara.choice.voiceID.hasPrefix("stock:") && mara.source == .auto)
-        #expect(VoiceInfo.pocket.first { $0.voiceID == mara.choice.voiceID }?.gender == .female)
-
-        // A designed voice the narrator chose stays theirs; the Orpheus voice doesn't move.
-        let tom = Self.character(p, "Tom Hale")
-        let tomVoice = try #require(tom.voice(for: .pocket))
-        #expect(tomVoice.source == .user)
-        #expect(VoiceInfo.pocket.first { $0.voiceID == tomVoice.choice.voiceID }?.gender == .male)
-        #expect(tom.voice(for: .orpheus)?.choice.voiceID == "leo" && tom.voice(for: .orpheus)?.source == .user)
-
-        // A clone keeps its recording, now spoken by Pocket TTS.
-        let pip = try #require(Self.character(p, "Pip").voice(for: .pocket))
-        #expect(pip.choice == VoiceChoice(engine: .pocket, voiceID: "clone:ABC") && pip.source == .user)
-
-        // The narrator's ready-made voice → the engine's own voice (Alba), still the narrator's choice.
-        let narrator = try #require(p.settings.narratorVoice(for: .pocket))
-        #expect(narrator.choice.voiceID == PocketVoice.builtInID && narrator.source == .user)
-        #expect(PocketVoice.builtInID == "stock:alba")
-        #expect(p.settings.narratorVoices?["qwen"] == nil)
-
-        // Roles: ready-made → stock; designed (the narrator's) → a stock voice of that gender, still theirs.
-        #expect(p.settings.roleVoice(.men, for: .pocket)?.choice.voiceID == "stock:dan")
-        let women = try #require(p.settings.roleVoice(.women, for: .pocket))
-        #expect(women.source == .user && VoiceInfo.pocket.first { $0.voiceID == women.choice.voiceID }?.gender == .female)
-
-        // Nobody without a voice got one, and the date casting last ran is kept.
-        #expect(Self.character(p, "Edda Voss").voices?.count == 1)
-        #expect(p.voicesCast == Date(timeIntervalSinceReferenceDate: 700_000_000))
-        #expect(p.characters.filter { $0.name != "Edda Voss" && $0.name != "Mara Quinn" && $0.name != "Tom Hale" && $0.name != "Pip" }
-            .allSatisfy { $0.voice(for: .pocket) == nil })
-
-        // Saved and read again, nothing changes and nothing is left to migrate.
-        var again = try JSONDecoder().decode(Project.self, from: JSONEncoder().encode(p))
-        #expect(!LegacyVoices.migrate(&again))
-        #expect(again == p)
+        #expect(p.settings.voiceEngine == .qwen)
+        let edda = Self.character(p, "Edda Voss").voice(for: .qwen)
+        #expect(edda?.choice.voiceID == "preset:grandmother" && edda?.source == .user && edda?.choice.pitch == 0.95)
+        let mara = Self.character(p, "Mara Quinn").voice(for: .qwen)
+        #expect(mara?.choice.voiceID == QwenVoice.designID && mara?.choice.design == "A woman in her thirties with a warm voice.")
+        #expect(Self.character(p, "Tom Hale").voice(for: .orpheus) != nil)
+        #expect(Self.character(p, "Pip").voice(for: .qwen)?.choice.voiceID == "clone:ABC")
+        #expect(p.settings.narratorVoice(for: .qwen)?.choice.voiceID == "preset:narrator")
+        #expect(p.characters.allSatisfy { $0.voice(for: .pocket) == nil })
+        // Saved back unchanged: still "qwen".
         let saved = String(decoding: try JSONEncoder().encode(p), as: UTF8.self)
-        #expect(!saved.contains("\"qwen\""))
+        #expect(saved.contains(#""voiceEngine":"qwen""#))
     }
 
-    @Test func projectsWithoutQwenAreLeftAlone() throws {
-        var p = ProjectBuilder.make(from: Self.book(["“Hi,” said Ann."]), fileName: "t.txt")
-        p.characters[0].setVoice(CastVoice(choice: VoiceChoice(engine: .orpheus, voiceID: "tara"), confidence: 1, source: .user), for: .orpheus)
-        let before = p
-        #expect(!LegacyVoices.migrate(&p))
-        #expect(p == before)
-    }
-
-    @Test func everyQwenPresetHasAStockVoiceOfItsGender() {
-        let genders: [String: VoiceGender] = [
-            "storyteller": .female, "bright": .female, "soft": .female, "brisk": .female, "dame": .female, "grandmother": .female,
-            "lass": .female, "girl": .female, "baritone": .male, "hero": .male, "gentleman": .male, "elder": .male, "sailor": .male,
-            "clerk": .male, "boy": .male,
-        ]
-        #expect(LegacyVoices.presets.count == 16)
-        for (preset, gender) in genders {
-            let mapped = LegacyVoices.mapped(CastVoice(choice: VoiceChoice(engine: .pocket, voiceID: "preset:" + preset), confidence: 1, source: .auto))
-            let info = VoiceInfo.pocket.first { $0.voiceID == mapped?.choice.voiceID }
-            #expect(info?.gender == gender, "\(preset)")
-        }
-        // Children sound higher and a little quicker.
-        let girl = LegacyVoices.mapped(CastVoice(choice: VoiceChoice(engine: .pocket, voiceID: "preset:girl"), confidence: 1, source: .auto))
-        #expect(PocketVoice.semitones(pitch: girl?.choice.pitch) == 3 && girl?.choice.rate == 1.05)
+    @Test func qwenCastingDesignsDescribedCharactersAndGivesOthersPresets() throws {
+        var p = try Self.oldProject()
+        for i in p.characters.indices { p.characters[i].voices = nil }
+        p.settings.narratorVoices = nil
+        let index = BookIndex(p)
+        VoiceCasting.cast(&p, index: index, engine: .qwen, voices: VoiceInfo.qwenPresets)
+        #expect(p.settings.narratorVoice(for: .qwen)?.choice.voiceID == "preset:narrator")
+        let voiced = p.characters.compactMap { $0.voice(for: .qwen) }
+        #expect(!voiced.isEmpty)
+        #expect(voiced.allSatisfy { $0.choice.engine == .qwen && ($0.choice.voiceID == QwenVoice.designID ? $0.choice.design?.isEmpty == false : $0.choice.voiceID.hasPrefix(QwenVoice.presetPrefix)) })
+        #expect(VoiceInfo.qwenPresets.count == 16 && Set(VoiceInfo.qwenPresets.map(\.voiceID)).count == 16)
     }
 
     @Test func unknownEnginesDoNotStopAProjectOpening() throws {
@@ -151,7 +94,7 @@ import Testing
         // `.mixed` names no voices, so the player falls back to the narrator.
         #expect(choice.engine == .mixed)
         #expect(try JSONDecoder().decode([VoiceEngine].self, from: Data(#"["apple","chatterbox","orpheus","elevenlabs","mixed","qwen"]"#.utf8))
-                == [.apple, .pocket, .orpheus, .elevenlabs, .mixed, .pocket])
+                == [.apple, .pocket, .orpheus, .elevenlabs, .mixed, .qwen])
         // Saved as "pocket"; the unreleased test build's "chatterbox" reads as Pocket TTS.
         #expect(String(decoding: try JSONEncoder().encode(VoiceEngine.pocket), as: UTF8.self) == #""pocket""#)
     }

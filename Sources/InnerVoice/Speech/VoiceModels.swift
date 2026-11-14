@@ -4,7 +4,7 @@ import InnerVoiceKit
 import MLXAudioCore
 import Observation
 
-/// The speech models Pocket TTS and Orpheus need, downloaded from Hugging Face into
+/// The speech models Pocket TTS, Qwen3-TTS and Orpheus need, downloaded from Hugging Face into
 /// Application Support. Downloading is the only time they touch the network; the book's
 /// text never leaves the Mac.
 nonisolated struct VoicePack: Sendable {
@@ -33,11 +33,24 @@ nonisolated struct VoicePack: Sendable {
     /// tokenizer. It clones a voice from a short clip and speaks the lines.
     static let pocketRepo = "mlx-community/pocket-tts"
 
+    static let qwen = VoicePack(
+        engine: .qwen,
+        repos: [VoicePack.qwenDesignRepo, VoicePack.qwenCloneRepo],
+        bytes: 6_180_000_000,
+        summary: "A voice designed for each character from their summary and Voice Notes, kept the same on every line and acted in each tone; it also speaks the voices you clone on this Mac. Uses about 6 GB of memory while it speaks.")
+
+    /// Qwen3-TTS (Alibaba's Qwen team, Apache 2.0; mlx-community's 8-bit MLX copies). The
+    /// design model makes a short sample in a voice described in words; the base model
+    /// speaks every line from that sample (or from a clip cloned on this Mac).
+    static let qwenDesignRepo = "mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit"
+    static let qwenCloneRepo = "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit"
+
     static func pack(for engine: VoiceEngine) -> VoicePack? {
         switch engine {
         case .apple, .mixed, .elevenlabs: nil
         case .orpheus: orpheus
         case .pocket: pocket
+        case .qwen: qwen
         }
     }
 
@@ -49,34 +62,6 @@ nonisolated struct VoicePack: Sendable {
         let base = ProcessInfo.processInfo.environment["APP_VOICE_MODELS"].map { URL(fileURLWithPath: $0) }
             ?? URL.applicationSupportDirectory.appending(path: "Inner Voice/Voice Models")
         setenv("HF_HUB_CACHE", base.path, 1)
-    }
-
-    /// Qwen3-TTS (retired 2026-11-13): its models and voice samples, if this Mac still has them.
-    static var oldQwenFiles: [URL] {
-        let fm = FileManager.default
-        var out: [URL] = []
-        let models = folder.appending(path: "mlx-audio")
-        for name in (try? fm.contentsOfDirectory(atPath: models.path)) ?? [] where name.hasPrefix("mlx-community_Qwen3-TTS") {
-            out.append(models.appending(path: name))
-        }
-        for name in (try? fm.contentsOfDirectory(atPath: folder.path)) ?? [] where name.hasPrefix("models--mlx-community--Qwen3-TTS") {
-            out.append(folder.appending(path: name))
-        }
-        let samples = folder.appending(path: "Samples")
-        if fm.fileExists(atPath: samples.path) { out.append(samples) }
-        return out
-    }
-
-    /// How much room the old files take.
-    static func size(of urls: [URL]) -> Int64 {
-        var total: Int64 = 0
-        for url in urls {
-            guard let e = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.totalFileAllocatedSizeKey]) else { continue }
-            for case let f as URL in e {
-                total += Int64((try? f.resourceValues(forKeys: [.totalFileAllocatedSizeKey]))?.totalFileAllocatedSize ?? 0)
-            }
-        }
-        return total
     }
 
     /// Where the models live. `APP_VOICE_MODELS` points test runs somewhere else.
@@ -212,26 +197,11 @@ final class VoiceModelManager {
             trash(hub)
         }
         if pack.engine == .pocket { PocketClips.forget() }
-        revision += 1
-    }
-
-    /// The files Qwen3-TTS left (Settings › Voices › Remove Old Voice Files), worked out once
-    /// per change: the Settings row asks on every redraw.
-    private(set) var oldFiles: (urls: [URL], bytes: Int64)?
-
-    func checkOldFiles() {
-        let urls = VoicePack.oldQwenFiles
-        oldFiles = urls.isEmpty ? nil : (urls, VoicePack.size(of: urls))
-    }
-
-    /// Moves Qwen3-TTS's models and voice samples to the Trash. Test runs touch only a
-    /// test folder (APP_VOICE_MODELS), never the person's own, and delete outright there.
-    func removeOldFiles() {
-        if SystemHooks.isTestRun, ProcessInfo.processInfo.environment["APP_VOICE_MODELS"] == nil { return }
-        for url in VoicePack.oldQwenFiles {
-            if SystemHooks.isTestRun { try? FileManager.default.removeItem(at: url) } else { try? FileManager.default.trashItem(at: url, resultingItemURL: nil) }
+        if pack.engine == .qwen {
+            trash(VoicePack.folder.appending(path: "Samples"))
+            QwenSamples.forget()
         }
-        checkOldFiles()
+        revision += 1
     }
 
     static func describe(_ error: Error) -> String {

@@ -574,6 +574,7 @@ struct ShadeEditor: View {
     private func note(_ engine: VoiceEngine) -> String {
         switch engine {
         case .pocket: "Pocket TTS shifts the clip it copies the narrator’s voice from, so it stays the same voice."
+        case .qwen: "Qwen3-TTS shifts the narrator’s voice sample, so it stays the same voice."
         case .apple: "Apple’s voices change pitch and speed."
         default: "\(engine.title) shifts the finished audio. Keep it within 2 to sound natural."
         }
@@ -648,6 +649,7 @@ struct VoiceChooser: View {
     /// Opens Clone a Voice for this character (only where a window's workspace is at hand).
     var onClone: (() -> Void)? = nil
     @Environment(\.undoManager) private var undoManager
+    @State private var designDraft = ""
     @State private var filter: VoiceGender?
     @State private var voiceQuery = ""
     @State private var cloudDesigning = false
@@ -691,7 +693,11 @@ struct VoiceChooser: View {
             if ElevenLabs.shared.isSetUp, ElevenLabs.shared.voices.isEmpty, engine == .elevenlabs || engine == .mixed { cloudVoicesMissing }
             suggestions
             if let onClone { cloneOffer(onClone) }
-            if engine == .pocket || (engine == .mixed && EngineSwitches.shared.usable(.pocket)) { descriptionNote }
+            if engine == .qwen || (engine == .mixed && EngineSwitches.shared.usable(.qwen)) {
+                design
+            } else if engine == .pocket || (engine == .mixed && EngineSwitches.shared.usable(.pocket)) {
+                descriptionNote
+            }
             if let c = character, showsCloudDesign { cloudDesign(c) }
             if !compact { allVoices }
         }
@@ -920,6 +926,50 @@ struct VoiceChooser: View {
 
     // MARK: Descriptions
 
+    /// Qwen3-TTS makes a voice from words: the narrator describes it, or starts from what the
+    /// book says. The character's Voice Notes are added when it speaks.
+    private var design: some View {
+        VStack(alignment: .leading, spacing: Space.sm) {
+            HStack(spacing: Space.sm) {
+                Text("Describe a Voice").font(.headline)
+                LocalOriginBadge()
+            }
+            Text(character == nil
+                 ? "Or describe any voice and Qwen3-TTS makes it, on this Mac. Say who they are and how they sound."
+                 : "Or describe any voice and Qwen3-TTS makes it, on this Mac. Say who they are and how they sound. \(character!.firstName)’s Voice Notes are added to the description, so what you write there shapes the voice too.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            TextField("A woman in her sixties with a warm, low voice and a soft Scottish accent.", text: $designDraft, axis: .vertical)
+                .lineLimit(2...5)
+                .textFieldStyle(.roundedBorder)
+                .onAppear { designDraft = voice?.choice.engine == .qwen ? voice?.choice.design ?? "" : "" }
+                .onSubmit(saveDesign)
+            HStack {
+                Button("Save Description", action: saveDesign)
+                    .disabled(designDraft.trimmingCharacters(in: .whitespaces).isEmpty || designDraft == voice?.choice.design)
+                if let c = character {
+                    Button("Describe from Summary") {
+                        let p = VoiceCasting.profile(c, project: document.project, index: document.index)
+                        designDraft = VoiceCasting.describe(p, name: c.name)
+                    }
+                    .help("Write the description from what the book says about \(c.firstName)")
+                }
+                Spacer()
+                Button("Play", systemImage: "play.fill") {
+                    audition(VoiceChoice(engine: .qwen, voiceID: QwenVoice.designID, design: designDraft))
+                }
+                .disabled(designDraft.isEmpty)
+            }
+        }
+    }
+
+    private func saveDesign() {
+        let text = designDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        choose(VoiceChoice(engine: .qwen, voiceID: QwenVoice.designID, design: text))
+    }
+
     /// Pocket TTS can't make a voice from words: say so where a description used to go, and
     /// point to what can.
     private var descriptionNote: some View {
@@ -986,7 +1036,7 @@ struct VoiceChooser: View {
     private func cloneOffer(_ open: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: Space.sm) {
             Text("Clone a Voice").font(.headline)
-            Text("Make a voice from a recording of a real person, with their consent: on this Mac with Pocket TTS (free, nothing leaves the Mac), or with ElevenLabs. Every project can use it.")
+            Text("Make a voice from a recording of a real person, with their consent: on this Mac with Pocket TTS or Qwen3-TTS (free, nothing leaves the Mac), or with ElevenLabs. Every project can use it.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

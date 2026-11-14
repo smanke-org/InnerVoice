@@ -122,8 +122,16 @@ struct VoicePackRow: View {
                 EngineSwitch(engine: pack.engine)
             }
         } label: {
-            Text(pack.engine.title)
-            Text(pack.summary)
+            if pack.engine == .qwen {
+                HStack(spacing: Space.sm) {
+                    Text(pack.engine.title)
+                    LocalOriginBadge()
+                }
+                Text(pack.summary + "\n\n" + LocalOriginBadge.detail)
+            } else {
+                Text(pack.engine.title)
+                Text(pack.summary)
+            }
         }
         .foregroundStyle(EngineSwitches.shared.isOn(pack.engine) ? .primary : .secondary)
     }
@@ -158,32 +166,6 @@ struct VoicePackRow: View {
     }
 }
 
-/// Qwen3-TTS, the engine Pocket TTS replaced, left its models and voice samples behind:
-/// offered for the Trash once, only while they're there. Nothing is removed on its own.
-struct OldVoiceFilesRow: View {
-    private var manager: VoiceModelManager { .shared }
-    @State private var asking = false
-
-    var body: some View {
-        if let old = manager.oldFiles {
-            LabeledContent {
-                Button("Remove Old Voice Files…") { asking = true }
-                    .controlSize(.small)
-                    .help("Move the Qwen3-TTS models and voice samples to the Trash")
-            } label: {
-                Text("Old Voice Files")
-                Text("Qwen3-TTS, which Pocket TTS replaced, left \(ByteCountFormatter.string(fromByteCount: old.bytes, countStyle: .file)) of models and voice samples on this Mac. InnerVoice doesn’t use them anymore.")
-            }
-            .confirmationDialog("Move the old Qwen3-TTS files to the Trash?", isPresented: $asking) {
-                Button("Move to Trash") { manager.removeOldFiles() }
-            } message: {
-                Text("Books that used Qwen3-TTS voices already speak with Pocket TTS. You can get the files back from the Trash until you empty it.")
-            }
-        }
-    }
-}
-
-/// Turns an engine on or off (the last one that's on stays on).
 struct EngineSwitch: View {
     let engine: VoiceEngine
     private var switches: EngineSwitches { .shared }
@@ -247,18 +229,16 @@ struct VoicesSettings: View {
                 }
             }
             VoicePackRow(pack: .pocket)
+            VoicePackRow(pack: .qwen)
             VoicePackRow(pack: .orpheus)
             ElevenLabsRow()
-            OldVoiceFilesRow()
         } header: {
             Text("Engines")
         } footer: {
-            Text("Apple Voices, Pocket TTS and Orpheus run on this Mac; downloading them is the only time they use the internet. ElevenLabs is different: it makes its voices in the cloud, so the text it speaks is sent to ElevenLabs, and each book asks first. Choose the engine for each project on its Voices page; turn an engine off to hide it there.")
+            Text("Apple Voices, Pocket TTS, Qwen3-TTS and Orpheus run on this Mac; downloading them is the only time they use the internet. ElevenLabs is different: it makes its voices in the cloud, so the text it speaks is sent to ElevenLabs, and each book asks first. Choose the engine for each project on its Voices page; turn an engine off to hide it there.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        // Listing the folders for Old Voice Files happens once per visit, never per redraw.
-        .task { VoiceModelManager.shared.checkOldFiles() }
         LocalClonesSection()
         if ElevenLabs.shared.isSetUp, EngineSwitches.shared.isOn(.elevenlabs) {
             ClonedVoicesSection()
@@ -313,7 +293,7 @@ struct ElevenLabsRow: View {
     }
 }
 
-/// Settings › Voices: voices cloned on this Mac (Pocket TTS), to listen to, rename or delete.
+/// Settings › Voices: voices cloned on this Mac (Pocket TTS, Qwen3-TTS), to listen to, rename or delete.
 struct LocalClonesSection: View {
     @State private var renaming: LocalClones.Clone?
     @State private var newName = ""
@@ -343,7 +323,7 @@ struct LocalClonesSection: View {
         } header: {
             Text("Voices Cloned on This Mac")
         } footer: {
-            Text("Pocket TTS speaks these from a short recording kept on this Mac, so every project here can use them. Casting never chooses them on its own.")
+            Text("Pocket TTS and Qwen3-TTS speak these from a short recording kept on this Mac, so every project here can use them. Casting never chooses them on its own.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -511,6 +491,26 @@ struct ClonedVoicesSection: View {
             defer { busy = nil }
             do { try await work() } catch { self.error = error.localizedDescription }
         }
+    }
+}
+
+/// Qwen3-TTS, wherever its engine is offered: made in China, but it runs on the Mac, so
+/// it's as private as the other on-device engines. Green like a safe choice, never the
+/// orange of Cloud.
+struct LocalOriginBadge: View {
+    static let text = "Developed in China · Runs on this Mac"
+    static let detail = "Qwen3-TTS comes from Alibaba’s Qwen team in China. It runs entirely on this Mac from open model files (Apache 2.0): your book’s text and the audio never leave the Mac, and it never connects to Alibaba or any server in China. The only network use is the one-time model download from Hugging Face."
+
+    var body: some View {
+        Label(Self.text, systemImage: "lock.shield")
+            .font(.caption2.weight(.semibold))
+            .labelStyle(.titleAndIcon)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .foregroundStyle(.green)
+            .background(.green.opacity(0.12), in: Capsule())
+            .fixedSize()
+            .help(Self.detail)
     }
 }
 

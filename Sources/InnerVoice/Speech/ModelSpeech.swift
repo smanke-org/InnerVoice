@@ -8,7 +8,7 @@ import MLXAudioTTS
 import NaturalLanguage
 import Observation
 
-/// Pocket TTS and Orpheus, on Apple's MLX (Apple silicon only).
+/// Pocket TTS, Qwen3-TTS and Orpheus, on Apple's MLX (Apple silicon only).
 ///
 /// Orpheus has eight fixed voices and acts from the words; the speech tag's sighs, laughs
 /// and gasps are added as its sound tags.
@@ -18,6 +18,13 @@ import Observation
 /// recording. The tone sets its sampling temperature, and a pitch, speed and loudness
 /// around it (`PocketDelivery`). A shade, or casting's age pitch, shifts the clip before
 /// cloning, so the voice stays the same person.
+///
+/// Qwen3-TTS (Alibaba's Qwen team, Apache 2.0; it runs here like the others and sends
+/// nothing anywhere) gives each character a voice designed from their summary and Voice
+/// Notes. The design model first records a short sample in that voice and tone (once, kept
+/// in Voice Models/Samples); every line is then spoken by the base model from that sample,
+/// so the voice stays the same from line to line. A voice cloned on this Mac is spoken from
+/// the narrator's own clip and its words.
 enum ModelSpeech {
     @MainActor
     static func isInstalled(_ engine: VoiceEngine) -> Bool { VoiceModelManager.shared.isInstalled(engine) }
@@ -54,6 +61,27 @@ enum ModelSpeech {
                 // No run-on cut: Pocket TTS stops when the line is said (short lines tested
                 // 2026-11-13, at the even and the angry temperature; self-test `pocketVoices`).
                 samples += said
+            case .qwen:
+                // A shade (Casting Style) and the narrator's pitch shift the sample; the clone
+                // keeps the voice. (Speed is stretched by `SpeechRenderer`.)
+                let semitones = (request.shade?.pitch ?? 0) + PocketVoice.semitones(pitch: request.choice.pitch)
+                let sample: QwenSamples.Sample
+                let seedKey: String
+                if LocalClones.isClone(request.choice) {
+                    // A voice cloned on this Mac: every line from the narrator's own clip.
+                    let clip = try LocalClones.shared.sample(for: request.choice.voiceID)
+                    sample = try QwenSamples.shaded(QwenSamples.Sample(audio: clip.audio, text: clip.text),
+                                                    key: request.choice.voiceID, semitones: semitones)
+                    seedKey = request.choice.voiceID
+                } else {
+                    let design = request.choice.design ?? VoiceResolver.fallback(.qwen)?.design ?? ""
+                    let tone = QwenSamples.sampleTone(for: request)
+                    sample = try QwenSamples.shaded(try await QwenSamples.sample(design: design, tone: tone),
+                                                    key: QwenSamples.key(design: design, tone: tone), semitones: semitones)
+                    seedKey = design
+                }
+                samples += try await MLXSpeech.shared.qwenClone(text: piece, reference: sample.audio, referenceText: sample.text,
+                                                                seed: seed(piece + seedKey))
             }
         }
         return try buffer(level(samples), volume: volume)
@@ -124,7 +152,7 @@ enum ModelSpeech {
     /// Loads the engine's models ahead of the first line (they take several seconds).
     static func prepare(_ engine: VoiceEngine) {
         Task { @MainActor in
-            let wanted = engine == .mixed ? [VoiceEngine.pocket, .orpheus] : [engine]
+            let wanted = engine == .mixed ? [VoiceEngine.pocket, .qwen, .orpheus] : [engine]
             let ready = wanted.filter { $0 != .apple && EngineSwitches.shared.usable($0) }
             guard !ready.isEmpty else { return }
             await MLXSpeech.shared.preload(ready)
@@ -202,6 +230,75 @@ enum PocketClips {
     static func forget() { memory = [:] }
 }
 
+/// Qwen3-TTS voice samples: a few seconds in the designed voice that every line is cloned
+/// from. Made once per design (and tone), then kept in Voice Models/Samples.
+@MainActor
+enum QwenSamples {
+    struct Sample: Sendable {
+        var audio: [Float]
+        var text: String
+    }
+
+    /// What the sample says: plain, unhurried and long enough to carry the voice.
+    static let sampleText = "I have lived in this town for a long time, and I know every road that leads out of it."
+
+    static var folder: URL {
+        let dir = VoicePack.folder.appending(path: "Samples")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    private static var memory: [String: Sample] = [:]
+
+    /// The tone the line's sample is recorded in. Narration is always even.
+    static func sampleTone(for request: SpeechRequest) -> Tone {
+        request.kind == nil ? .neutral : request.tone
+    }
+
+    static func key(design: String, tone: Tone) -> String {
+        let s = "v1\u{1F}" + design + "\u{1F}" + tone.rawValue
+        return SHA256.hash(data: Data(s.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
+    static func sample(design: String, tone: Tone) async throws -> Sample {
+        let k = key(design: design, tone: tone)
+        if let s = memory[k] { return s }
+        let file = folder.appending(path: k + ".caf")
+        if let b = SpeechRenderer.read(file), let data = b.floatChannelData {
+            let s = Sample(audio: Array(UnsafeBufferPointer(start: data[0], count: Int(b.frameLength))), text: sampleText)
+            memory[k] = s
+            return s
+        }
+        let prompt = tone == .neutral ? design : design + " Speaking " + tone.direction + "."
+        let audio = try await MLXSpeech.shared.qwenDesign(text: sampleText, description: prompt, seed: ModelSpeech.seed(design))
+        SpeechRenderer.write(try ModelSpeech.buffer(audio), to: file)
+        let s = Sample(audio: audio, text: sampleText)
+        memory[k] = s
+        return s
+    }
+
+    /// The sample with its pitch shifted `semitones` (a shade, the narrator's pitch), kept
+    /// beside the sample so it's made once. 0 is the sample itself.
+    static func shaded(_ sample: Sample, key: String, semitones: Int) throws -> Sample {
+        guard semitones != 0 else { return sample }
+        let k = key + "-shade\(semitones)"
+        if let s = memory[k] { return s }
+        let file = folder.appending(path: k + ".caf")
+        if let b = SpeechRenderer.read(file), let data = b.floatChannelData {
+            let s = Sample(audio: Array(UnsafeBufferPointer(start: data[0], count: Int(b.frameLength))), text: sample.text)
+            memory[k] = s
+            return s
+        }
+        let audio = try ShadeAudio.apply(sample.audio, semitones: semitones, pace: 0)
+        SpeechRenderer.write(try ModelSpeech.buffer(audio), to: file)
+        let s = Sample(audio: audio, text: sample.text)
+        memory[k] = s
+        return s
+    }
+
+    static func forget() { memory = [:] }
+}
+
 /// Runs the models, one generation at a time (they share the GPU), and keeps only one
 /// engine's models in memory.
 actor MLXSpeech {
@@ -209,6 +306,8 @@ actor MLXSpeech {
 
     private var orpheusModel: LlamaTTSModel?
     private var pocketModel: PocketTTSModel?
+    private var qwenDesignModel: Qwen3TTSModel?
+    private var qwenCloneModel: Qwen3TTSModel?
     private var busy = false
     private var waiters: [CheckedContinuation<Void, Never>] = []
 
@@ -225,6 +324,8 @@ actor MLXSpeech {
         await acquire(); defer { release() }
         orpheusModel = nil
         pocketModel = nil
+        qwenDesignModel = nil
+        qwenCloneModel = nil
         Memory.clearCache()
     }
 
@@ -235,14 +336,27 @@ actor MLXSpeech {
         return m
     }
 
-    /// Pocket TTS is small (about 1 GB while it speaks), so Macs with 16 GB or more keep it
-    /// loaded beside Orpheus (about 4 GB), and a project that mixes engines doesn't reload a
-    /// model between lines. Smaller Macs keep one.
-    private let keepBoth = ProcessInfo.processInfo.physicalMemory >= 16 * 1_073_741_824
+    /// What stays loaded together, so a project that mixes engines doesn't reload a model
+    /// between lines. Pocket TTS is small (about 1 GB while it speaks): Macs with 16 GB or
+    /// more keep it beside a bigger engine. Orpheus (about 4 GB) and Qwen3-TTS (its two
+    /// models, about 6 GB) stay loaded together only on Macs with 32 GB or more.
+    private let memoryGB = ProcessInfo.processInfo.physicalMemory / 1_073_741_824
+
+    /// Makes room for `engine` by dropping what this Mac can't keep beside it.
+    private func makeRoom(for engine: VoiceEngine) {
+        if memoryGB < 16 {
+            if engine != .pocket { pocketModel = nil }
+            if engine != .orpheus { orpheusModel = nil }
+            if engine != .qwen { qwenDesignModel = nil; qwenCloneModel = nil }
+        } else if memoryGB < 32 {
+            if engine == .orpheus { qwenDesignModel = nil; qwenCloneModel = nil }
+            if engine == .qwen { orpheusModel = nil }
+        }
+    }
 
     private func loadOrpheus() async throws -> LlamaTTSModel {
         if let m = orpheusModel { return m }
-        if !keepBoth { pocketModel = nil }
+        makeRoom(for: .orpheus)
         await SpeechModelActivity.begin(.orpheus)
         defer { Task { await SpeechModelActivity.end(.orpheus) } }
         let m = try await Self.load(VoicePack.orpheus.repos[0], as: LlamaTTSModel.self)
@@ -250,9 +364,34 @@ actor MLXSpeech {
         return m
     }
 
+    /// Qwen3-TTS's models are loaded from their folders, never fetched: the weights, text
+    /// tokenizer and speech tokenizer all come with the pack (`fromModelDirectory` reads
+    /// nothing else).
+    private func loadQwen(_ repo: String) async throws -> Qwen3TTSModel {
+        makeRoom(for: .qwen)
+        await SpeechModelActivity.begin(.qwen)
+        defer { Task { await SpeechModelActivity.end(.qwen) } }
+        Memory.cacheLimit = 512 * 1024 * 1024
+        return try await Qwen3TTSModel.fromModelDirectory(VoicePack.directory(repo))
+    }
+
+    private func loadQwenDesign() async throws -> Qwen3TTSModel {
+        if let m = qwenDesignModel { return m }
+        let m = try await loadQwen(VoicePack.qwenDesignRepo)
+        qwenDesignModel = m
+        return m
+    }
+
+    private func loadQwenClone() async throws -> Qwen3TTSModel {
+        if let m = qwenCloneModel { return m }
+        let m = try await loadQwen(VoicePack.qwenCloneRepo)
+        qwenCloneModel = m
+        return m
+    }
+
     private func loadPocket() async throws -> PocketTTSModel {
         if let m = pocketModel { return m }
-        if !keepBoth { orpheusModel = nil }
+        makeRoom(for: .pocket)
         await SpeechModelActivity.begin(.pocket)
         defer { Task { await SpeechModelActivity.end(.pocket) } }
         Memory.cacheLimit = 512 * 1024 * 1024
@@ -270,6 +409,7 @@ actor MLXSpeech {
         switch engine {
         case .orpheus: orpheusModel = nil
         case .pocket: pocketModel = nil
+        case .qwen: qwenDesignModel = nil; qwenCloneModel = nil
         case .apple, .mixed, .elevenlabs: break
         }
         Memory.clearCache()
@@ -282,6 +422,7 @@ actor MLXSpeech {
                 switch engine {
                 case .orpheus: _ = try await loadOrpheus()
                 case .pocket: _ = try await loadPocket()
+                case .qwen: _ = try await loadQwenClone(); _ = try await loadQwenDesign()
                 case .apple, .mixed, .elevenlabs: break
                 }
             } catch {
@@ -315,6 +456,33 @@ actor MLXSpeech {
         MLXRandom.seed(seed)
         let ref = MLXArray(reference).materialized()
         let audio = try await model.generate(text: text, voice: nil, refAudio: ref, refText: nil, language: nil, generationParameters: p)
+        return audio.asArray(Float.self)
+    }
+
+    /// A few seconds in a voice described in words (Qwen3-TTS VoiceDesign).
+    func qwenDesign(text: String, description: String, seed: UInt64) async throws -> [Float] {
+        await acquire(); defer { release() }
+        try Task.checkCancellation()
+        let model = try await loadQwenDesign()
+        var p = model.defaultGenerationParameters
+        p.seed = seed
+        p.maxTokens = 1200
+        MLXRandom.seed(seed)
+        let audio = try await model.generate(text: text, voice: description, refAudio: nil, refText: nil, language: "English", generationParameters: p)
+        return audio.asArray(Float.self)
+    }
+
+    /// One piece of text in the voice of `reference` (24 kHz mono) and its words (Qwen3-TTS Base).
+    func qwenClone(text: String, reference: [Float], referenceText: String, seed: UInt64) async throws -> [Float] {
+        await acquire(); defer { release() }
+        try Task.checkCancellation()
+        let model = try await loadQwenClone()
+        var p = model.defaultGenerationParameters
+        p.seed = seed
+        p.maxTokens = 2400
+        MLXRandom.seed(seed)
+        let ref = MLXArray(reference).materialized()
+        let audio = try await model.generate(text: text, voice: nil, refAudio: ref, refText: referenceText, language: "English", generationParameters: p)
         return audio.asArray(Float.self)
     }
 }
