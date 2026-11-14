@@ -45,12 +45,26 @@ nonisolated struct VoicePack: Sendable {
     static let qwenDesignRepo = "mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit"
     static let qwenCloneRepo = "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit"
 
+    static let chatterbox = VoicePack(
+        engine: .chatterbox,
+        repos: [VoicePack.chatterboxRepo, VoicePack.chatterboxTokenizerRepo],
+        bytes: 3_192_000_000,
+        summary: "Resemble AI’s expressive model: ten stock voices and the voices you clone on this Mac, kept the same on every line and acted in each tone with its emotion setting. Uses about 4 GB of memory while it speaks.")
+
+    /// Chatterbox (Resemble AI, MIT; mlx-community's fp16 MLX copy): clones a voice from a
+    /// short clip and speaks the lines.
+    static let chatterboxRepo = "mlx-community/Chatterbox-TTS-fp16"
+    /// The speech tokenizer Chatterbox reads a clip with (from Alibaba's CosyVoice 2, which
+    /// is why Chatterbox carries the "Uses parts developed in China" label).
+    static let chatterboxTokenizerRepo = "mlx-community/S3TokenizerV2"
+
     static func pack(for engine: VoiceEngine) -> VoicePack? {
         switch engine {
-        case .apple, .mixed, .elevenlabs: nil
+        case .apple, .mixed, .elevenlabs, .gemini: nil
         case .orpheus: orpheus
         case .pocket: pocket
         case .qwen: qwen
+        case .chatterbox: chatterbox
         }
     }
 
@@ -108,6 +122,7 @@ final class VoiceModelManager {
     func isInstalled(_ engine: VoiceEngine) -> Bool {
         _ = revision
         if engine == .elevenlabs { return ElevenLabs.shared.isSetUp }
+        if engine == .gemini { return GeminiVoices.shared.isSetUp }
         if engine == .apple || engine == .mixed { return true }
         // Checking lists the model folders on disk, and views ask on every redraw: the answer
         // is kept until a pack is downloaded or removed (`revision` changes).

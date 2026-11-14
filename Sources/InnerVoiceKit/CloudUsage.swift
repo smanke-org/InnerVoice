@@ -2,7 +2,7 @@ import Foundation
 
 /// What the cloud services used, per day, book and model: numbers only, never book text.
 public struct CloudUsageRecord: Codable, Hashable, Sendable {
-    public enum Service: String, Codable, Sendable { case claude, elevenlabs }
+    public enum Service: String, Codable, Sendable { case claude, elevenlabs, google }
 
     /// "yyyy-MM-dd" in the Mac's time zone.
     public var day: String
@@ -16,6 +16,9 @@ public struct CloudUsageRecord: Codable, Hashable, Sendable {
     public var cacheWriteTokens = 0
     /// ElevenLabs bills by characters.
     public var characters = 0
+    /// Gemini TTS bills by seconds of audio made (25 output tokens a second). Optional so
+    /// records saved before it existed still read.
+    public var audioSeconds: Double?
     public var requests = 0
 
     public init(day: String, book: String, service: Service, model: String) {
@@ -30,6 +33,10 @@ public struct CloudUsageRecord: Codable, Hashable, Sendable {
     /// Dollars at Anthropic's list prices (cache reads 0.1×, cache writes 1.25× the input
     /// price). nil for ElevenLabs and for models without a known price.
     public var cost: Double? {
+        if service == .google {
+            guard let m = GeminiTTS.Model(rawValue: model) else { return nil }
+            return (audioSeconds ?? 0) * m.dollarsPerSecond() + Double(inputTokens) * 0.5 / 1_000_000
+        }
         guard service == .claude, let p = ClaudePricing.price(for: model) else { return nil }
         let input = Double(inputTokens) + Double(cacheReadTokens) * 0.1 + Double(cacheWriteTokens) * 1.25
         return (input * p.input + Double(outputTokens) * p.output) / 1_000_000
@@ -41,6 +48,7 @@ public struct CloudUsageRecord: Codable, Hashable, Sendable {
         cacheReadTokens += other.cacheReadTokens
         cacheWriteTokens += other.cacheWriteTokens
         characters += other.characters
+        if other.audioSeconds != nil { audioSeconds = (audioSeconds ?? 0) + (other.audioSeconds ?? 0) }
         requests += other.requests
     }
 

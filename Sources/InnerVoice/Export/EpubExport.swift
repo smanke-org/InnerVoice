@@ -138,6 +138,11 @@ struct EpubExportSheet: View {
                     .font(.callout)
                     .foregroundStyle(.orange)
             }
+            if document.project.settings.googleVoicesAllowed != nil, document.project.engineInUse == .gemini || document.project.engineInUse == .mixed && EngineSwitches.shared.isOn(.gemini) {
+                Label("Gemini TTS voices are made in the cloud: exporting sends the text they speak to Google, billed to your Gemini API key.", systemImage: "icloud.and.arrow.up")
+                    .font(.callout)
+                    .foregroundStyle(.orange)
+            }
             Form {
                 Section("Chapters") { chapterList }
             }

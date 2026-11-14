@@ -26,9 +26,14 @@ final class EngineSwitches {
         }
     }
 
-    /// ElevenLabs counts as on only once it's set up (a key and the narrator's yes).
+    /// A cloud engine counts as on only once it's set up (a key and the narrator's yes).
     func isOn(_ engine: VoiceEngine) -> Bool {
-        !off.contains(engine) && (!engine.isCloud || ElevenLabs.shared.isSetUp)
+        guard !off.contains(engine) else { return false }
+        switch engine {
+        case .elevenlabs: return ElevenLabs.shared.isSetUp
+        case .gemini: return GeminiVoices.shared.isSetUp
+        default: return true
+        }
     }
 
     var enabled: [VoiceEngine] { VoiceEngine.engines.filter(isOn) }
@@ -65,7 +70,7 @@ final class EngineSwitches {
         let local = enabled.filter { !$0.isCloud }
         if chosen == .mixed { return enabled.count > 1 ? .mixed : enabled.first ?? .apple }
         // A cloud engine only for a book that allows it.
-        if chosen.isCloud, project.settings.cloudVoicesAllowed == nil { return local.first ?? .apple }
+        if !project.settings.allowsCloud(chosen) { return local.first ?? .apple }
         return isOn(chosen) ? chosen : local.first ?? enabled.first ?? chosen
     }
 }

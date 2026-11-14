@@ -270,6 +270,9 @@ final class Workspace {
     /// The engine to switch to once the narrator allows this book's text to go to
     /// ElevenLabs (the Voices page asks).
     var askCloudEngine: VoiceEngine?
+    /// The cloud engine whose company the question is about (ElevenLabs or Gemini TTS); with
+    /// `askCloudEngine` == .mixed, the one to include in Mix Engines.
+    var askCloudService: VoiceEngine = .elevenlabs
     /// "What is this project for?" (asked once per project).
     var showProjectType = false
     var showProjectSettings = false

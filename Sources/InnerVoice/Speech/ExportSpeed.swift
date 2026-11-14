@@ -29,13 +29,13 @@ enum ExportSpeed: String, CaseIterable, Identifiable {
 
     /// ElevenLabs gains the most (it waits on the network) and works at full speed; the
     /// voices on this Mac gain little, so they start one at a time.
-    static func standard(_ engine: VoiceEngine) -> ExportSpeed { engine == .elevenlabs ? .fastest : .slowest }
+    static func standard(_ engine: VoiceEngine) -> ExportSpeed { engine.isCloud ? .fastest : .slowest }
 
     static func current(_ engine: VoiceEngine) -> ExportSpeed {
         UserDefaults.standard.string(forKey: key(engine)).flatMap(ExportSpeed.init(rawValue:)) ?? standard(engine)
     }
 
-    static let engines: [VoiceEngine] = [.apple, .pocket, .qwen, .orpheus, .elevenlabs]
+    static let engines: [VoiceEngine] = VoiceEngine.engines
 
     /// The speed settings go to the person's other Macs with their other settings.
     static func registerSync() {

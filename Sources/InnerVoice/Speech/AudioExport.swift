@@ -253,6 +253,8 @@ struct AudioExportSheet: View {
     @State private var error: String?
     /// ElevenLabs credits this export would use, and what the plan has left.
     @State private var credits: (needed: Int, lines: Int, left: Int?)?
+    /// Characters of Gemini TTS lines this export would send (for a cost estimate).
+    @State private var geminiCharacters: Int?
 
     /// The engines this book's voices use, for the Export Speed pickers.
     private var speedEngines: [VoiceEngine] {
@@ -342,8 +344,19 @@ struct AudioExportSheet: View {
                     .font(.callout)
                     .foregroundStyle(.orange)
             }
+            if document.project.settings.googleVoicesAllowed != nil, document.project.engineInUse == .gemini || document.project.engineInUse == .mixed && EngineSwitches.shared.isOn(.gemini) {
+                Label("Gemini TTS voices are made in the cloud: exporting sends the text they speak to Google, billed to your Gemini API key.", systemImage: "icloud.and.arrow.up")
+                    .font(.callout)
+                    .foregroundStyle(.orange)
+            }
             if let credits, credits.needed > 0 {
                 creditsNote(credits)
+            }
+            if let geminiCharacters, geminiCharacters > 0 {
+                let dollars = GeminiTTS.estimatedSeconds(characters: geminiCharacters) * GeminiVoices.shared.model.dollarsPerSecond()
+                Label("About \(dollars.formatted(.currency(code: "USD"))) of Gemini TTS for the lines not made yet, at Google’s paid-tier prices.", systemImage: "creditcard")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
             Form {
                 Picker("Export", selection: $scope) {
@@ -478,15 +491,19 @@ struct AudioExportSheet: View {
     /// charges about a credit a character), then asks ElevenLabs what the plan has left.
     /// Only the plan's numbers come back; no book text is sent.
     private func estimateCredits() async {
-        guard ElevenLabs.shared.isSetUp else { credits = nil; return }
+        guard ElevenLabs.shared.isSetUp || GeminiVoices.shared.isSetUp else { credits = nil; geminiCharacters = nil; return }
         let resolver = VoiceResolver(project: document.project, index: document.index)
-        var needed = 0, lines = 0
+        var needed = 0, lines = 0, gemini = 0
         for (n, seg) in parts().flatMap(\.segments).enumerated() {
             if n % 500 == 0 { await Task.yield(); if Task.isCancelled { return } }
-            guard let r = resolver.request(for: seg), r.choice.engine == .elevenlabs, !SpeechRenderer.shared.isCached(r) else { continue }
-            needed += r.text.trimmingCharacters(in: .whitespacesAndNewlines).count
+            guard let r = resolver.request(for: seg), r.choice.engine.isCloud, r.cloudAllowed, !SpeechRenderer.shared.isCached(r) else { continue }
+            let count = r.text.trimmingCharacters(in: .whitespacesAndNewlines).count
+            if r.choice.engine == .gemini { gemini += count; continue }
+            needed += count
             lines += 1
         }
+        geminiCharacters = gemini
+        guard ElevenLabs.shared.isSetUp else { credits = nil; return }
         credits = (needed, lines, credits?.left)
         guard needed > 0, credits?.left == nil, let account = try? await ElevenLabs.shared.account(), !Task.isCancelled else { return }
         credits = (needed, lines, max(0, account.limit - account.used))

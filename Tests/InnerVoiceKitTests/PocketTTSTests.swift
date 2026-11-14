@@ -94,8 +94,9 @@ import Testing
         // `.mixed` names no voices, so the player falls back to the narrator.
         #expect(choice.engine == .mixed)
         #expect(try JSONDecoder().decode([VoiceEngine].self, from: Data(#"["apple","chatterbox","orpheus","elevenlabs","mixed","qwen"]"#.utf8))
-                == [.apple, .pocket, .orpheus, .elevenlabs, .mixed, .qwen])
-        // Saved as "pocket"; the unreleased test build's "chatterbox" reads as Pocket TTS.
+                == [.apple, .chatterbox, .orpheus, .elevenlabs, .mixed, .qwen])
+        // "chatterbox" is a real engine again (2026-11-14); the unreleased 0.4 test build's
+        // books used the same "stock:"/"clone:" voice IDs, so they speak with it as saved.
         #expect(String(decoding: try JSONEncoder().encode(VoiceEngine.pocket), as: UTF8.self) == #""pocket""#)
     }
 

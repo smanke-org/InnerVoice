@@ -384,8 +384,9 @@ struct SpeechStatusBar: View {
 
     private var message: String {
         switch player.preparingEngine {
-        case .pocket?, .qwen?, .orpheus?: "Getting \(player.preparingEngine!.title) ready… The first line takes a few seconds."
+        case .pocket?, .qwen?, .chatterbox?, .orpheus?: "Getting \(player.preparingEngine!.title) ready… The first line takes a few seconds."
         case .elevenlabs?: "Sending the line to ElevenLabs…"
+        case .gemini?: "Sending the line to Google…"
         default: "Making the audio…"
         }
     }

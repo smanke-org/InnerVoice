@@ -84,7 +84,7 @@ public enum ToneSource: String, Codable, Sendable {
     case rule, ai, user
 }
 
-/// A text-to-speech engine. All but ElevenLabs run on the Mac.
+/// A text-to-speech engine. All but ElevenLabs and Gemini TTS run on the Mac.
 ///
 /// Qwen3-TTS ("qwen") was retired on 2026-11-13 and came back on 2026-11-14 beside Pocket TTS:
 /// books 1.0.0–1.0.2 opened had their Qwen3-TTS voices turned into Pocket TTS ones and keep
@@ -97,30 +97,29 @@ public enum VoiceEngine: String, Codable, CaseIterable, Identifiable, Sendable {
     /// ElevenLabs, in the cloud: the only engine that sends text off the Mac. Off until the
     /// narrator sets it up, and each book must allow it.
     case elevenlabs
+    /// Google's Gemini TTS, in the cloud: sends text to Google. Off until the narrator sets
+    /// it up, and each book must allow it (`ProjectSettings.googleVoicesAllowed`).
+    case gemini
+    /// Chatterbox (Resemble AI, MIT) on the Mac: clones every voice from a short clip. Its
+    /// speech tokenizer and speaker encoder come from Alibaba research, so it's labeled
+    /// like Qwen3-TTS.
+    case chatterbox
     /// Not an engine itself: each character can have a voice from any engine that's on.
     /// A voice's own `VoiceChoice.engine` is always a real one.
     case mixed
 
     public var id: String { rawValue }
 
-    /// A test build briefly saved its on-device engine as "chatterbox" (never released): it
-    /// reads as Pocket TTS too.
-    static let unreleasedTestEngine = "chatterbox"
-
     public init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
-        if let known = VoiceEngine(rawValue: raw) {
-            self = known
-        } else {
-            self = raw == Self.unreleasedTestEngine ? .pocket : .mixed
-        }
+        self = VoiceEngine(rawValue: raw) ?? .mixed
     }
 
     /// The engines that make sound (everything but `.mixed`).
-    public static let engines: [VoiceEngine] = [.apple, .pocket, .qwen, .orpheus, .elevenlabs]
+    public static let engines: [VoiceEngine] = [.apple, .pocket, .qwen, .chatterbox, .orpheus, .elevenlabs, .gemini]
 
     /// Sends the book's text to a company's servers to make the audio.
-    public var isCloud: Bool { self == .elevenlabs }
+    public var isCloud: Bool { self == .elevenlabs || self == .gemini }
 
     public var title: String {
         switch self {
@@ -129,9 +128,24 @@ public enum VoiceEngine: String, Codable, CaseIterable, Identifiable, Sendable {
         case .qwen: "Qwen3-TTS"
         case .orpheus: "Orpheus"
         case .elevenlabs: "ElevenLabs"
+        case .gemini: "Gemini TTS"
+        case .chatterbox: "Chatterbox"
         case .mixed: "Mix Engines"
         }
     }
+
+    /// The company a cloud engine sends text to ("ElevenLabs", "Google"); nil on the Mac.
+    public var cloudCompany: String? {
+        switch self {
+        case .elevenlabs: "ElevenLabs"
+        case .gemini: "Google"
+        default: nil
+        }
+    }
+
+    /// Engines on the Mac whose parts were developed in China (Qwen3-TTS; Chatterbox's
+    /// speech tokenizer and speaker encoder). Labeled wherever they're offered.
+    public var hasChineseOrigin: Bool { self == .qwen || self == .chatterbox }
 
     /// Whether the engine acts out a line's tone (Apple's voices can't).
     public var actsTones: Bool { self != .apple }
@@ -692,9 +706,9 @@ public enum VoiceCasting {
                 continue
             }
             var choice = ageAdjusted(voice, for: p.age)
-            // Apple and Pocket TTS voices can't take a description: the brief's pitch and pace
-            // nudge them (for Pocket TTS, about a semitone and 6% a step).
-            if voice.engine == .apple || voice.engine == .pocket, p.pitchLean != 0 || p.paceLean != 0 {
+            // Apple, Pocket TTS and Chatterbox voices can't take a description: the brief's
+            // pitch and pace nudge them (for the clip engines, about a semitone and 6% a step).
+            if [.apple, .pocket, .chatterbox].contains(voice.engine), p.pitchLean != 0 || p.paceLean != 0 {
                 choice.pitch = ((choice.pitch ?? 1) * (1 + 0.06 * Double(p.pitchLean)) * 100).rounded() / 100
                 choice.rate = ((choice.rate ?? 1) * (1 + 0.06 * Double(p.paceLean)) * 100).rounded() / 100
             }
@@ -725,7 +739,8 @@ public enum VoiceCasting {
             case .older: choice.pitch = 0.88; choice.rate = 0.92
             case .adult: break
             }
-        case .pocket where !voice.voiceID.hasPrefix(PocketVoice.clonePrefix):
+        case .pocket where !voice.voiceID.hasPrefix(PocketVoice.clonePrefix),
+             .chatterbox where !voice.voiceID.hasPrefix(PocketVoice.clonePrefix):
             switch a {
             case .child: choice.pitch = 1.19; choice.rate = 1.05
             case .older: choice.pitch = 0.89; choice.rate = 0.92

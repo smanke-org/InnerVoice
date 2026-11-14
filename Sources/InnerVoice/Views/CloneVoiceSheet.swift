@@ -264,8 +264,8 @@ struct CloneVoiceSheet: View {
             }
             .padding(Space.md)
             .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 10))
-        } else if ![.pocket, .qwen, .mixed].contains(document.project.engineInUse) {
-            Text("This book speaks with \(document.project.engineInUse.title). Voices cloned on this Mac speak with Pocket TTS or Qwen3-TTS: to hear one in this book, choose one of them or Mix Engines in the toolbar.")
+        } else if ![.pocket, .qwen, .chatterbox, .mixed].contains(document.project.engineInUse) {
+            Text("This book speaks with \(document.project.engineInUse.title). Voices cloned on this Mac speak with Pocket TTS, Qwen3-TTS or Chatterbox: to hear one in this book, choose one of them or Mix Engines in the toolbar.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -632,7 +632,8 @@ struct CloneVoiceSheet: View {
         case .mac:
             do {
                 let c = try LocalClones.shared.add(name: name, gender: gender, audio: clip, text: clipText)
-                result = LocalClones.info(c, engine: document.project.engineInUse == .qwen ? .qwen : .pocket)
+                let e = document.project.engineInUse
+                result = LocalClones.info(c, engine: e == .qwen || e == .chatterbox ? e : .pocket)
             } catch {
                 self.error = error.localizedDescription
             }

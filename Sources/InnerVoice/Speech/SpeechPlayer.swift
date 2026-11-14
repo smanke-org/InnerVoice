@@ -17,8 +17,8 @@ struct VoiceResolver {
     init(project: Project, engine: VoiceEngine? = nil, index: BookIndex? = nil) {
         let e = engine ?? project.engineInUse
         self.engine = e
-        // ElevenLabs only for a book that allows its text to be sent.
-        let usable = Set(VoiceEngine.engines.filter { EngineSwitches.shared.usable($0) && (!$0.isCloud || project.settings.cloudVoicesAllowed != nil) })
+        // A cloud engine only for a book that allows its text to go to that company.
+        let usable = Set(VoiceEngine.engines.filter { EngineSwitches.shared.usable($0) && project.settings.allowsCloud($0) })
         var map: [UUID: VoiceChoice] = [:]
         for c in project.characters {
             if let v = c.voice(for: e)?.choice { map[c.id] = Self.withNotes(v, c) }
@@ -40,7 +40,7 @@ struct VoiceResolver {
             }
         }
         characters = map
-        cloudAllowed = project.settings.cloudVoicesAllowed != nil
+        cloudAllowed = Set(VoiceEngine.engines.filter { $0.isCloud && project.settings.allowsCloud($0) })
         usageBook = project.usageKey
         self.usable = usable
         writtenByNarrator = UserDefaults.standard.object(forKey: "voices.writtenByNarrator") as? Bool ?? true
@@ -94,8 +94,8 @@ struct VoiceResolver {
         return out
     }
 
-    /// The book allows its text to go to ElevenLabs.
-    var cloudAllowed = false
+    /// The cloud engines this book allows its text to go to (each company has its own yes).
+    var cloudAllowed: Set<VoiceEngine> = []
     var usageBook = ""
 
     /// Whether letters, signs and other written text are read by the narrator
@@ -109,12 +109,12 @@ struct VoiceResolver {
         let e = engine ?? project.engineInUse
         if project.settings.narratorVoice(for: e)?.source == .user { return nil }
         guard let pov = project.character(project.settings.povCharacterID), let v = pov.voice(for: e)?.choice,
-              !v.isNarrator, EngineSwitches.shared.usable(v.engine), !v.engine.isCloud || project.settings.cloudVoicesAllowed != nil else { return nil }
+              !v.isNarrator, EngineSwitches.shared.usable(v.engine), project.settings.allowsCloud(v.engine) else { return nil }
         return pov
     }
 
     /// A voice when nothing is cast yet: the best Apple voice, Orpheus's first, Pocket TTS's
-    /// own voice, or Qwen3-TTS's narrator.
+    /// or Chatterbox's own voice, Qwen3-TTS's narrator, or Gemini's first.
     @MainActor
     static func fallback(_ engine: VoiceEngine) -> VoiceChoice? {
         switch engine {
@@ -122,7 +122,9 @@ struct VoiceResolver {
         case .orpheus: VoiceChoice(engine: .orpheus, voiceID: "tara")
         case .pocket: VoiceInfo.pocket.first?.choice
         case .qwen: VoiceInfo.qwenPresets.first?.choice
+        case .chatterbox: VoiceInfo.chatterbox.first?.choice
         case .elevenlabs: ElevenLabs.shared.voices.first?.choice
+        case .gemini: GeminiVoices.shared.voices.first?.choice
         case .mixed: EngineSwitches.shared.enabled.first.flatMap { $0 == .mixed ? nil : fallback($0) }
         }
     }
@@ -138,10 +140,10 @@ struct VoiceResolver {
     func request(for segment: SpeechSegment) -> SpeechRequest? {
         guard let choice = choice(for: segment) else { return nil }
         return SpeechRequest(text: segment.text, choice: choice, tone: segment.speakerID == nil && segment.lineID == nil ? .neutral : segment.tone,
-                             kind: segment.lineID == nil ? nil : segment.kind, sound: segment.sound, cloudAllowed: cloudAllowed,
+                             kind: segment.lineID == nil ? nil : segment.kind, sound: segment.sound, cloudAllowed: cloudAllowed.contains(choice.engine),
                              shade: shade(for: segment, choice: choice),
-                             // Delivery hints are ElevenLabs' audio tags: never sent to another engine.
-                             delivery: choice.engine == .elevenlabs && segment.lineID != nil ? segment.delivery : nil,
+                             // Delivery hints go only to the cloud engines that take directions.
+                             delivery: (choice.engine == .elevenlabs || choice.engine == .gemini) && segment.lineID != nil ? segment.delivery : nil,
                              usageBook: usageBook)
     }
 }

@@ -289,6 +289,7 @@ enum SelfTest {
         switches.set(.apple, on: false)
         switches.set(.pocket, on: false)
         switches.set(.qwen, on: false)
+        switches.set(.chatterbox, on: false)
         switches.set(.orpheus, on: false)
         check("the last engine that's on stays on", switches.isOn(.orpheus) && !switches.canTurnOff(.orpheus) && switches.enabled == [.orpheus])
         for e in VoiceEngine.engines { switches.set(e, on: true) }
@@ -703,7 +704,9 @@ enum SelfTest {
         let out = ProcessInfo.processInfo.environment["APP_SELFTEST_AUDIO_OUT"].map { URL(fileURLWithPath: $0) }
         if let out { try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true) }
         SpeechRenderer.shared.clearCache()
-        for engine in [VoiceEngine.orpheus, .pocket, .qwen] {
+        for engine in [VoiceEngine.orpheus, .pocket, .qwen, .chatterbox] {
+            // Chatterbox is optional here: tested when its pack is in the test folder.
+            if engine == .chatterbox, !ModelSpeech.isInstalled(engine) { continue }
             guard ModelSpeech.isInstalled(engine) else {
                 check("\(engine.title) is downloaded", false, VoicePack.folder.path)
                 continue
@@ -752,6 +755,7 @@ enum SelfTest {
             }
             if engine == .pocket { await pocketVoices(out: out) }
             if engine == .qwen { await qwenVoices(doc, out: out) }
+            if engine == .chatterbox { await chatterboxVoices(out: out) }
         }
         // Mix Engines: each character can have a voice from any engine; two engines take turns.
         if ModelSpeech.isInstalled(.pocket), ModelSpeech.isInstalled(.orpheus) {
@@ -859,6 +863,53 @@ enum SelfTest {
         } catch {
             check("a book saved with Qwen3-TTS opens with its Qwen3-TTS voices", false, error.localizedDescription)
         }
+    }
+
+    /// Chatterbox (with its pack in the test folder): every stock voice, Tara in every tone,
+    /// a child, and short lines (its run-on after a short line is cut).
+    private static func chatterboxVoices(out: URL?) async {
+        let said = "I told you the tide would turn before morning, and it did."
+        func speak(_ name: String, _ request: SpeechRequest, range: ClosedRange<Double> = 1.5...20) async {
+            do {
+                let start = Date()
+                let audio = try await SpeechRenderer.shared.render(request)
+                let took = Date().timeIntervalSince(start)
+                let seconds = Double(audio.frameLength) / audio.format.sampleRate
+                check("Chatterbox speaks \(name)", range.contains(seconds), String(format: "%.1f s of audio in %.1f s", seconds, took))
+                print(String(format: "CHATTERBOX %@: %.2f s audio in %.2f s, level %.1f dB", name, seconds, took, rmsDB(audio)))
+                if let out { SpeechRenderer.write(audio, to: out.appending(path: "chatterbox-\(name.replacingOccurrences(of: " ", with: "-")).caf")) }
+            } catch {
+                check("Chatterbox speaks \(name)", false, error.localizedDescription)
+            }
+        }
+        for v in VoiceInfo.chatterbox {
+            await speak("voice \(v.name.lowercased())", SpeechRequest(text: said, choice: v.choice, tone: .neutral, kind: .spoken))
+        }
+        guard let tara = VoiceInfo.chatterbox.first(where: { $0.name == "Tara" }) else { return }
+        for tone in Tone.allCases {
+            await speak("tone \(tone.rawValue)", SpeechRequest(text: said, choice: tara.choice, tone: tone, kind: .spoken))
+        }
+        await speak("child", SpeechRequest(text: said, choice: VoiceCasting.ageAdjusted(tara, for: .child), tone: .neutral, kind: .spoken))
+        for line in ["The path was underwater.", "No.", "Where is she?"] {
+            await speak("short “\(line)”", SpeechRequest(text: line, choice: tara.choice, tone: .neutral, kind: .spoken),
+                        range: 0.2...(ChatterboxRunOn.expectedSeconds(line) * 2.2 + 0.6))
+        }
+    }
+
+    /// Downloads the real Chatterbox pack (APP_SELFTEST_GET_CHATTERBOX=1), only into the test
+    /// folder APP_VOICE_MODELS names.
+    private static func getChatterbox() async {
+        guard ProcessInfo.processInfo.environment["APP_VOICE_MODELS"] != nil else {
+            check("Chatterbox downloads only into a test folder (set APP_VOICE_MODELS)", false); return
+        }
+        let manager = VoiceModelManager.shared
+        guard !manager.isInstalled(.chatterbox) else { return }
+        let start = Date()
+        manager.download(VoiceEngine.chatterbox)
+        await manager.waitForDownload(.chatterbox)
+        let failed: String? = if case .failed(let m)? = manager.states[.chatterbox] { m } else { nil }
+        check("Chatterbox downloads", manager.isInstalled(.chatterbox) && failed == nil,
+              failed ?? String(format: "%.0f s, %@", Date().timeIntervalSince(start), VoicePack.folder.path))
     }
 
     /// Downloads the real Pocket TTS pack (APP_SELFTEST_GET_POCKET=1), only into the test
@@ -1672,6 +1723,7 @@ enum SelfTest {
         await oldBookMigrates()
         // Downloads Pocket TTS into a test folder (never the person's own) for the voice checks.
         if ProcessInfo.processInfo.environment["APP_SELFTEST_GET_POCKET"] != nil { await getPocket() }
+        if ProcessInfo.processInfo.environment["APP_SELFTEST_GET_CHATTERBOX"] != nil { await getChatterbox() }
         if let dir = ProcessInfo.processInfo.environment["APP_MAKE_STOCK_VOICES"] { await makeStockVoices(to: URL(fileURLWithPath: dir)) }
         if ProcessInfo.processInfo.environment["APP_SELFTEST_PARALLEL"] != nil { await parallelModels(doc, undo: undo) }
         if ProcessInfo.processInfo.environment["APP_SELFTEST_VOICES"] != nil {
@@ -1681,6 +1733,7 @@ enum SelfTest {
         }
         if ProcessInfo.processInfo.environment["APP_SELFTEST_DOWNLOAD"] != nil { await voiceDownload() }
         await elevenLabs(doc, undo: undo)
+        await gemini(doc, undo: undo)
         await localClones(doc, undo: undo)
         redrawCost(doc)
         await links()

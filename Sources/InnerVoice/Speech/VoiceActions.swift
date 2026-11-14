@@ -45,7 +45,17 @@ import SwiftUI
 
     /// Lets this book's text go to ElevenLabs (the narrator said yes), or stops it.
     func setCloudVoicesAllowed(_ allowed: Bool, undoManager: UndoManager?) {
-        updateSettings(allowed ? "Allow ElevenLabs" : "Stop Sending to ElevenLabs", undoManager: undoManager) { $0.cloudVoicesAllowed = allowed ? .now : nil }
+        setCloudAllowed(.elevenlabs, allowed, undoManager: undoManager)
+    }
+
+    /// Lets this book's text go to a cloud engine's company (the narrator said yes), or stops
+    /// it. Each company has its own yes.
+    func setCloudAllowed(_ engine: VoiceEngine, _ allowed: Bool, undoManager: UndoManager?) {
+        guard let company = engine.cloudCompany else { return }
+        updateSettings(allowed ? "Allow \(company)" : "Stop Sending to \(company)", undoManager: undoManager) {
+            let date: Date? = allowed ? .now : nil
+            if engine == .gemini { $0.googleVoicesAllowed = date } else { $0.cloudVoicesAllowed = date }
+        }
         if allowed { VoiceCastingRun.castIfNeeded(document: self) }
     }
 

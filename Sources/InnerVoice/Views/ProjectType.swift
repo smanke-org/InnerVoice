@@ -113,15 +113,15 @@ struct ProjectTypeSheet: View {
                     engineRow(e)
                 }
             }
-            if !EngineSwitches.shared.usable(.pocket) || !EngineSwitches.shared.usable(.qwen) || !EngineSwitches.shared.usable(.orpheus) {
-                Text("More natural voices (Pocket TTS, Qwen3-TTS, Orpheus) are a free download in Settings › Voices, and you can switch engines later on the Voices page.")
+            if [.pocket, .qwen, .chatterbox, .orpheus].contains(where: { !EngineSwitches.shared.usable($0) }) {
+                Text("More natural voices (Pocket TTS, Qwen3-TTS, Chatterbox, Orpheus) are a free download in Settings › Voices, and you can switch engines later on the Voices page.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if engine.isCloud {
                 Toggle(isOn: $allowCloud) {
-                    Text("Send this book’s text to ElevenLabs. Its voices are made in the cloud, so every line they speak goes to ElevenLabs; a table read or an export sends the whole manuscript.")
+                    Text("Send this book’s text to \(engine.cloudCompany ?? "the cloud"). \(engine.title)’s voices are made in the cloud, so every line they speak goes to \(engine.cloudCompany ?? "it"); a table read or an export sends the whole manuscript.")
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .toggleStyle(.checkbox)
@@ -154,8 +154,8 @@ struct ProjectTypeSheet: View {
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: Space.xs) {
                         Text(e.title)
-                        if e.isCloud { CloudBadge() }
-                        if e == .qwen { LocalOriginBadge() }
+                        if let company = e.cloudCompany { CloudBadge(service: company) }
+                        if e.hasChineseOrigin { LocalOriginBadge(engine: e) }
                     }
                     Text(engineDetail(e)).font(.caption).foregroundStyle(.secondary)
                 }
@@ -174,7 +174,9 @@ struct ProjectTypeSheet: View {
         case .pocket: "Nine stock voices and the voices you clone, acted in each tone."
         case .qwen: "A voice designed for each character from the book and your Voice Notes, acted in each tone."
         case .orpheus: "Eight natural voices that act out the words."
+        case .chatterbox: "Ten stock voices and the voices you clone, acted in each tone with its emotion setting."
         case .elevenlabs: "Natural voices in the cloud, from your ElevenLabs account."
+        case .gemini: "Thirty voices in the cloud from Google, directed in plain words for each tone. Your own Gemini API key."
         case .mixed: ""
         }
     }
@@ -206,7 +208,7 @@ struct ProjectTypeSheet: View {
             return
         }
         if guided {
-            if engine.isCloud { document.setCloudVoicesAllowed(true, undoManager: undoManager) }
+            if engine.isCloud { document.setCloudAllowed(engine, true, undoManager: undoManager) }
             document.setVoiceEngine(engine, undoManager: undoManager)
             if needsTagging {
                 workspace.afterTagging = .voices

@@ -14,7 +14,13 @@ enum CloudInUse {
         return engine == .elevenlabs || (engine == .mixed && EngineSwitches.shared.isOn(.elevenlabs))
     }
 
-    @MainActor static func any(_ project: Project) -> Bool { claude() || elevenLabs(project) }
+    @MainActor static func gemini(_ project: Project) -> Bool {
+        guard project.showsVoices, project.settings.googleVoicesAllowed != nil, GeminiVoices.shared.isSetUp else { return false }
+        let engine = project.engineInUse
+        return engine == .gemini || (engine == .mixed && EngineSwitches.shared.isOn(.gemini))
+    }
+
+    @MainActor static func any(_ project: Project) -> Bool { claude() || elevenLabs(project) || gemini(project) }
 }
 
 /// The toolbar's Usage button: tokens, cost and what's left for each cloud model, in a popover.
@@ -42,14 +48,18 @@ struct CloudUsageView: View {
         let book = allBooks ? nil : project.usageKey
         let showClaude = CloudInUse.claude()
         let showEleven = CloudInUse.elevenLabs(project)
-        let records = store.records.filter { ($0.service == .claude && showClaude) || ($0.service == .elevenlabs && showEleven) }
+        let showGemini = CloudInUse.gemini(project)
+        let records = store.records.filter {
+            ($0.service == .claude && showClaude) || ($0.service == .elevenlabs && showEleven) || ($0.service == .google && showGemini)
+        }
+        let services = [showClaude ? "Anthropic" : nil, showEleven ? "ElevenLabs" : nil, showGemini ? "Google" : nil].compactMap { $0 }
         let totals = CloudUsage.totals(records, book: book)
         let days = CloudUsage.byDay(records, book: book)
         let currentClaude = ModelManager.shared.selection.hasPrefix("claude:") ? String(ModelManager.shared.selection.dropFirst(7)) : nil
         VStack(alignment: .leading, spacing: Space.md) {
             HStack {
                 Text("Cloud Usage").font(.title3.weight(.semibold))
-                CloudBadge(service: showClaude && showEleven ? "Anthropic and ElevenLabs" : showClaude ? "Anthropic" : "ElevenLabs")
+                CloudBadge(service: services.formatted(.list(type: .and)))
                 Spacer()
                 Picker("Show", selection: $allBooks) {
                     Text("This Book").tag(false)
@@ -112,6 +122,21 @@ struct CloudUsageView: View {
                 }
             }
 
+            if showGemini {
+                section("Gemini TTS", systemImage: "waveform") {
+                    let g = totals.filter { $0.service == .google }
+                    if g.isEmpty { empty("No Gemini voices made yet" + (allBooks ? "." : " for this book.")) }
+                    ForEach(g, id: \.model) { t in
+                        modelRow(name: t.model, current: t.model == GeminiVoices.shared.model.rawValue,
+                                 lines: [("Characters", t.characters), ("Seconds of audio", Int(t.audioSeconds ?? 0)), ("Requests", t.requests)],
+                                 cost: t.cost.map { $0.formatted(.currency(code: "USD").precision(.fractionLength(2...4))) } ?? "Price not known")
+                    }
+                    Text("Costs are worked out from Google’s paid-tier list prices (which double on January 1, 2027) and may differ from your bill. Your spending is in Google AI Studio.")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
             if !days.isEmpty {
                 Text("By day").font(.headline)
                 Chart(days, id: \.self) { r in
@@ -119,7 +144,7 @@ struct CloudUsageView: View {
                             y: .value(r.service == .claude ? "Tokens" : "Characters", r.service == .claude ? r.totalTokens : r.characters))
                         .foregroundStyle(by: .value("Model", label(r)))
                 }
-                .chartYAxisLabel(showClaude && showEleven ? "Tokens (Claude) / characters (ElevenLabs)" : showClaude ? "Tokens" : "Characters")
+                .chartYAxisLabel(showClaude && (showEleven || showGemini) ? "Tokens (Claude) / characters (voices)" : showClaude ? "Tokens" : "Characters")
                 .frame(height: 160)
                 let costDays = days.filter { $0.cost != nil }
                 if !costDays.isEmpty {
@@ -142,7 +167,11 @@ struct CloudUsageView: View {
     }
 
     private func label(_ r: CloudUsageRecord) -> String {
-        r.service == .claude ? ClaudeAccount.shared.name(of: r.model) : "ElevenLabs (\(r.model))"
+        switch r.service {
+        case .claude: ClaudeAccount.shared.name(of: r.model)
+        case .elevenlabs: "ElevenLabs (\(r.model))"
+        case .google: "Gemini (\(r.model))"
+        }
     }
 
     private func date(_ day: String) -> Date {

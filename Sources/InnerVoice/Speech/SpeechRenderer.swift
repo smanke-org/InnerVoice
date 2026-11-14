@@ -25,8 +25,8 @@ struct SpeechRequest: Hashable, Sendable {
     var cacheKey: String {
         var parts = ["v1", choice.engine.rawValue, choice.voiceID, choice.design ?? "", String(choice.rate ?? 1), String(choice.pitch ?? 1),
                      tone.rawValue, kind?.rawValue ?? "narration", text]
-        if choice.engine == .orpheus || choice.engine == .elevenlabs, let sound { parts.append(sound.rawValue) }
-        if choice.engine == .elevenlabs, let delivery { parts.append("delivery \(delivery)") }
+        if [.orpheus, .elevenlabs, .gemini].contains(choice.engine), let sound { parts.append(sound.rawValue) }
+        if choice.engine == .elevenlabs || choice.engine == .gemini, let delivery { parts.append("delivery \(delivery)") }
         // Unshaded audio keeps the key it always had, so the cache stays warm.
         if let shade, shade.pitch != 0 || shade.pace != 0 { parts.append("shade \(shade.pitch) \(shade.pace)") }
         return SHA256.hash(data: Data(parts.joined(separator: "\u{1F}").utf8)).map { String(format: "%02x", $0) }.joined()
@@ -136,8 +136,9 @@ final class SpeechRenderer {
         var buffer: AVAudioPCMBuffer
         switch request.choice.engine {
         case .apple: buffer = try await AppleSpeech.render(request)
-        case .pocket, .qwen, .orpheus: buffer = try await ModelSpeech.render(request)
+        case .pocket, .qwen, .chatterbox, .orpheus: buffer = try await ModelSpeech.render(request)
         case .elevenlabs: buffer = try await ElevenLabs.shared.render(request, allowed: request.cloudAllowed)
+        case .gemini: buffer = try await GeminiVoices.shared.render(request, allowed: request.cloudAllowed)
         case .mixed: throw SpeechError.engineUnavailable(.mixed)
         }
         // Shading: Apple's voices did it themselves; Pocket TTS shifted the clip it cloned
@@ -148,13 +149,21 @@ final class SpeechRenderer {
         let s = request.shade ?? Shade()
         switch request.choice.engine {
         case .apple, .mixed: break
-        case .qwen:
+        case .qwen, .chatterbox:
+            // Chatterbox shifted the clip like Pocket TTS and acts the tone itself.
             let rate = (request.choice.rate ?? 1) * ShadeAudio.paceRate(s.pace)
             if abs(rate - 1) > 0.001 { buffer = try ShadeAudio.apply(buffer, semitones: 0, rate: rate) }
         case .pocket:
             let tone = PocketDelivery.for(request.tone, narration: request.kind == nil)
             let rate = (request.choice.rate ?? 1) * ShadeAudio.paceRate(s.pace) * tone.rate
             if abs(rate - 1) > 0.001 { buffer = try ShadeAudio.apply(buffer, semitones: 0, rate: rate) }
+        case .gemini:
+            // Gemini has no speed or pitch setting: the shade and the narrator's speed are
+            // applied to the finished audio.
+            let rate = request.choice.rate ?? 1
+            if s.pitch != 0 || s.pace != 0 || abs(rate - 1) > 0.001 {
+                buffer = try ShadeAudio.apply(buffer, semitones: s.pitch, rate: rate * ShadeAudio.paceRate(s.pace))
+            }
         case .orpheus, .elevenlabs:
             if s.pitch != 0 || s.pace != 0 { buffer = try ShadeAudio.apply(buffer, semitones: s.pitch, pace: s.pace) }
         }

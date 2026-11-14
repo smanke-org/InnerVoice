@@ -122,12 +122,12 @@ struct VoicePackRow: View {
                 EngineSwitch(engine: pack.engine)
             }
         } label: {
-            if pack.engine == .qwen {
+            if pack.engine.hasChineseOrigin {
                 HStack(spacing: Space.sm) {
                     Text(pack.engine.title)
-                    LocalOriginBadge()
+                    LocalOriginBadge(engine: pack.engine)
                 }
-                Text(pack.summary + "\n\n" + LocalOriginBadge.detail)
+                Text(pack.summary + "\n\n" + (pack.engine == .chatterbox ? LocalOriginBadge.chatterboxDetail : LocalOriginBadge.detail))
             } else {
                 Text(pack.engine.title)
                 Text(pack.summary)
@@ -230,12 +230,14 @@ struct VoicesSettings: View {
             }
             VoicePackRow(pack: .pocket)
             VoicePackRow(pack: .qwen)
+            VoicePackRow(pack: .chatterbox)
             VoicePackRow(pack: .orpheus)
             ElevenLabsRow()
+            GeminiRow()
         } header: {
             Text("Engines")
         } footer: {
-            Text("Apple Voices, Pocket TTS, Qwen3-TTS and Orpheus run on this Mac; downloading them is the only time they use the internet. ElevenLabs is different: it makes its voices in the cloud, so the text it speaks is sent to ElevenLabs, and each book asks first. Choose the engine for each project on its Voices page; turn an engine off to hide it there.")
+            Text("Apple Voices, Pocket TTS, Qwen3-TTS, Chatterbox and Orpheus run on this Mac; downloading them is the only time they use the internet. ElevenLabs and Gemini TTS are different: they make their voices in the cloud, so the text they speak is sent to ElevenLabs or Google, and each book asks first, for each company. Choose the engine for each project on its Voices page; turn an engine off to hide it there.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -293,7 +295,7 @@ struct ElevenLabsRow: View {
     }
 }
 
-/// Settings › Voices: voices cloned on this Mac (Pocket TTS, Qwen3-TTS), to listen to, rename or delete.
+/// Settings › Voices: voices cloned on this Mac (Pocket TTS, Qwen3-TTS, Chatterbox), to listen to, rename or delete.
 struct LocalClonesSection: View {
     @State private var renaming: LocalClones.Clone?
     @State private var newName = ""
@@ -323,7 +325,7 @@ struct LocalClonesSection: View {
         } header: {
             Text("Voices Cloned on This Mac")
         } footer: {
-            Text("Pocket TTS and Qwen3-TTS speak these from a short recording kept on this Mac, so every project here can use them. Casting never chooses them on its own.")
+            Text("Pocket TTS, Qwen3-TTS and Chatterbox speak these from a short recording kept on this Mac, so every project here can use them. Casting never chooses them on its own.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -498,11 +500,16 @@ struct ClonedVoicesSection: View {
 /// it's as private as the other on-device engines. Green like a safe choice, never the
 /// orange of Cloud.
 struct LocalOriginBadge: View {
+    /// Qwen3-TTS (developed in China) or Chatterbox (parts developed in China).
+    var engine: VoiceEngine = .qwen
+
     static let text = "Developed in China · Runs on this Mac"
     static let detail = "Qwen3-TTS comes from Alibaba’s Qwen team in China. It runs entirely on this Mac from open model files (Apache 2.0): your book’s text and the audio never leave the Mac, and it never connects to Alibaba or any server in China. The only network use is the one-time model download from Hugging Face."
+    static let chatterboxText = "Uses parts developed in China · Runs on this Mac"
+    static let chatterboxDetail = "Chatterbox comes from Resemble AI in the US, but its speech tokenizer and part of its voice decoder come from Alibaba’s CosyVoice research, and its speaker encoder from Alibaba’s 3D-Speaker, both in China. It runs entirely on this Mac from open model files (MIT): your book’s text and the audio never leave the Mac, and it never connects to Resemble, Alibaba or any server in China. The only network use is the one-time model download from Hugging Face."
 
     var body: some View {
-        Label(Self.text, systemImage: "lock.shield")
+        Label(engine == .chatterbox ? Self.chatterboxText : Self.text, systemImage: "lock.shield")
             .font(.caption2.weight(.semibold))
             .labelStyle(.titleAndIcon)
             .padding(.horizontal, 6)
@@ -510,7 +517,7 @@ struct LocalOriginBadge: View {
             .foregroundStyle(.green)
             .background(.green.opacity(0.12), in: Capsule())
             .fixedSize()
-            .help(Self.detail)
+            .help(engine == .chatterbox ? Self.chatterboxDetail : Self.detail)
     }
 }
 

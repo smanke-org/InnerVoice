@@ -97,9 +97,11 @@ enum VoiceCatalog {
         case .orpheus: VoiceInfo.orpheus
         case .pocket: LocalClones.shared.voices(on: .pocket) + VoiceInfo.pocket
         case .qwen: LocalClones.shared.voices(on: .qwen) + VoiceInfo.qwenPresets
+        case .chatterbox: LocalClones.shared.voices(on: .chatterbox) + VoiceInfo.chatterbox
         case .elevenlabs: ElevenLabs.shared.voices
+        case .gemini: GeminiVoices.shared.voices
         // Every engine that's on and ready, best first within each.
-        case .mixed: VoiceEngine.engines.filter { EngineSwitches.shared.usable($0) && (!$0.isCloud || project?.settings.cloudVoicesAllowed != nil) }
+        case .mixed: VoiceEngine.engines.filter { EngineSwitches.shared.usable($0) && (!$0.isCloud || project?.settings.allowsCloud($0) == true) }
             .flatMap { voices(for: $0) }
         }
     }
@@ -116,7 +118,10 @@ enum VoiceCatalog {
             ?? VoiceInfo.pocket.first { $0.voiceID == choice.voiceID }
         case .qwen: LocalClones.shared.clone(for: choice.voiceID).map { LocalClones.info($0, engine: .qwen) }
             ?? VoiceInfo.qwenPresets.first { $0.voiceID == choice.voiceID }
+        case .chatterbox: LocalClones.shared.clone(for: choice.voiceID).map { LocalClones.info($0, engine: .chatterbox) }
+            ?? VoiceInfo.chatterbox.first { $0.voiceID == choice.voiceID }
         case .elevenlabs: ElevenLabs.shared.voices.first { $0.voiceID == choice.voiceID }
+        case .gemini: GeminiVoices.shared.voices.first { $0.voiceID == choice.voiceID }
         case .mixed: nil
         }
     }

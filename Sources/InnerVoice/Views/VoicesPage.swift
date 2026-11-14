@@ -61,8 +61,9 @@ struct VoicesPage: View {
         .toolbar {
             ToolbarItem {
                 Picker("Engine", selection: Binding(get: { engine }, set: { e in
-                    // The first time a book uses ElevenLabs, ask before any of its text is sent.
-                    if e.isCloud, document.project.settings.cloudVoicesAllowed == nil {
+                    // The first time a book uses a cloud engine, ask before any of its text is
+                    // sent to that company.
+                    if !document.project.settings.allowsCloud(e) {
                         workspace.askCloudEngine = e
                     } else {
                         document.setVoiceEngine(e, undoManager: undoManager)
@@ -1149,23 +1150,29 @@ struct PlayStopButton: View {
     }
 }
 
-/// Asks before a book's text is first sent to ElevenLabs.
+/// Asks before a book's text is first sent to a cloud engine's company.
 struct CloudPermissionAlert: ViewModifier {
     @ObservedObject var document: InnerVoiceDocument
     @Bindable var workspace: Workspace
     @Environment(\.undoManager) private var undoManager
 
+    private var service: VoiceEngine {
+        let e = workspace.askCloudEngine
+        return e?.isCloud == true ? e! : workspace.askCloudService
+    }
+
     func body(content: Content) -> some View {
-        content.alert("Send This Book to ElevenLabs?", isPresented: Binding(get: { workspace.askCloudEngine != nil }, set: { if !$0 { workspace.askCloudEngine = nil } })) {
-            Button("Send to ElevenLabs") {
-                let e = workspace.askCloudEngine ?? .elevenlabs
-                document.setCloudVoicesAllowed(true, undoManager: undoManager)
+        let company = service.cloudCompany ?? "the cloud"
+        content.alert("Send This Book to \(company)?", isPresented: Binding(get: { workspace.askCloudEngine != nil }, set: { if !$0 { workspace.askCloudEngine = nil } })) {
+            Button("Send to \(company)") {
+                let e = workspace.askCloudEngine ?? service
+                document.setCloudAllowed(service, true, undoManager: undoManager)
                 document.setVoiceEngine(e, undoManager: undoManager)
                 workspace.askCloudEngine = nil
             }
             Button("Cancel", role: .cancel) { workspace.askCloudEngine = nil }
         } message: {
-            Text("ElevenLabs makes its voices on its own servers. Every line of “\(document.project.title)” that an ElevenLabs voice speaks is sent there as text; a table read or an exported book sends the whole manuscript. Allow it only if you have the right to share this book. You can stop it at any time on the Voices page.")
+            Text("\(service.title) makes its voices on \(company)’s servers. Every line of “\(document.project.title)” that a \(service.title) voice speaks is sent there as text; a table read or an exported book sends the whole manuscript. Allow it only if you have the right to share this book. You can stop it at any time on the Voices page.")
         }
     }
 }
@@ -1176,41 +1183,52 @@ extension View {
     }
 }
 
-/// On the Voices page while a book uses ElevenLabs: a plain reminder that its text goes to
-/// the cloud, and a way to stop. When mixing engines without permission, a way to include it.
+/// On the Voices page while a book uses a cloud engine: a plain reminder that its text goes
+/// to the cloud, and a way to stop. When mixing engines without permission, a way to include it.
 struct CloudNotice: View {
     @ObservedObject var document: InnerVoiceDocument
     @Bindable var workspace: Workspace
     @Environment(\.undoManager) private var undoManager
 
     var body: some View {
+        VStack(spacing: Space.sm) {
+            ForEach([VoiceEngine.elevenlabs, .gemini], id: \.self) { notice(for: $0) }
+        }
+    }
+
+    @ViewBuilder
+    private func notice(for service: VoiceEngine) -> some View {
         let project = document.project
         let engine = project.engineInUse
-        let allowed = project.settings.cloudVoicesAllowed != nil
-        let elevenOn = EngineSwitches.shared.isOn(.elevenlabs)
-        if allowed, engine == .elevenlabs || (engine == .mixed && elevenOn) {
+        let company = service.cloudCompany ?? ""
+        let allowed = project.settings.allowsCloud(service)
+        let on = EngineSwitches.shared.isOn(service)
+        if allowed, engine == service || (engine == .mixed && on) {
             HStack(alignment: .top, spacing: Space.sm) {
                 Image(systemName: "icloud.and.arrow.up").foregroundStyle(.orange)
                 Text(engine == .mixed
-                     ? "ElevenLabs voices are made in the cloud: the lines they speak from this book are sent to ElevenLabs."
-                     : "This book uses ElevenLabs, in the cloud: every line its voices speak is sent to ElevenLabs as text.")
+                     ? "\(service.title) voices are made in the cloud: the lines they speak from this book are sent to \(company)."
+                     : "This book uses \(service.title), in the cloud: every line its voices speak is sent to \(company) as text.")
                     .font(.callout)
                 Spacer(minLength: Space.sm)
-                Button("Stop Sending This Book") { document.setCloudVoicesAllowed(false, undoManager: undoManager) }
+                Button("Stop Sending This Book") { document.setCloudAllowed(service, false, undoManager: undoManager) }
                     .controlSize(.small)
-                    .help("Nothing more from this book goes to ElevenLabs. Its voices switch to an engine on this Mac.")
+                    .help("Nothing more from this book goes to \(company). Its voices switch to an engine on this Mac.")
             }
             .padding(Space.md)
             .background(.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
-        } else if engine == .mixed, elevenOn, !allowed {
+        } else if engine == .mixed, on, !allowed {
             HStack(alignment: .top, spacing: Space.sm) {
                 Image(systemName: "cloud").foregroundStyle(.secondary)
-                Text("ElevenLabs voices aren’t in the mix: this book hasn’t allowed its text to be sent to ElevenLabs.")
+                Text("\(service.title) voices aren’t in the mix: this book hasn’t allowed its text to be sent to \(company).")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 Spacer(minLength: Space.sm)
-                Button("Include ElevenLabs…") { workspace.askCloudEngine = .mixed }
-                    .controlSize(.small)
+                Button("Include \(service.title)…") {
+                    workspace.askCloudService = service
+                    workspace.askCloudEngine = .mixed
+                }
+                .controlSize(.small)
             }
         }
     }

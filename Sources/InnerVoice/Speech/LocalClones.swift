@@ -27,7 +27,7 @@ final class LocalClones {
     /// `VoiceChoice.voiceID` for a clone: "clone:" and its id.
     nonisolated static let prefix = PocketVoice.clonePrefix
     /// Pocket TTS and Qwen3-TTS both speak a voice cloned on this Mac.
-    nonisolated static func isClone(_ choice: VoiceChoice) -> Bool { (choice.engine == .pocket || choice.engine == .qwen) && choice.voiceID.hasPrefix(prefix) }
+    nonisolated static func isClone(_ choice: VoiceChoice) -> Bool { [.pocket, .qwen, .chatterbox].contains(choice.engine) && choice.voiceID.hasPrefix(prefix) }
 
     /// A clone's clip and what it says.
     struct Sample: Sendable {

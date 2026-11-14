@@ -8,7 +8,7 @@ import MLXAudioTTS
 import NaturalLanguage
 import Observation
 
-/// Pocket TTS, Qwen3-TTS and Orpheus, on Apple's MLX (Apple silicon only).
+/// Pocket TTS, Qwen3-TTS, Chatterbox and Orpheus, on Apple's MLX (Apple silicon only).
 ///
 /// Orpheus has eight fixed voices and acts from the words; the speech tag's sighs, laughs
 /// and gasps are added as its sound tags.
@@ -25,6 +25,11 @@ import Observation
 /// in Voice Models/Samples); every line is then spoken by the base model from that sample,
 /// so the voice stays the same from line to line. A voice cloned on this Mac is spoken from
 /// the narrator's own clip and its words.
+///
+/// Chatterbox (Resemble AI, MIT; parts from Alibaba research, labeled in the UI) clones
+/// from the same clips as Pocket TTS plus its own default voice. The tone sets its emotion
+/// exaggeration and CFG weight (`ChatterboxDelivery`); a short line's run-on after a pause
+/// is cut (`ChatterboxRunOn`).
 enum ModelSpeech {
     @MainActor
     static func isInstalled(_ engine: VoiceEngine) -> Bool { VoiceModelManager.shared.isInstalled(engine) }
@@ -42,7 +47,16 @@ enum ModelSpeech {
             try Task.checkCancellation()
             if n > 0 { samples += gap }
             switch engine {
-            case .apple, .mixed, .elevenlabs: throw SpeechError.engineUnavailable(engine)
+            case .apple, .mixed, .elevenlabs, .gemini: throw SpeechError.engineUnavailable(engine)
+            case .chatterbox:
+                // Same clips as Pocket TTS; a shade and casting's age pitch shift the clip.
+                let semitones = (request.shade?.pitch ?? 0) + PocketVoice.semitones(pitch: request.choice.pitch)
+                let reference = try PocketClips.reference(for: request.choice, semitones: semitones)
+                let delivery = ChatterboxDelivery.for(request.tone, narration: request.kind == nil)
+                if n == 0 { volume *= Float(delivery.volume) }
+                let said = try await MLXSpeech.shared.chatterbox(text: piece, reference: reference, delivery: delivery,
+                                                                 seed: seed(piece + request.choice.voiceID))
+                samples += ChatterboxRunOn.trim(said, sampleRate: SpeechAudio.format.sampleRate, text: piece)
             case .orpheus:
                 var r = request
                 r.text = piece
@@ -308,6 +322,7 @@ actor MLXSpeech {
     private var pocketModel: PocketTTSModel?
     private var qwenDesignModel: Qwen3TTSModel?
     private var qwenCloneModel: Qwen3TTSModel?
+    private var chatterboxModel: ChatterboxModel?
     private var busy = false
     private var waiters: [CheckedContinuation<Void, Never>] = []
 
@@ -326,6 +341,7 @@ actor MLXSpeech {
         pocketModel = nil
         qwenDesignModel = nil
         qwenCloneModel = nil
+        chatterboxModel = nil
         Memory.clearCache()
     }
 
@@ -338,8 +354,9 @@ actor MLXSpeech {
 
     /// What stays loaded together, so a project that mixes engines doesn't reload a model
     /// between lines. Pocket TTS is small (about 1 GB while it speaks): Macs with 16 GB or
-    /// more keep it beside a bigger engine. Orpheus (about 4 GB) and Qwen3-TTS (its two
-    /// models, about 6 GB) stay loaded together only on Macs with 32 GB or more.
+    /// more keep it beside a bigger engine. Orpheus (about 4 GB), Chatterbox (about 4 GB) and
+    /// Qwen3-TTS (its two models, about 6 GB) stay loaded together only on Macs with 32 GB or
+    /// more; under that, only one of the three big engines stays loaded.
     private let memoryGB = ProcessInfo.processInfo.physicalMemory / 1_073_741_824
 
     /// Makes room for `engine` by dropping what this Mac can't keep beside it.
@@ -348,9 +365,11 @@ actor MLXSpeech {
             if engine != .pocket { pocketModel = nil }
             if engine != .orpheus { orpheusModel = nil }
             if engine != .qwen { qwenDesignModel = nil; qwenCloneModel = nil }
-        } else if memoryGB < 32 {
-            if engine == .orpheus { qwenDesignModel = nil; qwenCloneModel = nil }
-            if engine == .qwen { orpheusModel = nil }
+            if engine != .chatterbox { chatterboxModel = nil }
+        } else if memoryGB < 32, engine != .pocket {
+            if engine != .orpheus { orpheusModel = nil }
+            if engine != .qwen { qwenDesignModel = nil; qwenCloneModel = nil }
+            if engine != .chatterbox { chatterboxModel = nil }
         }
     }
 
@@ -403,6 +422,23 @@ actor MLXSpeech {
         return m
     }
 
+    private func loadChatterbox() async throws -> ChatterboxModel {
+        if let m = chatterboxModel { return m }
+        makeRoom(for: .chatterbox)
+        await SpeechModelActivity.begin(.chatterbox)
+        defer { Task { await SpeechModelActivity.end(.chatterbox) } }
+        Memory.cacheLimit = 512 * 1024 * 1024
+        // Loaded from its folder, never fetched: the speech tokenizer comes from the pack too
+        // (mlx-audio's default cache is pinned to the voice models by `VoicePack.pinHubCache`,
+        // and it's set from the pack's own folder when the loader didn't find it).
+        let m = try await ChatterboxModel.fromModelDirectory(VoicePack.directory(VoicePack.chatterboxRepo), hfToken: nil)
+        if m.s3Tokenizer == nil {
+            m.s3Tokenizer = try S3TokenizerV2.fromModelDirectory(VoicePack.directory(VoicePack.chatterboxTokenizerRepo))
+        }
+        chatterboxModel = m
+        return m
+    }
+
     /// Unloads one engine's models (it was turned off).
     func unload(_ engine: VoiceEngine) async {
         await acquire(); defer { release() }
@@ -410,7 +446,8 @@ actor MLXSpeech {
         case .orpheus: orpheusModel = nil
         case .pocket: pocketModel = nil
         case .qwen: qwenDesignModel = nil; qwenCloneModel = nil
-        case .apple, .mixed, .elevenlabs: break
+        case .chatterbox: chatterboxModel = nil
+        case .apple, .mixed, .elevenlabs, .gemini: break
         }
         Memory.clearCache()
     }
@@ -423,7 +460,8 @@ actor MLXSpeech {
                 case .orpheus: _ = try await loadOrpheus()
                 case .pocket: _ = try await loadPocket()
                 case .qwen: _ = try await loadQwenClone(); _ = try await loadQwenDesign()
-                case .apple, .mixed, .elevenlabs: break
+                case .chatterbox: _ = try await loadChatterbox()
+                case .apple, .mixed, .elevenlabs, .gemini: break
                 }
             } catch {
                 SpeechLog.write("loading \(engine.rawValue) failed: \(error)")
@@ -439,6 +477,22 @@ actor MLXSpeech {
         p.seed = seed
         MLXRandom.seed(seed)
         let audio = try await model.generate(text: text, voice: voice, refAudio: nil, refText: nil, language: nil, generationParameters: p)
+        return audio.asArray(Float.self)
+    }
+
+    /// One piece of text in Chatterbox, in a voice cloned from `reference` (24 kHz mono),
+    /// said the way `delivery` asks.
+    func chatterbox(text: String, reference: [Float], delivery: ChatterboxDelivery, seed: UInt64) async throws -> [Float] {
+        await acquire(); defer { release() }
+        try Task.checkCancellation()
+        let model = try await loadChatterbox()
+        model.emotionAdvOverride = Float(delivery.exaggeration)
+        model.cfgWeightOverride = Float(delivery.cfgWeight)
+        var p = model.defaultGenerationParameters
+        p.seed = seed
+        MLXRandom.seed(seed)
+        let ref = MLXArray(reference).materialized()
+        let audio = try await model.generate(text: text, voice: nil, refAudio: ref, refText: nil, language: nil, generationParameters: p)
         return audio.asArray(Float.self)
     }
 
