@@ -478,10 +478,25 @@ public sealed class ProjectSettings : ModelObject
     /// When the narrator allowed this book's text to be sent to a cloud voice engine
     /// (ElevenLabs). null: never sent.
     public AppleDate? CloudVoicesAllowed { get; set; }
+    /// When the narrator allowed this book's text to be sent to Google for Gemini TTS voices.
+    /// null: never sent. Separate from ElevenLabs: each company gets its own yes.
+    public AppleDate? GoogleVoicesAllowed { get; set; }
     /// The voice for each shared role (men, women, other), per engine: role → engine → voice.
     public Dictionary<string, Dictionary<string, CastVoice>>? RoleVoices { get; set; }
 
     [JsonIgnore] public VoiceEngine Engine => VoiceEngine ?? Core.VoiceEngine.Apple;
+
+    /// Whether this book's text may go to the company behind a cloud engine. Each company has
+    /// its own yes; engines on this PC are always allowed.
+    public bool AllowsCloud(VoiceEngine engine) => engine switch
+    {
+        Core.VoiceEngine.Elevenlabs => CloudVoicesAllowed is not null,
+        Core.VoiceEngine.Gemini => GoogleVoicesAllowed is not null,
+        _ => true,
+    };
+
+    /// Whether any cloud voice engine may get this book's text.
+    [JsonIgnore] public bool AllowsAnyCloudVoices => CloudVoicesAllowed is not null || GoogleVoicesAllowed is not null;
 
     public CastVoice? NarratorVoice(VoiceEngine engine) => NarratorVoices is { } v && v.TryGetValue(engine.Raw(), out var cv) ? cv : null;
 
@@ -516,6 +531,7 @@ public sealed class ProjectSettings : ModelObject
         CastingStyle = CastingStyle, NarrationRole = NarrationRole, MinorVoices = MinorVoices, ShadeStrength = ShadeStrength,
         NarratorGender = NarratorGender, CloudTextAllowed = CloudTextAllowed, ReviewCloudAI = ReviewCloudAI,
         VoiceEngine = VoiceEngine, NarratorVoices = CastVoice.CopyMap(NarratorVoices), CloudVoicesAllowed = CloudVoicesAllowed,
+        GoogleVoicesAllowed = GoogleVoicesAllowed,
         RoleVoices = RoleVoices?.ToDictionary(kv => kv.Key, kv => CastVoice.CopyMap(kv.Value)!), Extra = CopyExtra(),
     };
 }

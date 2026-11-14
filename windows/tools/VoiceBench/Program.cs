@@ -21,7 +21,7 @@ switch (args)
 {
     case ["--hardware"]:
         Console.WriteLine(hw);
-        foreach (var e in new[] { VoiceEngine.Pocket, VoiceEngine.Qwen, VoiceEngine.Orpheus })
+        foreach (var e in new[] { VoiceEngine.Pocket, VoiceEngine.Qwen, VoiceEngine.Chatterbox, VoiceEngine.Orpheus })
             Console.WriteLine($"{e.Title()}: {VoiceHardwareCheck.Fit(hw, e)}. {VoiceHardwareCheck.Warning(hw, e) ?? "No warning."}");
         break;
 
@@ -51,7 +51,7 @@ switch (args)
         break;
 
     default:
-        Console.WriteLine("VoiceBench --hardware | --bench <Voice Models folder> <output folder> [pocket|qwen|orpheus] | --clone <Voice Models folder> <recording.wav> <output folder> | --probe <model.onnx>… | --check <file.wav>…");
+        Console.WriteLine("VoiceBench --hardware | --bench <Voice Models folder> <output folder> [pocket|qwen|chatterbox|orpheus] | --clone <Voice Models folder> <recording.wav> <output folder> | --probe <model.onnx>… | --check <file.wav>…");
         break;
 }
 
@@ -122,6 +122,28 @@ void Bench(string models, string outDir, string[] only)
             Measure("Qwen3-TTS line (Base 0.6B clone)", lines.Select((l, i) => ((i + 1).ToString(), new SpeechRequest { Text = l, Choice = choice })),
                     r => engine.Render(r, default).Result, "qwen-line");
             NeuralModels.Shared.Unload(VoiceEngine.Qwen);
+        }
+    }
+    if (only.Length == 0 || only.Contains("chatterbox"))
+    {
+        if (!VoicePacks.IsInstalled(VoicePacks.Chatterbox)) Console.WriteLine("Chatterbox isn't in that folder.");
+        else
+        {
+            var engine = new ChatterboxEngine();
+            var load = Stopwatch.StartNew();
+            NeuralModels.Shared.Chatterbox();
+            Console.WriteLine($"Chatterbox loaded in {load.Elapsed.TotalSeconds:0.0} s on {Onnx.LastDevice}");
+            var own = VoiceInfo.Chatterbox[0];
+            // The first line in its own voice includes reading the clip (once per voice).
+            Measure("Chatterbox lines (its own voice)", lines.Select((l, i) => ((i + 1).ToString(), new SpeechRequest { Text = l, Choice = own.Choice })),
+                    r => engine.Render(r, default).Result, "chatterbox-line");
+            var spokenLine = "You can’t be serious. Not after everything that happened last winter.";
+            Measure("Chatterbox tones (Tara)", new[] { Tone.Neutral, Tone.Angry, Tone.Sad, Tone.Whispered }.Select(t => (t.Raw(),
+                    new SpeechRequest { Text = spokenLine, Choice = new VoiceChoice(VoiceEngine.Chatterbox, "stock:tara"), Kind = LineKind.Spoken, Tone = t })),
+                    r => engine.Render(r, default).Result, "chatterbox-tone");
+            Measure("Chatterbox short line", [("path", new SpeechRequest { Text = "The path was underwater.", Choice = own.Choice, Kind = LineKind.Spoken })],
+                    r => engine.Render(r, default).Result, "chatterbox-short");
+            NeuralModels.Shared.Unload(VoiceEngine.Chatterbox);
         }
     }
     if (only.Length == 0 || only.Contains("orpheus"))

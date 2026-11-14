@@ -43,11 +43,12 @@ public sealed partial class SettingsWindow : Window
         AppSettings.Changed += Build;
         ClaudeAccount.Shared.Changed += Build;
         Speech.ElevenLabsEngine.Shared.Changed += Build;
+        Speech.GeminiVoices.Shared.Changed += Build;
         Speech.VoiceModels.Shared.Changed += Build;
         Closed += (_, _) =>
         {
             ModelManager.Shared.Changed -= Build; AppSettings.Changed -= Build; ClaudeAccount.Shared.Changed -= Build;
-            Speech.ElevenLabsEngine.Shared.Changed -= Build; Speech.VoiceModels.Shared.Changed -= Build;
+            Speech.ElevenLabsEngine.Shared.Changed -= Build; Speech.GeminiVoices.Shared.Changed -= Build; Speech.VoiceModels.Shared.Changed -= Build;
         };
     }
 

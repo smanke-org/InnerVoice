@@ -205,9 +205,10 @@ public class AudioExportTests : IDisposable
     public void ExportSpeedDefaults()
     {
         Assert.Equal(ExportSpeed.Fastest, ExportSpeeds.Standard(VoiceEngine.Elevenlabs));
-        foreach (var e in new[] { VoiceEngine.Apple, VoiceEngine.Pocket, VoiceEngine.Qwen, VoiceEngine.Orpheus })
+        Assert.Equal(ExportSpeed.Fastest, ExportSpeeds.Standard(VoiceEngine.Gemini));
+        foreach (var e in new[] { VoiceEngine.Apple, VoiceEngine.Pocket, VoiceEngine.Qwen, VoiceEngine.Chatterbox, VoiceEngine.Orpheus })
             Assert.Equal(ExportSpeed.Slowest, ExportSpeeds.Standard(e));
-        Assert.Equal([VoiceEngine.Apple, VoiceEngine.Pocket, VoiceEngine.Qwen, VoiceEngine.Orpheus, VoiceEngine.Elevenlabs], ExportSpeeds.Engines);
+        Assert.Equal([VoiceEngine.Apple, VoiceEngine.Pocket, VoiceEngine.Qwen, VoiceEngine.Chatterbox, VoiceEngine.Orpheus, VoiceEngine.Elevenlabs, VoiceEngine.Gemini], ExportSpeeds.Engines);
         Assert.Equal(1, ExportSpeed.Slowest.LinesAtOnce(VoiceEngine.Elevenlabs));
         Assert.Equal(2, ExportSpeed.Faster.LinesAtOnce(VoiceEngine.Apple));
         Assert.Equal(3, ExportSpeed.Fastest.LinesAtOnce(VoiceEngine.Apple));

@@ -325,7 +325,7 @@ public class VoiceTests
     [Fact]
     public void EngineRawValuesMatchTheMac()
     {
-        Assert.Equal(["apple", "pocket", "qwen", "orpheus", "elevenlabs", "mixed"], Enum.GetValues<VoiceEngine>().Select(e => e.Raw()));
+        Assert.Equal(["apple", "pocket", "qwen", "orpheus", "elevenlabs", "gemini", "chatterbox", "mixed"], Enum.GetValues<VoiceEngine>().Select(e => e.Raw()));
         Assert.Equal("Windows Voices", VoiceEngine.Apple.Title());
         Assert.True(VoiceEngine.Elevenlabs.IsCloud());
         Assert.Equal(VoiceEngine.Elevenlabs, VoiceEngines.Parse("elevenlabs"));

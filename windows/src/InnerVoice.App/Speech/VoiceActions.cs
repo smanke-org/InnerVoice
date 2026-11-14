@@ -25,12 +25,14 @@ public static class VoiceSetup
         SpeechRenderer.Shared = new SpeechRenderer(CacheFolder);
         VoiceEngineRegistry.Register(new WindowsVoices());
         ElevenLabsEngine.Register();
-        // Pocket TTS, Qwen3-TTS and Orpheus on ONNX Runtime (DirectML or the CPU). Test runs keep
+        GeminiVoices.Register();
+        // Pocket TTS, Qwen3-TTS, Chatterbox and Orpheus on ONNX Runtime (DirectML or the CPU). Test runs keep
         // their models, samples and clones in temporary folders, never the narrator's own.
         VoicePacks.Folder = AppPaths.IsTestRun ? Path.Combine(Path.GetTempPath(), "InnerVoice Voice Models (test)") : Path.Combine(AppPaths.Support, "Voice Models");
         LocalClones.Shared = new LocalClones(AppPaths.IsTestRun ? Path.Combine(Path.GetTempPath(), $"InnerVoice Cloned Voices (test {Environment.ProcessId})") : Path.Combine(AppPaths.Support, "Cloned Voices"));
         VoiceEngineRegistry.Register(new PocketEngine());
         VoiceEngineRegistry.Register(new QwenEngine());
+        VoiceEngineRegistry.Register(new ChatterboxEngine());
         VoiceEngineRegistry.Register(new OrpheusEngine());
         VoiceModels.Shared.DetectHardware();
         VoiceHooks.Install();
@@ -131,9 +133,19 @@ public static class VoiceActions
     }
 
     /// Lets this book's text go to ElevenLabs (the narrator said yes), or stops it.
-    public static void SetCloudVoicesAllowed(this ProjectDocument document, bool allowed)
+    public static void SetCloudVoicesAllowed(this ProjectDocument document, bool allowed) =>
+        document.SetCloudAllowed(VoiceEngine.Elevenlabs, allowed);
+
+    /// Lets this book's text go to a cloud engine's company (the narrator said yes), or stops
+    /// it. Each company has its own yes.
+    public static void SetCloudAllowed(this ProjectDocument document, VoiceEngine engine, bool allowed)
     {
-        document.Change(allowed ? "Allow ElevenLabs" : "Stop Sending to ElevenLabs", p => p.Settings.CloudVoicesAllowed = allowed ? AppleDate.Now : null);
+        if (engine.CloudCompany() is not { } company) return;
+        document.Change(allowed ? $"Allow {company}" : $"Stop Sending to {company}", p =>
+        {
+            var date = allowed ? AppleDate.Now : (AppleDate?)null;
+            if (engine == VoiceEngine.Gemini) p.Settings.GoogleVoicesAllowed = date; else p.Settings.CloudVoicesAllowed = date;
+        });
         if (allowed) VoiceCastingRun.CastIfNeeded(document);
     }
 

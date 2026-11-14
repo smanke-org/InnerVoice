@@ -6,7 +6,9 @@
 // the first piece, and every line is leveled to -20 dB. Qwen3-TTS speaks every line by cloning
 // a voice sample (one per description and tone, made once by the VoiceDesign model and kept in
 // Voice Models\Samples, or the narrator's own clip for a clone); a shade shifts that sample's
-// pitch.
+// pitch. Chatterbox clones from the same clips as Pocket TTS plus its own default voice; the
+// tone sets its emotion exaggeration (ChatterboxDelivery), and a short line's run-on after a
+// pause is cut (ChatterboxRunOn).
 
 using System.Security.Cryptography;
 using System.Text;
@@ -86,10 +88,13 @@ public sealed class NeuralModels
     QwenShared? qwenShared;
     QwenModel? design, clone;
     OrpheusModel? orpheus;
+    ChatterboxModel? chatterbox;
     int loading;
     /// Pocket TTS's conditioning for each clip it has cloned from (voice ID and semitones):
     /// worked out once, the same for every line.
     readonly Dictionary<string, float[]> voices = [];
+    /// Chatterbox's reading of each clip (voice ID and semitones), the same way.
+    readonly Dictionary<string, ChatterboxVoiceConditioning> chatterboxVoices = [];
 
     /// A model is loading (Settings and the player show "Loading the voice model…").
     public event Action? Changed;
@@ -102,10 +107,11 @@ public sealed class NeuralModels
             VoiceEngine.Pocket => Volatile.Read(ref pocket) is not null,
             VoiceEngine.Qwen => Volatile.Read(ref design) is not null || Volatile.Read(ref clone) is not null,
             VoiceEngine.Orpheus => Volatile.Read(ref orpheus) is not null,
+            VoiceEngine.Chatterbox => Volatile.Read(ref chatterbox) is not null,
             _ => false,
         };
 
-    static readonly VoiceEngine[] Local = [VoiceEngine.Pocket, VoiceEngine.Qwen, VoiceEngine.Orpheus];
+    static readonly VoiceEngine[] Local = [VoiceEngine.Pocket, VoiceEngine.Qwen, VoiceEngine.Chatterbox, VoiceEngine.Orpheus];
 
     T Load<T>(ref T? slot, Func<T> make, VoiceEngine engine) where T : class
     {
@@ -130,6 +136,7 @@ public sealed class NeuralModels
     public QwenModel Design() => Load(ref design, () => new QwenModel(VoicePacks.QwenDesignFolder, SharedQwen()), VoiceEngine.Qwen);
     public QwenModel Clone() => Load(ref clone, () => new QwenModel(VoicePacks.QwenCloneFolder, SharedQwen()), VoiceEngine.Qwen);
     public OrpheusModel Orpheus() => Load(ref orpheus, () => new OrpheusModel(VoicePacks.OrpheusFolder), VoiceEngine.Orpheus);
+    public ChatterboxModel Chatterbox() => Load(ref chatterbox, () => new ChatterboxModel(VoicePacks.ChatterboxFolder), VoiceEngine.Chatterbox);
 
     QwenShared SharedQwen() => qwenShared ??= new QwenShared(VoicePacks.QwenSharedFolder);
 
@@ -145,6 +152,20 @@ public sealed class NeuralModels
             lock (gate) voices[line.ClipKey] = voice;
         }
         return model.Speak(line.Text, voice, line.Temperature, line.Seed, ct);
+    }
+
+    /// Speaks a line with Chatterbox, cloning the voice from `clip` (read once per `ClipKey`).
+    public float[] SpeakChatterbox(ChatterboxLine line, CancellationToken ct)
+    {
+        var model = Chatterbox();
+        ChatterboxVoiceConditioning? voice;
+        lock (gate) chatterboxVoices.TryGetValue(line.ClipKey, out voice);
+        if (voice is null)
+        {
+            voice = model.Encode(line.Clip);
+            lock (gate) chatterboxVoices[line.ClipKey] = voice;
+        }
+        return model.Speak(line.Text, voice, line.Exaggeration, line.Seed, ct);
     }
 
     public void Unload(VoiceEngine engine)
@@ -172,12 +193,22 @@ public sealed class NeuralModels
             orpheus?.Dispose();
             orpheus = null;
         }
+        else if (engine == VoiceEngine.Chatterbox)
+        {
+            chatterbox?.Dispose();
+            chatterbox = null;
+            chatterboxVoices.Clear();
+        }
     }
 }
 
 /// One line for Pocket TTS: the text, the clip it clones the voice from (`ClipKey` names the
 /// clip and its shift), the sampling temperature and the seed.
 public sealed record PocketLine(string Text, float[] Clip, string ClipKey, double Temperature, ulong Seed);
+
+/// One line for Chatterbox: the text, the clip it clones the voice from (`ClipKey` names the
+/// clip and its shift) and the tone's emotion exaggeration.
+public sealed record ChatterboxLine(string Text, float[] Clip, string ClipKey, double Exaggeration, ulong Seed);
 
 /// The clips Pocket TTS clones its voices from: a stock voice's clip from the app
 /// (windows/Resources/StockVoices, the Mac's nine clips as WAV), a cloned voice's recording,
@@ -338,7 +369,7 @@ public static class QwenSamples
 
 /// Voices cloned on this PC (Clone a Voice › On This PC): a clip of the narrator's recording
 /// and what it says, kept in Cloned Voices as `<id>.wav` + voices.json. voiceID "clone:<id>"
-/// on the Pocket TTS or the Qwen3-TTS engine (both speak from the same clip). As the Mac's
+/// on the Pocket TTS, Qwen3-TTS or Chatterbox engine (all speak from the same clip). As the Mac's
 /// LocalClones.swift.
 public sealed class LocalClones
 {
@@ -352,7 +383,7 @@ public sealed class LocalClones
     public static LocalClones Shared { get; set; } = new(Path.Combine(Path.GetTempPath(), "InnerVoice Cloned Voices (test)"));
 
     public static bool IsClone(VoiceChoice c) =>
-        c.Engine is VoiceEngine.Pocket or VoiceEngine.Qwen && c.VoiceID.StartsWith(Prefix, StringComparison.Ordinal);
+        c.Engine is VoiceEngine.Pocket or VoiceEngine.Qwen or VoiceEngine.Chatterbox && c.VoiceID.StartsWith(Prefix, StringComparison.Ordinal);
 
     public string Folder { get; }
     readonly Lock gate = new();
@@ -384,7 +415,7 @@ public sealed class LocalClones
 
     public static VoiceInfo Info(Clone c) => Info(c, VoiceEngine.Pocket);
 
-    /// The clone as a voice of `engine` (Pocket TTS or Qwen3-TTS).
+    /// The clone as a voice of `engine` (Pocket TTS, Qwen3-TTS or Chatterbox).
     public static VoiceInfo Info(Clone c, VoiceEngine engine) => new(engine, c.VoiceID, c.Name, c.Gender, VoiceAge.Adult, "", 3, "Cloned on this PC", Cloned: true);
 
     public Clone? For(string voiceID)
@@ -616,6 +647,69 @@ public sealed class QwenEngine : IVoiceEngine
     public Task Prepare(CancellationToken ct) => Ready && !AssumeReady ? Task.Run(() => NeuralModels.Shared.Clone(), ct) : Task.CompletedTask;
 
     public void Unload() => NeuralModels.Shared.Unload(VoiceEngine.Qwen);
+}
+
+/// Chatterbox on this PC: every voice cloned from a clip, like Pocket TTS (the same stock clips
+/// and clones, plus its own default voice). It shades by itself (the clip's pitch before
+/// cloning; the pace, casting's speed for the character's age and the tone's stand-in for the
+/// CFG weight stretch the finished audio), so the renderer leaves it alone.
+public sealed class ChatterboxEngine : IVoiceEngine
+{
+    public VoiceEngine Engine => VoiceEngine.Chatterbox;
+    public bool IsReady => VoicePacks.IsInstalled(VoicePacks.Chatterbox);
+    public string? NotReadyReason => IsReady ? null : "Chatterbox isn’t downloaded yet. Download it in Settings › Voices.";
+    public bool ShadesPitch => true;
+    public bool ShadesPace => true;
+
+    /// Speaks one piece; tests put a fake here.
+    public Func<ChatterboxLine, CancellationToken, float[]> Speaker { get; set; } = (line, ct) => NeuralModels.Shared.SpeakChatterbox(line, ct);
+
+    /// Test runs speak without the download.
+    public bool AssumeReady { get; set; }
+    bool Ready => AssumeReady || IsReady;
+
+    public IReadOnlyList<VoiceInfo> Voices =>
+        LocalClones.Shared.All.Select(c => LocalClones.Info(c, VoiceEngine.Chatterbox)).Concat(VoiceInfo.Chatterbox).ToList();
+
+    public VoiceInfo? Info(VoiceChoice choice)
+    {
+        if (LocalClones.IsClone(choice)) return LocalClones.Shared.For(choice.VoiceID) is { } c ? LocalClones.Info(c, VoiceEngine.Chatterbox) : null;
+        return VoiceInfo.Chatterbox.FirstOrDefault(v => v.VoiceID == choice.VoiceID);
+    }
+
+    /// The tone's delivery: narration is always even.
+    public static ChatterboxDelivery Delivery(SpeechRequest r) => ChatterboxDelivery.For(r.Tone, narration: r.Kind is null);
+
+    /// The semitones the clip shifts by: the shade's and casting's (the voice's pitch).
+    public static int Semitones(SpeechRequest r) => (r.Shade?.Pitch ?? 0) + PocketVoice.Semitones(r.Choice.Pitch);
+
+    /// The speed of the finished audio: the voice's rate, the shade's pace and the tone's.
+    public static double Rate(SpeechRequest r) => (r.Choice.Rate ?? 1) * ShadeAudio.PaceRate(r.Shade?.Pace ?? 0) * Delivery(r).Rate;
+
+    public Task<float[]> Render(SpeechRequest r, CancellationToken ct) => Task.Run(() =>
+    {
+        if (!Ready) throw SpeechException.EngineUnavailable(VoiceEngine.Chatterbox);
+        if (Info(r.Choice) is null) throw SpeechException.VoiceMissing(r.Choice.VoiceID);
+        var delivery = Delivery(r);
+        int semitones = Semitones(r);
+        var clip = PocketClips.Reference(r.Choice, semitones);
+        var key = PocketClips.Key(r.Choice, semitones);
+        var pieces = new List<float[]>();
+        foreach (var piece in SpeechChunks.Chunks(r.Text))
+        {
+            ct.ThrowIfCancellationRequested();
+            var said = Speaker(new ChatterboxLine(piece, clip, key, delivery.Exaggeration, Sampler.Seed(piece + r.Choice.VoiceID)), ct);
+            // A short line can run on after a pause: cut there.
+            pieces.Add(ChatterboxRunOn.Trim(said, SpeechAudio.SampleRate, piece));
+        }
+        var audio = LocalRender.Finish(pieces, r, delivery.Volume);
+        double rate = Rate(r);
+        return Math.Abs(rate - 1) > 0.001 ? SpeechAudio.TimeStretched(audio, rate) : audio;
+    }, ct);
+
+    public Task Prepare(CancellationToken ct) => Ready && !AssumeReady ? Task.Run(() => NeuralModels.Shared.Chatterbox(), ct) : Task.CompletedTask;
+
+    public void Unload() => NeuralModels.Shared.Unload(VoiceEngine.Chatterbox);
 }
 
 /// Orpheus on this PC.

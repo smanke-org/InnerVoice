@@ -12,6 +12,7 @@ using InnerVoice.App.Speech;
 using InnerVoice.App.UI;
 using InnerVoice.Core;
 using InnerVoice.Core.Speech;
+using InnerVoice.Core.Speech.Neural;
 
 namespace InnerVoice.App.Pages;
 
@@ -139,8 +140,8 @@ public sealed partial class VoicesPage : Page
                 Content = e.Title() + (e.IsCloud() ? " (Cloud)" : VoiceEngineRegistry.IsReady(e) || e == VoiceEngine.Mixed ? "" : " (Not Downloaded)"),
                 Tag = e,
             };
-            // Qwen3-TTS: where it comes from, and that it stays on this PC.
-            if (e == VoiceEngine.Qwen) ToolTip.SetTip(item, InnerVoice.App.Windows.SettingsWindow.LocalOriginTag + ". " + InnerVoice.App.Windows.SettingsWindow.LocalOriginDetail);
+            // Qwen3-TTS and Chatterbox: where they come from, and that they stay on this PC.
+            if (e.HasChineseOrigin()) ToolTip.SetTip(item, InnerVoice.App.Windows.SettingsWindow.OriginTag(e) + ". " + InnerVoice.App.Windows.SettingsWindow.OriginDetail(e));
             return item;
         }).ToList();
         engineBox.SelectedIndex = choices.ToList().IndexOf(Engine);
@@ -180,22 +181,24 @@ public sealed partial class VoicesPage : Page
         };
     }
 
-    /// The first time a book uses ElevenLabs, ask before any of its text is sent.
+    /// The first time a book uses a cloud engine, ask before any of its text is sent to that
+    /// company.
     async Task ChooseEngine(VoiceEngine e)
     {
-        if (e.IsCloud() && Document.Project.Settings.CloudVoicesAllowed is null)
+        if (!Document.Project.Settings.AllowsCloud(e))
         {
-            if (!await AskCloud())
+            if (!await AskCloud(e))
             {
                 Refresh(false);
                 return;
             }
-            Document.SetCloudVoicesAllowed(true);
+            Document.SetCloudAllowed(e, true);
         }
-        // Pocket TTS, Qwen3-TTS and Orpheus run on this PC: offer the download, and say first if it's too weak for them.
-        if (e is VoiceEngine.Pocket or VoiceEngine.Qwen or VoiceEngine.Orpheus && !VoiceModels.Shared.IsInstalled(e))
+        // Pocket TTS, Qwen3-TTS, Chatterbox and Orpheus run on this PC: offer the download, and say first if it's too weak for them.
+        bool local = VoicePacks.For(e) is not null;
+        if (local && !VoiceModels.Shared.IsInstalled(e))
             await VoiceModels.Shared.OfferDownload(this, e);
-        else if (e is VoiceEngine.Pocket or VoiceEngine.Qwen or VoiceEngine.Orpheus && !await VoiceModels.Shared.ConfirmHardware(this, e, downloading: false))
+        else if (local && !await VoiceModels.Shared.ConfirmHardware(this, e, downloading: false))
         {
             Refresh(false);
             return;
@@ -203,9 +206,17 @@ public sealed partial class VoicesPage : Page
         Document.SetVoiceEngine(e);
     }
 
-    async Task<bool> AskCloud() => await Dialogs.Confirm(this, "Send This Book to ElevenLabs?",
-        $"ElevenLabs makes its voices on its own servers. Every line of “{Document.Project.Title}” that an ElevenLabs voice speaks is sent there as text; a table read or an exported book sends the whole manuscript. Allow it only if you have the right to share this book. You can stop it at any time on the Voices page.",
-        "Send to ElevenLabs", destructive: false);
+    /// Asks before a book's text is first sent to a cloud engine's company (the Mac's
+    /// CloudPermissionAlert).
+    internal async Task<bool> AskCloud(VoiceEngine service)
+    {
+        var company = service.CloudCompany() ?? "the cloud";
+        var a = "AEIOU".Contains(service.Title()[0]) ? "an" : "a";
+        var servers = company.EndsWith('s') ? company + "’" : company + "’s";
+        return await Dialogs.Confirm(this, $"Send This Book to {company}?",
+            $"{service.Title()} makes its voices on {servers} servers. Every line of “{Document.Project.Title}” that {a} {service.Title()} voice speaks is sent there as text; a table read or an exported book sends the whole manuscript. Allow it only if you have the right to share this book. You can stop it at any time on the Voices page.",
+            $"Send to {company}", destructive: false);
+    }
 
     // MARK: Casting Style
 

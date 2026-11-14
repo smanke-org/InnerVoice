@@ -322,16 +322,18 @@ public class NeuralVoiceTests
         }
     }
 
-    /// The nine stock voices ship with the app: the Mac's clips, 24 kHz mono, 8 to 11 seconds.
+    /// The nine stock voices ship with the app, and Chatterbox's own: the Mac's clips, 24 kHz
+    /// mono, 7.5 to 11 seconds (Pocket TTS's 8 to 11).
     [Fact]
     public void TheStockVoicesShipWithTheApp()
     {
-        Assert.Equal(["alba", "dan", "jess", "leah", "leo", "mia", "tara", "zac", "zoe"], PocketClips.StockNames);
-        Assert.Equal(PocketClips.StockNames, VoiceInfo.Pocket.Select(v => PocketVoice.StockName(v.VoiceID)).Order(StringComparer.Ordinal));
+        Assert.Equal(["alba", "chatterbox", "dan", "jess", "leah", "leo", "mia", "tara", "zac", "zoe"], PocketClips.StockNames);
+        Assert.Equal(PocketClips.StockNames.Where(n => n != "chatterbox"), VoiceInfo.Pocket.Select(v => PocketVoice.StockName(v.VoiceID)).Order(StringComparer.Ordinal));
+        Assert.Equal(PocketClips.StockNames, VoiceInfo.Chatterbox.Select(v => PocketVoice.StockName(v.VoiceID)).Order(StringComparer.Ordinal));
         foreach (var name in PocketClips.StockNames)
         {
             var clip = PocketClips.StockClip(name)!;
-            Assert.InRange(clip.Length / (double)SpeechAudio.SampleRate, 8, 11);
+            Assert.InRange(clip.Length / (double)SpeechAudio.SampleRate, name == "chatterbox" ? 7.5 : 8, 11);
             Assert.True(Pitch.Analyze(clip).Voiced > 0.3, name);
         }
         // The men's clips are lower than the women's.
@@ -590,7 +592,21 @@ public class NeuralVoiceTests
         Assert.Contains(VoicePacks.Qwen.Files, f => f.Local.StartsWith("qwen/clone/speaker_encoder", StringComparison.Ordinal));
         Assert.All(VoicePacks.Qwen.Files, f => Assert.StartsWith("https://huggingface.co/wavekat/Qwen3-TTS-", f.Url));
         Assert.All(VoicePacks.Qwen.Repos, r => Assert.Equal("Apache-2.0", r.License));
-        Assert.Equal([VoiceEngine.Pocket, VoiceEngine.Qwen, VoiceEngine.Orpheus], VoicePacks.Packs.Select(p => p.Engine));
+        Assert.Equal([VoiceEngine.Pocket, VoiceEngine.Qwen, VoiceEngine.Chatterbox, VoiceEngine.Orpheus], VoicePacks.Packs.Select(p => p.Engine));
+        // Chatterbox: the ONNX Community's export of Resemble AI's model (MIT), the 4-bit
+        // language model and the four graphs, every one with its external weights.
+        Assert.InRange(VoicePacks.Chatterbox.Bytes, 1.5e9, 1.6e9);
+        Assert.All(VoicePacks.Chatterbox.Files, f => Assert.StartsWith("https://huggingface.co/onnx-community/chatterbox-ONNX/resolve/", f.Url));
+        Assert.All(VoicePacks.Chatterbox.Repos, r => Assert.Equal("MIT", r.License));
+        foreach (var graph in new[] { "speech_encoder", "embed_tokens", "language_model_q4", "conditional_decoder" })
+        {
+            Assert.Contains(VoicePacks.Chatterbox.Files, f => f.Local == $"chatterbox/onnx/{graph}.onnx");
+            Assert.Contains(VoicePacks.Chatterbox.Files, f => f.Local == $"chatterbox/onnx/{graph}.onnx_data");
+        }
+        Assert.Contains(VoicePacks.Chatterbox.Files, f => f.Local == "chatterbox/onnx/" + ChatterboxModel.LanguageModelFile);
+        Assert.Contains(VoicePacks.Chatterbox.Files, f => f.Local == "chatterbox/tokenizer.json");
+        Assert.Equal(VoicePacks.Chatterbox, VoicePacks.For(VoiceEngine.Chatterbox));
+        Assert.Null(VoicePacks.For(VoiceEngine.Gemini));
         Assert.All(VoicePacks.Packs.SelectMany(p => p.Files), f => Assert.StartsWith("https://huggingface.co/", f.Url));
         Assert.InRange(VoicePacks.Orpheus.Bytes, 2.3e9, 2.7e9);
         Assert.Contains(VoicePacks.Orpheus.Files, f => f.Local == "orpheus/snac/decoder_model.onnx");
@@ -713,7 +729,8 @@ public class NeuralVoiceTests
         Assert.Equal(VoiceFit.TooWeak, VoiceHardwareCheck.Fit(strong with { MemoryGB = 4 }, VoiceEngine.Qwen));
         Assert.Contains("RTX 3060", VoiceHardwareCheck.Recommended);
         Assert.Contains("Pocket TTS is small", VoiceHardwareCheck.Recommended);
-        Assert.Contains("32 GB to keep Qwen3-TTS and Orpheus loaded together", VoiceHardwareCheck.Recommended);
+        Assert.Contains("For Qwen3-TTS, Chatterbox and Orpheus", VoiceHardwareCheck.Recommended);
+        Assert.Contains("32 GB to keep two of them loaded together", VoiceHardwareCheck.Recommended);
         // The graphics card check's answer, from the child process.
         Assert.Equal(new GpuInfo(1, "Test Graphics RTX", 12), VoiceHardwareCheck.ParseGpu("1\t12\tTest Graphics RTX\r\n"));
         Assert.Null(VoiceHardwareCheck.ParseGpu("none"));

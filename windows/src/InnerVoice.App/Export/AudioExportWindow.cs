@@ -100,6 +100,8 @@ public sealed class AudioExportWindow : Window
         content.Children.Add(Ui.Caption($"Each line is read in its character’s voice and tone, with {engine.Title()}.", TextWrapping.Wrap));
         if (project.Settings.CloudVoicesAllowed is not null && engine is VoiceEngine.Elevenlabs or VoiceEngine.Mixed)
             content.Children.Add(Ui.Caption("☁ ElevenLabs voices are made in the cloud: exporting sends the text they speak to ElevenLabs, and uses your plan’s credits.", TextWrapping.Wrap));
+        if (GeminiNoteShown(project))
+            content.Children.Add(Ui.Caption(GeminiNote, TextWrapping.Wrap));
         (creditsPanel.Parent as Panel)?.Children.Remove(creditsPanel);
         content.Children.Add(creditsPanel);
 
@@ -197,11 +199,12 @@ public sealed class AudioExportWindow : Window
     /// back; no book text is sent.
     void EstimateCredits()
     {
-        if (!ElevenLabsEngine.Shared.IsSetUp)
+        if (!ElevenLabsEngine.Shared.IsSetUp && !GeminiVoices.Shared.IsSetUp)
         {
             creditsRun?.Cancel();
             creditsKey = null;
             credits = null;
+            geminiCharacters = 0;
             ShowCredits();
             return;
         }
@@ -223,10 +226,12 @@ public sealed class AudioExportWindow : Window
         {
             var renderer = SpeechRenderer.Shared;
             var (needed, lines) = await Task.Run(() => AudioExporter.CreditsNeeded(parts, resolver, renderer, ct), ct);
+            var (gemini, _) = await Task.Run(() => AudioExporter.CloudCharacters(parts, resolver, VoiceEngine.Gemini, renderer, ct), ct);
             if (ct.IsCancellationRequested) return;
+            geminiCharacters = gemini;
             credits = (needed, lines, creditsLeft);
             ShowCredits();
-            if (needed == 0 || creditsLeft is not null) return;
+            if (!ElevenLabsEngine.Shared.IsSetUp || needed == 0 || creditsLeft is not null) return;
             var account = await ElevenLabsEngine.Shared.Account(ct);
             creditsLeft = account.Left;
             if (ct.IsCancellationRequested) return;
@@ -246,15 +251,38 @@ public sealed class AudioExportWindow : Window
              ? "That’s more than your plan has left: the export would stop when the credits run out. Lines already made aren’t charged again, so you could export fewer chapters now and the rest later."
              : null);
 
+    /// The Gemini TTS export note (the Mac's words), shown while the book allows Google and
+    /// speaks with Gemini TTS or mixes it in. Export EPUB with Audio shows it too.
+    public const string GeminiNote = "☁ Gemini TTS voices are made in the cloud: exporting sends the text they speak to Google, billed to your Gemini API key.";
+
+    public static bool GeminiNoteShown(Project project)
+    {
+        var engine = project.EngineInUse();
+        return project.Settings.GoogleVoicesAllowed is not null
+            && (engine == VoiceEngine.Gemini || (engine == VoiceEngine.Mixed && EngineSwitches.Shared.IsOn(VoiceEngine.Gemini)));
+    }
+
+    /// Characters of Gemini TTS lines this export would send (for the cost estimate).
+    long geminiCharacters;
+    public long GeminiCharacters => geminiCharacters;
+
+    /// The Gemini TTS estimate's words: dollars at Google's paid-tier prices for the model in use.
+    public static string GeminiCostText(long characters, GeminiModel model) =>
+        $"About {(GeminiTTS.EstimatedSeconds(characters) * model.DollarsPerSecond()).ToString("C2", System.Globalization.CultureInfo.GetCultureInfo("en-US"))} of Gemini TTS for the lines not made yet, at Google’s paid-tier prices.";
+
     void ShowCredits()
     {
         creditsPanel.Children.Clear();
-        if (credits is not { Needed: > 0 } c) { creditsPanel.IsVisible = false; return; }
-        var (line, warning) = CreditsText(c.Needed, c.Lines, c.Left);
-        var brush = Look.Brush(warning is null ? Look.SecondaryInk : Look.Attention);
-        creditsPanel.Children.Add(Ui.Text(line, 12, brush: brush, wrap: TextWrapping.Wrap));
-        if (warning is not null) creditsPanel.Children.Add(Ui.Text(warning, 12, brush: brush, wrap: TextWrapping.Wrap));
-        creditsPanel.IsVisible = true;
+        if (credits is { Needed: > 0 } c)
+        {
+            var (line, warning) = CreditsText(c.Needed, c.Lines, c.Left);
+            var brush = Look.Brush(warning is null ? Look.SecondaryInk : Look.Attention);
+            creditsPanel.Children.Add(Ui.Text(line, 12, brush: brush, wrap: TextWrapping.Wrap));
+            if (warning is not null) creditsPanel.Children.Add(Ui.Text(warning, 12, brush: brush, wrap: TextWrapping.Wrap));
+        }
+        if (geminiCharacters > 0)
+            creditsPanel.Children.Add(Ui.Text(GeminiCostText(geminiCharacters, GeminiVoices.Shared.Model), 12, brush: Look.Brush(Look.SecondaryInk), wrap: TextWrapping.Wrap));
+        creditsPanel.IsVisible = creditsPanel.Children.Count > 0;
     }
 
     /// The progress bar while it runs, and the last status ("Stopped.") after.

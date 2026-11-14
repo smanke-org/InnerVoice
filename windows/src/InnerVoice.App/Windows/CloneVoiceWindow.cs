@@ -14,7 +14,7 @@ using InnerVoice.Core.Speech;
 namespace InnerVoice.App.Windows;
 
 /// Book › Clone a Voice… (and the Voices page): a voice made from recordings of one person.
-/// The Mac's CloneVoiceSheet. On This PC: Pocket TTS (or Qwen3-TTS, in a book that speaks with it) speaks from a clip of the recordings (up to 15 s), and
+/// The Mac's CloneVoiceSheet. On This PC: Pocket TTS (or Qwen3-TTS or Chatterbox, in a book that speaks with it) speaks from a clip of the recordings (up to 15 s), and
 /// the words in it are found on this PC (LocalCloning); nothing leaves the PC. ElevenLabs:
 /// nothing is sent until the rights checkbox is on, and then only the recordings and the
 /// name, never text from the book. Recordings made here are temporary files, deleted when the
@@ -83,9 +83,9 @@ public sealed class CloneVoiceWindow : Window
     public IReadOnlyList<string> Recordings => recordings;
 
     bool ElevenReady => ElevenLabsEngine.Shared.IsSetUp && document.Project.Settings.CloudVoicesAllowed is not null;
-    /// The engine a voice cloned on this PC speaks with here: Qwen3-TTS in a book that speaks
-    /// with it, Pocket TTS otherwise (the same clip works for both).
-    VoiceEngine LocalEngine => document.Project.EngineInUse() == VoiceEngine.Qwen ? VoiceEngine.Qwen : VoiceEngine.Pocket;
+    /// The engine a voice cloned on this PC speaks with here: Qwen3-TTS or Chatterbox in a book
+    /// that speaks with it, Pocket TTS otherwise (the same clip works for all three).
+    VoiceEngine LocalEngine => document.Project.EngineInUse() is VoiceEngine.Qwen or VoiceEngine.Chatterbox ? document.Project.EngineInUse() : VoiceEngine.Pocket;
     bool LocalReady => VoiceEngineRegistry.IsReady(LocalEngine);
 
     /// The clip made from the recordings (tests).
@@ -279,8 +279,8 @@ public sealed class CloneVoiceWindow : Window
                     if (await VoiceModels.Shared.ConfirmHardware(this, local, downloading: true)) VoiceModels.Shared.Download(local);
                 });
             }
-            if (e is not (VoiceEngine.Pocket or VoiceEngine.Qwen or VoiceEngine.Mixed))
-                return Ui.Text($"This book speaks with {e.Title()}. Voices cloned on this PC speak with Pocket TTS or Qwen3-TTS: to hear one in this book, choose one of them or Mix Engines on the Voices page.",
+            if (e is not (VoiceEngine.Pocket or VoiceEngine.Qwen or VoiceEngine.Chatterbox or VoiceEngine.Mixed))
+                return Ui.Text($"This book speaks with {e.Title()}. Voices cloned on this PC speak with Pocket TTS, Qwen3-TTS or Chatterbox: to hear one in this book, choose one of them or Mix Engines on the Voices page.",
                     13, brush: Look.Brush(Look.SecondaryInk), wrap: TextWrapping.Wrap);
             return new Panel();
         }
@@ -500,7 +500,7 @@ public sealed class CloneVoiceWindow : Window
     Control Done(VoiceInfo v)
     {
         var col = Ui.Column(Look.Md);
-        bool local = v.Engine is VoiceEngine.Pocket or VoiceEngine.Qwen;
+        bool local = v.Engine is VoiceEngine.Pocket or VoiceEngine.Qwen or VoiceEngine.Chatterbox;
         var head = Ui.Row(Look.Sm, Ui.Headline($"“{v.Name}” is ready"));
         if (!local) head.Children.Add(SettingsWindow.ElevenLabsCloudBadge());
         col.Children.Add(head);

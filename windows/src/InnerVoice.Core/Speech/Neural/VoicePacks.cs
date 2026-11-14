@@ -1,4 +1,4 @@
-// The voice packs: the model files Pocket TTS, Qwen3-TTS and Orpheus need, pinned to one revision of each
+// The voice packs: the model files Pocket TTS, Qwen3-TTS, Chatterbox and Orpheus need, pinned to one revision of each
 // Hugging Face repository and checked by SHA-256, downloaded into
 // %LOCALAPPDATA%\InnerVoice\Voice Models (APP_VOICE_MODELS in tests, as on the Mac). Like the
 // Mac's VoiceModels.swift, one pack per engine; unlike it, the files are ONNX exports, and
@@ -45,6 +45,14 @@ public static class VoicePacks
         "Apache-2.0 (Orpheus), Llama 3.2 Community License (its base model)", "Orpheus by Canopy Labs, built on Meta’s Llama 3.2; ONNX export by the ONNX Community");
     static readonly VoiceRepo Snac = new("onnx-community/snac_24khz-ONNX", "f317cdff7efb7b2a63148c9e68bbb0320fe629a1",
         "MIT", "SNAC by Hubert Siuzdak; ONNX export by the ONNX Community");
+    /// Chatterbox: the original English model with its emotion exaggeration (the Mac runs the
+    /// same model, mlx-community/Chatterbox-TTS-fp16), in the ONNX Community's export (MIT,
+    /// base model ResembleAI/chatterbox). Its speech tokenizer (S3TokenizerV2, from CosyVoice 2)
+    /// and speaker encoder (CAM++) are inside speech_encoder.onnx, and the flow decoder and HiFT
+    /// vocoder (CosyVoice) inside conditional_decoder.onnx. The 4-bit language model: about a
+    /// sixth the size of the fp32 one.
+    static readonly VoiceRepo ChatterboxOnnx = new("onnx-community/chatterbox-ONNX", "3cab09af388d3f02bba43443fce88c1f4525ac43",
+        "MIT", "Chatterbox by Resemble AI; ONNX export by the ONNX Community");
 
     static readonly VoicePackFile[] All =
     [
@@ -133,6 +141,16 @@ public static class VoicePacks
     new(OrpheusLm, "tokenizer.json", "orpheus/tokenizer.json", 15722697, "f17508bf9f772747e43b038fae379a4c3e80f5a7d39da8123bbf9794b94f20b6"),
     // onnx-community/snac_24khz-ONNX @ f317cdff7efb7b2a63148c9e68bbb0320fe629a1
     new(Snac, "onnx/decoder_model.onnx", "orpheus/snac/decoder_model.onnx", 52600822, "9e2991fce96c3b49c508304e656052f4f6b860fe8432164fcd976eee195fd4f0"),
+    // onnx-community/chatterbox-ONNX @ 3cab09af388d3f02bba43443fce88c1f4525ac43
+    new(ChatterboxOnnx, "tokenizer.json", "chatterbox/tokenizer.json", 28543, "ecddf6aaae85e271610a2743409f7e447886957d0b0836687c1eaec5ccac2891"),
+    new(ChatterboxOnnx, "onnx/speech_encoder.onnx", "chatterbox/onnx/speech_encoder.onnx", 1184608, "8f1c8a0f89b77bf9cd5dd8f2e034eb2c79dc00fe70d41196b28c257643b00ccb"),
+    new(ChatterboxOnnx, "onnx/speech_encoder.onnx_data", "chatterbox/onnx/speech_encoder.onnx_data", 591274880, "04431dcef6325c54b02de2219845888b464bcd1f1ac2f8839c2fecd1ed2ef294"),
+    new(ChatterboxOnnx, "onnx/embed_tokens.onnx", "chatterbox/onnx/embed_tokens.onnx", 13286, "160722ec14789f616abdb1e31916cbbf9223c03fde0ab546d64ca74fb72e430b"),
+    new(ChatterboxOnnx, "onnx/embed_tokens.onnx_data", "chatterbox/onnx/embed_tokens.onnx_data", 61640704, "898c563c3a5ca1b9ea10ce89b0cdcf252b0bb5ab460dfc4eadea003b56e5d2ee"),
+    new(ChatterboxOnnx, "onnx/language_model_q4.onnx", "chatterbox/onnx/language_model_q4.onnx", 227911, "7f8cdca83b2493536cbf3acf421199808a3d68736f55f4eabd20ef8a99da4313"),
+    new(ChatterboxOnnx, "onnx/language_model_q4.onnx_data", "chatterbox/onnx/language_model_q4.onnx_data", 353621248, "5203d1e83c159316f9923c5c83759f6a34f87be1322ce4ad0facd9fc4aef4790"),
+    new(ChatterboxOnnx, "onnx/conditional_decoder.onnx", "chatterbox/onnx/conditional_decoder.onnx", 6350448, "1656d0d31332bae1854839959a3139300ebb67c178651dfa3f8c5fbfa5351351"),
+    new(ChatterboxOnnx, "onnx/conditional_decoder.onnx_data", "chatterbox/onnx/conditional_decoder.onnx_data", 533970816, "51d58345a272747665ec9d5bb61e01835258a940e321a288582ac4c18cf01b5a"),
     ];
 
     /// Pocket TTS: small and quick, clones every voice from a clip. The Mac's text, "this PC".
@@ -152,12 +170,19 @@ public static class VoicePacks
         "Eight natural American voices that act out the words, with sighs, laughs and gasps from the speech tags.",
         All.Where(f => f.Local.StartsWith("orpheus/", StringComparison.Ordinal)).ToList(), RecommendedMemoryGB: 16, MinimumMemoryGB: 8, RecommendedGpuGB: 8);
 
-    public static IReadOnlyList<VoicePack> Packs { get; } = [Pocket, Qwen, Orpheus];
+    /// Chatterbox: Resemble AI's expressive model, cloning from the same clips as Pocket TTS. The
+    /// Mac's text, "this PC".
+    public static readonly VoicePack Chatterbox = new(VoiceEngine.Chatterbox, "Chatterbox",
+        "Resemble AI’s expressive model: ten stock voices and the voices you clone on this PC, kept the same on every line and acted in each tone with its emotion setting. Uses about 4 GB of memory while it speaks.",
+        All.Where(f => f.Local.StartsWith("chatterbox/", StringComparison.Ordinal)).ToList(), RecommendedMemoryGB: 16, MinimumMemoryGB: 8, RecommendedGpuGB: 6);
+
+    public static IReadOnlyList<VoicePack> Packs { get; } = [Pocket, Qwen, Chatterbox, Orpheus];
 
     public static VoicePack? For(VoiceEngine engine) => engine switch
     {
         VoiceEngine.Pocket => Pocket,
         VoiceEngine.Qwen => Qwen,
+        VoiceEngine.Chatterbox => Chatterbox,
         VoiceEngine.Orpheus => Orpheus,
         _ => null,
     };
@@ -182,6 +207,7 @@ public static class VoicePacks
     public static string QwenCloneFolder => Path.Combine(Folder, "qwen", "clone");
     public static string QwenSharedFolder => Path.Combine(Folder, "qwen", "shared");
     public static string OrpheusFolder => Path.Combine(Folder, "orpheus");
+    public static string ChatterboxFolder => Path.Combine(Folder, "chatterbox");
     /// Qwen3-TTS's voice samples (one per description and tone, made once).
     public static string SamplesFolder => Path.Combine(Folder, "Samples");
 

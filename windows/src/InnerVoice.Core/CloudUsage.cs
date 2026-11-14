@@ -6,10 +6,10 @@ using InnerVoice.Core.AI;
 
 namespace InnerVoice.Core;
 
-public enum CloudService { Claude, Elevenlabs }
+public enum CloudService { Claude, Elevenlabs, Google }
 
 /// What the cloud services used, per day, book and model: numbers only, never book text.
-/// JSON names match the Mac's (camelCase; service "claude" / "elevenlabs").
+/// JSON names match the Mac's (camelCase; service "claude" / "elevenlabs" / "google").
 public sealed record CloudUsageRecord
 {
     /// "yyyy-MM-dd" in this PC's time zone.
@@ -24,6 +24,9 @@ public sealed record CloudUsageRecord
     public long CacheWriteTokens { get; set; }
     /// ElevenLabs bills by characters.
     public long Characters { get; set; }
+    /// Gemini TTS bills by seconds of audio made (25 output tokens a second). Optional so
+    /// records saved before it existed still read (and aren't written when null).
+    public double? AudioSeconds { get; set; }
     public long Requests { get; set; }
 
     public CloudUsageRecord() { }
@@ -38,12 +41,18 @@ public sealed record CloudUsageRecord
     [JsonIgnore] public long TotalTokens => InputTokens + OutputTokens + CacheReadTokens + CacheWriteTokens;
 
     /// Dollars at Anthropic's list prices (cache reads 0.1×, cache writes 1.25× the input
-    /// price). null for ElevenLabs and for models without a known price.
+    /// price). Gemini TTS: seconds of audio at its price, plus text input at $0.50 a million
+    /// tokens. null for ElevenLabs and for models without a known price.
     [JsonIgnore]
     public double? Cost
     {
         get
         {
+            if (Service == CloudService.Google)
+            {
+                if (GeminiTTS.ModelFrom(Model) is not { } m) return null;
+                return (AudioSeconds ?? 0) * m.DollarsPerSecond() + InputTokens * 0.5 / 1_000_000;
+            }
             if (Service != CloudService.Claude || ClaudePricing.Price(Model) is not { } p) return null;
             double input = InputTokens + CacheReadTokens * 0.1 + CacheWriteTokens * 1.25;
             return (input * p.Input + OutputTokens * p.Output) / 1_000_000;
@@ -57,6 +66,7 @@ public sealed record CloudUsageRecord
         CacheReadTokens += other.CacheReadTokens;
         CacheWriteTokens += other.CacheWriteTokens;
         Characters += other.Characters;
+        if (other.AudioSeconds is { } s) AudioSeconds = (AudioSeconds ?? 0) + s;
         Requests += other.Requests;
     }
 
@@ -67,6 +77,11 @@ public sealed record CloudUsageRecord
     /// this (characters sent), as the Mac's ElevenLabs.render does.
     public static CloudUsageRecord ElevenLabs(string book, string model, int characters) =>
         new(DayOf(), book, CloudService.Elevenlabs, model) { Characters = characters, Requests = 1 };
+
+    /// One Gemini TTS request: the seconds of audio it made (what Google bills) and the
+    /// characters sent, as the Mac's GeminiVoices does.
+    public static CloudUsageRecord Google(string book, string model, int characters, double audioSeconds) =>
+        new(DayOf(), book, CloudService.Google, model) { Characters = characters, AudioSeconds = audioSeconds, Requests = 1 };
 }
 
 public static class CloudUsage

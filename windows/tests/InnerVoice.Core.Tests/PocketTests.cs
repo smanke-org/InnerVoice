@@ -7,8 +7,8 @@ namespace InnerVoice.Core.Tests;
 /// The Mac's PocketTTSTests, and the file format since Qwen3-TTS came back beside Pocket TTS
 /// (2026-11-14): a book saved with Qwen3-TTS opens as Qwen3-TTS, with its voices as they were
 /// and nothing migrated (the old book is the Mac's own, Fixtures/legacy-qwen.json from
-/// tools/MacFixtures, and the Windows-saved Qwen3-TTS sample); "chatterbox" still reads as
-/// Pocket TTS and an engine this version doesn't know as Mix Engines; and the tones.
+/// tools/MacFixtures, and the Windows-saved Qwen3-TTS sample); "chatterbox" is a real engine
+/// again (2026-11-14) and an engine this version doesn't know reads as Mix Engines; and the tones.
 public class PocketTests
 {
     static Project OldProject() => ProjectJson.Decode(File.ReadAllBytes(Fixtures.PathOf("legacy-qwen.json")));
@@ -105,14 +105,18 @@ public class PocketTests
         var choice = System.Text.Json.JsonSerializer.Deserialize<VoiceChoice>("""{"engine":"someday-engine","voiceID":"x"}""", ProjectJson.Options)!;
         // Mixed names no voices, so the player falls back to the narrator.
         Assert.Equal(VoiceEngine.Mixed, choice.Engine);
-        Assert.Equal([VoiceEngine.Apple, VoiceEngine.Pocket, VoiceEngine.Orpheus, VoiceEngine.Elevenlabs, VoiceEngine.Mixed, VoiceEngine.Qwen, VoiceEngine.Pocket],
+        Assert.Equal([VoiceEngine.Apple, VoiceEngine.Chatterbox, VoiceEngine.Orpheus, VoiceEngine.Elevenlabs, VoiceEngine.Mixed, VoiceEngine.Qwen, VoiceEngine.Pocket],
             System.Text.Json.JsonSerializer.Deserialize<VoiceEngine[]>("""["apple","chatterbox","orpheus","elevenlabs","mixed","qwen","pocket"]""", ProjectJson.Options));
-        // Saved as "pocket" and "qwen"; the unreleased test build's "chatterbox" reads as Pocket TTS.
+        // Saved as "pocket" and "qwen". "chatterbox" is a real engine again (2026-11-14); the
+        // unreleased Mac test build's books used the same "stock:"/"clone:" voice IDs, so they
+        // speak with it as saved.
         Assert.Equal("\"pocket\"", System.Text.Json.JsonSerializer.Serialize(VoiceEngine.Pocket, ProjectJson.Options));
         Assert.Equal("\"qwen\"", System.Text.Json.JsonSerializer.Serialize(VoiceEngine.Qwen, ProjectJson.Options));
         // Outside a project too (the attribute on the enum): "qwen" is Qwen3-TTS, never Pocket TTS.
         Assert.Equal(VoiceEngine.Qwen, System.Text.Json.JsonSerializer.Deserialize<VoiceEngine>("\"qwen\""));
-        Assert.Equal(VoiceEngine.Pocket, System.Text.Json.JsonSerializer.Deserialize<VoiceEngine>("\"chatterbox\""));
+        Assert.Equal(VoiceEngine.Chatterbox, System.Text.Json.JsonSerializer.Deserialize<VoiceEngine>("\"chatterbox\""));
+        Assert.Equal("\"gemini\"", System.Text.Json.JsonSerializer.Serialize(VoiceEngine.Gemini, ProjectJson.Options));
+        Assert.Equal("\"chatterbox\"", System.Text.Json.JsonSerializer.Serialize(VoiceEngine.Chatterbox, ProjectJson.Options));
         // A whole project with an engine from the future still opens.
         var p = ProjectJson.Decode(System.Text.Encoding.UTF8.GetBytes(System.Text.Encoding.UTF8.GetString(File.ReadAllBytes(Fixtures.PathOf("legacy-qwen.json"))).Replace("\"voiceEngine\":\"qwen\"", "\"voiceEngine\":\"hologram\"")));
         Assert.Equal(VoiceEngine.Mixed, p.Settings.VoiceEngine);

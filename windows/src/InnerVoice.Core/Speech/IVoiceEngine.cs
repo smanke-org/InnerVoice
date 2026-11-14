@@ -5,8 +5,10 @@
 //
 //   apple       Windows' built-in voices (App/Speech/WindowsVoices.cs; the Mac's Apple voices)
 //   elevenlabs  ElevenLabs, in the cloud (App/Speech/ElevenLabs.cs)
+//   gemini      Google's Gemini TTS, in the cloud (App/Speech/GeminiVoices.cs)
 //   pocket      Pocket TTS through ONNX Runtime (Speech/Neural)
 //   qwen        Qwen3-TTS through ONNX Runtime (Speech/Neural)
+//   chatterbox  Chatterbox through ONNX Runtime (Speech/Neural)
 //   orpheus     Orpheus through ONNX Runtime (Speech/Neural)
 //
 // The renderer (SpeechRenderer) owns caching, shading the engine can't do itself, and the
@@ -24,15 +26,16 @@ public sealed record SpeechRequest
     public VoiceChoice Choice { get; init; } = new();
     public Tone Tone { get; init; } = Tone.Neutral;
     public LineKind? Kind { get; init; }
-    /// A sigh or laugh from the speech tag (Orpheus and ElevenLabs).
+    /// A sigh or laugh from the speech tag (Orpheus, ElevenLabs and Gemini TTS).
     public VocalSound? Sound { get; init; }
-    /// The book allows its text to go to a cloud engine (ElevenLabs). Not part of the cache key.
+    /// The book allows its text to go to this request's cloud engine (that company: ElevenLabs
+    /// or Google). Not part of the cache key.
     public bool CloudAllowed { get; init; }
     /// Casting Style: how the narrator's voice changes for the character saying this (pitch
     /// in semitones, pace in steps). null or neutral: the voice as it is.
     public Shade? Shade { get; init; }
-    /// The line's delivery hint. ElevenLabs only: the resolver sets it for ElevenLabs voices
-    /// alone, and no other engine reads it.
+    /// The line's delivery hint. ElevenLabs and Gemini TTS only: the resolver sets it for their
+    /// voices alone, and no other engine reads it.
     public string? Delivery { get; init; }
     /// The book's `UsageKey`, for Cloud Usage. Not part of the cache key.
     public string? UsageBook { get; init; }
@@ -49,8 +52,8 @@ public sealed record SpeechRequest
                 "v1", Choice.Engine.Raw(), Choice.VoiceID, Choice.Design ?? "", Num(Choice.Rate ?? 1), Num(Choice.Pitch ?? 1),
                 Tone.Raw(), Kind?.ToString().ToLowerInvariant() ?? "narration", Text,
             };
-            if (Choice.Engine is VoiceEngine.Orpheus or VoiceEngine.Elevenlabs && Sound is { } s) parts.Add(s.Raw());
-            if (Choice.Engine == VoiceEngine.Elevenlabs && Delivery is { } d) parts.Add($"delivery {d}");
+            if (Choice.Engine is VoiceEngine.Orpheus or VoiceEngine.Elevenlabs or VoiceEngine.Gemini && Sound is { } s) parts.Add(s.Raw());
+            if (Choice.Engine is VoiceEngine.Elevenlabs or VoiceEngine.Gemini && Delivery is { } d) parts.Add($"delivery {d}");
             // Unshaded audio keeps the key it always had, so the cache stays warm.
             if (IsShaded) parts.Add($"shade {Shade!.Pitch} {Shade.Pace}");
             var hash = SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\u001F', parts)));
@@ -159,6 +162,8 @@ public static class VoiceEngineRegistry
         VoiceEngine.Pocket when Get(VoiceEngine.Pocket) is null => VoiceInfo.Pocket.FirstOrDefault(v => v.VoiceID == choice.VoiceID),
         // Qwen3-TTS presets need no engine to be named.
         VoiceEngine.Qwen when Get(VoiceEngine.Qwen) is null => VoiceInfo.QwenPreset(choice.VoiceID),
+        VoiceEngine.Chatterbox when Get(VoiceEngine.Chatterbox) is null => VoiceInfo.Chatterbox.FirstOrDefault(v => v.VoiceID == choice.VoiceID),
+        VoiceEngine.Gemini when Get(VoiceEngine.Gemini) is null => GeminiTTS.Voices.FirstOrDefault(v => v.VoiceID == choice.VoiceID),
         VoiceEngine.Orpheus when Get(VoiceEngine.Orpheus) is null => VoiceInfo.Orpheus.FirstOrDefault(v => v.VoiceID == choice.VoiceID),
         _ => Get(choice.Engine)?.Info(choice),
     };

@@ -5,9 +5,9 @@ character summaries with a local AI model (or Claude, in the cloud, once the nar
 up and allows the book), keep an index and narrator scripts, and read from the teleprompter in
 the booth (record in your own audio app). Books made with AI voices give every character a
 voice and a tone, play table reads and export audio or an EPUB with audio, with Windows' own
-voices, Pocket TTS, Qwen3-TTS and Orpheus (downloaded once, running on this PC through ONNX
-Runtime, on the graphics card with DirectML or on the processor), or ElevenLabs (in the cloud, set up and
-allowed per book). See docs/WINDOWS-PLAN.md § Local voices. Projects (`.innervoice`) open
+voices, Pocket TTS, Qwen3-TTS, Chatterbox and Orpheus (downloaded once, running on this PC through ONNX
+Runtime, on the graphics card with DirectML or on the processor), or ElevenLabs and Gemini TTS (in the
+cloud, each set up and allowed per book, per company). See docs/WINDOWS-PLAN.md § Local voices. Projects (`.innervoice`) open
 on both Windows and the Mac.
 
 The plan and the decisions behind it are in [../docs/WINDOWS-PLAN.md](../docs/WINDOWS-PLAN.md).
@@ -19,7 +19,9 @@ The plan and the decisions behind it are in [../docs/WINDOWS-PLAN.md](../docs/WI
   OpenDocument, Pages, EPUB, HTML), rules, dialogue finder, prompts, llama.cpp binding, voices
   (`Voices.cs`, `ToneRules.cs`, `SpeechScript.cs`, `SeriesVoices.cs`) and `Speech/` (the voice
   engine interface, renderer and audio cache, resolver, audio DSP, WAV, audio export;
-  `Speech/Neural/`: Pocket TTS, Qwen3-TTS and Orpheus on ONNX Runtime, voice packs, the hardware check).
+  `Speech/Neural/`: Pocket TTS, Qwen3-TTS, Chatterbox and Orpheus on ONNX Runtime, voice packs, the
+  hardware check), `GeminiTTS.cs` (Gemini TTS's voices, request and reply) and `Chatterbox.cs` (its
+  voices, tones and run-on cut).
 - `src/InnerVoice.Agent` — the agent interface shared by the app and the CLI (the Mac's
   `Sources/InnerVoice/Agent/`): the command list, parser, help, output, MCP server, named pipe,
   `innervoice://` links. No packages.
@@ -27,9 +29,9 @@ The plan and the decisions behind it are in [../docs/WINDOWS-PLAN.md](../docs/WI
   windowed program no console). Publishing the app puts it in the app's `cli\` folder.
 - `src/InnerVoice.App` — the Avalonia app: `Agent/` (what each command does, the pipe server,
   link registration), `Document/` (open, save, undo, edits), `Pages/`, `Windows/`, `Controls/`
-  (the manuscript view), `AI/`, `Speech/` (Windows Voices, ElevenLabs, the voice model
+  (the manuscript view), `AI/`, `Speech/` (Windows Voices, ElevenLabs, Gemini TTS, the voice model
   downloads, cloning on this PC, the player), `Export/`, `Help/`.
-- `tools/VoiceBench` — measures Pocket TTS, Qwen3-TTS and Orpheus on a computer (`--hardware`, `--bench`, `--clone`).
+- `tools/VoiceBench` — measures Pocket TTS, Qwen3-TTS, Chatterbox and Orpheus on a computer (`--hardware`, `--bench`, `--clone`).
 - `tools/PocketCheck` — the provenance check for the Pocket TTS ONNX files (every weight is Kyutai's).
 - `tools/MacFixtures` — writes the Mac-made fixtures (the Mac's Pocket TTS sample and a Qwen3-TTS
   book, which opens as Qwen3-TTS and saves back unchanged) with the Mac's own Kit; `make-stock-voices.sh` copies the
@@ -153,10 +155,10 @@ output, the ElevenLabs key in Credential Manager, the microphone in Clone a Voic
 export (Media Foundation) there or on a PC. On the Mac, tests use fake engines and play
 silently (`INNERVOICE_SPEECH_AUDIBLE` has no effect off Windows).
 
-Pocket TTS, Qwen3-TTS and Orpheus: the tests use fake models. To run the real ones (Pocket TTS
-0.5 GB, Qwen3-TTS 8.8 GB, Orpheus 2.5 GB; any of them), download the
+Pocket TTS, Qwen3-TTS, Chatterbox and Orpheus: the tests use fake models. To run the real ones (Pocket TTS
+0.5 GB, Qwen3-TTS 8.8 GB, Chatterbox 1.5 GB, Orpheus 2.5 GB; any of them), download the
 packs into a folder laid out like Voice Models and set `INNERVOICE_TEST_VOICE_MODELS` to it for
-`NeuralVoiceTests.TheRealModelsSpeak`, or run `dotnet run --project tools/VoiceBench -- --bench
+`NeuralVoiceTests.TheRealModelsSpeak` and `ChatterboxTests.TheRealModelSpeaks`, or run `dotnet run --project tools/VoiceBench -- --bench
 <folder> <output folder>` for speeds and WAV files to listen to. On a PC, run VoiceBench
 `--hardware` too and compare a graphics card with the processor.
 
@@ -169,6 +171,24 @@ fetches nothing. It designs a voice from a description (sixteen presets, "design
 descriptions and Voice Notes), records one sample per description and tone into Voice
 Models\Samples, and clones every line from it; voices cloned on this PC speak with it too (cut to
 10 seconds for its ONNX codec encoder).
+
+Chatterbox (engine "chatterbox", Resemble AI, MIT; since 2026-11-14) runs the ONNX Community's
+export `onnx-community/chatterbox-ONNX` (pinned and checked by SHA-256 in `VoicePacks.cs`: the speech
+encoder, embed_tokens, the 4-bit language model and the conditional decoder, 1.5 GB). Its speech
+tokenizer and voice decoder come from Alibaba's CosyVoice and its speaker encoder from 3D-Speaker,
+so it's marked "Uses parts developed in China · Runs on this PC" wherever it's offered; nothing is
+fetched at load. It clones from Pocket TTS's stock clips, its own default voice
+(`Resources/StockVoices/chatterbox.wav`, the Mac's chatterbox.m4a as WAV) and voices cloned on this
+PC. The tone sets the export's emotion exaggeration; the export has no classifier-free guidance, so
+the Mac's CFG weight becomes a slight slowdown (`ChatterboxDelivery.Rate`). Sampling is Chatterbox's
+own (temperature 0.8, min-p 0.05, repetition penalty 1.2): the export's greedy example got stuck on
+its silence token. Measured on an Apple M-series processor (CPU): about real time for a long line,
+a few seconds for a short one (the decoder takes most of it).
+
+Gemini TTS (engine "gemini", cloud) works like ElevenLabs: a key in Credential Manager
+(`InnerVoice/gemini`), the narrator's yes, and each book's own `googleVoicesAllowed` (separate
+from ElevenLabs' `cloudVoicesAllowed`). `GeminiAppTests` checks against a fake Google that nothing
+is sent without all three.
 
 ## Releasing
 
