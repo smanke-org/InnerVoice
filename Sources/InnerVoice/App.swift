@@ -119,6 +119,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         SystemHooks.busyReason = { TaggingController.busyReason }
         ExportSpeed.registerSync()
+        ComputerPronunciations.registerSync()
+        _ = ComputerPronunciations.shared
         SystemHooks.didFinishLaunching()
         if AgentSocket.shouldListen {
             AgentSocket.listen { await AgentRouter.handle($0) }
@@ -258,6 +260,19 @@ struct BookCommands: Commands {
                         f.workspace.page = .pronunciations
                     }
                 }
+                .disabled(focus == nil)
+                Button("Add This Book’s Pronunciations to This Mac…") {
+                    if let f = focus { ComputerPronunciations.addBook(f.document) }
+                }
+                .disabled(focus == nil)
+                Toggle("Use This Mac’s Pronunciations", isOn: Binding(
+                    get: { focus?.document.project.settings.usesComputerPronunciations ?? true },
+                    set: { v in
+                        if let f = focus {
+                            f.document.updateSettings(v ? "Use This Mac’s Pronunciations" : "Don’t Use This Mac’s Pronunciations",
+                                                      undoManager: f.undoManager) { $0.usesComputerPronunciations = v }
+                        }
+                    }))
                 .disabled(focus == nil)
             }
             Button("Choose Model…") { focus?.workspace.showModelSheet = true }

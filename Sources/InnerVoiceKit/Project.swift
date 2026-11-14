@@ -436,6 +436,13 @@ public struct ProjectSettings: Codable, Hashable, Sendable {
     /// When the narrator allowed this book's text to be sent to Claude (Anthropic's cloud
     /// model) for the AI features. nil: never sent.
     public var cloudTextAllowed: Date?
+    /// Off when the narrator turned off "Use This Mac's Pronunciations" for this book; nil
+    /// (older files, and the usual case) is on (`PronunciationLists`).
+    public var computerPronunciationsOff: Bool?
+    public var usesComputerPronunciations: Bool {
+        get { computerPronunciationsOff != true }
+        set { computerPronunciationsOff = newValue ? nil : true }
+    }
     /// Show Claude's changes in a list to keep or undo after each Tag Speakers run.
     /// nil: on (the default); false: keep them straight away like a local model's.
     public var reviewCloudAI: Bool?
@@ -528,6 +535,9 @@ public struct Project: Codable, Hashable, Sendable {
     public var characters: [BookCharacter]
     public var narrators: [Narrator]
     public var pronunciations: [Pronunciation]
+    /// The book's copy of the computer's pronunciations it used when last saved, so it sounds
+    /// the same on another computer (`PronunciationLists`). Not edited directly.
+    public var computerPronunciations: [ListedPronunciation]?
     /// Paragraphs read in Record.
     public var recorded: Set<UUID>
     public var retakes: [Retake]

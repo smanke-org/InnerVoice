@@ -298,13 +298,9 @@ public enum SpeechScript {
         }
     }
 
+    /// The book's own pronunciations, then the computer's list (`PronunciationLists`).
     public static func sayings(_ project: Project) -> [Saying] {
-        project.pronunciations
-            .filter { !$0.dismissed && !$0.sayItAs.trimmingCharacters(in: .whitespaces).isEmpty
-                && !$0.term.trimmingCharacters(in: .whitespaces).isEmpty }
-            .map { Saying($0.term.trimmingCharacters(in: .whitespaces), $0.sayItAs.trimmingCharacters(in: .whitespaces),
-                          matchCase: $0.matchCase) }
-            .sorted { $0.term.count > $1.term.count }
+        PronunciationLists.sayings(project, computer: PronunciationLists.computer)
     }
 
     /// "Kerensa" → "keh-REN-sa" from the pronunciation guide, whole words only. One entry also

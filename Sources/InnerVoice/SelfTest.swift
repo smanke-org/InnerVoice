@@ -263,9 +263,9 @@ enum SelfTest {
             var p = doc.project
             check("a project that hasn't been asked shows every page", all.allSatisfy { $0.isShown(in: p) })
             p.settings.purpose = .narration
-            check("Narration Tools hides Voices and Pronunciations and keeps the Teleprompter and Index",
-                  !Workspace.Page.voices.isShown(in: p) && !Workspace.Page.pronunciations.isShown(in: p)
-                    && ([.teleprompter, .index, .review, .cast] as [Workspace.Page]).allSatisfy { $0.isShown(in: p) })
+            check("Narration Tools hides Voices and keeps Pronunciations, the Teleprompter and Index",
+                  !Workspace.Page.voices.isShown(in: p)
+                    && ([.pronunciations, .teleprompter, .index, .review, .cast] as [Workspace.Page]).allSatisfy { $0.isShown(in: p) })
             p.settings.purpose = .aiVoices
             check("Produce with AI Voices hides the Teleprompter and Index and keeps Voices and Pronunciations",
                   Workspace.Page.voices.isShown(in: p) && Workspace.Page.pronunciations.isShown(in: p)
@@ -960,6 +960,43 @@ enum SelfTest {
     /// (nothing is sent without it), audio tags, errors.
     /// Use Voices from Another Project: an earlier book saved to /tmp is read back without
     /// opening it, its voices go to the matched characters as one undo step.
+    /// This Book's and This Mac's pronunciations: This Mac's list reaches speech, the book's
+    /// own entry wins, the book saves a copy, a book can turn the list off, Narration Tools
+    /// books show the page, and test runs never touch the person's own list.
+    private static func computerPronunciations(_ doc: InnerVoiceDocument, undo: UndoManager) {
+        let store = ComputerPronunciations.shared
+        let before = UserDefaults.standard.string(forKey: ComputerPronunciations.key)
+        let saved = doc.project
+        store.change { $0.entries = [ListedPronunciation(term: "Penhallow", sayItAs: "pen-HAL-oh"), ListedPronunciation(term: "Mara", sayItAs: "MAH-ra")] }
+        check("This Mac’s pronunciations reach speech", SpeechScript.apply(SpeechScript.sayings(doc.project), to: "Penhallow Light") == "pen-HAL-oh Light")
+        doc.change("Test", undoManager: undo) { $0.pronunciations.append(Pronunciation(term: "Mara", sayItAs: "MARE-a", addedByUser: true)) }
+        let say = SpeechScript.sayings(doc.project)
+        check("this book’s entry wins over This Mac’s", say.first { $0.term == "Mara" }?.say == "MARE-a" && say.filter { $0.term == "Mara" }.count == 1)
+        if let snap = try? doc.snapshot(contentType: .data) {
+            let copy = snap.project.computerPronunciations ?? []
+            check("a saved book keeps a copy of This Mac’s pronunciations it uses",
+                  Set(copy.map(\.term)) == ["Penhallow", "Mara"] && copy.allSatisfy { $0.list == store.list.listID } && doc.project.computerPronunciations == nil)
+        }
+        doc.updateSettings("Test", undoManager: undo) { $0.usesComputerPronunciations = false }
+        check("a book can turn This Mac’s list off", !SpeechScript.sayings(doc.project).contains { $0.term == "Penhallow" })
+        var narration = doc.project
+        narration.settings.purpose = .narration
+        check("Narration Tools books show Pronunciations", narration.showsPronunciations && Workspace.Page.pronunciations.isShown(in: narration))
+        // Export and import through real files.
+        let dir = FileManager.default.temporaryDirectory.appending(path: "iv-pron-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        for f in PronunciationFile.Format.allCases {
+            let url = dir.appending(path: "list.\(f.fileExtension)")
+            try? PronunciationFile.export(store.list.entries, as: f).write(to: url)
+            let back = (try? PronunciationFile.read(Data(contentsOf: url), fileName: url.lastPathComponent)) ?? []
+            check("This Mac’s list exports and imports as \(f.rawValue.uppercased())", Set(back.map(\.term)) == ["Penhallow", "Mara"])
+        }
+        try? FileManager.default.removeItem(at: dir)
+        doc.change("Restore", undoManager: nil) { $0 = saved }
+        store.change { $0.entries = [] }
+        check("test runs never save This Mac’s list", UserDefaults.standard.string(forKey: ComputerPronunciations.key) == before)
+    }
+
     private static func seriesVoices(_ doc: InnerVoiceDocument, undo: UndoManager) {
         var earlier = doc.project
         earlier.title = "Saltwater Hymns"
@@ -1685,6 +1722,7 @@ enum SelfTest {
         redrawCost(doc)
         await links()
         seriesVoices(doc, undo: undo)
+        computerPronunciations(doc, undo: undo)
         await claudeFeatures()
 
         if let path = ProcessInfo.processInfo.environment["APP_SELFTEST_MODEL"] {

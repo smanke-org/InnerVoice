@@ -87,7 +87,10 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | Cue | The line just before one of yours | prompt, previous line |
 | Narrator | A person reading the audiobook; characters are cast to narrators | reader, voice actor |
 | Narrator Script | An export with one narrator's lines | sides, part |
-| Pronunciation | A term and how the AI voices should say it (Produce with AI Voices) | glossary entry, word |
+| Pronunciation | A term and how to say it; the AI voices use it (every book) | glossary entry, word |
+| This Book’s list | The book’s own pronunciations, saved in the book; wins over This Mac’s | project list, local list |
+| This Mac’s list | One pronunciation list for every book on the computer ("This PC" on Windows), in Settings › Pronunciations; a book can turn it off (Use This Mac’s Pronunciations) and keeps a copy of the entries it uses | master list, global list, library, system-wide list |
+| Another Computer | A This Mac entry from the computer a book was last saved on, kept in the book’s copy | imported, foreign |
 | Teleprompter | The book in large type for the booth, one paragraph at a time; it keeps your place but doesn't record | Record, prompter, studio |
 | Revised Manuscript | A new draft imported into an existing project | update, new version |
 | Model | The AI that reads the book: downloaded, Apple's on-device model, or Claude (Cloud) | engine, LLM |

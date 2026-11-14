@@ -182,6 +182,8 @@ struct SettingsPane: View {
             } else {
                 ModelPicker().padding(Space.xl)
             }
+        case .pronunciations:
+            ComputerPronunciationsSettings().padding(Space.xl)
         default:
             Form {
                 switch tab {
@@ -191,7 +193,7 @@ struct SettingsPane: View {
                 case .recording: RecordingSettings()
                 case .appearance: AppearanceSettings()
                 case .activity: ActivitySettings()
-                case .ai: EmptyView()
+                case .ai, .pronunciations: EmptyView()
                 }
             }
             .formStyle(.grouped)

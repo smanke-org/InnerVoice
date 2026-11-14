@@ -494,7 +494,7 @@ enum AgentCommands {
     // MARK: Pronunciations
 
     private static var pronunciations: [AgentCommand] { [
-        AgentCommand(name: "pronunciations list", summary: "List the pronunciation terms. Returns `pronunciations` (id, term, sayItAs, notes, confirmed, occurrences, first, hasSample).",
+        AgentCommand(name: "pronunciations list", summary: "List the pronunciation terms the book uses: its own, then This Mac's for words it has none for. Returns `pronunciations` (id, term, sayItAs, notes, confirmed, occurrences, first, hasSample, source: book, computer or bookCopy).",
                      params: [.init(name: "search", help: "only terms or sayings containing this"),
                               .init(name: "all", kind: .boolean, help: "include terms dismissed as needing no entry"),
                               .init(name: "limit", kind: .integer, help: "at most this many (default 50)"),
@@ -507,7 +507,65 @@ enum AgentCommands {
             if let search = args.string("search"), !search.isEmpty {
                 terms = terms.filter { $0.term.localizedCaseInsensitiveContains(search) || $0.sayItAs.localizedCaseInsensitiveContains(search) }
             }
-            return try page(terms, args, key: "pronunciations", extra: ["project": entry.name]) { pronunciationJSON($0, document) }
+            var items = terms.map { pronunciationJSON($0, document) }
+            for (e, source) in PronunciationLists.computerEntries(document.project, computer: PronunciationLists.computer)
+            where !PronunciationLists.bookKeys(document.project).contains(e.key) {
+                if let search = args.string("search"), !search.isEmpty,
+                   !e.term.localizedCaseInsensitiveContains(search) && !e.sayItAs.localizedCaseInsensitiveContains(search) { continue }
+                var j = listedJSON(e)
+                j["source"] = source == .bookCopy ? "bookCopy" : "computer"
+                items.append(j)
+            }
+            return try page(items, args, key: "pronunciations", extra: ["project": entry.name, "usesComputerPronunciations": document.project.settings.usesComputerPronunciations]) { $0 }
+        },
+        AgentCommand(name: "pronunciations share", summary: "Add the book's pronunciations to This Mac's list, as Book › Add This Book's Pronunciations to This Mac… does. Words This Mac already says differently are kept unless --replace.",
+                     params: [.init(name: "replace", kind: .boolean, help: "use the book's pronunciation where This Mac's list says a word differently"),
+                              projectParam],
+                     example: "innervoice pronunciations share --json") { args in
+            let (entry, document) = try project(args)
+            let conflict: PronunciationConflict = try args.bool("replace") == true ? .replace : .keepExisting
+            let entries = PronunciationLists.bookEntries(document.project)
+            var result = PronunciationLists.MergeResult()
+            ComputerPronunciations.shared.change { result = PronunciationLists.merge(entries, into: &$0, conflict: conflict) }
+            return ["project": entry.name, "added": result.added, "replaced": result.replaced, "kept": result.kept, "unchanged": result.unchanged]
+        },
+        AgentCommand(name: "pronunciations computer list", summary: "List This Mac's pronunciations, the list every book uses. Returns `pronunciations` (id, term, sayItAs, notes, matchCase).",
+                     params: [.init(name: "search", help: "only words or sayings containing this"),
+                              .init(name: "limit", kind: .integer, help: "at most this many (default 50)"),
+                              .init(name: "offset", kind: .integer, help: "skip this many, for the next page")],
+                     example: "innervoice pronunciations computer list --json", readOnly: true) { args in
+            var list = ComputerPronunciations.shared.list.sorted
+            if let search = args.string("search"), !search.isEmpty {
+                list = list.filter { $0.term.localizedCaseInsensitiveContains(search) || $0.sayItAs.localizedCaseInsensitiveContains(search) }
+            }
+            return try page(list, args, key: "pronunciations", extra: [:]) { listedJSON($0) }
+        },
+        AgentCommand(name: "pronunciations computer import", summary: "Add words to This Mac's list from a CSV, text (word = how to say it) or InnerVoice JSON file. Words already there are kept unless --replace.",
+                     params: [.init(name: "path", required: true, positional: true, help: "the file, an absolute path"),
+                              .init(name: "replace", kind: .boolean, help: "use the file's pronunciation where This Mac's list says a word differently")],
+                     example: "innervoice pronunciations computer import /Users/me/names.csv --json") { args in
+            let path = try args.required("path")
+            guard path.hasPrefix("/") else { throw AgentError.usage("give an absolute path") }
+            let url = URL(fileURLWithPath: path)
+            let entries: [ListedPronunciation]
+            do { entries = try PronunciationFile.read(try Data(contentsOf: url), fileName: url.lastPathComponent) } catch {
+                throw AgentError.usage("can't import \(url.lastPathComponent): \(error.localizedDescription)")
+            }
+            let replace = try args.bool("replace") == true
+            var result = PronunciationLists.MergeResult()
+            ComputerPronunciations.shared.change { result = PronunciationLists.merge(entries, into: &$0, conflict: replace ? .replace : .keepExisting) }
+            return ["file": path, "added": result.added, "replaced": result.replaced, "kept": result.kept, "unchanged": result.unchanged]
+        },
+        AgentCommand(name: "pronunciations computer export", summary: "Save This Mac's list to a file: CSV (opens in Numbers and Excel) or JSON, by the file's extension.",
+                     params: [.init(name: "path", required: true, positional: true, help: "where to save, an absolute path ending in .csv or .json")],
+                     example: "innervoice pronunciations computer export /Users/me/Pronunciations.csv --json") { args in
+            let path = try args.required("path")
+            guard path.hasPrefix("/") else { throw AgentError.usage("give an absolute path") }
+            let ext = (path as NSString).pathExtension.lowercased()
+            guard let format = PronunciationFile.Format(rawValue: ext) else { throw AgentError.usage("the file must end in .csv or .json") }
+            let entries = ComputerPronunciations.shared.list.entries
+            try PronunciationFile.export(entries, as: format).write(to: URL(fileURLWithPath: path), options: .atomic)
+            return ["file": path, "words": entries.count]
         },
         AgentCommand(name: "pronunciations set", summary: "Say how to pronounce a term, as typing in the Pronunciations list does. Adds the term when it isn't there yet.",
                      params: [.init(name: "term", required: true, positional: true, help: "the term (or its id)"),
@@ -816,7 +874,11 @@ enum AgentCommands {
     private static func pronunciationJSON(_ p: Pronunciation, _ document: InnerVoiceDocument) -> JSONObject {
         ["id": short(p.id), "term": p.term, "sayItAs": p.sayItAs, "notes": p.notes, "confirmed": p.confirmed, "matchCase": p.matchCase,
          "occurrences": p.occurrences, "first": p.firstParagraphID.map { document.index.reference($0) } ?? NSNull(),
-         "hasSample": p.audioFile != nil, "dismissed": p.dismissed]
+         "hasSample": p.audioFile != nil, "dismissed": p.dismissed, "source": "book"]
+    }
+
+    private static func listedJSON(_ e: ListedPronunciation) -> JSONObject {
+        ["id": short(e.id), "term": e.term, "sayItAs": e.sayItAs, "notes": e.notes, "matchCase": e.matchCase]
     }
 
     private static func jobJSON(_ document: InnerVoiceDocument) -> Any {
