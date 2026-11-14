@@ -113,7 +113,11 @@ nonisolated final class InnerVoiceDocument: ReferenceFileDocument {
     }
 
     func snapshot(contentType: UTType) throws -> Snapshot {
-        Snapshot(project: project, audio: audio, original: original)
+        // The book keeps a copy of This Mac's pronunciations it uses, so it sounds the same on
+        // another computer (`PronunciationLists`).
+        var p = project
+        p.computerPronunciations = PronunciationLists.copyForSaving(p, computer: PronunciationLists.computer)
+        return Snapshot(project: p, audio: audio, original: original)
     }
 
     /// Always one ordinary file, even when the project was opened from a package: cloud

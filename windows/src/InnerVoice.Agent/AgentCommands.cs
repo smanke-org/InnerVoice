@@ -30,6 +30,16 @@ public static class AgentCommands
         ("a downloaded model's id, \"apple\" for Apple's on-device model, or the path to your own .gguf file.", "a downloaded model's id, or the path to your own .gguf file."),
         ("a model id from `innervoice model list`, apple, or a .gguf path", "a model id from `innervoice model list`, or a .gguf path"),
         ("the size and the fit for this Mac", "the size and the fit for this PC"),
+        // This Mac's pronunciations are This PC's here.
+        ("then This Mac's for words it has none for", "then This PC's for words it has none for"),
+        // (ASCII only: the Mac's help JSON escapes › and ….)
+        ("to This Mac's list, as Book", "to This PC's list, as Book"),
+        ("Pronunciations to This Mac", "Pronunciations to This PC"),
+        ("Words This Mac already says differently", "Words This PC already says differently"),
+        ("where This Mac's list says a word differently", "where This PC's list says a word differently"),
+        ("List This Mac's pronunciations", "List This PC's pronunciations"),
+        ("Add words to This Mac's list from", "Add words to This PC's list from"),
+        ("Save This Mac's list to a file", "Save This PC's list to a file"),
     ];
 
     /// Test copies only (APP_STORE): the sample book, so there is a project to drive.
@@ -215,7 +225,7 @@ public static class AgentCommands
                 ProjectParam,
             ],
         },
-        new("pronunciations list", "List the pronunciation terms. Returns `pronunciations` (id, term, sayItAs, notes, confirmed, occurrences, first, hasSample).", "innervoice pronunciations list --json") {
+        new("pronunciations list", "List the pronunciation terms the book uses: its own, then This PC's for words it has none for. Returns `pronunciations` (id, term, sayItAs, notes, confirmed, occurrences, first, hasSample, source: book, computer or bookCopy).", "innervoice pronunciations list --json") {
             ReadOnly = true,
             Params = [
                 new Param("search", Help: "only terms or sayings containing this"),
@@ -223,6 +233,31 @@ public static class AgentCommands
                 new Param("limit", ParamKind.Integer, Help: "at most this many (default 50)"),
                 new Param("offset", ParamKind.Integer, Help: "skip this many, for the next page"),
                 ProjectParam,
+            ],
+        },
+        new("pronunciations share", "Add the book's pronunciations to This PC's list, as Book › Add This Book's Pronunciations to This PC… does. Words This PC already says differently are kept unless --replace.", "innervoice pronunciations share --json") {
+            Params = [
+                new Param("replace", ParamKind.Boolean, Help: "use the book's pronunciation where This PC's list says a word differently"),
+                ProjectParam,
+            ],
+        },
+        new("pronunciations computer list", "List This PC's pronunciations, the list every book uses. Returns `pronunciations` (id, term, sayItAs, notes, matchCase).", "innervoice pronunciations computer list --json") {
+            ReadOnly = true,
+            Params = [
+                new Param("search", Help: "only words or sayings containing this"),
+                new Param("limit", ParamKind.Integer, Help: "at most this many (default 50)"),
+                new Param("offset", ParamKind.Integer, Help: "skip this many, for the next page"),
+            ],
+        },
+        new("pronunciations computer import", "Add words to This PC's list from a CSV, text (word = how to say it) or InnerVoice JSON file. Words already there are kept unless --replace.", "innervoice pronunciations computer import /Users/me/names.csv --json") {
+            Params = [
+                new Param("path", Required: true, Positional: true, Help: "the file, an absolute path"),
+                new Param("replace", ParamKind.Boolean, Help: "use the file's pronunciation where This PC's list says a word differently"),
+            ],
+        },
+        new("pronunciations computer export", "Save This PC's list to a file: CSV (opens in Numbers and Excel) or JSON, by the file's extension.", "innervoice pronunciations computer export /Users/me/Pronunciations.csv --json") {
+            Params = [
+                new Param("path", Required: true, Positional: true, Help: "where to save, an absolute path ending in .csv or .json"),
             ],
         },
         new("pronunciations set", "Say how to pronounce a term, as typing in the Pronunciations list does. Adds the term when it isn't there yet.", "innervoice pronunciations set Kerensa --say-it-as \"keh-REN-sah\" --json") {

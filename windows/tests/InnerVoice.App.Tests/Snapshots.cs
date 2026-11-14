@@ -91,9 +91,23 @@ public class Snapshots
                 PronunciationFinder.Refresh(p, _ => false);
                 if (p.Pronunciations.FirstOrDefault(x => x.Term == "Kerensa") is { } k) { k.SayItAs = "keh-REN-sa"; k.Notes = "Cornish"; k.Confirmed = true; }
             });
+            // This PC's list too: a word the book also has, two it doesn't, and the book's copy
+            // of a word from another computer.
+            var computer = InnerVoice.App.Speech.ComputerPronunciations.Shared;
+            var keptList = computer.List.Entries.Select(e => e.Copy()).ToList();
+            computer.Change(l => l.Entries = [new("Kerensa", "KEH-ren-sah"), new("Siobhan", "shi-VAWN", "Irish"), new("Will", "Will", "The name", matchCase: true)]);
+            doc.ApplyQuietly(p => p.ComputerPronunciations = [new ListedPronunciation("Aoife", "EE-fa", list: "OTHER")]);
             w.Workspace.Go(PageKind.Pronunciations);
             Pump();
             w.CaptureRenderedFrame()?.Save(Path.Combine(dir, $"Pronunciations-{name}.png"), (int?)null);
+            (w.FindPage(PageKind.Pronunciations) as PronunciationsPage)?.Show(PronunciationFilter.Computer);
+            Pump();
+            w.CaptureRenderedFrame()?.Save(Path.Combine(dir, $"Pronunciations-ThisPC-{name}.png"), (int?)null);
+            var pronSettings = InnerVoice.App.Windows.SettingsWindow.Show(null, "Pronunciations");
+            Pump();
+            pronSettings.CaptureRenderedFrame()?.Save(Path.Combine(dir, $"Settings-Pronunciations-{name}.png"), (int?)null);
+            pronSettings.Close();
+            computer.Change(l => l.Entries = keptList);
             w.Close();
         }
         var settings = InnerVoice.App.Windows.SettingsWindow.Show(null, "AI");

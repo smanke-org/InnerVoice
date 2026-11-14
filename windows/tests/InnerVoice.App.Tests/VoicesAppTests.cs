@@ -198,10 +198,10 @@ public class VoicesAppTests
             doc.Undo();
             Assert.False(doc.Project.Pronunciations.First(p => p.Id == entry.Id).MatchCase);
 
-            // Narration Tools has no Pronunciations page: the window leaves it.
+            // Narration Tools books keep the Pronunciations page (no voices, but how names are said).
             doc.SetPurpose(ProjectPurpose.Narration);
             Pump();
-            Assert.Equal(PageKind.Manuscript, w.Workspace.Page);
+            Assert.Equal(PageKind.Pronunciations, w.Workspace.Page);
             w.Close();
         }
         finally { Restore(); }

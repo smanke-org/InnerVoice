@@ -177,7 +177,7 @@ public sealed class ProjectDocument
         {
             var data = ProjectArchive.Write(new ProjectArchive.Contents
             {
-                ProjectJson = ProjectJson.Encode(Project),
+                ProjectJson = EncodeForSaving(),
                 Original = Original,
                 Audio = Audio,
             });
@@ -193,6 +193,17 @@ public sealed class ProjectDocument
             error = e.Message;
             return false;
         }
+    }
+
+    /// project.json as saved: the book keeps a copy of This PC's pronunciations it uses, so it
+    /// sounds the same on another computer (PronunciationLists.cs). Only the file gets the
+    /// fresh copy; the open book keeps the one it was opened with, like the Mac.
+    public byte[] EncodeForSaving()
+    {
+        var had = Project.ComputerPronunciations;
+        Project.ComputerPronunciations = PronunciationLists.CopyForSaving(Project, PronunciationLists.Computer);
+        try { return ProjectJson.Encode(Project); }
+        finally { Project.ComputerPronunciations = had; }
     }
 
     /// Writes beside the file, then swaps it in, so a crash or a sync never leaves half a

@@ -605,7 +605,7 @@
             "readOnly": false
         },
         {
-            "description": "List the pronunciation terms. Returns `pronunciations` (id, term, sayItAs, notes, confirmed, occurrences, first, hasSample). Example: innervoice pronunciations list --json",
+            "description": "List the pronunciation terms the book uses: its own, then This Mac's for words it has none for. Returns `pronunciations` (id, term, sayItAs, notes, confirmed, occurrences, first, hasSample, source: book, computer or bookCopy). Example: innervoice pronunciations list --json",
             "destructive": false,
             "inputSchema": {
                 "properties": {
@@ -635,6 +635,90 @@
             },
             "name": "pronunciations list",
             "readOnly": true
+        },
+        {
+            "description": "Add the book's pronunciations to This Mac's list, as Book \u203a Add This Book's Pronunciations to This Mac\u2026 does. Words This Mac already says differently are kept unless --replace. Example: innervoice pronunciations share --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "project": {
+                        "description": "the project: its name, path or id from `innervoice projects list` (default: the frontmost)",
+                        "type": "string"
+                    },
+                    "replace": {
+                        "description": "use the book's pronunciation where This Mac's list says a word differently",
+                        "type": "boolean"
+                    }
+                },
+                "required": [],
+                "type": "object"
+            },
+            "name": "pronunciations share",
+            "readOnly": false
+        },
+        {
+            "description": "List This Mac's pronunciations, the list every book uses. Returns `pronunciations` (id, term, sayItAs, notes, matchCase). Example: innervoice pronunciations computer list --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "limit": {
+                        "description": "at most this many (default 50)",
+                        "type": "integer"
+                    },
+                    "offset": {
+                        "description": "skip this many, for the next page",
+                        "type": "integer"
+                    },
+                    "search": {
+                        "description": "only words or sayings containing this",
+                        "type": "string"
+                    }
+                },
+                "required": [],
+                "type": "object"
+            },
+            "name": "pronunciations computer list",
+            "readOnly": true
+        },
+        {
+            "description": "Add words to This Mac's list from a CSV, text (word = how to say it) or InnerVoice JSON file. Words already there are kept unless --replace. Example: innervoice pronunciations computer import /Users/me/names.csv --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "path": {
+                        "description": "the file, an absolute path",
+                        "type": "string"
+                    },
+                    "replace": {
+                        "description": "use the file's pronunciation where This Mac's list says a word differently",
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "path"
+                ],
+                "type": "object"
+            },
+            "name": "pronunciations computer import",
+            "readOnly": false
+        },
+        {
+            "description": "Save This Mac's list to a file: CSV (opens in Numbers and Excel) or JSON, by the file's extension. Example: innervoice pronunciations computer export /Users/me/Pronunciations.csv --json",
+            "destructive": false,
+            "inputSchema": {
+                "properties": {
+                    "path": {
+                        "description": "where to save, an absolute path ending in .csv or .json",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "path"
+                ],
+                "type": "object"
+            },
+            "name": "pronunciations computer export",
+            "readOnly": false
         },
         {
             "description": "Say how to pronounce a term, as typing in the Pronunciations list does. Adds the term when it isn't there yet. Example: innervoice pronunciations set Kerensa --say-it-as \"keh-REN-sah\" --json",

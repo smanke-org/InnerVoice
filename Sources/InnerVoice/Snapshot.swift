@@ -255,7 +255,20 @@ enum Snapshot {
                     document.tagging.debugSummaries(nil)
                 }
                 await shot("index") { workspace.page = .index }
+                // This Mac's list (made-up words; test runs keep it in memory), and a word kept
+                // in the book's copy from another computer.
+                ComputerPronunciations.shared.change { l in
+                    l.entries = [ListedPronunciation(term: "Penhallow", sayItAs: "pen-HAL-oh", notes: "Cornish"),
+                                 ListedPronunciation(term: "Aoife", sayItAs: "EE-fa", notes: "Irish"),
+                                 ListedPronunciation(term: "Siobhan", sayItAs: "shi-VAWN"),
+                                 ListedPronunciation(term: "Mara", sayItAs: "MAH-ra")]
+                }
+                let beforeCopy = document.project
+                document.change("Snapshot", undoManager: nil) {
+                    $0.computerPronunciations = [ListedPronunciation(term: "Tregarthen", sayItAs: "treh-GAR-then", list: "another-computer")]
+                }
                 await shot("pronunciations", settle: 1.5) { workspace.page = .pronunciations }
+                document.change("Restore", undoManager: nil) { $0 = beforeCopy }
                 await shot("teleprompter") {
                     workspace.page = .teleprompter
                     workspace.teleprompterParagraph = document.project.chapters.first?.paragraphs.dropFirst(1).first?.id

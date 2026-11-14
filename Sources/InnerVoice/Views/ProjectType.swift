@@ -10,7 +10,9 @@ extension Project {
     var showsNarrationTools: Bool { settings.purpose != .aiVoices }
     /// Pronunciations: they tell the AI voices how to say names, so a narrator (who says
     /// them in their own voice) doesn't see them. The terms stay in the project.
-    var showsPronunciations: Bool { settings.purpose != .narration }
+    /// Every book: AI voices use them, and narrators keep them as their guide (with This
+    /// Mac's list), since 2026-11-14.
+    var showsPronunciations: Bool { true }
 }
 
 extension Workspace.Page {

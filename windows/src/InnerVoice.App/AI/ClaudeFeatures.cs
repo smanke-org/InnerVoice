@@ -5,7 +5,8 @@ namespace InnerVoice.App.AI;
 
 /// Book › Claude (Cloud): the features only Claude does (the Mac's ClaudeFeatures): Clean Up
 /// Text, Write Chapter Recaps, Suggest Delivery Hints and Suggest Spellings. The last two are
-/// offered, as on the Mac, only in books with voices (`Project.ShowsVoices`/`ShowsPronunciations`).
+/// offered, as on the Mac, where their page is: delivery hints in books with voices
+/// (`Project.ShowsVoices`), spellings with Pronunciations (`ShowsPronunciations`, every book).
 /// Each sends text only with a key, the narrator's yes in Settings and this book's permission
 /// (`ClaudeTextModel` checks all three). Results wait in a review list while Review Claude's
 /// Changes is on (spellings always do: the narrator confirms each), applied in one Undo step.

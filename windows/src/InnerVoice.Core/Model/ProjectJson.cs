@@ -52,6 +52,9 @@ public static class ProjectJson
         return JsonSerializer.SerializeToUtf8Bytes(sorted, new JsonSerializerOptions { Encoder = Options.Encoder });
     }
 
+    /// A JSON tree with every object's keys in order, like Swift's `.sortedKeys`.
+    public static JsonNode? SortKeys(JsonNode? node) => Sort(node);
+
     /// Recursively orders object keys by ordinal comparison, like Swift's `.sortedKeys`.
     static JsonNode? Sort(JsonNode? node) => node switch
     {

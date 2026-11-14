@@ -38,6 +38,8 @@ public partial class App : Application
     {
         ApplyAppearance();
         Speech.VoiceSetup.Start();
+        // This PC's pronunciations, for every book's speech (PronunciationLists.Computer).
+        _ = Speech.ComputerPronunciations.Shared;
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime d)
         {
             desktop = d;

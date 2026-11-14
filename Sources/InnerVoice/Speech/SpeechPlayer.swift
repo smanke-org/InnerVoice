@@ -388,9 +388,12 @@ enum PlayCommand {
                 if Words.count(s) <= 40 { text = s }
             }
         }
+        // This entry's own spelling, even when the other list has the same word.
         var sayings = SpeechScript.sayings(project)
-        if !sayings.contains(where: { $0.term == p.term }), !p.sayItAs.isEmpty {
-            sayings.insert(.init(p.term, p.sayItAs, matchCase: p.matchCase), at: 0)
+        if !p.sayItAs.isEmpty {
+            let key = ListedPronunciation.key(p.term)
+            sayings.removeAll { $0.term.lowercased() == key }
+            sayings.insert(.init(p.term.trimmingCharacters(in: .whitespaces), p.sayItAs, matchCase: p.matchCase), at: 0)
         }
         var seg = SpeechSegment(id: "pronunciation", paragraphID: UUID(), lineID: nil, speakerID: nil,
                                 text: SpeechScript.apply(sayings, to: text), tone: .neutral, kind: nil, pauseAfter: 0)
