@@ -29,8 +29,8 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | Context | On Review, how many paragraphs show before and after each line's paragraph (This paragraph only up to 5 paragraphs around) | surrounding text, excerpt |
 | Tone | How a line is said: neutral, excited, confused, sad, angry, whispered, scared, tender or sarcastic | emotion, mood, style |
 | Voice | The speech voice a character (or the narrator) is read in, on one engine | TTS voice, speaker voice |
-| Engine | Where voices come from: Apple Voices, Pocket TTS, Qwen3-TTS or Orpheus on the Mac, or ElevenLabs (Cloud) | provider, backend |
-| Voice pack | The downloaded models for Pocket TTS, Qwen3-TTS or Orpheus, in Settings › Voices | model files, weights |
+| Engine | Where voices come from: Apple Voices, Pocket TTS, Qwen3-TTS, Chatterbox or Orpheus on the Mac, or ElevenLabs or Gemini TTS (Cloud) | provider, backend |
+| Voice pack | The downloaded models for Pocket TTS, Qwen3-TTS, Chatterbox or Orpheus, in Settings › Voices | model files, weights |
 | Ready-made voice | One of Qwen3-TTS's sixteen described voices (Audiobook Narrator, Warm Storyteller, …), for characters the book says little about | preset |
 | Describe a Voice | Voices page, Qwen3-TTS: a voice made on the Mac from a description; the character's Voice Notes are added when it speaks | design prompt |
 | Stock voice | One of Pocket TTS's nine named voices (Alba, Tara, Leah, Jess, Mia, Zoe, Leo, Dan, Zac), each cloned from a short clip that comes with the app | preset |
@@ -58,13 +58,14 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | Playback speed | How fast Play plays (0.75× to 2×), pauses included; Export Audio is always 1× | rate, tempo |
 | From the book | The part of a character's Voice Notes Build Summary writes (age, gender, accent, voice, manner); the narrator's once edited | AI notes, auto notes |
 | Design a Voice from Voice Notes | ElevenLabs designs a new voice from a character's description and Voice Notes (Cloud; uses credits and a voice slot) | generate voice |
-| Clone a Voice | Book › Clone a Voice…: a voice made from recordings of a real person, saved under a name the narrator chooses. Two ways: On This Mac (Pocket TTS or Qwen3-TTS, free, nothing leaves the Mac) or ElevenLabs (Cloud; paid plan, one voice slot) | voice copy, voice twin, custom voice |
+| Clone a Voice | Book › Clone a Voice…: a voice made from recordings of a real person, saved under a name the narrator chooses. Two ways: On This Mac (Pocket TTS, Qwen3-TTS or Chatterbox, free, nothing leaves the Mac) or ElevenLabs (Cloud; paid plan, one voice slot) | voice copy, voice twin, custom voice |
 | Cloned voice | A voice made by Clone a Voice (or at elevenlabs.io); marked Cloned, listed first, never chosen by casting | clone (as a noun in UI), copy |
 | The Clip | On This Mac: the first 15 seconds of speech a cloned voice is learned from, with the words it says | sample, reference |
 | Use Voices from Another Project | Copy voices (and optionally Voice Notes, narrator voice, engine) from an earlier book in a series, after matching its characters to this book's | import cast, series voices, voice transfer |
 | Voice brief | The AI's casting note in Voice Notes: pitch, pace, texture, attitude, and the contrast with scene partners | voice profile, direction |
-| Cloud | Marks what sends text off the Mac: ElevenLabs (voices) and Claude (the cloud model) | online, remote |
-| Send This Book to ElevenLabs | The per-book permission before any of its text goes to ElevenLabs; Stop Sending This Book ends it | consent, opt in |
+| Uses parts developed in China | The label on Chatterbox (CosyVoice and 3D-Speaker parts from Alibaba); it still runs only on the Mac, like Qwen3-TTS's "Developed in China" | Chinese model |
+| Cloud | Marks what sends text off the Mac: ElevenLabs and Gemini TTS (voices) and Claude (the cloud model) | online, remote |
+| Send This Book to ElevenLabs / Google | The per-book permission before any of its text goes to that company (each asks separately); Stop Sending This Book ends it | consent, opt in |
 | Sound | A sigh, laugh, gasp, groan, sniffle, yawn or cough a speech tag asks for; Orpheus performs it | effect, tag |
 | Casting | Choosing a voice for each character from the summary; Cast Voices Again redoes it | auto-assign, matching |
 | Narrator voice | The voice that reads narration and lines nobody is cast for | default voice |

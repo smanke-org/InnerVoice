@@ -101,6 +101,8 @@ enum Credits {
                license: ccBY4),
         Credit(text: "Qwen3-TTS voices: Qwen3-TTS by Alibaba’s Qwen team, Apache 2.0, in mlx-community’s 8-bit MLX conversions (Qwen3-TTS-12Hz-1.7B VoiceDesign and Base). It runs on this Mac only.",
                license: URL(string: "https://www.apache.org/licenses/LICENSE-2.0")!),
+        Credit(text: "Chatterbox voices: Chatterbox by Resemble AI, MIT, with its speech tokenizer from Alibaba’s CosyVoice, in mlx-community’s MLX conversions (Chatterbox-TTS-fp16, S3TokenizerV2). It runs on this Mac only. The stock voice “Chatterbox” is the default voice Resemble ships with Chatterbox Turbo.",
+               license: URL(string: "https://opensource.org/licenses/MIT")!),
         Credit(text: "The stock voice Alba: a clip by Alba MacKenna from Kyutai’s voice collection (kyutai/tts-voices), CC BY 4.0, converted to 24 kHz mono.",
                license: ccBY4),
         Credit(text: "The other eight stock voices were spoken by Orpheus TTS by Canopy Labs, Apache 2.0.",
