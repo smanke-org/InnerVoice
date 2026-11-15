@@ -633,6 +633,7 @@ struct AudioExportSheet: View {
         let stem = separate && scope != .character ? AudioExporter.stems(project: document.project, index: document.index, resolver: resolver) : nil
         error = nil
         progress = 0
+        let started = Date()
         running = Task {
             defer { running = nil }
             do {
@@ -646,7 +647,7 @@ struct AudioExportSheet: View {
                 defer { waits.cancel(); waitNote = nil }
                 let urls = try await AudioExporter.write(parts, to: folder, format: format, resolver: resolver, stem: stem) { done, total, what in
                     progress = total == 0 ? 1 : Double(done) / Double(total)
-                    status = what.isEmpty ? "Finishing…" : "Reading \(what) (\(done.formatted()) of \(total.formatted()))…"
+                    status = what.isEmpty ? "Finishing…" : "Reading \(what) (\(done.formatted()) of \(total.formatted()))" + (TimeLeft.estimate(done: done, total: total, elapsed: Date().timeIntervalSince(started)).map { ", \($0)…" } ?? "…")
                 }
                 if AudioExporter.slowedLines > 0 {
                     let alert = NSAlert()

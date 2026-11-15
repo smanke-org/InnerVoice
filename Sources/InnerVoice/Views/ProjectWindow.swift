@@ -35,6 +35,7 @@ struct ProjectWindow: View {
             }
         }
         .frame(minWidth: 900, minHeight: 560)
+        .remembersWindowFrame(book: document.project.isEmpty ? "" : document.project.usageKey)
         .focusedSceneValue(\.project, ProjectFocus(document: document, workspace: workspace, undoManager: undoManager))
         .sheet(isPresented: $workspace.showModelSheet) {
             ModelSheet { ready in

@@ -34,6 +34,8 @@ public sealed partial class ProjectWindow : Window
         Height = AppSettings.Current.WindowHeight;
         MinWidth = 820;
         MinHeight = 520;
+        RestoreFrame();
+        WatchFrame();
         FontFamily = Look.UIFamily;
         Icon = Look.WindowIcon;
         UpdateTitle();
@@ -308,6 +310,8 @@ public sealed partial class ProjectWindow : Window
             return;
         }
         Document.FlushAutosave();
+        frameSave?.Stop();
+        SaveFrame();
         AppSettings.Update(s => { s.WindowWidth = Width; s.WindowHeight = Height; });
         foreach (var p in pages.Values) p.Hidden();
         App.Current.WindowClosed(this);

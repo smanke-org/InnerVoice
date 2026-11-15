@@ -197,12 +197,13 @@ struct EpubExportSheet: View {
         let resolver = VoiceResolver(project: project, index: index)
         error = nil
         progress = 0
+        let started = Date()
         running = Task {
             defer { running = nil }
             do {
                 try await EpubExporter.write(project: project, index: index, chapters: picked, to: url, resolver: resolver) { done, total, what in
                     progress = total == 0 ? 1 : Double(done) / Double(total)
-                    status = what.isEmpty ? "Putting the book together…" : "Reading \(what) (\(done.formatted()) of \(total.formatted()))…"
+                    status = what.isEmpty ? "Putting the book together…" : "Reading \(what) (\(done.formatted()) of \(total.formatted()))" + (TimeLeft.estimate(done: done, total: total, elapsed: Date().timeIntervalSince(started)).map { ", \($0)…" } ?? "…")
                 }
                 isPresented = false
                 NSWorkspace.shared.activateFileViewerSelecting([url])

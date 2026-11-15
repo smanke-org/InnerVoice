@@ -81,6 +81,8 @@ struct HelpView: View {
         }
     }
 
+    @FocusState private var searchFocused: Bool
+
     var body: some View {
         NavigationSplitView {
             List(matches, selection: $state.selection) { topic in
@@ -98,6 +100,13 @@ struct HelpView: View {
             }
         }
         .searchable(text: $state.query, placement: .sidebar, prompt: "Search Help")
+        .searchFocused($searchFocused)
+        // ⌘F puts the cursor in Search Help, like Find in other apps' help.
+        .background {
+            Button("Search Help") { searchFocused = true }
+                .keyboardShortcut("f", modifiers: .command)
+                .hidden()
+        }
         .onChange(of: state.query) {
             // Keep a matching topic on screen while searching.
             if let first = matches.first, !matches.contains(where: { $0 == state.selection }) { state.selection = first }

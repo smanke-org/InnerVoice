@@ -130,13 +130,14 @@ public sealed class EpubExportWindow : Window
         status.Text = "";
         bar.Value = 0;
         Build();
+        var started = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             double spoken = await Task.Run(() => EpubAudioExport.Write(project, index, picked, path, resolver, encoder,
                 progress: (done, total, what) => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                 {
                     bar.Value = total == 0 ? 1 : (double)done / total;
-                    status.Text = what.Length == 0 ? "Putting the book together…" : $"Reading {what} ({done:N0} of {total:N0})…";
+                    status.Text = what.Length == 0 ? "Putting the book together…" : $"Reading {what} ({done:N0} of {total:N0})" + TimeLeft.Ending(done, total, started.Elapsed.TotalSeconds);
                 }),
                 ct: source.Token));
             Activity.Record(ActivityKey.SecondsExported, (int)Math.Round(spoken));

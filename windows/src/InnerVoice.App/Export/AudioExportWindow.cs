@@ -442,6 +442,7 @@ public sealed class AudioExportWindow : Window
             if (running is not null && progressText.Length > 0) status.Text = progressText + note;
         };
         waits.Start();
+        var started = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             var files = await Task.Run(() => AudioExporter.Write(parts, folder, format, resolver, encoder: AudioEncoders.M4a, stem: stem,
@@ -449,7 +450,7 @@ public sealed class AudioExportWindow : Window
                 progress: (done, total, what) => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                 {
                     bar.Value = total == 0 ? 1 : (double)done / total;
-                    status.Text = progressText = what.Length == 0 ? "Finishing…" : $"Reading {what} ({done:N0} of {total:N0})…";
+                    status.Text = progressText = what.Length == 0 ? "Finishing…" : $"Reading {what} ({done:N0} of {total:N0})" + TimeLeft.Ending(done, total, started.Elapsed.TotalSeconds);
                 }),
                 ct: source.Token, stats: stats));
             SlowedLines = stats.SlowedLines;

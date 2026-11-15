@@ -25,6 +25,9 @@ public sealed class AppSettings
     public NextKey RecordNextKey { get; set; } = NextKey.Space;
     /// The paragraph each book's Teleprompter was last on, by the project file's full path.
     public Dictionary<string, Guid> TeleprompterPlaces { get; set; } = new();
+    /// Each book's window place and size, by `Project.UsageKey` (the Mac's
+    /// windows.projectFrames).
+    public Dictionary<string, InnerVoice.App.Windows.ProjectWindowFrame> ProjectFrames { get; set; } = new();
     public bool StepsHidden { get; set; }
     /// Paragraphs shown before and after each line on the Review page (0–5).
     public int ReviewContext { get; set; } = 2;

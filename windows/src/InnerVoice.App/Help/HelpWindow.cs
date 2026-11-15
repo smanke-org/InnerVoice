@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using InnerVoice.App.UI;
@@ -21,6 +23,16 @@ public sealed class HelpWindow : Window
     readonly Border divider = Ui.Divider(vertical: true);
     HelpTopic selected = HelpTopic.GettingStarted;
     bool updating;
+
+    /// The Help window while it exists (tests).
+    public static HelpWindow? Current => shown;
+
+    /// Ctrl+F (the Mac's ⌘F): the search box, with what's in it selected.
+    public void FocusSearch()
+    {
+        search.Focus();
+        search.SelectAll();
+    }
 
     /// Opens Help on `topic`.
     public static void Show(HelpTopic topic = HelpTopic.GettingStarted)
@@ -56,6 +68,16 @@ public sealed class HelpWindow : Window
         };
         search.Margin = new Thickness(Look.Md, Look.Md, Look.Md, Look.Sm);
         search.TextChanged += (_, _) => Filter();
+        // Ctrl+F finds in Help wherever the focus is. Windows+F belongs to Windows (Feedback
+        // Hub), so it isn't used.
+        AddHandler(KeyDownEvent, (_, e) =>
+        {
+            if (e.Key == Key.F && e.KeyModifiers == KeyModifiers.Control)
+            {
+                FocusSearch();
+                e.Handled = true;
+            }
+        }, RoutingStrategies.Tunnel);
         noMatches.HorizontalAlignment = HorizontalAlignment.Center;
         noMatches.Margin = new Thickness(0, Look.Lg);
 
