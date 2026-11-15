@@ -35,3 +35,13 @@ public class HelpAppTests
         finally { w.Hide(); }
     }
 }
+
+public class AIReviewSearchTests
+{
+    [Xunit.Fact]
+    public void SearchMatchesEveryWordAnyCase()
+    {
+        Xunit.Assert.True(InnerVoice.App.Windows.AIReviewWindow.Matches("Gray I'll take the trade. Ch 2 ¶73", "gray TRADE"));
+        Xunit.Assert.False(InnerVoice.App.Windows.AIReviewWindow.Matches("Gray Good idea", "gray trade"));
+    }
+}

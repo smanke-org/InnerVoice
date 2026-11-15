@@ -21,6 +21,9 @@ public sealed class AIReviewWindow : Window
     readonly Button undoButton = new() { IsDefault = true };
     readonly Button toggleAll = new();
     readonly List<CheckBox> boxes = [];
+    readonly List<(Control Row, CheckBox Box, string Text)> rows = [];
+    readonly TextBox search = new() { Watermark = "Search text or characters, like \"Mara\"" };
+    readonly TextBlock matchCount = new() { FontSize = 12, IsVisible = false };
 
     public static Task Show(Window owner, ProjectDocument document, AIRunner.PendingReview review) =>
         new AIReviewWindow(document, review).ShowDialog(owner);
@@ -65,12 +68,17 @@ public sealed class AIReviewWindow : Window
             row.Children.Add(box);
             row.Children.Add(col);
             list.Children.Add(row);
+            var before = p.Character(item.SpeakerBefore)?.Name ?? "Who's Speaking?";
+            var after = p.Character(item.SpeakerAfter)?.Name ?? "Who's Speaking?";
+            rows.Add((row, box, string.Join(" ", before, after,
+                line is null ? "" : p.TextOf(line, index), line is null ? "" : index.Reference(line.ParagraphID))));
         }
 
         toggleAll.Click += (_, _) =>
         {
-            bool checkAll = undone.Count == review.Items.Count;
-            foreach (var b in boxes) b.IsChecked = checkAll;
+            var shown = rows.Where(x => x.Row.IsVisible).ToList();
+            bool checkAll = shown.Count > 0 && shown.All(x => x.Box.IsChecked != true);
+            foreach (var x in shown) x.Box.IsChecked = checkAll;
         };
         var keepAll = new Button { Content = "Keep All", IsCancel = true };
         keepAll.Click += (_, _) => Close();
@@ -85,7 +93,13 @@ public sealed class AIReviewWindow : Window
         var header = Ui.Row(Look.Sm, Ui.Title("Review Claude's Changes"), SettingsWindow.CloudBadge());
         var intro = Ui.Text($"{review.Model} changed {review.Items.Count:N0} lines. Uncheck any you don't want, and they go back to how they were. Lines you assigned yourself were not touched.",
                             13, brush: Look.Brush(Look.SecondaryInk), wrap: TextWrapping.Wrap);
-        var top2 = Ui.Column(Look.Md, header, intro);
+        search.TextChanged += (_, _) => ApplySearch();
+        matchCount.Foreground = Look.Brush(Look.SecondaryInk);
+        var top2 = Ui.Column(Look.Md, header, search, intro, matchCount);
+        KeyDown += (_, e) =>
+        {
+            if (e.Key == Avalonia.Input.Key.F && e.KeyModifiers.HasFlag(Avalonia.Input.KeyModifiers.Control)) { search.Focus(); search.SelectAll(); e.Handled = true; }
+        };
         var root = new DockPanel { Margin = new Thickness(Look.Xl) };
         DockPanel.SetDock(top2, Dock.Top);
         DockPanel.SetDock(buttons, Dock.Bottom);
@@ -111,9 +125,26 @@ public sealed class AIReviewWindow : Window
         return text;
     }
 
+    /// Words must all appear (any case) in the line, its reference or the speaker names.
+    public static bool Matches(string text, string query) =>
+        query.Split(' ', StringSplitOptions.RemoveEmptyEntries).All(w => text.Contains(w, StringComparison.CurrentCultureIgnoreCase));
+
+    void ApplySearch()
+    {
+        var q = (search.Text ?? "").Trim();
+        int n = 0;
+        foreach (var x in rows) { x.Row.IsVisible = q.Length == 0 || Matches(x.Text, q); if (x.Row.IsVisible) n++; }
+        matchCount.IsVisible = q.Length > 0;
+        matchCount.Text = n == 0 ? $"No changes match \"{q}\"." : $"Showing {n:N0} of {rows.Count:N0}.";
+        Refresh();
+    }
+
     void Refresh()
     {
-        toggleAll.Content = undone.Count == review.Items.Count ? "Check All" : "Uncheck All";
+        var shown = rows.Where(x => x.Row.IsVisible).ToList();
+        var label = shown.Count == rows.Count ? "All" : $"{shown.Count:N0} Shown";
+        toggleAll.IsEnabled = shown.Count > 0;
+        toggleAll.Content = (shown.Count > 0 && shown.All(x => x.Box.IsChecked != true) ? "Check " : "Uncheck ") + label;
         undoButton.Content = undone.Count == 0 ? "Done" : $"Undo {undone.Count:N0} Unchecked";
     }
 

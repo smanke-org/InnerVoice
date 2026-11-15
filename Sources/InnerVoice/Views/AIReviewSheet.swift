@@ -9,6 +9,8 @@ struct AIReviewSheet: View {
     @Environment(\.undoManager) private var undoManager
     @State private var undone: Set<UUID> = []
     @State private var filter = Filter.all
+    @State private var search = ""
+    @FocusState private var searchFocused: Bool
 
     enum Filter: String, CaseIterable, Identifiable {
         case all = "All", speakers = "Speakers", tones = "Tones"
@@ -20,13 +22,26 @@ struct AIReviewSheet: View {
         let index = document.index
         let names = Dictionary(uniqueKeysWithValues: p.characters.map { ($0.id, $0.name) })
         let lines = Dictionary(uniqueKeysWithValues: p.lines.map { ($0.id, $0) })
+        let words = search.trimmingCharacters(in: .whitespaces)
         let shown = review.items.filter {
             switch filter {
             case .all: true
             case .speakers: $0.speakerChanged
             case .tones: $0.toneChanged
             }
+        }.filter { item in
+            guard !words.isEmpty else { return true }
+            var hay = [
+                item.speakerBefore.flatMap { names[$0] } ?? "Who’s Speaking?",
+                item.speakerAfter.flatMap { names[$0] } ?? "Who’s Speaking?",
+            ]
+            if item.toneChanged { hay += [(item.toneBefore ?? .neutral).title, (item.toneAfter ?? .neutral).title] }
+            if let line = lines[item.lineID] { hay += [p.text(of: line, index: index), index.reference(line.paragraphID)] }
+            let text = hay.joined(separator: " ")
+            return words.split(separator: " ").allSatisfy { text.localizedStandardContains($0) }
         }
+        let shownIDs = Set(shown.map(\.lineID))
+        let allShownUnchecked = !shownIDs.isEmpty && shownIDs.isSubset(of: undone)
         VStack(alignment: .leading, spacing: Space.md) {
             HStack(spacing: Space.sm) {
                 Text("Review Claude’s Changes").font(.title2.weight(.semibold))
@@ -39,9 +54,17 @@ struct AIReviewSheet: View {
                 .labelsHidden()
                 .fixedSize()
             }
+            TextField("Search text, characters or tones, like “whisper”", text: $search)
+                .textFieldStyle(.roundedBorder)
+                .focused($searchFocused)
+                .background(Button("Search") { searchFocused = true }.keyboardShortcut("f").hidden())
             Text("\(review.model) changed \(review.items.count.formatted()) lines. Uncheck any you don’t want, and they go back to how they were. Lines you assigned yourself were not touched.")
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            if !words.isEmpty {
+                Text(shown.isEmpty ? "No changes match “\(words)”." : "Showing \(shown.count.formatted()) of \(review.items.count.formatted()).")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             List(shown) { item in
                 let line = lines[item.lineID]
                 HStack(alignment: .top, spacing: Space.md) {
@@ -70,9 +93,11 @@ struct AIReviewSheet: View {
             }
             .frame(minHeight: 280)
             HStack {
-                Button(undone.count == review.items.count ? "Check All" : "Uncheck All") {
-                    undone = undone.count == review.items.count ? [] : Set(review.items.map(\.lineID))
+                let label = shown.count == review.items.count ? "All" : "\(shown.count.formatted()) Shown"
+                Button(allShownUnchecked ? "Check \(label)" : "Uncheck \(label)") {
+                    if allShownUnchecked { undone.subtract(shownIDs) } else { undone.formUnion(shownIDs) }
                 }
+                .disabled(shownIDs.isEmpty)
                 Spacer()
                 Button("Keep All") { close() }
                     .keyboardShortcut(.cancelAction)
