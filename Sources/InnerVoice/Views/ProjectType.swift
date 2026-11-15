@@ -142,8 +142,10 @@ struct ProjectTypeSheet: View {
             }
         }
         .onAppear {
-            // Start from the best engine that's ready on this Mac.
-            engine = [.qwen, .pocket, .orpheus, .apple].first { EngineSwitches.shared.usable($0) } ?? .apple
+            // Start from the default for new books (Settings › Voices), else the best engine
+            // that's ready on this Mac.
+            let d = EngineSwitches.shared.defaultEngine
+            engine = EngineSwitches.shared.usable(d) ? d : [.qwen, .pocket, .orpheus, .apple].first { EngineSwitches.shared.usable($0) } ?? .apple
         }
     }
 

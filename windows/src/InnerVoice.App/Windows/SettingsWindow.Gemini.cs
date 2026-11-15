@@ -24,7 +24,6 @@ public sealed partial class SettingsWindow
         var actions = Ui.Row(Look.Sm);
         if (gemini.IsSetUp)
         {
-            actions.Children.Add(EngineSwitch(VoiceEngine.Gemini, Build));
             actions.Children.Add(Ui.Button("Change…", () => _ = GeminiSetupDialog().ShowDialog(this)));
         }
         else actions.Children.Add(Ui.Button("Set Up…", () => _ = GeminiSetupDialog().ShowDialog(this),

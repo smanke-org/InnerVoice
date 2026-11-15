@@ -347,6 +347,7 @@ enum PlayCommand {
 
     /// The selected line, or the paragraph it is in when nothing is selected.
     static func playLine(document: InnerVoiceDocument, workspace: Workspace) {
+        guard CloudGate.allows(document) else { return }
         VoiceCastingRun.castIfNeeded(document: document)
         let project = document.project
         let index = document.index
@@ -362,6 +363,7 @@ enum PlayCommand {
     /// With `paragraphID` (a right-click in the Manuscript), it starts there instead: at
     /// `lineID` when the click was on a line, else at the top of that paragraph.
     static func playFromHere(document: InnerVoiceDocument, workspace: Workspace, paragraphID: UUID? = nil, lineID: UUID? = nil) {
+        guard CloudGate.allows(document) else { return }
         VoiceCastingRun.castIfNeeded(document: document)
         let project = document.project
         let index = document.index
@@ -393,6 +395,7 @@ enum PlayCommand {
     /// One sample line in a voice, for choosing voices: the character's own words when
     /// they have lines.
     static func audition(_ choice: VoiceChoice, character: BookCharacter?, document: InnerVoiceDocument, tone: Tone? = nil, shade: Shade? = nil) {
+        guard CloudGate.allows(document) else { return }
         let project = document.project
         let index = document.index
         var text = "The light was never mine to leave you. It belongs to you now."
@@ -426,6 +429,7 @@ enum PlayCommand {
     /// A Pronunciations entry said in the book's narrator voice, the way a line would be:
     /// the sentence where it's first used (with every entry applied), or the word alone.
     static func hear(_ p: Pronunciation, document: InnerVoiceDocument) {
+        guard CloudGate.allows(document) else { return }
         let project = document.project
         let index = document.index
         var text = p.term

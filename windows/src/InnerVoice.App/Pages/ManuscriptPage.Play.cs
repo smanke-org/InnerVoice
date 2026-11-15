@@ -14,6 +14,7 @@ public sealed partial class ManuscriptPage
     {
         ids ??= Canvas.SelectedLines.ToList();
         if (ids.Count == 0 || !Document.Project.ShowsVoices) return;
+        if (!CloudGate.Ready(Document, () => PlayLines(ids))) return;
         VoiceCastingRun.CastIfNeeded(Document);
         var project = Document.Project;
         var index = Document.Index;
@@ -34,6 +35,7 @@ public sealed partial class ManuscriptPage
     public void PlayFromHere(Guid? lineID = null, Guid? paragraphID = null)
     {
         if (!Document.Project.ShowsVoices) return;
+        if (!CloudGate.Ready(Document, () => PlayFromHere(lineID, paragraphID))) return;
         VoiceCastingRun.CastIfNeeded(Document);
         var project = Document.Project;
         var index = Document.Index;

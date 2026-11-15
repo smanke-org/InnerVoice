@@ -206,6 +206,8 @@ public class SpeechTests : IDisposable
         Assert.Null(resolver.RequestFor(segs.First(s => s.Text == "Hush"))!.Shade?.Cue);
     }
 
+    /// One engine per book (2026-11-15): a book speaks with its own engine, Mix Engines is never
+    /// offered or used, and a cloud engine the book hasn't allowed stays chosen (playing asks).
     [Fact]
     public void SwitchesPickTheEngineInUse()
     {
@@ -215,23 +217,52 @@ public class SpeechTests : IDisposable
         try
         {
             var sw = new EngineSwitches();
+            Assert.Equal(VoiceEngine.Apple, sw.DefaultEngine);
             Assert.Equal([VoiceEngine.Apple], sw.Choices);
             p.Settings.VoiceEngine = VoiceEngine.Elevenlabs;
             Assert.Equal(VoiceEngine.Apple, sw.InUse(p));   // not set up
             cloud.IsReady = true;
-            Assert.Equal(VoiceEngine.Apple, sw.InUse(p));   // the book hasn't allowed it
-            p.Settings.CloudVoicesAllowed = AppleDate.Now;
-            Assert.Equal(VoiceEngine.Elevenlabs, sw.InUse(p));
-            Assert.Equal([VoiceEngine.Apple, VoiceEngine.Elevenlabs, VoiceEngine.Mixed], sw.Choices);
-            Assert.False(sw.CanTurnOff(VoiceEngine.Apple) && sw.Enabled.Count < 2);
-            sw.Set(VoiceEngine.Elevenlabs, false);
-            Assert.Equal(VoiceEngine.Apple, sw.InUse(p));
-            sw.Set(VoiceEngine.Apple, false);   // the last engine stays on
-            Assert.True(sw.IsOn(VoiceEngine.Apple));
+            Assert.Equal(VoiceEngine.Elevenlabs, sw.InUse(p));   // not allowed yet, but still chosen
+            Assert.Equal([VoiceEngine.Apple, VoiceEngine.Elevenlabs], sw.Choices);
+            Assert.DoesNotContain(VoiceEngine.Mixed, sw.Choices);
             p.Settings.VoiceEngine = VoiceEngine.Mixed;
-            sw.Set(VoiceEngine.Elevenlabs, true);
-            Assert.Equal(3, sw.VoicesFor(VoiceEngine.Mixed, p).Count);
+            Assert.Equal(VoiceEngine.Apple, sw.InUse(p));   // a mixed book uses the default
+            sw.SetDefault(VoiceEngine.Elevenlabs);
+            Assert.Equal(VoiceEngine.Elevenlabs, sw.InUse(p));
+            sw.SetDefault(VoiceEngine.Mixed);   // never a default
+            Assert.Equal(VoiceEngine.Elevenlabs, sw.DefaultEngine);
+            cloud.IsReady = false;
+            Assert.Equal(VoiceEngine.Apple, sw.InUse(p));   // a default that's no longer set up
+            // Before 2026-11-15: the best engine that was on becomes the default.
+            Assert.Equal(VoiceEngine.Apple, new EngineSwitches(null, [VoiceEngine.Qwen]).DefaultEngine);
+            Assert.Equal(VoiceEngine.Elevenlabs, new EngineSwitches(VoiceEngine.Elevenlabs).DefaultEngine);
         }
         finally { VoiceEngineRegistry.Unregister(VoiceEngine.Elevenlabs); }
+    }
+
+    /// A book saved with Mix Engines moving to one engine: that engine's empty slots take the
+    /// mixed picks made on it; its own voices stay, and nothing is removed.
+    [Fact]
+    public void MixedVoicesFillTheChosenEnginesEmptySlots()
+    {
+        var p = new Project { Title = "Placeholder" };
+        var a = new BookCharacter { Name = "Ann", ColorHex = "#2F7FD0" };
+        var b = new BookCharacter { Name = "Bo", ColorHex = "#2F7FD0" };
+        var qa = new VoiceChoice(VoiceEngine.Qwen, "preset:dame");
+        var ob = new VoiceChoice(VoiceEngine.Orpheus, "leo");
+        var keep = new VoiceChoice(VoiceEngine.Qwen, "preset:lass");
+        a.SetVoice(new CastVoice(qa, 1, VoiceSource.User), VoiceEngine.Mixed);
+        b.SetVoice(new CastVoice(ob, 1, VoiceSource.User), VoiceEngine.Mixed);
+        b.SetVoice(new CastVoice(keep, 1, VoiceSource.User), VoiceEngine.Qwen);
+        p.Characters.AddRange([a, b]);
+        p.Settings.SetNarratorVoice(new CastVoice(qa, 1, VoiceSource.User), VoiceEngine.Mixed);
+        p.Settings.SetRoleVoice(new CastVoice(qa, 1, VoiceSource.User), VoiceRole.Women, VoiceEngine.Mixed);
+        p.Settings.VoiceEngine = VoiceEngine.Mixed;
+        p.AdoptMixedVoices(VoiceEngine.Qwen);
+        Assert.Equal(qa, p.Characters[0].Voice(VoiceEngine.Qwen)?.Choice);
+        Assert.Equal(keep, p.Characters[1].Voice(VoiceEngine.Qwen)?.Choice);   // its own Qwen voice stays
+        Assert.Equal(qa, p.Settings.NarratorVoice(VoiceEngine.Qwen)?.Choice);
+        Assert.Equal(qa, p.Settings.RoleVoice(VoiceRole.Women, VoiceEngine.Qwen)?.Choice);
+        Assert.Equal(ob, p.Characters[1].Voice(VoiceEngine.Mixed)?.Choice);    // nothing removed
     }
 }

@@ -47,16 +47,25 @@ public static class VoiceSetup
     public static ExportSpeed SpeedFor(VoiceEngine engine) =>
         AppSettings.Current.ExportSpeedByEngine.TryGetValue(engine.Raw(), out var speed) && Enum.IsDefined(speed) ? speed : ExportSpeeds.Standard(engine);
 
-    public static void SetExportSpeed(VoiceEngine engine, ExportSpeed speed) =>
+    public static void SetExportSpeed(VoiceEngine engine, ExportSpeed speed)
+    {
         AppSettings.UpdateQuietly(s => s.ExportSpeedByEngine[engine.Raw()] = speed);
+        ExportSpeedChanged?.Invoke(engine);
+    }
+
+    /// Every Export Speed menu (Settings › Voices and Export Audio) follows the one setting.
+    public static event Action<VoiceEngine>? ExportSpeedChanged;
 
     static void LoadSwitches()
     {
-        // Test runs start with every engine on and never write the choice back.
-        var off = AppPaths.IsTestRun ? [] : AppSettings.Current.VoicesOffEngines.Select(VoiceEngines.Parse).OfType<VoiceEngine>();
-        EngineSwitches.Shared = new EngineSwitches(off)
+        // Test runs start on Apple Voices and never write the default back.
+        if (AppPaths.IsTestRun) { EngineSwitches.Shared = new EngineSwitches(); return; }
+        var saved = AppSettings.Current.VoicesDefaultEngine is { } raw ? VoiceEngines.Parse(raw) : null;
+        // First run of this version: the best engine that was switched on and is downloaded.
+        var oldOff = AppSettings.Current.VoicesOffEngines.Select(VoiceEngines.Parse).OfType<VoiceEngine>();
+        EngineSwitches.Shared = new EngineSwitches(saved, oldOff)
         {
-            Save = set => AppSettings.Update(s => s.VoicesOffEngines = VoiceEngines.Engines.Where(set.Contains).Select(e => e.Raw()).ToList()),
+            SaveDefault = e => AppSettings.Update(s => s.VoicesDefaultEngine = e.Raw()),
         };
     }
 
@@ -151,7 +160,13 @@ public static class VoiceActions
 
     public static void SetVoiceEngine(this ProjectDocument document, VoiceEngine engine)
     {
-        document.Change("Change Voice Engine", p => p.Settings.VoiceEngine = engine == VoiceEngine.Apple ? null : engine);
+        // Stored even for Apple Voices: a book without an engine reads as Apple Voices, and
+        // only new books take Settings' default.
+        document.Change("Change Voice Engine", p =>
+        {
+            if (p.Settings.VoiceEngine == VoiceEngine.Mixed) p.AdoptMixedVoices(engine);
+            p.Settings.VoiceEngine = engine;
+        });
         VoiceCastingRun.CastIfNeeded(document);
         if (VoiceEngineRegistry.Get(engine) is { } e) _ = e.Prepare(CancellationToken.None);
     }

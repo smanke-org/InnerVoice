@@ -65,7 +65,12 @@ import SwiftUI
     }
 
     func setVoiceEngine(_ engine: VoiceEngine, undoManager: UndoManager?) {
-        updateSettings("Change Voice Engine", undoManager: undoManager) { $0.voiceEngine = engine == .apple ? nil : engine }
+        // Stored even for Apple Voices: a book without an engine reads as Apple Voices, and
+        // only new books take Settings' default.
+        change("Change Voice Engine", undoManager: undoManager) { p in
+            if p.settings.voiceEngine == .mixed { p.adoptMixedVoices(for: engine) }
+            p.settings.voiceEngine = engine
+        }
         VoiceCastingRun.castIfNeeded(document: self)
         ModelSpeech.prepare(engine)
     }

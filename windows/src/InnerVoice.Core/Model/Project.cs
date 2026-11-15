@@ -709,3 +709,24 @@ public static class Names
         "Something", "Nothing", "All", "Some", "Most", "Not", "Again", "Finally", "Instead", "Later", "Soon",
     ];
 }
+
+public static class MixedVoices
+{
+    /// A book saved with Mix Engines moving to one engine (2026-11-15, the Mac's
+    /// `Project.adoptMixedVoices`): the voices it had picked on that engine under Mix Engines
+    /// fill that engine's empty slots (characters, the narrator, shared roles). Nothing is
+    /// removed; voices from other engines stay under Mix Engines in the file, unused.
+    public static void AdoptMixedVoices(this Project project, VoiceEngine engine)
+    {
+        if (engine == VoiceEngine.Mixed) return;
+        foreach (var c in project.Characters)
+            if (c.Voice(engine) is null && c.Voice(VoiceEngine.Mixed) is { } v && v.Choice.Engine == engine)
+                c.SetVoice(v.Copy(), engine);
+        var s = project.Settings;
+        if (s.NarratorVoice(engine) is null && s.NarratorVoice(VoiceEngine.Mixed) is { } n && n.Choice.Engine == engine)
+            s.SetNarratorVoice(n.Copy(), engine);
+        foreach (var r in CastingStyleRules.SharedRoles)
+            if (s.RoleVoice(r, engine) is null && s.RoleVoice(r, VoiceEngine.Mixed) is { } rv && rv.Choice.Engine == engine)
+                s.SetRoleVoice(rv.Copy(), r, engine);
+    }
+}

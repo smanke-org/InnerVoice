@@ -41,7 +41,10 @@ public sealed class AppSettings
 
     // Voices (Settings › Voices), kept per PC like the Mac's.
     /// Engines turned off (raw values: "apple", "elevenlabs"…).
+    /// Before 2026-11-15: engines switched off (read once, to pick the default below).
     public List<string> VoicesOffEngines { get; set; } = [];
+    /// The voice engine new books start with (Settings › Voices › Voice Engine).
+    public string? VoicesDefaultEngine { get; set; }
     /// Pauses between pieces of speech; null is Natural.
     public InnerVoice.Core.PauseSettings? Pauses { get; set; }
     /// Play's speed, 0.5× to 2×. Export Audio is always 1×.

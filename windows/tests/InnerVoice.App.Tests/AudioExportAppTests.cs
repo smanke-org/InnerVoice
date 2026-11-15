@@ -103,16 +103,24 @@ public class AudioExportAppTests
             picker.SelectedIndex = 2;
             Assert.Equal(ExportSpeed.Fastest, VoiceSetup.SpeedFor(VoiceEngine.Apple));
             Assert.Equal(3, AudioExporter.RenderAhead(VoiceEngine.Apple));
-            w.Close();
+            Assert.Contains($"Export speed ({VoiceEngine.Apple.Title()})", w.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text));
 
-            // Settings › Voices: the section and its note.
+            // Settings › Voices: the section and its note, and the same setting as Export
+            // Audio's: changing either one changes both.
             var settings = SettingsWindow.Show(null, "Voices");
             Pump();
             var texts = settings.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
             Assert.Contains("Export Speed", texts);
-            Assert.Contains(texts, t => t is not null && t.StartsWith("Export Audio can make several lines at once.") && t.EndsWith("Playing in the app always goes one line at a time."));
-            Assert.Contains(settings.GetLogicalDescendants().OfType<ComboBox>(), b => b.ItemsSource is IEnumerable<string> items && items.Contains(ExportSpeed.Slowest.Title()));
+            Assert.Contains(texts, t => t is not null && t.StartsWith("One setting for each voice engine. Export Audio can make several lines at once.") && t.EndsWith("Playing in the app always goes one line at a time."));
+            var inSettings = settings.GetLogicalDescendants().OfType<ComboBox>()
+                .First(b => b.ItemsSource is IEnumerable<string> items && items.Contains(ExportSpeed.Slowest.Title()));
+            Assert.Equal(2, inSettings.SelectedIndex);
+            inSettings.SelectedIndex = 0;
+            Pump();
+            Assert.Equal(0, picker.SelectedIndex);
+            Assert.Equal(ExportSpeed.Slowest, VoiceSetup.SpeedFor(VoiceEngine.Apple));
             settings.Close();
+            w.Close();
         }
         finally
         {

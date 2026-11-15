@@ -153,7 +153,7 @@ public sealed class AudioExportWindow : Window
         // Export Speed for each engine the book's voices use (Settings › Voices has them all).
         var speeds = new StackPanel { Spacing = Look.Sm };
         foreach (var e in ExportSpeeds.EnginesFor(project, engine))
-            speeds.Children.Add(Ui.Column(2, Ui.Caption(e.Title()), ExportSpeedPicker.Make(e)));
+            speeds.Children.Add(Ui.Column(2, Ui.Caption($"Export speed ({e.Title()})"), ExportSpeedPicker.Make(e)));
         if (speeds.Children.Count > 0) form.Children.Add(Row("Speed", speeds));
         var formats = Ui.Row(Look.Md,
             Radio("M4A", "AudioFormat", Format == AudioFormat.M4a, () => Format = AudioFormat.M4a, enabled: AudioEncoders.M4a is not null),
@@ -346,6 +346,7 @@ public sealed class AudioExportWindow : Window
 
     async Task PickAndExport()
     {
+        if (!await CloudGate.Allows(document, this)) return;
         // Anything paid goes out only after saying what: how many chapters, and the cost.
         // Cancel is the default button, so a stray Enter never starts a costly export.
         var picked = chapters.Picked;

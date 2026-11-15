@@ -100,6 +100,7 @@ public sealed class EpubExportWindow : Window
 
     async Task PickAndExport()
     {
+        if (!await CloudGate.Allows(document, this)) return;
         var path = await Dialogs.SaveFile(this, "Export EPUB with Audio", SuggestedName, "epub", new FilePickerFileType("EPUB") { Patterns = ["*.epub"] });
         if (path is null) return;
         if (await Export(path))

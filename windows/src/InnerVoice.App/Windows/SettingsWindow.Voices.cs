@@ -31,6 +31,8 @@ public sealed partial class SettingsWindow
         var pane = Pane();
 
         // Table Read
+        pane.Children.Add(VoiceEngineSection());
+
         pane.Children.Add(Ui.Headline("Table Read"));
         pane.Children.Add(Choice("Play from Here reads", s.ReadNarration, [("Narration and dialogue", true), ("Dialogue only", false)],
             v => AppSettings.Update(x => x.ReadNarration = v)));
@@ -46,6 +48,62 @@ public sealed partial class SettingsWindow
         if (ElevenLabsEngine.Shared.IsSetUp && EngineSwitches.Shared.IsOn(VoiceEngine.Elevenlabs)) pane.Children.Add(ClonedVoicesSection());
         pane.Children.Add(SavedAudioSection());
         return pane;
+    }
+
+    /// Settings › Voices › Voice Engine (the Mac's EngineChoice): with a book open that uses AI
+    /// voices, that book's one engine, changed for that book only; with none open, the
+    /// default every new book starts with. Re-read whenever Settings comes forward.
+    Control VoiceEngineSection()
+    {
+        var section = new StackPanel { Spacing = Look.Sm };
+        var body = new StackPanel { Spacing = Look.Sm };
+        section.Children.Add(Ui.Headline("Voice Engine"));
+        section.Children.Add(body);
+        section.Children.Add(Note("Each book speaks with one engine: its previews, table reads and exports all use it. Download or set up more engines under Engines below."));
+
+        void Fill()
+        {
+            body.Children.Clear();
+            var switches = EngineSwitches.Shared;
+            var document = App.Current.FrontProject?.Document is { Project.ShowsVoices: true } d ? d : null;
+            var current = document?.Project.EngineInUse() ?? switches.DefaultEngine;
+            var choices = switches.Choices.ToList();
+            if (!choices.Contains(current)) choices.Add(current);
+            var box = new ComboBox
+            {
+                ItemsSource = choices.Select(e => e.Title() + (e.IsCloud() ? " (Cloud)" : "")).ToList(),
+                SelectedIndex = choices.IndexOf(current), MinWidth = 300,
+            };
+            box.SelectionChanged += async (_, _) =>
+            {
+                if (box.SelectedIndex < 0) return;
+                var e = choices[box.SelectedIndex];
+                if (e == current) return;
+                if (document is null) switches.SetDefault(e);
+                else
+                {
+                    document.SetVoiceEngine(e);
+                    // A cloud engine the book hasn't allowed stays chosen; ask now.
+                    if (e.IsCloud()) await CloudGate.Allows(document, this);
+                }
+                Fill();
+            };
+            if (document is null)
+            {
+                ToolTip.SetTip(box, "New books start with this engine. To change an open book’s engine, use this menu while it’s open, or its Voices page.");
+                body.Children.Add(WideRow("Default engine for new books", box));
+            }
+            else
+            {
+                ToolTip.SetTip(box, "This book’s engine. It changes only this book; close every book to change the default for new ones.");
+                body.Children.Add(WideRow($"Voice engine for “{document.Project.Title}”", box));
+            }
+        }
+        Fill();
+        void Activated(object? s, EventArgs e) => Fill();
+        section.AttachedToVisualTree += (_, _) => this.Activated += Activated;
+        section.DetachedFromVisualTree += (_, _) => this.Activated -= Activated;
+        return section;
     }
 
     static Control Check(string label, bool value, Action<bool> set, string? tip = null)
@@ -71,14 +129,14 @@ public sealed partial class SettingsWindow
 
     static TextBlock Note(string text) => Ui.Caption(text, TextWrapping.Wrap);
 
-    /// How many lines Export Audio makes at once, per engine that's on (the Mac's Export Speed).
+    /// How many lines Export Audio makes at once, per engine (the Mac's Export Speed).
     static Control ExportSpeedSection()
     {
         var section = new StackPanel { Spacing = Look.Sm };
         section.Children.Add(Ui.Headline("Export Speed"));
-        foreach (var engine in ExportSpeeds.Engines.Where(EngineSwitches.Shared.IsOn))
+        foreach (var engine in ExportSpeeds.Engines.Where(EngineSwitches.Shared.Usable))
             section.Children.Add(WideRow(engine.Title(), Export.ExportSpeedPicker.Make(engine)));
-        section.Children.Add(Note("Export Audio can make several lines at once. Slowest makes one at a time and always works; Faster and Fastest save time but might not work correctly with every voice. If an export at a faster speed has trouble with a line, that line is made again on its own. Playing in the app always goes one line at a time."));
+        section.Children.Add(Note("One setting for each voice engine. Export Audio can make several lines at once. Slowest makes one at a time and always works; Faster and Fastest save time but might not work correctly with every voice. If an export at a faster speed has trouble with a line, that line is made again on its own. Playing in the app always goes one line at a time."));
         return section;
     }
 
@@ -231,18 +289,6 @@ public sealed partial class SettingsWindow
 
     // MARK: Engines
 
-    static ToggleSwitch EngineSwitch(VoiceEngine engine, Action rebuild)
-    {
-        var sw = EngineSwitches.Shared;
-        bool on = sw.IsOn(engine);
-        var t = new ToggleSwitch { IsChecked = on, OnContent = "", OffContent = "", IsEnabled = !on || sw.CanTurnOff(engine) };
-        ToolTip.SetTip(t, on
-            ? sw.CanTurnOff(engine) ? $"Turn {engine.Title()} off: it won’t be offered on the Voices page" : "At least one engine stays on"
-            : $"Turn {engine.Title()} on");
-        t.IsCheckedChanged += (_, _) => { sw.Set(engine, t.IsChecked == true); rebuild(); };
-        return t;
-    }
-
     Control EnginesSection()
     {
         var col = Ui.Column(Look.Sm, Ui.Headline("Engines"));
@@ -255,7 +301,7 @@ public sealed partial class SettingsWindow
             Ui.Text(voices.Count > 0
                 ? $"{voices.Count} English {(voices.Count == 1 ? "voice" : "voices")} on this PC: {string.Join(", ", voices.Take(6).Select(v => v.Name))}{(voices.Count > 6 ? "…" : "")}. Instant, with no download; they can’t act out a tone, so a tone only changes their speed, pitch and loudness."
                 : windows?.NotReadyReason ?? "Windows Voices need Windows.", 12, wrap: TextWrapping.Wrap));
-        var wActions = Ui.Row(Look.Sm, EngineSwitch(VoiceEngine.Apple, Build));
+        var wActions = Ui.Row(Look.Sm);
         if (windows is not null)
             wActions.Children.Add(Ui.Button("Reload Voices", () => { windows.Reload(); Build(); },
                 tip: "Look again for voices added in Windows Settings › Time & language › Speech"));
@@ -270,7 +316,7 @@ public sealed partial class SettingsWindow
 
         col.Children.Add(ElevenLabsRow());
         col.Children.Add(GeminiRow());
-        col.Children.Add(Note("Windows Voices, Pocket TTS, Qwen3-TTS, Chatterbox and Orpheus run on this PC; downloading them is the only time they use the internet. ElevenLabs and Gemini TTS are different: they make their voices in the cloud, so the text they speak is sent to ElevenLabs or Google, and each book asks first, for each company. Choose the engine for each project on its Voices page; turn an engine off to hide it there."));
+        col.Children.Add(Note("Windows Voices, Pocket TTS, Qwen3-TTS, Chatterbox and Orpheus run on this PC; downloading them is the only time they use the internet. ElevenLabs and Gemini TTS are different: they make their voices in the cloud, so the text they speak is sent to ElevenLabs or Google, and each book asks first, for each company. Each book speaks with one engine: its previews, table reads and exports all use it."));
         return col;
     }
 
@@ -284,7 +330,6 @@ public sealed partial class SettingsWindow
         var actions = Ui.Row(Look.Sm);
         if (eleven.IsSetUp)
         {
-            actions.Children.Add(EngineSwitch(VoiceEngine.Elevenlabs, Build));
             actions.Children.Add(Ui.Button("Change…", () => _ = ElevenLabsSetupDialog().ShowDialog(this)));
             if (!refreshedElevenLabsVoices)
             {
@@ -423,7 +468,6 @@ public sealed partial class SettingsWindow
             default:
                 if (models.IsInstalled(e))
                 {
-                    actions.Children.Add(EngineSwitch(e, Build));
                     actions.Children.Add(Ui.Button("Remove…", async () =>
                     {
                         if (await Dialogs.Confirm(this, $"Remove {pack.Title}?",

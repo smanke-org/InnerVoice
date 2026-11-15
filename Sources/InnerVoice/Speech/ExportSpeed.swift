@@ -46,17 +46,20 @@ enum ExportSpeed: String, CaseIterable, Identifiable {
 /// One picker per engine: in Settings › Voices, and in Export Audio for the book's engines.
 struct ExportSpeedPicker: View {
     let engine: VoiceEngine
+    /// The row's name: the engine in Settings, "Export speed" in Export Audio.
+    var label: String?
     @AppStorage private var raw: String
 
-    init(engine: VoiceEngine) {
+    init(engine: VoiceEngine, label: String? = nil) {
         self.engine = engine
+        self.label = label
         _raw = AppStorage(wrappedValue: ExportSpeed.standard(engine).rawValue, ExportSpeed.key(engine))
     }
 
     var body: some View {
-        Picker(engine.title, selection: $raw) {
+        Picker(label ?? engine.title, selection: $raw) {
             ForEach(ExportSpeed.allCases) { Text($0.title).tag($0.rawValue) }
         }
-        .help("How many lines Export Audio makes at once with \(engine.title). Slowest makes one at a time.")
+        .help("How many lines Export Audio makes at once with \(engine.title). Slowest makes one at a time. The same setting as Settings › Voices › Export Speed: changing it here changes it there.")
     }
 }

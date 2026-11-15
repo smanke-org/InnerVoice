@@ -402,7 +402,7 @@ struct AudioExportSheet: View {
                     }
                     .help("Separate saves the narrator, each shared voice and each character with a voice of their own in files of their own. They’re all the same length, so they line up in an audio editor.")
                 }
-                ForEach(speedEngines, id: \.self) { ExportSpeedPicker(engine: $0) }
+                ForEach(speedEngines, id: \.self) { ExportSpeedPicker(engine: $0, label: "Export speed (\($0.title))") }
                 Picker("Format", selection: $formatRaw) {
                     ForEach(AudioExporter.Format.allCases) { Text($0.rawValue).tag($0.rawValue) }
                 }
@@ -563,6 +563,7 @@ struct AudioExportSheet: View {
     }
 
     private func export() {
+        guard CloudGate.allows(document) else { return }
         // Anything paid goes out only after saying what: how many chapters, and the cost.
         // Cancel is the default button, so a stray Return never starts a costly export.
         let paidCredits = credits?.needed ?? 0

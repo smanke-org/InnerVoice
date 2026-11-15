@@ -26,7 +26,16 @@ public static class ExportSpeedPicker
             var speed = ExportSpeeds.All[box.SelectedIndex];
             if (speed != VoiceSetup.SpeedFor(engine)) VoiceSetup.SetExportSpeed(engine, speed);
         };
-        ToolTip.SetTip(box, $"How many lines Export Audio makes at once with {engine.Title()}. Slowest makes one at a time.");
+        // The same setting in Settings › Voices and Export Audio: changing one changes both.
+        void Follow(VoiceEngine e)
+        {
+            if (e != engine) return;
+            int i = Array.IndexOf(ExportSpeeds.All, VoiceSetup.SpeedFor(engine));
+            if (box.SelectedIndex != i) box.SelectedIndex = i;
+        }
+        box.AttachedToVisualTree += (_, _) => { VoiceSetup.ExportSpeedChanged += Follow; Follow(engine); };
+        box.DetachedFromVisualTree += (_, _) => VoiceSetup.ExportSpeedChanged -= Follow;
+        ToolTip.SetTip(box, $"How many lines Export Audio makes at once with {engine.Title()}. Slowest makes one at a time. The same setting as Settings › Voices › Export Speed: changing it here changes it there.");
         return box;
     }
 }

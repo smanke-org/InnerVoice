@@ -182,6 +182,7 @@ struct EpubExportSheet: View {
     }
 
     private func export() {
+        guard CloudGate.allows(document) else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.epub]
         panel.canCreateDirectories = true

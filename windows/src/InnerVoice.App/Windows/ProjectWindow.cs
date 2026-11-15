@@ -95,7 +95,11 @@ public sealed partial class ProjectWindow : Window
             ShowPage();
             if (Document.IsReadOnly)
                 await Dialogs.Alert(this, "Opened Read-Only", "A newer version of InnerVoice made this project, so this one can show it but won't save over it.");
-            else await AskProjectTypeIfNeeded();
+            else
+            {
+                await AskProjectTypeIfNeeded();
+                await AskMixedEngineIfNeeded();
+            }
             _ = Document.RecolorAutomaticAsync();
         };
         ShowPage();

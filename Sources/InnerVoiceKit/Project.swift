@@ -659,3 +659,24 @@ public enum Names {
         "Something", "Nothing", "All", "Some", "Most", "Not", "Again", "Finally", "Instead", "Later", "Soon",
     ]
 }
+
+extension Project {
+    /// A book saved with Mix Engines moving to one engine (2026-11-15): the voices it had
+    /// picked on that engine under Mix Engines fill that engine's empty slots (characters,
+    /// the narrator, shared roles). Nothing is removed; voices from other engines stay
+    /// under Mix Engines in the file, unused.
+    public mutating func adoptMixedVoices(for engine: VoiceEngine) {
+        guard engine != .mixed else { return }
+        for i in characters.indices {
+            if characters[i].voice(for: engine) == nil, let v = characters[i].voice(for: .mixed), v.choice.engine == engine {
+                characters[i].setVoice(v, for: engine)
+            }
+        }
+        if settings.narratorVoice(for: engine) == nil, let v = settings.narratorVoice(for: .mixed), v.choice.engine == engine {
+            settings.setNarratorVoice(v, for: engine)
+        }
+        for r in VoiceRole.sharedRoles where settings.roleVoice(r, for: engine) == nil {
+            if let v = settings.roleVoice(r, for: .mixed), v.choice.engine == engine { settings.setRoleVoice(v, r, for: engine) }
+        }
+    }
+}

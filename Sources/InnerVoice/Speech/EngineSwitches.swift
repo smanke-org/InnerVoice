@@ -2,34 +2,44 @@ import InnerVoiceKit
 import Observation
 import SwiftUI
 
-/// Which voice engines are turned on (Settings › Voices). A turned-off engine isn't
-/// offered on the Voices page, and a project set to it uses the first engine that's on,
-/// without changing the project, so turning it back on brings its casting back. At least
-/// one engine stays on. Kept per Mac, like the downloaded models.
+/// The voice engines this Mac can speak with, and the default for new books (Settings ›
+/// Voices). Each book speaks with one engine (`ProjectSettings.voiceEngine`): previews, table
+/// reads and exports all use it. Mix Engines is gone (2026-11-15): a book saved with it asks
+/// which one engine to use when it opens. A local engine is available once downloaded, a
+/// cloud engine once it's set up (a key and the narrator's yes). Kept per Mac.
 @Observable
 @MainActor
 final class EngineSwitches {
     static let shared = EngineSwitches()
-    static let key = "voices.offEngines"
+    static let defaultKey = "voices.defaultEngine"
+    /// Before 2026-11-15: engines the narrator had switched off (read once, to pick a default).
+    static let oldOffKey = "voices.offEngines"
 
-    private(set) var off: Set<VoiceEngine>
+    /// The engine new books start with.
+    private(set) var defaultEngine: VoiceEngine
 
     private init() {
-        // Test runs share the person's preferences: they start with every engine on and
-        // never write the choice back.
         if SystemHooks.isTestRun {
-            off = []
+            defaultEngine = .apple
+        } else if let raw = UserDefaults.standard.string(forKey: Self.defaultKey), let e = VoiceEngine(rawValue: raw), e != .mixed {
+            defaultEngine = e
         } else {
-            let raw = UserDefaults.standard.string(forKey: Self.key) ?? ""
-            off = Set(raw.split(separator: ",").compactMap { VoiceEngine(rawValue: String($0)) })
-            if off.count >= VoiceEngine.engines.count { off = [] }
+            // First run of this version: the best engine that was switched on and downloaded.
+            let off = Set((UserDefaults.standard.string(forKey: Self.oldOffKey) ?? "").split(separator: ",").compactMap { VoiceEngine(rawValue: String($0)) })
+            defaultEngine = [VoiceEngine.qwen, .pocket, .chatterbox, .orpheus, .apple].first { !off.contains($0) && ModelSpeech.isInstalled($0) } ?? .apple
         }
     }
 
-    /// A cloud engine counts as on only once it's set up (a key and the narrator's yes).
+    func setDefault(_ engine: VoiceEngine) {
+        guard engine != .mixed else { return }
+        defaultEngine = engine
+        if !SystemHooks.isTestRun { UserDefaults.standard.set(engine.rawValue, forKey: Self.defaultKey) }
+    }
+
+    /// Whether the engine can be chosen: a cloud engine only once it's set up.
     func isOn(_ engine: VoiceEngine) -> Bool {
-        guard !off.contains(engine) else { return false }
         switch engine {
+        case .mixed: return false
         case .elevenlabs: return ElevenLabs.shared.isSetUp
         case .gemini: return GeminiVoices.shared.isSetUp
         default: return true
@@ -38,40 +48,24 @@ final class EngineSwitches {
 
     var enabled: [VoiceEngine] { VoiceEngine.engines.filter(isOn) }
 
-    /// On and downloaded: its voices can be used now.
+    /// Available and downloaded: its voices can be used now.
     func usable(_ engine: VoiceEngine) -> Bool { isOn(engine) && ModelSpeech.isInstalled(engine) }
 
-    /// What the Voices page's engine menu offers: the engines that are on, and Mix Engines
-    /// when two or more are.
-    var choices: [VoiceEngine] { enabled + (enabled.count > 1 ? [.mixed] : []) }
+    /// What engine menus offer: one engine per book, never a mix.
+    var choices: [VoiceEngine] { VoiceEngine.engines.filter(usable) }
 
-    /// The last engine that's on can't be turned off.
-    func canTurnOff(_ engine: VoiceEngine) -> Bool { isOn(engine) && enabled.count > 1 }
+    /// Kept for setup code that "turns an engine on": every set-up engine is available now.
+    func set(_ engine: VoiceEngine, on: Bool) {}
 
-    func set(_ engine: VoiceEngine, on: Bool) {
-        if on { off.remove(engine) } else {
-            guard canTurnOff(engine) else { return }
-            off.insert(engine)
-            // Free the memory a turned-off model engine was using.
-            if engine != .apple { Task { await ModelSpeech.unload(engine) } }
-        }
-        if !SystemHooks.isTestRun {
-            UserDefaults.standard.set(VoiceEngine.engines.filter { off.contains($0) }.map(\.rawValue).joined(separator: ","), forKey: Self.key)
-        }
-    }
-
-    func binding(_ engine: VoiceEngine) -> Binding<Bool> {
-        Binding(get: { self.isOn(engine) }, set: { self.set(engine, on: $0) })
-    }
-
-    /// The engine a project speaks with: its own choice while that's on.
+    /// The engine a book speaks with: its own. A book saved with Mix Engines uses the
+    /// default until the narrator picks one (the window asks); a cloud engine that's no
+    /// longer set up falls back to the default (or Apple Voices). A cloud engine the book
+    /// hasn't allowed stays chosen: playing asks for permission first (`CloudGate`).
     func inUse(_ project: Project) -> VoiceEngine {
         let chosen = project.settings.engine
-        let local = enabled.filter { !$0.isCloud }
-        if chosen == .mixed { return enabled.count > 1 ? .mixed : enabled.first ?? .apple }
-        // A cloud engine only for a book that allows it.
-        if !project.settings.allowsCloud(chosen) { return local.first ?? .apple }
-        return isOn(chosen) ? chosen : local.first ?? enabled.first ?? chosen
+        let fallback = defaultEngine.isCloud && !isOn(defaultEngine) ? .apple : defaultEngine
+        if chosen == .mixed { return fallback }
+        return isOn(chosen) ? chosen : (fallback.isCloud ? .apple : fallback)
     }
 }
 

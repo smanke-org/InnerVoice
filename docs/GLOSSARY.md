@@ -35,7 +35,7 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | Describe a Voice | Voices page, Qwen3-TTS: a voice made on the Mac from a description; the character's Voice Notes are added when it speaks | design prompt |
 | Stock voice | One of Pocket TTS's nine named voices (Alba, Tara, Leah, Jess, Mia, Zoe, Leo, Dan, Zac), each cloned from a short clip that comes with the app | preset |
 | Voice description | The words ElevenLabs designs a character's voice from (Design a Voice from Voice Notes); the voices on the Mac can't take one | prompt, voice prompt |
-| Mix Engines | A project casting voices from every engine that's on, not one engine | mixed mode, hybrid |
+| Mix Engines | Removed 2026-11-15: each book speaks with one engine. Older books saved with it ask which engine to use | mixed mode, hybrid |
 | Same as Narrator | A character whose lines are read in the narrator's voice | narrator voice, default voice |
 | Project type | What a project is for: Narration Tools or Produce with AI Voices; decides which pages and commands show | mode, workflow |
 | Casting Style | How a book shares its voices: One Voice (Just Me when narrating), Narrator + Two Voices (Three Narrators), Full Cast; chosen after the project type, changed on Voices (AI) or Cast (narration) | voice plan, mode |

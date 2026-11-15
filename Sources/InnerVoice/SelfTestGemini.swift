@@ -26,7 +26,7 @@ extension SelfTest {
         // Set up, and the book allows ElevenLabs, but not Google: nothing may go to Google.
         doc.setCloudVoicesAllowed(true, undoManager: undo)
         doc.setVoiceEngine(.gemini, undoManager: undo)
-        check("a book that allowed only ElevenLabs doesn't use Gemini TTS", doc.project.engineInUse != .gemini)
+        check("a book that allowed only ElevenLabs keeps Gemini TTS chosen but won't play until it allows Google", doc.project.engineInUse == .gemini && !CloudGate.allows(doc))
         let segs = SpeechScript.segments(chapter: 0, project: doc.project, index: doc.index, includeNarration: true)
         let lines = Array(segs.filter { $0.lineID != nil }.prefix(2))
         SpeechRenderer.shared.clearCache()
@@ -86,7 +86,7 @@ extension SelfTest {
         SpeechRenderer.shared.clearCache()
         let r2 = VoiceResolver(project: doc.project)
         for seg in lines { _ = try? await SpeechRenderer.shared.render(r2.request(for: seg)!) }
-        check("after Stop Sending This Book, nothing more goes to Google", FakeGemini.speechRequests.count == before && doc.project.engineInUse != .gemini)
+        check("after Stop Sending This Book, nothing more goes to Google", FakeGemini.speechRequests.count == before && !CloudGate.allows(doc))
         gemini.disconnect()
         check("Disconnect turns Gemini TTS off", !gemini.isSetUp && !EngineSwitches.shared.choices.contains(.gemini))
         doc.setVoiceEngine(.apple, undoManager: undo)

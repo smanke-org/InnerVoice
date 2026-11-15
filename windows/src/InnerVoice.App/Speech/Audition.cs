@@ -11,6 +11,7 @@ public static class Audition
 {
     public static void Play(VoiceChoice choice, BookCharacter? character, ProjectDocument document, Tone? tone = null, Shade? shade = null)
     {
+        if (!CloudGate.Ready(document, () => Play(choice, character, document, tone, shade))) return;
         var project = document.Project;
         var index = document.Index;
         string text;
@@ -49,6 +50,7 @@ public static class Audition
     /// applied, or the word alone.
     public static void Hear(Pronunciation p, ProjectDocument document)
     {
+        if (!CloudGate.Ready(document, () => Hear(p, document))) return;
         var project = document.Project;
         var index = document.Index;
         var seg = new SpeechSegment

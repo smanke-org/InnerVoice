@@ -118,8 +118,7 @@ struct VoicePackRow: View {
     var body: some View {
         LabeledContent {
             HStack(spacing: Space.sm) {
-                if EngineSwitches.shared.isOn(pack.engine) || manager.states[pack.engine] != nil { controls }
-                EngineSwitch(engine: pack.engine)
+                controls
             }
         } label: {
             if pack.engine.hasChineseOrigin {
@@ -166,22 +165,6 @@ struct VoicePackRow: View {
     }
 }
 
-struct EngineSwitch: View {
-    let engine: VoiceEngine
-    private var switches: EngineSwitches { .shared }
-
-    var body: some View {
-        Toggle("Use \(engine.title)", isOn: switches.binding(engine))
-            .labelsHidden()
-            .toggleStyle(.switch)
-            .controlSize(.small)
-            .disabled(switches.isOn(engine) && !switches.canTurnOff(engine))
-            .help(switches.isOn(engine)
-                  ? (switches.canTurnOff(engine) ? "Turn \(engine.title) off: it won’t be offered on the Voices page" : "At least one engine stays on")
-                  : "Turn \(engine.title) on")
-    }
-}
-
 struct VoicesSettings: View {
     @AppStorage("voices.readNarration") private var readNarration = true
     @AppStorage("voices.followAlong") private var followAlong = true
@@ -189,6 +172,15 @@ struct VoicesSettings: View {
     @State private var cacheSize = 0
 
     var body: some View {
+        Section {
+            EngineChoice()
+        } header: {
+            Text("Voice Engine")
+        } footer: {
+            Text("Each book speaks with one engine: its previews, table reads and exports all use it. Download or set up more engines under Engines below.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
         Section {
             Picker("Play from Here reads", selection: $readNarration) {
                 Text("Narration and dialogue").tag(true)
@@ -207,11 +199,11 @@ struct VoicesSettings: View {
         }
         PauseSettingsSection()
         Section {
-            ForEach(ExportSpeed.engines.filter { EngineSwitches.shared.isOn($0) }, id: \.self) { ExportSpeedPicker(engine: $0) }
+            ForEach(ExportSpeed.engines.filter { EngineSwitches.shared.usable($0) }, id: \.self) { ExportSpeedPicker(engine: $0) }
         } header: {
             Text("Export Speed")
         } footer: {
-            Text("One setting for each voice engine that’s turned on below. Export Audio can make several lines at once. Slowest makes one at a time and always works; Faster and Fastest save time but might not work correctly with every voice. If an export at a faster speed has trouble with a line, that line is made again on its own. Playing in the app always goes one line at a time.")
+            Text("One setting for each voice engine. Export Audio can make several lines at once. Slowest makes one at a time and always works; Faster and Fastest save time but might not work correctly with every voice. If an export at a faster speed has trouble with a line, that line is made again on its own. Playing in the app always goes one line at a time.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -225,7 +217,6 @@ struct VoicesSettings: View {
                         }
                         .help("Download free Premium voices in System Settings › Accessibility › Spoken Content › System Voice › Manage Voices")
                     }
-                    EngineSwitch(engine: .apple)
                 }
             }
             VoicePackRow(pack: .pocket)
@@ -237,7 +228,7 @@ struct VoicesSettings: View {
         } header: {
             Text("Engines")
         } footer: {
-            Text("Apple Voices, Pocket TTS, Qwen3-TTS, Chatterbox and Orpheus run on this Mac; downloading them is the only time they use the internet. ElevenLabs and Gemini TTS are different: they make their voices in the cloud, so the text they speak is sent to ElevenLabs or Google, and each book asks first, for each company. Choose the engine for each project on its Voices page; turn an engine off to hide it there.")
+            Text("Apple Voices, Pocket TTS, Qwen3-TTS, Chatterbox and Orpheus run on this Mac; downloading them is the only time they use the internet. ElevenLabs and Gemini TTS are different: they make their voices in the cloud, so the text they speak is sent to ElevenLabs or Google, and each book asks first, for each company. Each book speaks with one engine: its previews, table reads and exports all use it.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -282,7 +273,6 @@ struct ElevenLabsRow: View {
                     Button("Set Up…") { showSetup = true }
                         .help("Connect your ElevenLabs account. Its voices are made in the cloud.")
                 }
-                EngineSwitch(engine: .elevenlabs).disabled(!eleven.isSetUp)
             }
         } label: {
             HStack(spacing: Space.xs) {

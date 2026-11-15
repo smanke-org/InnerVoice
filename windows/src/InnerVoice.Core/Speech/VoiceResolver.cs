@@ -3,73 +3,84 @@
 
 namespace InnerVoice.Core.Speech;
 
-/// Which voice engines are turned on (Settings › Voices). A turned-off engine isn't offered
-/// on the Voices page, and a project set to it uses the first engine that's on, without
-/// changing the project, so turning it back on brings its casting back. At least one engine
-/// stays on. Kept per computer (the app saves `Off` in its settings).
+/// The voice engines this computer can speak with, and the default for new books (Settings ›
+/// Voices). Each book speaks with one engine (`ProjectSettings.VoiceEngine`): previews, table
+/// reads and exports all use it. Mix Engines is gone (2026-11-15): a book saved with it asks
+/// which one engine to use when it opens. A local engine is available once downloaded, a
+/// cloud engine once it's set up (a key and the narrator's yes). Kept per computer.
 public sealed class EngineSwitches
 {
     public static EngineSwitches Shared { get; set; } = new();
 
-    public HashSet<VoiceEngine> Off { get; } = [];
+    static readonly VoiceEngine[] BestFirst =
+        [VoiceEngine.Qwen, VoiceEngine.Pocket, VoiceEngine.Chatterbox, VoiceEngine.Orpheus, VoiceEngine.Apple];
 
-    /// Saves the choice (the app sets this; test runs leave it null).
-    public Action<IReadOnlySet<VoiceEngine>>? Save { get; set; }
+    VoiceEngine? chosenDefault;
+    readonly HashSet<VoiceEngine>? oldOff;
 
-    public EngineSwitches(IEnumerable<VoiceEngine>? off = null)
+    /// Saves the default for new books (the app sets this; test runs leave it null).
+    public Action<VoiceEngine>? SaveDefault { get; set; }
+
+    /// `defaultEngine`: the saved default for new books. With none saved, `oldOff` (the
+    /// engines switched off before 2026-11-15) picks the best engine that was on and is
+    /// downloaded; with neither (test runs), Apple Voices.
+    public EngineSwitches(VoiceEngine? defaultEngine = null, IEnumerable<VoiceEngine>? oldOff = null)
     {
-        if (off is not null) Off.UnionWith(off);
-        if (VoiceEngines.Engines.All(Off.Contains)) Off.Clear();
+        if (defaultEngine is { } d && d != VoiceEngine.Mixed) chosenDefault = d;
+        else if (oldOff is not null) this.oldOff = [.. oldOff];
+        else chosenDefault = VoiceEngine.Apple;
     }
 
-    /// This computer has the engine (part B adds the local models). A cloud engine counts as
-    /// on only once it's set up (a key and the narrator's yes).
-    public bool IsOn(VoiceEngine e) =>
-        e != VoiceEngine.Mixed && VoiceEngineRegistry.Get(e) is { } engine && !Off.Contains(e) && (!e.IsCloud() || engine.IsReady);
+    /// The engine new books start with.
+    public VoiceEngine DefaultEngine =>
+        chosenDefault ?? BestFirst.FirstOrDefault(e => !oldOff!.Contains(e) && Usable(e), VoiceEngine.Apple);
 
-    public IReadOnlyList<VoiceEngine> Enabled => VoiceEngines.Engines.Where(IsOn).ToList();
+    public void SetDefault(VoiceEngine engine)
+    {
+        if (engine == VoiceEngine.Mixed) return;
+        chosenDefault = engine;
+        SaveDefault?.Invoke(engine);
+    }
 
-    /// On and ready: its voices can be used now.
-    public bool Usable(VoiceEngine e) => IsOn(e) && VoiceEngineRegistry.IsReady(e);
-
-    /// What the Voices page's engine menu offers: the engines that are on, and Mix Engines
-    /// when two or more are.
-    public IReadOnlyList<VoiceEngine> Choices
+    /// The engine a new book starts with: the default, else the best engine that's ready on
+    /// this computer (the Mac's project-type step).
+    public VoiceEngine StartingEngine
     {
         get
         {
-            var on = Enabled.ToList();
-            if (on.Count > 1) on.Add(VoiceEngine.Mixed);
-            return on;
+            var d = DefaultEngine;
+            if (Usable(d)) return d;
+            return new[] { VoiceEngine.Qwen, VoiceEngine.Pocket, VoiceEngine.Orpheus, VoiceEngine.Apple }.FirstOrDefault(Usable, VoiceEngine.Apple);
         }
     }
 
-    /// The last engine that's on can't be turned off.
-    public bool CanTurnOff(VoiceEngine e) => IsOn(e) && Enabled.Count > 1;
+    /// Whether the engine can be chosen: this computer has it, and a cloud engine only once
+    /// it's set up (a key and the narrator's yes).
+    public bool IsOn(VoiceEngine e) =>
+        e != VoiceEngine.Mixed && VoiceEngineRegistry.Get(e) is { } engine && (!e.IsCloud() || engine.IsReady);
 
-    public void Set(VoiceEngine e, bool on)
-    {
-        if (on) Off.Remove(e);
-        else
-        {
-            if (!CanTurnOff(e)) return;
-            Off.Add(e);
-            // Free the memory a turned-off model engine was using.
-            VoiceEngineRegistry.Get(e)?.Unload();
-        }
-        Save?.Invoke(Off);
-    }
+    public IReadOnlyList<VoiceEngine> Enabled => VoiceEngines.Engines.Where(IsOn).ToList();
 
-    /// The engine a project speaks with: its own choice while that's on.
+    /// Available and ready: its voices can be used now.
+    public bool Usable(VoiceEngine e) => IsOn(e) && VoiceEngineRegistry.IsReady(e);
+
+    /// What engine menus offer: one engine per book, never a mix.
+    public IReadOnlyList<VoiceEngine> Choices => VoiceEngines.Engines.Where(Usable).ToList();
+
+    /// Kept for setup code that "turns an engine on": every set-up engine is available now.
+    public void Set(VoiceEngine e, bool on) { }
+
+    /// The engine a book speaks with: its own. A book saved with Mix Engines uses the default
+    /// until the narrator picks one (the window asks); a cloud engine that's no longer set up
+    /// falls back to the default (or Apple Voices). A cloud engine the book hasn't allowed
+    /// stays chosen: playing asks for permission first (`CloudGate`).
     public VoiceEngine InUse(Project project)
     {
         var chosen = project.Settings.Engine;
-        var enabled = Enabled;
-        var local = enabled.Where(e => !e.IsCloud()).ToList();
-        if (chosen == VoiceEngine.Mixed) return enabled.Count > 1 ? VoiceEngine.Mixed : enabled.FirstOrDefault(VoiceEngine.Apple);
-        // A cloud engine only for a book that allows that company.
-        if (!project.Settings.AllowsCloud(chosen)) return local.FirstOrDefault(VoiceEngine.Apple);
-        return IsOn(chosen) ? chosen : local.Count > 0 ? local[0] : enabled.Count > 0 ? enabled[0] : chosen;
+        var d = DefaultEngine;
+        var fallback = d.IsCloud() && !IsOn(d) ? VoiceEngine.Apple : d;
+        if (chosen == VoiceEngine.Mixed) return fallback;
+        return IsOn(chosen) ? chosen : fallback.IsCloud() ? VoiceEngine.Apple : fallback;
     }
 
     /// An engine's voices. Mixing includes a cloud engine only for a book that allows that company.

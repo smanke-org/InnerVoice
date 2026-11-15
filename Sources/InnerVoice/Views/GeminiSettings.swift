@@ -18,7 +18,6 @@ struct GeminiRow: View {
                     Button("Set Up…") { showSetup = true }
                         .help("Connect your Gemini API key. Its voices are made in Google’s cloud.")
                 }
-                EngineSwitch(engine: .gemini).disabled(!gemini.isSetUp)
             }
         } label: {
             HStack(spacing: Space.xs) {

@@ -132,7 +132,9 @@ public sealed partial class VoicesPage : Page
     public override void Refresh(bool textChanged)
     {
         updating = true;
-        var choices = EngineSwitches.Shared.Choices;
+        // One engine per book: the engines ready on this PC, plus the book's own if it isn't.
+        var choices = EngineSwitches.Shared.Choices.ToList();
+        if (!choices.Contains(Engine)) choices.Add(Engine);
         engineBox.ItemsSource = choices.Select(e =>
         {
             var item = new ComboBoxItem

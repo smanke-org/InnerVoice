@@ -69,8 +69,10 @@ public static class Dialogs
     }
 
     /// A question with several answers, then Cancel, left to right: the index of the answer
-    /// picked, or -1 for Cancel. `defaultIndex` is the answer Enter picks.
-    public static async Task<int> Choose(Visual from, string title, string message, string[] actions, string cancel = "Cancel", int defaultIndex = 0)
+    /// picked, or -1 for Cancel. `defaultIndex` is the answer Enter picks (-1: none).
+    /// `stacked`: one answer per row, for a long list (an engine each).
+    public static async Task<int> Choose(Visual from, string title, string message, string[] actions, string cancel = "Cancel", int defaultIndex = 0,
+                                         bool stacked = false)
     {
         var owner = Owner(from);
         int result = -1;
@@ -79,17 +81,19 @@ public static class Dialogs
             Title = title, Width = 460, SizeToContent = SizeToContent.Height, CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner, ShowInTaskbar = false,
         };
-        var buttons = Ui.Row(Look.Sm);
-        buttons.HorizontalAlignment = HorizontalAlignment.Right;
+        var buttons = stacked ? Ui.Column(Look.Sm) : Ui.Row(Look.Sm);
+        buttons.HorizontalAlignment = stacked ? HorizontalAlignment.Stretch : HorizontalAlignment.Right;
         for (int i = 0; i < actions.Length; i++)
         {
             int index = i;
             var b = new Button { Content = actions[i], IsDefault = i == defaultIndex };
+            if (stacked) { b.HorizontalAlignment = HorizontalAlignment.Stretch; b.HorizontalContentAlignment = HorizontalAlignment.Center; }
             if (i == defaultIndex) b.Classes.Add("accent");
             b.Click += (_, _) => { result = index; dialog.Close(); };
             buttons.Children.Add(b);
         }
         var no = new Button { Content = cancel, IsCancel = true };
+        if (stacked) { no.HorizontalAlignment = HorizontalAlignment.Stretch; no.HorizontalContentAlignment = HorizontalAlignment.Center; }
         no.Click += (_, _) => dialog.Close();
         buttons.Children.Add(no);
         var content = new StackPanel { Margin = new Thickness(Look.Xl), Spacing = Look.Md };

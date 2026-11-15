@@ -310,21 +310,13 @@ enum SelfTest {
         // Engine switches (Settings › Voices); test runs never save them.
         let switches = EngineSwitches.shared
         doc.setVoiceEngine(.orpheus, undoManager: undo)
-        switches.set(.orpheus, on: false)
-        check("a turned-off engine isn't used: the project falls back to one that's on",
-              doc.project.engineInUse == .apple && doc.project.settings.engine == .orpheus && VoiceResolver(project: doc.project).engine == .apple)
-        switches.set(.orpheus, on: true)
-        check("turning it back on brings the project's own engine back", doc.project.engineInUse == .orpheus)
-        switches.set(.apple, on: false)
-        switches.set(.pocket, on: false)
-        switches.set(.qwen, on: false)
-        switches.set(.chatterbox, on: false)
-        switches.set(.orpheus, on: false)
-        check("the last engine that's on stays on", switches.isOn(.orpheus) && !switches.canTurnOff(.orpheus) && switches.enabled == [.orpheus])
-        for e in VoiceEngine.engines { switches.set(e, on: true) }
+        check("a book speaks with its own one engine", doc.project.engineInUse == .orpheus && VoiceResolver(project: doc.project).engine == .orpheus)
+        check("Mix Engines is never offered", !switches.choices.contains(.mixed))
+        doc.change("Mixed", undoManager: undo) { $0.settings.voiceEngine = .mixed }
+        check("a book saved with Mix Engines speaks with the default until it picks one", doc.project.engineInUse == switches.defaultEngine)
         undo.undo()
-        check("every engine is on again after the test", switches.enabled.count == VoiceEngine.engines.filter { !$0.isCloud }.count && doc.project.engineInUse == .apple)
-        check("Mix Engines is offered when two or more engines are on", switches.choices.contains(.mixed))
+        undo.undo()
+        check("the book is back on Apple Voices", doc.project.engineInUse == .apple)
 
         // Real speech: one line in its voice, cached the second time.
         let resolver = VoiceResolver(project: doc.project)
@@ -1478,7 +1470,7 @@ enum SelfTest {
 
         // Set up, but this book hasn't allowed it: nothing may be sent.
         doc.setVoiceEngine(.elevenlabs, undoManager: undo)
-        check("a book that hasn't allowed ElevenLabs uses an engine on this Mac", doc.project.engineInUse != .elevenlabs)
+        check("a book that hasn't allowed ElevenLabs keeps it chosen but won't play until it allows it", doc.project.engineInUse == .elevenlabs && !CloudGate.allows(doc))
         let segs = SpeechScript.segments(chapter: 0, project: doc.project, index: doc.index, includeNarration: true)
         let lines = Array(segs.filter { $0.lineID != nil }.prefix(2))
         let r0 = VoiceResolver(project: doc.project)
@@ -1556,7 +1548,7 @@ enum SelfTest {
         SpeechRenderer.shared.clearCache()
         let r2 = VoiceResolver(project: doc.project)
         for seg in lines { _ = try? await SpeechRenderer.shared.render(r2.request(for: seg)!) }
-        check("after Stop Sending This Book, nothing more is sent", FakeElevenLabs.speechRequests.count == before && doc.project.engineInUse != .elevenlabs)
+        check("after Stop Sending This Book, nothing more is sent", FakeElevenLabs.speechRequests.count == before && !CloudGate.allows(doc))
         eleven.disconnect()
         check("Disconnect turns ElevenLabs off", !eleven.isSetUp && !EngineSwitches.shared.choices.contains(.elevenlabs))
         doc.setVoiceEngine(.apple, undoManager: undo)

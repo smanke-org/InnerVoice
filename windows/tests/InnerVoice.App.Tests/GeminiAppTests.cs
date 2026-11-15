@@ -123,7 +123,9 @@ public class GeminiAppTests
             doc.Change("Purpose", p => { p.Settings.Purpose = ProjectPurpose.AiVoices; });
             doc.SetCloudVoicesAllowed(true);
             doc.SetVoiceEngine(VoiceEngine.Gemini);
-            Assert.NotEqual(VoiceEngine.Gemini, doc.Project.EngineInUse());
+            // Gemini TTS stays chosen, but nothing plays until the book allows Google.
+            Assert.Equal(VoiceEngine.Gemini, doc.Project.EngineInUse());
+            Assert.False(await CloudGate.Allows(doc));
             Assert.False(CloudInUse.Gemini(doc.Project));
             var segs = SpeechScript.Segments([0], doc.Project, doc.Index, includeNarration: true);
             var lines = segs.Where(s => s.LineID is not null).Take(2).ToList();
@@ -195,7 +197,7 @@ public class GeminiAppTests
             var r2 = VoiceSetup.Resolver(doc);
             foreach (var seg in lines) try { if (r2.RequestFor(seg) is { } q) await renderer.Render(q); } catch (SpeechException) { }
             Assert.Equal(before, fake.Speech.Count);
-            Assert.NotEqual(VoiceEngine.Gemini, doc.Project.EngineInUse());
+            Assert.False(await CloudGate.Allows(doc));
             Assert.False(AudioExportWindow.GeminiNoteShown(doc.Project));
 
             gemini.Disconnect();

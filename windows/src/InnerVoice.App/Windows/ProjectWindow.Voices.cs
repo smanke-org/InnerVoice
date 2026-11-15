@@ -8,6 +8,7 @@ using InnerVoice.App.Pages;
 using InnerVoice.App.Speech;
 using InnerVoice.App.UI;
 using InnerVoice.Core;
+using InnerVoice.Core.Speech;
 
 namespace InnerVoice.App.Windows;
 
@@ -79,6 +80,21 @@ public sealed partial class ProjectWindow
         if (SpeechPlayer.Shared.Failure is { } f && IsActive) SetStatus(f);
     }
 
+    /// A book saved with Mix Engines (gone 2026-11-15) asks once which one engine to use
+    /// (not in test runs). Later leaves it on the default until it's asked again next open.
+    async Task AskMixedEngineIfNeeded()
+    {
+        if (AppPaths.IsTestRun || !Document.Project.ShowsVoices || Document.Project.Settings.VoiceEngine != VoiceEngine.Mixed) return;
+        var choices = EngineSwitches.Shared.Choices;
+        int i = await Dialogs.Choose(this, "Choose One Voice Engine for This Book",
+            $"“{Document.Project.Title}” mixed voices from several engines. InnerVoice now speaks each book with one engine, so previews, table reads and exports all sound alike. The voices you picked on the engine you choose come with it; the others stay in the book. Until you choose, it uses {Document.Project.EngineInUse().Title()}.",
+            choices.Select(e => e.IsCloud() ? $"{e.Title()} (Cloud)" : e.Title()).ToArray(), cancel: "Later", defaultIndex: -1, stacked: true);
+        if (i < 0) return;
+        var engine = choices[i];
+        Document.SetVoiceEngine(engine);
+        if (engine.IsCloud()) await CloudGate.Allows(Document, this);
+    }
+
     /// A project that hasn't been asked what it's for asks once (not in test runs).
     async Task AskProjectTypeIfNeeded()
     {
@@ -133,6 +149,9 @@ public sealed class ProjectTypeWindow : Window
         var go = Ui.Button("Continue", () =>
         {
             if (document.Project.Settings.Purpose != choice) document.SetPurpose(choice);
+            // A new book with AI voices starts from the default engine (Settings › Voices).
+            if (choice == ProjectPurpose.AiVoices && document.Project.Settings.VoiceEngine is null)
+                document.SetVoiceEngine(EngineSwitches.Shared.StartingEngine);
             Close();
         }, primary: true);
         go.IsDefault = true;

@@ -12,6 +12,13 @@ struct ProjectWindow: View {
         workspace.showProjectType = true
     }
 
+    /// A book saved with Mix Engines (gone 2026-11-15) asks once which one engine to use.
+    @State private var askMixedEngine = false
+    private func askMixedEngineIfNeeded() {
+        guard !SystemHooks.isTestRun, document.project.showsVoices, document.project.settings.voiceEngine == .mixed else { return }
+        askMixedEngine = true
+    }
+
     @ObservedObject var document: InnerVoiceDocument
     let fileURL: URL?
     @State private var workspace = Workspace()
@@ -76,7 +83,18 @@ struct ProjectWindow: View {
         }
         // Asked once per project, new or made before the question existed. Test runs don't
         // ask (snapshots show the sheet on purpose).
-        .onAppear { askProjectTypeIfNeeded() }
+        .onAppear { askProjectTypeIfNeeded(); askMixedEngineIfNeeded() }
+        .confirmationDialog("Choose One Voice Engine for This Book", isPresented: $askMixedEngine, titleVisibility: .visible) {
+            ForEach(EngineSwitches.shared.choices) { e in
+                Button(e.isCloud ? "\(e.title) (Cloud)" : e.title) {
+                    document.setVoiceEngine(e, undoManager: undoManager)
+                    if e.isCloud { _ = CloudGate.allows(document) }
+                }
+            }
+            Button("Later", role: .cancel) {}
+        } message: {
+            Text("“\(document.project.title)” mixed voices from several engines. InnerVoice now speaks each book with one engine, so previews, table reads and exports all sound alike. The voices you picked on the engine you choose come with it; the others stay in the book. Until you choose, it uses \(EngineSwitches.shared.inUse(document.project).title).")
+        }
         .onChange(of: document.project.isEmpty) { askProjectTypeIfNeeded() }
         .onChange(of: document.project.settings.purpose) {
             if !workspace.page.isShown(in: document.project) { workspace.page = .manuscript }

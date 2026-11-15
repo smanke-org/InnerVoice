@@ -280,7 +280,7 @@ public sealed class CloneVoiceWindow : Window
                 });
             }
             if (e is not (VoiceEngine.Pocket or VoiceEngine.Qwen or VoiceEngine.Chatterbox or VoiceEngine.Mixed))
-                return Ui.Text($"This book speaks with {e.Title()}. Voices cloned on this PC speak with Pocket TTS, Qwen3-TTS or Chatterbox: to hear one in this book, choose one of them or Mix Engines on the Voices page.",
+                return Ui.Text($"This book speaks with {e.Title()}. Voices cloned on this PC speak with Pocket TTS, Qwen3-TTS or Chatterbox: to hear one in this book, choose one of them on the Voices page.",
                     13, brush: Look.Brush(Look.SecondaryInk), wrap: TextWrapping.Wrap);
             return new Panel();
         }
@@ -291,7 +291,7 @@ public sealed class CloneVoiceWindow : Window
             return Notice("This book hasn’t allowed ElevenLabs yet. Allowing it sends the lines its ElevenLabs voices speak, as text.", "Allow for This Book",
                 () => { document.SetCloudVoicesAllowed(true); allowanceAsked = false; Build(); });
         if (!ElevenLabsEngine.CloningOffered(document.Project))
-            return Ui.Text($"This book speaks with {document.Project.EngineInUse().Title()}. You can still clone a voice with ElevenLabs; to hear it in this book, choose ElevenLabs or Mix Engines on the Voices page.",
+            return Ui.Text($"This book speaks with {document.Project.EngineInUse().Title()}. You can still clone a voice with ElevenLabs; to hear it in this book, choose ElevenLabs on the Voices page.",
                 13, brush: Look.Brush(Look.SecondaryInk), wrap: TextWrapping.Wrap);
         if (allowance is { CanClone: false })
             return Notice("Voice cloning needs a paid ElevenLabs plan (Starter or above). Your plan doesn’t include it.", "See Plans",
@@ -511,7 +511,7 @@ public sealed class CloneVoiceWindow : Window
             : $"{char.ToUpperInvariant(who[0])}{who[1..]} speaks with it in this book now.", 13, wrap: TextWrapping.Wrap));
         var engine = document.Project.EngineInUse();
         if (engine != VoiceEngine.Mixed && engine != v.Engine)
-            col.Children.Add(Ui.Caption($"This book speaks with {engine.Title()}. To hear “{v.Name}” in it, choose {v.Engine.Title()} or Mix Engines on the Voices page, then pick it there.", TextWrapping.Wrap));
+            col.Children.Add(Ui.Caption($"This book speaks with {engine.Title()}. To hear “{v.Name}” in it, choose {v.Engine.Title()} on the Voices page, then pick it there.", TextWrapping.Wrap));
         var play = Ui.Button("Play", () => Play(v), tip: "Hear the new voice say a line");
         var done = new Button { Content = "Done", IsDefault = true };
         done.Classes.Add("accent");

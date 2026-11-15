@@ -93,14 +93,17 @@ public class ElevenLabsAppTests
             var refused = await Assert.ThrowsAsync<SpeechException>(() => eleven.Render(Request(false), default));
             Assert.Contains("hasn’t been allowed", refused.Message);
             Assert.Empty(fake.Sent);
-            // Nor does the resolver choose it for a book that hasn't said yes.
+            // A book that hasn't said yes keeps ElevenLabs chosen, but nothing plays until it does.
             var doc = ProjectDocument.Unsaved(TestApp.Sample());
             doc.Change("Purpose", p => { p.Settings.Purpose = ProjectPurpose.AiVoices; p.Settings.VoiceEngine = VoiceEngine.Elevenlabs; });
-            Assert.NotEqual(VoiceEngine.Elevenlabs, doc.Project.EngineInUse());
+            Assert.Equal(VoiceEngine.Elevenlabs, doc.Project.EngineInUse());
+            Assert.True(CloudGate.NeedsAsk(doc));
+            Assert.False(await CloudGate.Allows(doc));
             Assert.False(CloudInUse.ElevenLabs(doc.Project));
             Assert.False(ElevenLabsEngine.CloningOffered(doc.Project));
             doc.SetCloudVoicesAllowed(true);
             Assert.Equal(VoiceEngine.Elevenlabs, doc.Project.EngineInUse());
+            Assert.False(CloudGate.NeedsAsk(doc));
             Assert.True(CloudInUse.ElevenLabs(doc.Project));
             Assert.True(ElevenLabsEngine.CloningOffered(doc.Project));
             Assert.DoesNotContain(fake.Sent, s => s.Path.StartsWith("/v1/text-to-speech"));
