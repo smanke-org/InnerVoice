@@ -46,9 +46,12 @@ struct CloudUsageView: View {
 
     var body: some View {
         let book = allBooks ? nil : project.usageKey
-        let showClaude = CloudInUse.claude()
-        let showEleven = CloudInUse.elevenLabs(project)
-        let showGemini = CloudInUse.gemini(project)
+        // A service shows while it's in use, and always once it has usage here: an engine
+        // switched off later still cost what it cost.
+        let used = Set(store.records.filter { book == nil || $0.book == book }.map(\.service))
+        let showClaude = CloudInUse.claude() || used.contains(.claude)
+        let showEleven = CloudInUse.elevenLabs(project) || used.contains(.elevenlabs)
+        let showGemini = CloudInUse.gemini(project) || used.contains(.google)
         let records = store.records.filter {
             ($0.service == .claude && showClaude) || ($0.service == .elevenlabs && showEleven) || ($0.service == .google && showGemini)
         }
@@ -138,14 +141,28 @@ struct CloudUsageView: View {
             }
 
             if !days.isEmpty {
-                Text("By day").font(.headline)
-                Chart(days, id: \.self) { r in
-                    BarMark(x: .value("Day", date(r.day), unit: .day),
-                            y: .value(r.service == .claude ? "Tokens" : "Characters", r.service == .claude ? r.totalTokens : r.characters))
-                        .foregroundStyle(by: .value("Model", label(r)))
+                // Tokens and characters on separate charts: a day of Claude's millions of
+                // tokens would flatten the voices' characters to nothing.
+                let tokenDays = days.filter { $0.service == .claude }
+                let voiceDays = days.filter { $0.service != .claude }
+                if !tokenDays.isEmpty {
+                    Text("Claude by day").font(.headline)
+                    Chart(tokenDays, id: \.self) { r in
+                        BarMark(x: .value("Day", date(r.day), unit: .day), y: .value("Tokens", r.totalTokens))
+                            .foregroundStyle(by: .value("Model", label(r)))
+                    }
+                    .chartYAxisLabel("Tokens")
+                    .frame(height: 120)
                 }
-                .chartYAxisLabel(showClaude && (showEleven || showGemini) ? "Tokens (Claude) / characters (voices)" : showClaude ? "Tokens" : "Characters")
-                .frame(height: 160)
+                if !voiceDays.isEmpty {
+                    Text("Voices by day").font(.headline)
+                    Chart(voiceDays, id: \.self) { r in
+                        BarMark(x: .value("Day", date(r.day), unit: .day), y: .value("Characters", r.characters))
+                            .foregroundStyle(by: .value("Model", label(r)))
+                    }
+                    .chartYAxisLabel("Characters spoken")
+                    .frame(height: 120)
+                }
                 let costDays = days.filter { $0.cost != nil }
                 if !costDays.isEmpty {
                     Text("Cost by day").font(.headline)

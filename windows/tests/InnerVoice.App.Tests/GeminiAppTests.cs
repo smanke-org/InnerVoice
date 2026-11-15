@@ -290,4 +290,44 @@ public class GeminiAppTests
         guess.Limited(null, 0);
         Assert.Equal(3, guess.Interval);
     }
+    /// Before a paid export: how many chapters and what it costs, with Cancel the default
+    /// (the Mac's top of AudioExportSheet.export()). Nothing paid, no question.
+    [Xunit.Fact]
+    public void PaidExportAsksFirst()
+    {
+        Assert.Null(AudioExportWindow.PaidQuestion(3, true, null, 0, GeminiModel.Flash, 0));
+        var whole = AudioExportWindow.PaidQuestion(12, true, null, 0, GeminiModel.Flash, 4_500)!.Value;
+        Assert.Equal("Export the Whole Book (12 Chapters)?", whole.Title);
+        Assert.Equal("This uses about 4,500 ElevenLabs credits for the lines not made yet.", whole.Message);
+        Assert.Equal("Export 12 Chapters", whole.Action);
+        var some = AudioExportWindow.PaidQuestion(2, false, null, 10_000, GeminiModel.Flash, 300)!.Value;
+        Assert.Equal("Export 2 Chapters?", some.Title);
+        Assert.Matches(@"^This uses about \$\d+\.\d\d of Gemini TTS and about 300 ElevenLabs credits for the lines not made yet\.$", some.Message);
+        var one = AudioExportWindow.PaidQuestion(1, true, "The Long Night", 10_000, GeminiModel.Flash, 0)!.Value;
+        Assert.Equal("Export 1 Chapter?", one.Title);
+        Assert.EndsWith(" of Gemini TTS for the lines not made yet. Chapter: The Long Night.", one.Message);
+        Assert.Equal("Export 1 Chapter", one.Action);
+    }
+
+    /// Cloud Usage shows a service while it's in use, and always once it has usage for the
+    /// book (or, under All Books, for any book).
+    [AvaloniaFact]
+    public void CloudUsageShowsServicesWithUsage()
+    {
+        var doc = ProjectDocument.Unsaved(TestApp.Sample());
+        var book = doc.Project.UsageKey();
+        if (CloudInUse.ElevenLabs(doc.Project) || CloudInUse.Gemini(doc.Project)) return;
+        var records = new List<CloudUsageRecord>
+        {
+            new() { Day = "2026-11-14", Book = book, Service = CloudService.Google, Model = "gemini-3.8-flash-tts", Characters = 900 },
+            new() { Day = "2026-11-14", Book = "Another|1", Service = CloudService.Elevenlabs, Model = "eleven_v4", Characters = 500 },
+        };
+        var thisBook = CloudUsageView.Shown(doc.Project, book, records);
+        Assert.True(thisBook.Gemini);
+        Assert.False(thisBook.ElevenLabs);
+        var all = CloudUsageView.Shown(doc.Project, null, records);
+        Assert.True(all.Gemini);
+        Assert.True(all.ElevenLabs);
+        Assert.False(CloudUsageView.Shown(doc.Project, book, []).Gemini);
+    }
 }

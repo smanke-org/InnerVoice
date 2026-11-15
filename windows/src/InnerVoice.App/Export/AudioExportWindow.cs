@@ -327,8 +327,32 @@ public sealed class AudioExportWindow : Window
         return grid;
     }
 
+    /// The question before an export that spends money (the Mac's top of `export()`): how
+    /// many chapters, and what the lines not made yet cost. null when nothing is paid.
+    public static (string Title, string Message, string Action)? PaidQuestion(int count, bool everyChapter, string? onlyChapter,
+                                                                             long geminiCharacters, GeminiModel model, long credits)
+    {
+        if (geminiCharacters <= 0 && credits <= 0) return null;
+        var costs = new List<string>();
+        if (geminiCharacters > 0)
+            costs.Add($"about {(GeminiTTS.EstimatedSeconds(geminiCharacters) * model.DollarsPerSecond()).ToString("C2", System.Globalization.CultureInfo.GetCultureInfo("en-US"))} of Gemini TTS");
+        if (credits > 0) costs.Add($"about {credits:N0} ElevenLabs credits");
+        var chapters = count == 1 ? "1 Chapter" : $"{count:N0} Chapters";
+        var title = everyChapter && count > 1 ? $"Export the Whole Book ({count:N0} Chapters)?" : $"Export {chapters}?";
+        var message = $"This uses {string.Join(" and ", costs)} for the lines not made yet."
+            + (count == 1 && onlyChapter is not null ? $" Chapter: {onlyChapter}." : "");
+        return (title, message, $"Export {chapters}");
+    }
+
     async Task PickAndExport()
     {
+        // Anything paid goes out only after saying what: how many chapters, and the cost.
+        // Cancel is the default button, so a stray Enter never starts a costly export.
+        var picked = chapters.Picked;
+        if (PaidQuestion(picked.Count, chapters.EveryChapter, picked.Count == 1 ? AudioExporter.ChapterTitle(document.Project, picked[0]) : null,
+                         geminiCharacters, GeminiVoices.Shared.Model, credits?.Needed ?? 0) is { } paid
+            && !await Dialogs.Confirm(this, paid.Title, paid.Message, paid.Action, destructive: false, cancelIsDefault: true))
+            return;
         if (credits is { Left: { } left } c && c.Needed > left
             && !await Dialogs.Confirm(this, "Not Enough ElevenLabs Credits",
                 $"This export needs about {c.Needed:N0} credits and your plan has {left:N0} left. It will stop when they run out; lines already made are kept and aren’t charged again.",

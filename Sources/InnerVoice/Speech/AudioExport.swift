@@ -563,6 +563,28 @@ struct AudioExportSheet: View {
     }
 
     private func export() {
+        // Anything paid goes out only after saying what: how many chapters, and the cost.
+        // Cancel is the default button, so a stray Return never starts a costly export.
+        let paidCredits = credits?.needed ?? 0
+        let paidGemini = geminiCharacters ?? 0
+        if paidCredits > 0 || paidGemini > 0 {
+            let count = picked.count
+            var costs: [String] = []
+            if paidGemini > 0 {
+                let dollars = GeminiTTS.estimatedSeconds(characters: paidGemini) * GeminiVoices.shared.model.dollarsPerSecond()
+                costs.append("about \(dollars.formatted(.currency(code: "USD"))) of Gemini TTS")
+            }
+            if paidCredits > 0 { costs.append("about \(paidCredits.formatted()) ElevenLabs credits") }
+            let alert = NSAlert()
+            alert.messageText = everyChapter && count > 1
+                ? "Export the Whole Book (\(count.formatted()) Chapters)?"
+                : "Export \(count == 1 ? "1 Chapter" : "\(count.formatted()) Chapters")?"
+            alert.informativeText = "This uses \(costs.formatted(.list(type: .and))) for the lines not made yet."
+                + (count == 1 ? " Chapter: \(chapterTitle(picked[0]))." : "")
+            alert.addButton(withTitle: "Cancel")
+            alert.addButton(withTitle: count == 1 ? "Export 1 Chapter" : "Export \(count.formatted()) Chapters")
+            guard alert.runModal() == .alertSecondButtonReturn else { return }
+        }
         if let c = credits, let left = c.left, c.needed > left {
             let alert = NSAlert()
             alert.alertStyle = .warning

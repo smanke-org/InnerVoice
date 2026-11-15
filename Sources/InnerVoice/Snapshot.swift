@@ -125,6 +125,15 @@ enum Snapshot {
                             o.inputTokens = 25_000; o.outputTokens = 4_000; o.requests = 9
                             made.append(o)
                         }
+                        // Voices made in the cloud show even with their engine off now.
+                        var g = CloudUsageRecord(day: d, book: key, service: .google, model: "gemini-3.8-flash-lite-tts")
+                        g.characters = 6_000 + n * 2_500; g.requests = 90 + n * 20; g.audioSeconds = Double(g.characters) / 15
+                        made.append(g)
+                        if n >= 2 {
+                            var e = CloudUsageRecord(day: d, book: key, service: .elevenlabs, model: "eleven_v4")
+                            e.characters = 12_000; e.requests = 140
+                            made.append(e)
+                        }
                     }
                     CloudUsageStore.shared.replaceForTesting(made)
                     let host = NSHostingView(rootView: CloudUsageView(project: document.project).fixedSize())

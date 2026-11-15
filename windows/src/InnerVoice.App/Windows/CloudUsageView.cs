@@ -71,10 +71,20 @@ public sealed class CloudUsageView : UserControl
 
     static string Money(double d) => d.ToString(d < 1 ? "$0.00##" : "$#,##0.00", Us);
 
+    /// Which services show: each one while it's in use, and always once it has usage here
+    /// (this book, or every book): an engine switched off later still cost what it cost.
+    public static (bool Claude, bool ElevenLabs, bool Gemini) Shown(Project project, string? book, IEnumerable<CloudUsageRecord> records)
+    {
+        var used = records.Where(r => book is null || r.Book == book).Select(r => r.Service).ToHashSet();
+        return (CloudInUse.Claude() || used.Contains(CloudService.Claude),
+                CloudInUse.ElevenLabs(project) || used.Contains(CloudService.Elevenlabs),
+                CloudInUse.Gemini(project) || used.Contains(CloudService.Google));
+    }
+
     void Build()
     {
         var book = allBooks ? null : project.UsageKey();
-        bool showClaude = CloudInUse.Claude(), showEleven = CloudInUse.ElevenLabs(project), showGemini = CloudInUse.Gemini(project);
+        var (showClaude, showEleven, showGemini) = Shown(project, book, CloudUsageStore.Shared.Records);
         var records = CloudUsageStore.Shared.Records
             .Where(r => (r.Service == CloudService.Claude && showClaude) || (r.Service == CloudService.Elevenlabs && showEleven)
                         || (r.Service == CloudService.Google && showGemini)).ToList();
@@ -156,14 +166,26 @@ public sealed class CloudUsageView : UserControl
 
         if (days.Count > 0)
         {
-            // One color per model, the same in both charts, with one legend above them.
+            // One color per model, the same in every chart, with one legend above them.
             var colors = days.Select(Label).Distinct().Select((m, i) => (m, Palette[i % Palette.Length])).ToDictionary(x => x.m, x => x.Item2);
             var legend = new WrapPanel();
             foreach (var (model, hex) in colors)
                 legend.Children.Add(Ui.Row(Look.Xs, Ui.Dot(hex), Ui.Caption(model)).Also(r => r.Margin = new Thickness(0, 0, Look.Md, 0)));
-            panel.Children.Add(Ui.Column(Look.Xs, Ui.Headline("By day"), legend));
-            panel.Children.Add(Chart(days, colors, r => r.Service == CloudService.Claude ? r.TotalTokens : r.Characters,
-                showClaude && (showEleven || showGemini) ? "Tokens (Claude) / characters (voices)" : showClaude ? "Tokens" : "Characters", 170, money: false));
+            panel.Children.Add(legend);
+            // Tokens and characters on separate charts: a day of Claude's millions of tokens
+            // would flatten the voices' characters to nothing.
+            var tokenDays = days.Where(d => d.Service == CloudService.Claude).ToList();
+            var voiceDays = days.Where(d => d.Service != CloudService.Claude).ToList();
+            if (tokenDays.Count > 0)
+            {
+                panel.Children.Add(Ui.Headline("Claude by day"));
+                panel.Children.Add(Chart(tokenDays, colors, r => r.TotalTokens, "Tokens", 130, money: false));
+            }
+            if (voiceDays.Count > 0)
+            {
+                panel.Children.Add(Ui.Headline("Voices by day"));
+                panel.Children.Add(Chart(voiceDays, colors, r => r.Characters, "Characters spoken", 130, money: false));
+            }
             var costDays = days.Where(d => d.Cost is not null).ToList();
             if (costDays.Count > 0)
             {

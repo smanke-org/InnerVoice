@@ -211,7 +211,7 @@ struct VoicesSettings: View {
         } header: {
             Text("Export Speed")
         } footer: {
-            Text("Export Audio can make several lines at once. Slowest makes one at a time and always works; Faster and Fastest save time but might not work correctly with every voice. If an export at a faster speed has trouble with a line, that line is made again on its own. Playing in the app always goes one line at a time.")
+            Text("One setting for each voice engine that’s turned on below. Export Audio can make several lines at once. Slowest makes one at a time and always works; Faster and Fastest save time but might not work correctly with every voice. If an export at a faster speed has trouble with a line, that line is made again on its own. Playing in the app always goes one line at a time.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
