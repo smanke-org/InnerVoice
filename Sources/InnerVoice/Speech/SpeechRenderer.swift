@@ -22,7 +22,7 @@ struct SpeechRequest: Hashable, Sendable {
     var usageBook: String? = nil
 
     /// The file name of the rendered audio in the cache. Version 1 of the rendering.
-    var cacheKey: String {
+    nonisolated var cacheKey: String {
         var parts = ["v1", choice.engine.rawValue, choice.voiceID, choice.design ?? "", String(choice.rate ?? 1), String(choice.pitch ?? 1),
                      tone.rawValue, kind?.rawValue ?? "narration", text]
         if [.orpheus, .elevenlabs, .gemini].contains(choice.engine), let sound { parts.append(sound.rawValue) }

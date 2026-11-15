@@ -77,8 +77,9 @@ final class ThemeStore {
     }
 
     private init() {
-        themeID = ProcessInfo.processInfo.environment["APP_ACCENT"]
-            ?? UserDefaults.standard.string(forKey: "appearance.accent") ?? Self.defaultID
+        // The Accent tab was removed (2026-11-14): the app follows the Mac's accent color.
+        // APP_ACCENT is kept for snapshot tests only.
+        themeID = ProcessInfo.processInfo.environment["APP_ACCENT"] ?? Self.defaultID
         NotificationCenter.default.addObserver(forName: NSColor.systemColorsDidChangeNotification,
                                                object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.macIsMulticolor = ThemeStore.readMulticolor() }

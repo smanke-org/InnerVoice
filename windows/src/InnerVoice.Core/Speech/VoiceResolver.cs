@@ -163,6 +163,19 @@ public sealed class VoiceResolver
                     break;
             }
         }
+        // First-Person Narrator: the "I" character speaks in the narrator's voice (Same,
+        // Variant) or their own (Different). Which chapter a paragraph is in decides who "I" is.
+        if (project.Settings.CastingStyle == CastingStyle.FirstPerson)
+        {
+            var fp = project.Settings.FirstPerson ?? new FirstPersonSettings();
+            FirstPerson = fp;
+            Tellers = FirstPersonRules.Tellers(project.Settings);
+            bookTeller = project.Settings.PovCharacterID;
+            chapterTellers = fp.ChapterNarrators ?? [];
+            if (chapterTellers.Count > 0)
+                foreach (var ch in project.Chapters) foreach (var para in ch.Paragraphs) chapterOf[para.Id] = ch.Id;
+            if (fp.VoiceMode != FirstPersonVoice.Different) foreach (var id in Tellers) Characters.Remove(id);
+        }
         CloudAllowed = VoiceEngines.Engines.Where(x => x.IsCloud() && project.Settings.AllowsCloud(x)).ToHashSet();
         UsageBook = project.UsageKey();
         // The narrator's voice: one the narrator chose; else, in a first-person book, the POV
@@ -190,6 +203,8 @@ public sealed class VoiceResolver
     public static BookCharacter? PovNarrator(Project project, VoiceEngine engine, EngineSwitches switches)
     {
         if (project.Settings.NarratorVoice(engine)?.Source == VoiceSource.User) return null;
+        // First-Person Narrator keeps the narrator's voice; its own settings decide the rest.
+        if (project.Settings.CastingStyle == CastingStyle.FirstPerson) return null;
         if (project.Character(project.Settings.PovCharacterID) is not { } pov || pov.Voice(engine)?.Choice is not { } v || v.IsNarrator
             || !switches.Usable(v.Engine) || !project.Settings.AllowsCloud(v.Engine)) return null;
         return pov;
@@ -207,10 +222,38 @@ public sealed class VoiceResolver
         return output;
     }
 
+    /// First-Person Narrator, when the book uses it.
+    public FirstPersonSettings? FirstPerson { get; }
+    /// Everyone who tells part of the book in the first person.
+    public HashSet<Guid> Tellers { get; } = [];
+    readonly Guid? bookTeller;
+    readonly Dictionary<Guid, Guid> chapterTellers = [];
+    readonly Dictionary<Guid, Guid> chapterOf = [];
+
+    /// Who says "I" where this segment is.
+    public Guid? Teller(SpeechSegment segment) =>
+        chapterOf.TryGetValue(segment.ParagraphID, out var ch) && chapterTellers.TryGetValue(ch, out var id) ? id : bookTeller;
+
+    /// Narration the "I" character reads (First-Person Narrator, "reads the narration" on).
+    Guid? TellerNarrating(SpeechSegment segment) =>
+        FirstPerson is { ReadsNarration: true } && segment.LineID is null && segment.SpeakerID is null && segment.Source is not null
+            ? Teller(segment) : null;
+
+    /// The "I" character's thought the narrator reads plainly (their thoughts toggle off).
+    bool NarratorReadsThought(SpeechSegment segment) =>
+        FirstPerson is { VoicesThoughts: false } && segment.Kind == LineKind.Thought && segment.SpeakerID is { } id && Tellers.Contains(id);
+
     /// The shade a segment is said with: the speaker's, when the narrator's voice says their
     /// spoken or thought line (not narration, and not letters the narrator reads out).
     public Shade? ShadeFor(SpeechSegment segment, VoiceChoice choice)
     {
+        if (FirstPerson is { } fp && choice == Narrator)
+        {
+            if (TellerNarrating(segment) is not null) return fp.VoiceMode == FirstPersonVoice.Variant ? fp.VariantShade : null;
+            if (NarratorReadsThought(segment)) return null;
+            if (segment.SpeakerID is { } t && Tellers.Contains(t) && segment.LineID is not null && segment.Kind != LineKind.Written)
+                return AuditionShade ?? (fp.VoiceMode == FirstPersonVoice.Variant ? fp.VariantShade : null);
+        }
         if (segment.LineID is null || segment.Kind == LineKind.Written) return null;
         if (AuditionShade is not null) return AuditionShade;
         if (segment.SpeakerID is not { } id || choice != Narrator) return null;
@@ -220,6 +263,9 @@ public sealed class VoiceResolver
     public VoiceChoice? ChoiceFor(SpeechSegment segment)
     {
         if (segment.LineID is not null && segment.Kind == LineKind.Written && WrittenByNarrator) return Narrator;
+        if (TellerNarrating(segment) is { } teller)
+            return Characters.TryGetValue(teller, out var tc) && !tc.IsNarrator && Usable.Contains(tc.Engine) ? tc : Narrator;
+        if (NarratorReadsThought(segment)) return Narrator;
         // "Same as Narrator", and a voice from an engine that's turned off or not ready,
         // use the narrator's voice.
         if (segment.SpeakerID is { } id && Characters.TryGetValue(id, out var c) && !c.IsNarrator && Usable.Contains(c.Engine)) return c;

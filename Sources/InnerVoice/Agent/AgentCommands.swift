@@ -380,14 +380,15 @@ enum AgentCommands {
             return ["project": entry.name, "changed": changed, "character": c.name, "color": hex, "automatic": false]
         },
         // Casting Style (docs/CASTING-STYLE.md)
-        AgentCommand(name: "casting style", summary: "Show or change the book's Casting Style: one-voice (One Voice, or Just Me when narrating), shared (Narrator + Two Voices, or Three Narrators) or full-cast. Changing it keeps every voice and narrator. Returns `castingStyle` and who reads each character (`readers`).",
-                     params: [.init(name: "style", positional: true, help: "one-voice, shared or full-cast (leave out to show the current one)"), projectParam],
+        AgentCommand(name: "casting style", summary: "Show or change the book's Casting Style: one-voice (One Voice, or Just Me when narrating), shared (Narrator + Two Voices, or Three Narrators), first-person (First-Person Narrator: Narrator + Two Voices plus the book's “I” character) or full-cast. Changing it keeps every voice and narrator. Returns `castingStyle` and who reads each character (`readers`).",
+                     params: [.init(name: "style", positional: true, help: "one-voice, shared, first-person or full-cast (leave out to show the current one)"), projectParam],
                      example: "innervoice casting style shared --json") { args in
             let (entry, document) = try project(args)
             if let raw = args.string("style") {
                 let styles: [String: CastingStyle] = ["one-voice": .oneVoice, "one": .oneVoice, "just-me": .oneVoice, "shared": .shared,
-                                                      "three-narrators": .shared, "full-cast": .fullCast, "full": .fullCast]
-                guard let style = styles[raw.lowercased()] else { throw AgentError.usage("\"\(raw)\" isn't a Casting Style. Give one-voice, shared or full-cast.") }
+                                                      "three-narrators": .shared, "first-person": .firstPerson, "first": .firstPerson,
+                                                      "full-cast": .fullCast, "full": .fullCast]
+                guard let style = styles[raw.lowercased()] else { throw AgentError.usage("\"\(raw)\" isn't a Casting Style. Give one-voice, shared, first-person or full-cast.") }
                 document.setCastingStyle(style, undoManager: entry.undoManager)
             }
             let readers = CastingStyleRules.readers(document.project, index: document.index)

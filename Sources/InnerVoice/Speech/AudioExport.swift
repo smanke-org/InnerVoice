@@ -23,7 +23,7 @@ enum AudioExporter {
     }
 
     /// One file to write: its name and what goes in it.
-    struct Part {
+    struct Part: Sendable {
         var name: String
         var segments: [SpeechSegment]
     }
@@ -193,23 +193,35 @@ enum AudioExporter {
     }
 
     /// ElevenLabs answers "busy" when too many requests run at once (another app, or a
-    /// smaller plan): wait and try again rather than stopping the export.
+    /// smaller plan), and Gemini TTS when a per-minute limit is reached or Google is
+    /// overloaded: wait and try again rather than stopping the export. Gemini's waits come
+    /// from GeminiPace (as long as Google asks, then spaced to the key's limit).
     static func renderWithRetry(_ request: SpeechRequest) async throws -> AVAudioPCMBuffer {
         if SystemHooks.isTestRun, testFailures > 0 {
             testFailures -= 1
             throw SpeechError.failed("self-test failure")
         }
-        var wait: UInt64 = 1_000_000_000
-        for attempt in 0..<6 {
+        var wait = retryWait
+        var attempt = 0
+        while true {
             do {
                 return try await SpeechRenderer.shared.render(request)
             } catch ElevenLabsError.busy where attempt < 5 {
-                try await Task.sleep(nanoseconds: wait)
-                wait *= 2
+                try await Task.sleep(for: .seconds(wait))
+            } catch GeminiError.busy where attempt < 8 {
+                // GeminiPace holds the next try until Google's wait is over and spaces the
+                // lines to the key's limit, so a short pause is enough here.
+                SpeechLog.write("export: Gemini TTS busy, trying again (attempt \(attempt + 1))")
+                try await Task.sleep(for: .seconds(min(wait, 4)))
             }
+            attempt += 1
+            wait = min(wait * 2, 60)
         }
-        return try await SpeechRenderer.shared.render(request)
     }
+
+    /// The first wait before trying a busy engine again, in seconds; it doubles each time
+    /// (up to a minute). Test runs shorten it.
+    static var retryWait: Double = 1
 
     static func safeName(_ s: String) -> String {
         let bad = CharacterSet(charactersIn: "/:\\?%*|\"<>")
@@ -222,7 +234,7 @@ struct AudioExportSheet: View {
     var workspace: Workspace
     @Binding var isPresented: Bool
 
-    enum Scope: String, CaseIterable, Identifiable {
+    nonisolated enum Scope: String, CaseIterable, Identifiable, Sendable {
         case book, character
         var id: String { rawValue }
         var title: String {
@@ -250,6 +262,8 @@ struct AudioExportSheet: View {
     @State private var running: Task<Void, Never>?
     @State private var progress = 0.0
     @State private var status = ""
+    /// Gemini TTS: how long Google asked to wait (its per-minute limit), while it lasts.
+    @State private var waitNote: String?
     @State private var error: String?
     /// ElevenLabs credits this export would use, and what the plan has left.
     @State private var credits: (needed: Int, lines: Int, left: Int?)?
@@ -401,6 +415,7 @@ struct AudioExportSheet: View {
                 VStack(alignment: .leading, spacing: Space.xs) {
                     ProgressView(value: progress)
                     Text(status).font(.caption).foregroundStyle(.secondary)
+                    if let waitNote { Text(waitNote).font(.caption).foregroundStyle(.secondary).monospacedDigit() }
                 }
             }
             if let error { Text(error).font(.callout).foregroundStyle(.orange) }
@@ -433,10 +448,30 @@ struct AudioExportSheet: View {
     }
 
     private func parts() -> [AudioExporter.Part] {
-        let project = document.project
-        let index = document.index
+        spec.parts(resolver: VoiceResolver(project: document.project, index: document.index))
+    }
+
+    /// What goes into the files, as plain values, so the lines can be worked out off the
+    /// main thread (the estimate) as well as on it (the export).
+    nonisolated struct PartsSpec: Sendable {
+        var project: Project
+        var index: BookIndex
+        var picked: [Int]
+        var scope: Scope
+        var characterID: UUID?
+        var narration: Bool
+        var recaps: Bool
+        var perChapter: Bool
+
+        private func chapterTitle(_ i: Int) -> String {
+            let t = project.chapters[i].title.trimmingCharacters(in: .whitespaces)
+            return t.isEmpty ? (i == 0 ? "Opening" : "Untitled") : t
+        }
+
+        func parts(resolver: VoiceResolver) -> [AudioExporter.Part] {
         let title = project.title
         let chapters = picked
+        let everyChapter = picked.count == project.chapters.count
         // "Book - Chapters 1–3, 5" when only some chapters go out.
         let which = everyChapter ? "" : (scope == .character ? ", " : " - ") + SpeechScript.chapterLabel(chapters)
         switch scope {
@@ -455,9 +490,8 @@ struct AudioExportSheet: View {
                                        segments: SpeechScript.segments(chapters: chapters, project: project, index: index, includeNarration: narration, recaps: recaps))]
         case .character:
             guard let id = characterID else { return [] }
-            if id == Self.narratorTag {
+            if id == AudioExportSheet.narratorTag {
                 // Everything the narrator's voice reads, in order.
-                let resolver = VoiceResolver(project: project, index: index)
                 let all = SpeechScript.segments(chapters: chapters, project: project, index: index, includeNarration: true)
                 return [AudioExporter.Part(name: "\(title) - Narrator" + which, segments: all.filter { resolver.choice(for: $0) == resolver.narrator })]
             }
@@ -466,6 +500,12 @@ struct AudioExportSheet: View {
                                        segments: SpeechScript.segments(chapters: chapters, project: project, index: index,
                                                                        includeNarration: false, only: id))]
         }
+        }
+    }
+
+    private var spec: PartsSpec {
+        PartsSpec(project: document.project, index: document.index, picked: picked, scope: scope, characterID: characterID,
+                  narration: narration, recaps: recaps, perChapter: perChapter)
     }
 
     private func creditsNote(_ c: (needed: Int, lines: Int, left: Int?)) -> some View {
@@ -492,16 +532,29 @@ struct AudioExportSheet: View {
     /// Only the plan's numbers come back; no book text is sent.
     private func estimateCredits() async {
         guard ElevenLabs.shared.isSetUp || GeminiVoices.shared.isSetUp else { credits = nil; geminiCharacters = nil; return }
+        // Settle first: a run of clicks makes one estimate, not one each.
+        try? await Task.sleep(for: .milliseconds(250))
+        if Task.isCancelled { return }
+        // The whole book's lines and a disk check for each: off the main thread, so the
+        // sheet keeps up with the clicks.
+        let spec = spec
         let resolver = VoiceResolver(project: document.project, index: document.index)
-        var needed = 0, lines = 0, gemini = 0
-        for (n, seg) in parts().flatMap(\.segments).enumerated() {
-            if n % 500 == 0 { await Task.yield(); if Task.isCancelled { return } }
-            guard let r = resolver.request(for: seg), r.choice.engine.isCloud, r.cloudAllowed, !SpeechRenderer.shared.isCached(r) else { continue }
-            let count = r.text.trimmingCharacters(in: .whitespacesAndNewlines).count
-            if r.choice.engine == .gemini { gemini += count; continue }
-            needed += count
-            lines += 1
+        let folder = SpeechRenderer.shared.cacheFolder
+        let work = Task.detached(priority: .userInitiated) { () -> (needed: Int, lines: Int, gemini: Int)? in
+            var needed = 0, lines = 0, gemini = 0
+            for (n, seg) in spec.parts(resolver: resolver).flatMap(\.segments).enumerated() {
+                if n % 200 == 0, Task.isCancelled { return nil }
+                guard let r = resolver.request(for: seg), r.choice.engine.isCloud, r.cloudAllowed,
+                      !FileManager.default.fileExists(atPath: folder.appending(path: r.cacheKey + ".caf").path) else { continue }
+                let count = r.text.trimmingCharacters(in: .whitespacesAndNewlines).count
+                if r.choice.engine == .gemini { gemini += count; continue }
+                needed += count
+                lines += 1
+            }
+            return (needed, lines, gemini)
         }
+        guard let (needed, lines, gemini) = await withTaskCancellationHandler(operation: { await work.value }, onCancel: { work.cancel() }),
+              !Task.isCancelled else { return }
         geminiCharacters = gemini
         guard ElevenLabs.shared.isSetUp else { credits = nil; return }
         credits = (needed, lines, credits?.left)
@@ -560,6 +613,14 @@ struct AudioExportSheet: View {
         running = Task {
             defer { running = nil }
             do {
+                // While Google makes us wait, say so: the bar stands still for up to a minute.
+                let waits = Task {
+                    while !Task.isCancelled {
+                        try? await Task.sleep(for: .seconds(1))
+                        waitNote = await GeminiPace.shared.secondsWaiting().map { "Waiting \($0) s for Google’s per-minute limit on Gemini TTS…" }
+                    }
+                }
+                defer { waits.cancel(); waitNote = nil }
                 let urls = try await AudioExporter.write(parts, to: folder, format: format, resolver: resolver, stem: stem) { done, total, what in
                     progress = total == 0 ? 1 : Double(done) / Double(total)
                     status = what.isEmpty ? "Finishing…" : "Reading \(what) (\(done.formatted()) of \(total.formatted()))…"

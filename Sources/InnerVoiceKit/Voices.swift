@@ -649,12 +649,14 @@ public enum VoiceCasting {
     /// Casts every character with lines who has no voice the narrator chose, and the
     /// narrator if they have none. Main characters choose first. Characters in `keep` keep
     /// the voice they have, like the narrator's choices; `keepExisting` keeps every voice
-    /// there is (the narrator's and the roles' too) and only fills what's missing. Returns how
-    /// many characters got a voice.
+    /// there is (the narrator's and the roles' too) and only fills what's missing.
+    /// `keepNarratorAndRoles` keeps the narrator's and the shared roles' voices whatever `keep`
+    /// holds (casting on its own never changes them, so each engine's stay as they were).
+    /// Returns how many characters got a voice.
     @discardableResult
     public static func cast(_ project: inout Project, index: BookIndex, engine: VoiceEngine, voices: [VoiceInfo],
-                            keep: Set<UUID> = [], keepExisting: Bool = false) -> Int {
-        let keeping = keepExisting || !keep.isEmpty
+                            keep: Set<UUID> = [], keepExisting: Bool = false, keepNarratorAndRoles: Bool = false) -> Int {
+        let keeping = keepExisting || !keep.isEmpty || keepNarratorAndRoles
         func kept(_ c: BookCharacter) -> Bool {
             guard let v = c.voice(for: engine) else { return false }
             return v.source == .user || keepExisting || keep.contains(c.id)

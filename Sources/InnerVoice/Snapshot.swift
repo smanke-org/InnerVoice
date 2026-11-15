@@ -299,6 +299,10 @@ enum Snapshot {
                     workspace.pickedVoices = []
                     document.setCastingStyle(.fullCast, undoManager: nil)
                     await shot("voices-fullcast", settle: 1.0) { workspace.voiceTarget = .character(main.id); workspace.page = .voices }
+                    document.setCastingStyle(.firstPerson, undoManager: nil)
+                    document.updateSettings("POV", undoManager: nil) { $0.povCharacterID = main.id }
+                    await shot("voices-firstperson", settle: 1.0) { workspace.voiceTarget = .character(main.id); workspace.page = .voices }
+                    document.updateSettings("POV", undoManager: nil) { $0.povCharacterID = nil }
                     document.setCastingStyle(.oneVoice, undoManager: nil)
                     await shot("voices-onevoice", settle: 1.0) { workspace.voiceTarget = .character(main.id); workspace.page = .voices }
                     document.setCastingStyle(nil, undoManager: nil)

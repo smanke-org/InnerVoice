@@ -119,7 +119,7 @@ struct ReviewPage: View {
                 }
             }
         }
-        .navigationTitle("Review")
+        .navigationTitle("Review Tagging")
         .pageSubtitle(needing.isEmpty ? "" : "\(needing.count) lines need you")
         .toolbar {
             if !nothingToReview, filter != .voices, filter != .genders {

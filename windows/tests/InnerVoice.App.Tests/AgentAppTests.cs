@@ -133,6 +133,11 @@ public class AgentAppTests
             Assert.Equal(false, Ok("lines", "kind", id, "--kind", "thought")["changed"]);
             Assert.Contains("\"loud\" isn't a kind", ((JObject)Run(2, "lines", "kind", id, "loud")["error"]!)["message"] as string);
 
+            // Casting Style: First-Person Narrator by name, and back.
+            Assert.Equal("firstPerson", Ok("casting", "style", "first-person")["castingStyle"]);
+            Assert.Contains("first-person", ((JObject)Run(2, "casting", "style", "loud")["error"]!)["message"] as string);
+            Assert.Equal("fullCast", Ok("casting", "style", "full-cast")["castingStyle"]);
+
             // Tones: the narrator's (Tag Speakers never changes them), one undo step, shown in lines list.
             var toned = Ok("lines", "tone", id, "angry");
             Assert.Equal("angry", toned["tone"]);

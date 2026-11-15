@@ -82,20 +82,24 @@ import SwiftUI
 }
 
 /// Casting that happens on its own: after Tag Speakers and Build Summaries, and when the
-/// engine changes. It fills in characters with no voice and decides again the voices it
-/// was unsure of; voices it was sure of, and the narrator's choices, stay. Not an undo
-/// step of its own: it rides along with the run that caused it.
+/// engine changes. It only fills in what has no voice yet (characters, the narrator, the
+/// shared roles); every voice there is stays, so switching engines (or turning one off and
+/// on) brings back each engine's voices as they were. After Tag Speakers and Build Summaries
+/// (`recastUnsure`) it also decides again the characters' automatic voices it was unsure of,
+/// on the engine in use only. Not an undo step of its own: it rides along with the run that
+/// caused it.
 @MainActor
 enum VoiceCastingRun {
-    static func castIfNeeded(document: InnerVoiceDocument) {
+    static func castIfNeeded(document: InnerVoiceDocument, recastUnsure: Bool = false) {
         let project = document.project
         let engine = project.engineInUse
         let index = document.index
         let speaking = project.characters.filter { (index.stats[$0.id]?.lines ?? 0) > 0 }
         let open = speaking.filter { c in
             guard let v = c.voice(for: engine) else { return true }
-            // Mixing: an automatic voice from an engine that's now off or gone is cast again.
-            if v.source == .auto, !EngineSwitches.shared.usable(v.choice.engine) { return true }
+            // A voice from an engine that's off stays: it's back when the engine is (until
+            // then the narrator's voice reads them).
+            guard recastUnsure, EngineSwitches.shared.usable(v.choice.engine) else { return false }
             return v.source == .auto && v.confidence < project.settings.unsureBelow
         }
         // Casting Style: a shared role (Men, Women, Other) the style uses with no voice yet.
@@ -105,7 +109,7 @@ enum VoiceCastingRun {
         guard !voices.isEmpty else { return }
         let sure = Set(speaking.filter { !open.contains($0) }.map(\.id))
         document.applyQuietly { p in
-            VoiceCasting.cast(&p, index: index, engine: engine, voices: voices, keep: sure)
+            VoiceCasting.cast(&p, index: index, engine: engine, voices: voices, keep: sure, keepNarratorAndRoles: true)
         }
     }
 }

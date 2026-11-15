@@ -11,7 +11,7 @@ using System.Text.RegularExpressions;
 
 namespace InnerVoice.Core;
 
-public enum CastingStyle { OneVoice, Shared, FullCast }
+public enum CastingStyle { OneVoice, Shared, FirstPerson, FullCast }
 
 /// Who reads a character under the Casting Style.
 public enum VoiceRole { Narrator, Men, Women, Other, Own }
@@ -34,6 +34,7 @@ public static class CastingStyleNames
     {
         CastingStyle.OneVoice => "Just Me",
         CastingStyle.Shared => "Three Narrators",
+        CastingStyle.FirstPerson => "First-Person Narrator",
         _ => "Full Cast",
     };
 
@@ -44,6 +45,7 @@ public static class CastingStyleNames
         (CastingStyle.OneVoice, _) => "One Voice",
         (CastingStyle.Shared, ProjectPurpose.Narration) => "Three Narrators",
         (CastingStyle.Shared, _) => "Narrator + Two Voices",
+        (CastingStyle.FirstPerson, _) => "First-Person Narrator",
         _ => "Full Cast",
     };
 
@@ -262,7 +264,7 @@ public static class CastingStyleRules
     /// The shared roles the style reads characters in, so each needs a voice: all three in
     /// Narrator + Two Voices, and in Full Cast when minor characters go by gender.
     public static IReadOnlyList<VoiceRole> SharedRolesNeeded(ProjectSettings s) =>
-        s.CastingStyle == CastingStyle.Shared || (s.CastingStyle == CastingStyle.FullCast && s.MinorVoices == MinorVoices.ByGender)
+        s.CastingStyle is CastingStyle.Shared or CastingStyle.FirstPerson || (s.CastingStyle == CastingStyle.FullCast && s.MinorVoices == MinorVoices.ByGender)
             ? SharedRoles : [];
 
     /// Which role reads a character. `gender`: the narrator's choice, else the book's; null
@@ -275,6 +277,10 @@ public static class CastingStyleRules
             case CastingStyle.OneVoice:
                 return c.Role == VoiceRole.Own ? VoiceRole.Own : VoiceRole.Narrator;
             case CastingStyle.Shared:
+                return c.Role ?? (gender ?? CharacterGender.Other).Role();
+            case CastingStyle.FirstPerson:
+                // The "I" character: the voice resolver works out each line (FirstPersonRules).
+                if (FirstPersonRules.Tellers(s).Contains(c.Id)) return VoiceRole.Own;
                 return c.Role ?? (gender ?? CharacterGender.Other).Role();
             default:
                 if (c.Role is { } r) return r;
@@ -291,8 +297,7 @@ public static class CastingStyleRules
     public static bool AnyMainMarked(Project p) => p.Characters.Any(c => c.IsMain == true);
 
     /// The shared roles the style sorts by gender into.
-    public static bool UsesGender(ProjectSettings s) =>
-        s.CastingStyle == CastingStyle.Shared || (s.CastingStyle == CastingStyle.FullCast && s.MinorVoices == MinorVoices.ByGender);
+    public static bool UsesGender(ProjectSettings s) => SharedRolesNeeded(s).Count > 0;
 
     /// In Three Narrators, Narrator means whoever reads the narration (a two-person book
     /// gives it to the men's or women's narrator).

@@ -302,6 +302,17 @@ public class AudioExportTests : IDisposable
             system.Fail = r => r.Text == busyText && Interlocked.Increment(ref tries) > 0 ? new SpeechException("Broken.") : null;
             await Assert.ThrowsAsync<SpeechException>(() => AudioExporter.Write([part], Path.Combine(root, "broken"), AudioFormat.Wav, resolver, renderer));
             Assert.Equal(1, tries);
+            // An engine that says how long to wait is waited for (capped).
+            tries = 0;
+            renderer.ClearCache();
+            var max = AudioExporter.MaxRetryWait;
+            AudioExporter.MaxRetryWait = TimeSpan.FromMilliseconds(300);
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            system.Fail = r => r.Text == busyText && Interlocked.Increment(ref tries) <= 1
+                ? new SpeechException("Busy.") { Busy = true, RetryAfter = TimeSpan.FromSeconds(30) } : null;
+            Assert.Single(await AudioExporter.Write([part], Path.Combine(root, "busy3"), AudioFormat.Wav, resolver, renderer));
+            AudioExporter.MaxRetryWait = max;
+            Assert.InRange(clock.ElapsedMilliseconds, 280, 10_000);
         }
         finally
         {

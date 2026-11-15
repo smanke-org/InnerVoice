@@ -5,7 +5,7 @@ import Foundation
 /// work only while it is in front. Keep in step with the menus (App.swift's commands).
 enum ShortcutCatalog {
     /// The project window's pages, in sidebar order: ⌘1 is the first.
-    static let pages = ["Manuscript", "Cast", "Index", "Pronunciations", "Teleprompter", "Review", "Voices"]
+    static let pages = ["Manuscript", "Cast", "Index", "Pronunciations", "Teleprompter", "Review Tagging", "Voices"]
 
     // Carbon modifiers.
     private static let command = 0x100

@@ -310,3 +310,11 @@ Phases 2 and 4 don't depend on each other once Phase 1 lands.
    asking. Beyond that, InnerVoice says how many voice slots it would use and asks.
    Remixes are tested only after the person says so (credits).
 8. **Narration Tools says "narrator"**, never "reader".
+
+## First-Person Narrator
+
+For books told in the first person: Narrator + Two Voices (men's and women's voices by gender) plus the "I" character (`ProjectSettings.povCharacterID`). `FirstPersonSettings` (all the narrator's choice):
+- Their voice: Same as Narrator, Variant of Narrator (the narrator's voice with a `Shade`, default pitch +1, pace +1), or Different Voice (their own cast voice).
+- Their voice reads the narration (off by default) and their thoughts (on by default).
+- Narrator by Chapter: `chapterNarrators` (chapter → character) for books with more than one "I"; other chapters use the book's.
+`VoiceResolver` applies it per segment (`teller(of:)` finds the chapter's "I"). `FirstPersonRules` in the Kit; UI in `Views/FirstPersonOptions.swift`.

@@ -296,6 +296,31 @@ import Testing
         #expect(p.settings.roleVoice(.women, for: .apple)?.source == .auto)
     }
 
+    /// Casting on its own (switching engines and back) keeps each engine's narrator and shared
+    /// voices as they were, automatic ones too, even when the engine's voice list has changed.
+    @Test func automaticNarratorAndRolesStayPerEngine() {
+        var p = Project(title: "T")
+        p.settings.castingStyle = .shared
+        VoiceCasting.cast(&p, index: BookIndex(p), engine: .apple, voices: Self.catalog)
+        let narrator = p.settings.narratorVoice(for: .apple)?.choice.voiceID
+        let men = p.settings.roleVoice(.men, for: .apple)?.choice.voiceID
+        #expect(narrator != nil && men != nil && p.settings.narratorVoice(for: .apple)?.source == .auto)
+        // The list now ranks other voices first (as ElevenLabs' list can change between fetches).
+        let changed = Self.catalog.map { v -> VoiceInfo in var v = v; v.quality = 5 - v.quality; return v }
+            + [VoiceInfo(engine: .apple, voiceID: "m3", name: "Other Man", gender: .male, accent: "American", quality: 4)]
+        VoiceCasting.cast(&p, index: BookIndex(p), engine: .apple, voices: changed, keepNarratorAndRoles: true)
+        #expect(p.settings.narratorVoice(for: .apple)?.choice.voiceID == narrator)
+        #expect(p.settings.roleVoice(.men, for: .apple)?.choice.voiceID == men)
+        // Without it (Cast Voices Again), they're decided again.
+        VoiceCasting.cast(&p, index: BookIndex(p), engine: .apple, voices: changed)
+        #expect(p.settings.roleVoice(.men, for: .apple)?.choice.voiceID == "m3")
+        // A missing role is still filled.
+        p.settings.setRoleVoice(nil, .women, for: .apple)
+        VoiceCasting.cast(&p, index: BookIndex(p), engine: .apple, voices: changed, keepNarratorAndRoles: true)
+        #expect(p.settings.roleVoice(.women, for: .apple) != nil)
+        #expect(p.settings.roleVoice(.men, for: .apple)?.choice.voiceID == "m3")
+    }
+
     @Test func onlyStylesThatShareVoicesCastThem() {
         var p = Project(title: "T")
         p.settings.castingStyle = .oneVoice

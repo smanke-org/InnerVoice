@@ -147,6 +147,7 @@ public static class ProjectActions
             if (target.VoiceNotes.Length == 0) target.VoiceNotes = source.VoiceNotes;
             foreach (var l in p.Lines.Where(l => l.SpeakerID == from)) l.SpeakerID = into;
             if (p.Settings.PovCharacterID == from) p.Settings.PovCharacterID = into;
+            FirstPersonRules.Merge(p.Settings, from, into);
             p.Characters.Remove(source);
         });
     }
@@ -163,6 +164,7 @@ public static class ProjectActions
                 l.Confidence = 0;
             }
             if (p.Settings.PovCharacterID == id) p.Settings.PovCharacterID = null;
+            FirstPersonRules.Remove(p.Settings, id);
             p.Characters.RemoveAll(c => c.Id == id);
         });
     }

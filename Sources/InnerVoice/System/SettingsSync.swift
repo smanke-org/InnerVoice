@@ -281,8 +281,8 @@ final class SettingsSync: ObservableObject {
         AutoUpdater.shared.reloadPolicy()
         MenuHub.shared.reload()
         // The accent is cached in ThemeStore; the light/dark choice follows defaults by itself.
-        let accent = defaults.string(forKey: Self.accentKey) ?? ThemeStore.defaultID
-        if ThemeStore.shared.themeID != accent { ThemeStore.shared.themeID = accent }
+        // The accent always follows the Mac's (the Accent tab was removed), so a synced
+        // choice from an older version is ignored.
         onApply?()
         noteSynced(remote)
         NSLog("InnerVoice: adopted settings from \(remote.updatedBy) (\(remote.updatedAt))")

@@ -248,4 +248,46 @@ public class GeminiAppTests
         settings.Close();
         Assert.Contains("Alibaba’s CosyVoice", SettingsWindow.OriginDetail(VoiceEngine.Chatterbox));
     }
+
+    /// A per-minute 429 or an overloaded model is busy (Export Audio waits as long as Google
+    /// asks); a daily quota is out of quota.
+    [Xunit.Fact]
+    public void RateLimitsAreBusyDailyQuotaIsNot()
+    {
+        var perMinute = Encoding.UTF8.GetBytes("""{"error":{"code":429,"message":"You exceeded your current quota.","status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"27s"}]}}""");
+        var e = GeminiVoices.Failure(429, perMinute);
+        Assert.True(e.Busy);
+        Assert.Equal(GeminiErrors.Busy, e.Message);
+        Assert.Equal(TimeSpan.FromSeconds(27), e.RetryAfter);
+        var overloaded = GeminiVoices.Failure(503, Encoding.UTF8.GetBytes("""{"error":{"code":503,"message":"The model is overloaded.","status":"UNAVAILABLE"}}"""), TimeSpan.FromSeconds(5));
+        Assert.True(overloaded.Busy);
+        Assert.Equal(TimeSpan.FromSeconds(5), overloaded.RetryAfter);
+        var daily = GeminiVoices.Failure(429, Encoding.UTF8.GetBytes("""{"error":{"code":429,"message":"Quota exceeded.","details":[{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaId":"GenerateRequestsPerDayPerProjectPerModel"}]}]}}"""));
+        Assert.False(daily.Busy);
+        Assert.Equal(GeminiErrors.OutOfQuota, daily.Message);
+    }
+
+    /// After Google says busy, requests wait out its delay together and then start one every
+    /// 60 / limit seconds (the Mac's GeminiPace).
+    [Xunit.Fact]
+    public async Task PaceSpacesRequestsAfterALimit()
+    {
+        var pace = new GeminiPace();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        await pace.WaitTurn(default);
+        await pace.WaitTurn(default);
+        Assert.True(clock.ElapsedMilliseconds < 100);   // no limit yet: at once
+        pace.Limited(perMinute: 600, retryAfter: 0.2);   // 0.105 s apart after a 0.2 s wait
+        Assert.InRange(pace.Interval, 0.1, 0.11);
+        Assert.NotNull(pace.SecondsWaiting());
+        clock.Restart();
+        await Task.WhenAll(pace.WaitTurn(default), pace.WaitTurn(default), pace.WaitTurn(default));
+        Assert.InRange(clock.ElapsedMilliseconds, 380, 3000);
+        // An unknown limit grows a guess with each refusal.
+        var guess = new GeminiPace();
+        guess.Limited(null, 0);
+        Assert.Equal(2, guess.Interval);
+        guess.Limited(null, 0);
+        Assert.Equal(3, guess.Interval);
+    }
 }

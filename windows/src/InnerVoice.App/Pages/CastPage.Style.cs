@@ -21,11 +21,11 @@ public sealed partial class CastPage
     {
         var s = Document.Project.Settings;
         var col = new StackPanel { Spacing = Look.Sm };
-        CastingStyle?[] styles = [null, CastingStyle.OneVoice, CastingStyle.Shared, CastingStyle.FullCast];
+        CastingStyle?[] styles = [null, CastingStyle.OneVoice, CastingStyle.Shared, CastingStyle.FirstPerson, CastingStyle.FullCast];
         var styleBox = Combo(styles.Where(x => x is not null || s.CastingStyle is null).Select(x => x?.Title() ?? "Not Chosen").ToArray(),
             Array.IndexOf(styles.Where(x => x is not null || s.CastingStyle is null).ToArray(), s.CastingStyle),
             i => Document.SetCastingStyle(styles.Where(x => x is not null || s.CastingStyle is null).ElementAt(i)), 200);
-        ToolTip.SetTip(styleBox, "How the parts are shared: you read everyone, three narrators (narration, men, women), or a narrator per character. Changing it keeps every assignment.");
+        ToolTip.SetTip(styleBox, "How the parts are shared: you read everyone, three narrators (narration, men, women), three narrators plus the “I” character of a first-person book, or a narrator per character. Changing it keeps every assignment.");
         col.Children.Add(Labeled("Casting Style", styleBox));
         switch (s.CastingStyle)
         {
@@ -49,6 +49,9 @@ public sealed partial class CastPage
                 if (parts.Any(r => Document.Project.Narrators.All(n => n.Role != r)))
                     row.Children.Add(Ui.Button("Set Up Narrators", Document.SetUpThreeNarrators, tip: "Add a narrator for the narration, the men and the women. Rename them in Narrators…"));
                 col.Children.Add(row);
+                break;
+            case CastingStyle.FirstPerson:
+                col.Children.Add(FirstPersonOptions.Build(Document, narration: true));
                 break;
             case CastingStyle.FullCast:
                 var minors = Enum.GetValues<MinorVoices>();

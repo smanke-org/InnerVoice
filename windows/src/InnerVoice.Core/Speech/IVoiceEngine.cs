@@ -72,6 +72,8 @@ public sealed class SpeechException(string message, Exception? inner = null) : E
     /// The engine is busy for now (ElevenLabs' HTTP 429: too many requests at once, from
     /// another app or a smaller plan): trying again shortly may work. Export Audio does.
     public bool Busy { get; init; }
+    /// How long the engine asked to wait before trying again (Gemini TTS's RetryInfo), if it said.
+    public TimeSpan? RetryAfter { get; init; }
 
     public static SpeechException EngineUnavailable(VoiceEngine e) => new(e.IsCloud()
         ? $"{e.Title()} isn’t set up. Set it up in Settings › Voices, or choose another engine on the Voices page."

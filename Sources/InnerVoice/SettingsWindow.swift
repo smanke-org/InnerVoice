@@ -191,7 +191,6 @@ struct SettingsPane: View {
                 case .manuscript: ManuscriptSettings()
                 case .voices: VoicesSettings()
                 case .recording: RecordingSettings()
-                case .appearance: AppearanceSettings()
                 case .activity: ActivitySettings()
                 case .ai, .pronunciations: EmptyView()
                 }

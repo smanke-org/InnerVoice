@@ -171,12 +171,15 @@ public static class VoiceActions
 }
 
 /// Casting that happens on its own: after Tag Speakers and Build Summaries, and when the engine
-/// changes. It fills in characters with no voice and decides again the voices it was unsure
-/// of; voices it was sure of, and the narrator's choices, stay. Not an undo step of its own:
-/// it rides along with the run that caused it.
+/// changes. It only fills in what has no voice yet (characters, the narrator, the shared
+/// roles); every voice there is stays, so switching engines (or turning one off and on) brings
+/// back each engine's voices as they were. After Tag Speakers and Build Summaries
+/// (`recastUnsure`) it also decides again the characters' automatic voices it was unsure of,
+/// on the engine in use only. Not an undo step of its own: it rides along with the run that
+/// caused it. (The Mac's VoiceCastingRun.)
 public static class VoiceCastingRun
 {
-    public static void CastIfNeeded(ProjectDocument document)
+    public static void CastIfNeeded(ProjectDocument document, bool recastUnsure = false)
     {
         var project = document.Project;
         if (!project.ShowsVoices) return;
@@ -186,8 +189,9 @@ public static class VoiceCastingRun
         var open = speaking.Where(c =>
         {
             if (c.Voice(engine) is not { } v) return true;
-            // Mixing: an automatic voice from an engine that's now off or gone is cast again.
-            if (v.Source == VoiceSource.Auto && !EngineSwitches.Shared.Usable(v.Choice.Engine)) return true;
+            // A voice from an engine that's off stays: it's back when the engine is (until
+            // then the narrator's voice reads them).
+            if (!recastUnsure || !EngineSwitches.Shared.Usable(v.Choice.Engine)) return false;
             return v.Source == VoiceSource.Auto && v.Confidence < project.Settings.UnsureBelow;
         }).Select(c => c.Id).ToHashSet();
         // Casting Style: a shared role (Men, Women, Other) the style uses with no voice yet.
@@ -196,6 +200,6 @@ public static class VoiceCastingRun
         var voices = VoiceInfo.Castable(EngineSwitches.Shared.VoicesFor(engine, project));
         if (voices.Count == 0 && engine != VoiceEngine.Qwen) return;
         var sure = speaking.Where(c => !open.Contains(c.Id)).Select(c => c.Id).ToHashSet();
-        document.ApplyQuietly(p => VoiceCasting.Cast(p, index, engine, voices, sure));
+        document.ApplyQuietly(p => VoiceCasting.Cast(p, index, engine, voices, sure, keepNarratorAndRoles: true));
     }
 }

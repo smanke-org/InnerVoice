@@ -467,6 +467,8 @@ public struct ProjectSettings: Codable, Hashable, Sendable {
     /// The voice for each shared role (men, women, other), per engine:
     /// role → engine → voice, like `narratorVoices`.
     public var roleVoices: [String: [String: CastVoice]]?
+    /// First-Person Narrator: how the "I" character sounds. nil: the defaults.
+    public var firstPerson: FirstPersonSettings?
     public init() {}
 
     public func roleVoice(_ role: VoiceRole, for engine: VoiceEngine) -> CastVoice? {

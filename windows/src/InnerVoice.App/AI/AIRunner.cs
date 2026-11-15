@@ -144,7 +144,7 @@ public sealed partial class AIRunner(ProjectDocument document)
             int needs = document.Project.LinesNeedingYou;
             _ = document.RecolorAutomaticAsync();
             // Casting that happens on its own: new characters get voices.
-            Speech.VoiceCastingRun.CastIfNeeded(document);
+            Speech.VoiceCastingRun.CastIfNeeded(document, recastUnsure: true);
             if (model.IsCloud && document.Project.Settings.ReviewsCloudAI)
             {
                 var items = AIReview.Items(changed, document.Project);
@@ -287,7 +287,7 @@ public sealed partial class AIRunner(ProjectDocument document)
             Activity.Record(ActivityKey.Facts, added);
             _ = document.RecolorAutomaticAsync();
             // Voice Notes and facts shape casting: voices it was unsure of are decided again.
-            Speech.VoiceCastingRun.CastIfNeeded(document);
+            Speech.VoiceCastingRun.CastIfNeeded(document, recastUnsure: true);
             Finished = $"Found {added:N0} facts" + (briefsWritten > 0 ? $" and wrote {briefsWritten} voice briefs." : ".");
         }
         catch (OperationCanceledException) { Finished = "Stopped. Summaries so far are kept."; }

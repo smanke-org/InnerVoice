@@ -226,7 +226,8 @@ public sealed partial class VoicesPage : Page
         var styles = new (CastingStyle? Style, string Title)[]
         {
             (null, "Not Chosen"), (CastingStyle.OneVoice, CastingStyle.OneVoice.Title(ProjectPurpose.AiVoices)),
-            (CastingStyle.Shared, CastingStyle.Shared.Title(ProjectPurpose.AiVoices)), (CastingStyle.FullCast, CastingStyle.FullCast.Title(ProjectPurpose.AiVoices)),
+            (CastingStyle.Shared, CastingStyle.Shared.Title(ProjectPurpose.AiVoices)),
+            (CastingStyle.FirstPerson, CastingStyle.FirstPerson.Title(ProjectPurpose.AiVoices)), (CastingStyle.FullCast, CastingStyle.FullCast.Title(ProjectPurpose.AiVoices)),
         };
         box.ItemsSource = styles.Select(s => s.Title).ToList();
         box.SelectedIndex = Array.FindIndex(styles, s => s.Style == Document.Project.Settings.CastingStyle);
@@ -237,7 +238,7 @@ public sealed partial class VoicesPage : Page
             VoiceCastingRun.CastIfNeeded(Document);
         };
         Document.Changed += _ => box.SelectedIndex = Array.FindIndex(styles, s => s.Style == Document.Project.Settings.CastingStyle);
-        ToolTip.SetTip(box, "How voices are shared: one voice for everyone, a narrator plus voices for men, women and others, or a voice per character. Changing it keeps every voice.");
+        ToolTip.SetTip(box, "How voices are shared: one voice for everyone, a narrator plus voices for men, women and others, the same plus the “I” character of a first-person book, or a voice per character. Changing it keeps every voice.");
         var column = Ui.Column(Look.Xs, Ui.Caption("Casting Style"), box);
         column.Margin = new Thickness(Look.Md, Look.Md, Look.Md, 0);
         return column;
@@ -276,6 +277,28 @@ public sealed partial class VoicesPage : Page
             list.Children.Add(Header("Characters"));
             list.Children.Add(Pad(Ui.Caption(q.Length > 0 ? find.NoMatchText : "Characters with lines show here after Tag Speakers.", TextWrapping.Wrap)));
             return;
+        }
+        // First-Person Narrator: the "I" character (and anyone telling a chapter) first.
+        var tellers = p.Settings.CastingStyle == CastingStyle.FirstPerson ? FirstPersonRules.Tellers(p.Settings) : [];
+        if (cast.Any(c => tellers.Contains(c.Id)))
+        {
+            list.Children.Add(Header("First-Person Character"));
+            var mode = p.Settings.FirstPerson?.VoiceMode ?? FirstPersonVoice.Variant;
+            foreach (var c in cast.Where(c => tellers.Contains(c.Id)))
+            {
+                var id = c.Id;
+                string caption = mode switch
+                {
+                    FirstPersonVoice.Same => "The narrator’s voice",
+                    FirstPersonVoice.Variant => "The narrator’s voice, shaded" + (p.Settings.FirstPerson?.VariantShade.Cue is { } cue ? $": {cue}" : ""),
+                    _ => c.Voice(engine) is { } v ? VoiceNames.Name(v.Choice) : "No voice yet",
+                };
+                bool needs = mode == FirstPersonVoice.Different && p.VoiceNeedsYou(c, engine);
+                list.Children.Add(Row(c.Name, c.ColorHex, caption, needs, Target is VoiceTarget.Character ch && ch.Id == c.Id,
+                                      () => Show(new VoiceTarget.Character(id))));
+            }
+            cast = cast.Where(c => !tellers.Contains(c.Id)).ToList();
+            if (cast.Count == 0) return;
         }
         list.Children.Add(Header("Characters"));
         foreach (var c in cast)

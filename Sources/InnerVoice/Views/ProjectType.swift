@@ -289,6 +289,9 @@ extension ProjectTypeSheet {
                     Text(narration ? "The women’s narrator" : "The women’s voice").tag(VoiceRole.women)
                 }
                 .help("Choose the men’s or women’s for a book read by two people")
+            case .firstPerson:
+                Text("Choose the “I” character and how they sound on the \(narration ? "Cast" : "Voices") page.")
+                    .font(.caption).foregroundStyle(.secondary)
             case .fullCast:
                 Picker("Minor characters", selection: $minor) {
                     Text(narration ? "The narrator" : "The narrator’s voice").tag(MinorVoices.narrator)
@@ -339,6 +342,7 @@ private struct CastingStyleCard: View {
         switch style {
         case .oneVoice: narration ? "mic" : "person.wave.2"
         case .shared: "person.3"
+        case .firstPerson: "person.bubble"
         case .fullCast: "person.3.sequence"
         }
     }
@@ -349,6 +353,8 @@ private struct CastingStyleCard: View {
         case (.oneVoice, false): "One AI voice reads everything and shades each character a little lower or higher, like most audiobooks."
         case (.shared, true): "A narrator for the narration, one for every man and one for every woman, each with a Narrator Script of their own."
         case (.shared, false): "A narrator voice, one voice for every man and one for every woman. InnerVoice sorts the characters by gender."
+        case (.firstPerson, true): "For books told in the first person: a narrator, the “I” character (read the same, a little different, or by someone else), plus one for every man and one for every woman."
+        case (.firstPerson, false): "For books told in the first person: a narrator voice, the “I” character’s (the same, a variant, or entirely different), plus a voice for every man and one for every woman."
         case (.fullCast, true): "Every main character has a narrator of their own, plus the narrator."
         case (.fullCast, false): "Every main character gets a voice of their own, plus the narrator."
         }
@@ -361,6 +367,8 @@ private struct CastingStyleCard: View {
         case (.oneVoice, false): "Narration: the voice · Men: a little lower · Women: a little higher"
         case (.shared, true): "Narration: a narrator · Men: the men’s narrator · Women: the women’s"
         case (.shared, false): "Narration: the narrator · Men: the men’s voice · Women: the women’s"
+        case (.firstPerson, true): "Narration: a narrator · “I”: your choice · Men and women: their narrators"
+        case (.firstPerson, false): "Narration: the narrator · “I”: same, variant or own voice · Men and women: shared voices"
         case (.fullCast, true): "Narration: a narrator · Each main character: their own narrator"
         case (.fullCast, false): "Narration: the narrator · Each main character: their own voice"
         }

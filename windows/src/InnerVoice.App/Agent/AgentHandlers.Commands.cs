@@ -411,9 +411,10 @@ public static partial class AgentHandlers
                 {
                     ["one-voice"] = CastingStyle.OneVoice, ["one"] = CastingStyle.OneVoice, ["just-me"] = CastingStyle.OneVoice,
                     ["shared"] = CastingStyle.Shared, ["three-narrators"] = CastingStyle.Shared,
+                    ["first-person"] = CastingStyle.FirstPerson, ["first"] = CastingStyle.FirstPerson,
                     ["full-cast"] = CastingStyle.FullCast, ["full"] = CastingStyle.FullCast,
                 };
-                if (!styles.TryGetValue(raw.ToLowerInvariant(), out var style)) throw AgentError.Usage($"\"{raw}\" isn't a Casting Style. Give one-voice, shared or full-cast.");
+                if (!styles.TryGetValue(raw.ToLowerInvariant(), out var style)) throw AgentError.Usage($"\"{raw}\" isn't a Casting Style. Give one-voice, shared, first-person or full-cast.");
                 d.SetCastingStyle(style);
             }
             var readers = d.Readers();

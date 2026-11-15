@@ -87,6 +87,7 @@ struct CastPage: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 260, maximum: 360), spacing: Space.lg)], spacing: Space.lg) {
                     // The narrator first: the voice for everything no character says.
                     if document.project.showsVoices {
+                    Section {
                     Button { workspace.showVoice(nil) } label: {
                         NarratorCard(document: document)
                     }
@@ -97,7 +98,20 @@ struct CastPage: View {
                         Button("Play the Narrator Voice") { PlayCommand.audition(VoiceChoice(engine: document.project.engineInUse, voiceID: VoiceChoice.narratorID), character: nil, document: document) }
                     }
                     }
-                    ForEach(shown) { c in card(c) }
+                    }
+                    let groups = castGroups
+                    ForEach(groups, id: \.title) { g in
+                        Section {
+                            ForEach(g.members) { c in card(c) }
+                        } header: {
+                            HStack {
+                                Text(g.title).font(.headline)
+                                Text("\(g.members.count)").foregroundStyle(.secondary)
+                                Spacer()
+                            }
+                            .padding(.top, Space.md)
+                        }
+                    }
                 }
                 .padding(Space.margin)
                 }
@@ -130,6 +144,18 @@ struct CastPage: View {
             }
 
         }
+    }
+
+    /// Prominent Characters speak at least 3% of all dialogue lines (and at least 5 lines);
+    /// everyone else is a Minor Character. Each group keeps the chosen sort. Empty groups are left out.
+    private var castGroups: [(title: String, members: [BookCharacter])] {
+        let stats = document.index.stats
+        let total = document.project.characters.reduce(0) { $0 + (stats[$1.id]?.lines ?? 0) }
+        let bar = max(5, Int((Double(total) * 0.03).rounded(.up)))
+        let all = shown
+        let prominent = all.filter { (stats[$0.id]?.lines ?? 0) >= bar }
+        let minor = all.filter { (stats[$0.id]?.lines ?? 0) < bar }
+        return [("Prominent Characters", prominent), ("Minor Characters", minor)].filter { !$0.1.isEmpty }
     }
 
     /// The characters shown: all, or with Gender to Review on, only those it lists.

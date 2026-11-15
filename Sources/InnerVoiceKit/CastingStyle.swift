@@ -8,7 +8,7 @@ import Foundation
 
 /// How voices are shared in a book.
 public enum CastingStyle: String, Codable, CaseIterable, Identifiable, Sendable {
-    case oneVoice, shared, fullCast
+    case oneVoice, shared, firstPerson, fullCast
 
     public var id: String { rawValue }
 
@@ -19,8 +19,65 @@ public enum CastingStyle: String, Codable, CaseIterable, Identifiable, Sendable 
         case (.oneVoice, _): "One Voice"
         case (.shared, .narration): "Three Narrators"
         case (.shared, _): "Narrator + Two Voices"
+        case (.firstPerson, _): "First-Person Narrator"
         case (.fullCast, _): "Full Cast"
         }
+    }
+}
+
+/// First-Person Narrator: how the "I" character sounds next to the narrator.
+public enum FirstPersonVoice: String, Codable, CaseIterable, Identifiable, Sendable {
+    /// The narrator's voice, unchanged.
+    case same
+    /// The narrator's voice, shaded (pitch, pace, texture).
+    case variant
+    /// The character's own cast voice.
+    case different
+
+    public var id: String { rawValue }
+    public var title: String {
+        switch self {
+        case .same: "Same as Narrator"
+        case .variant: "Variant of Narrator"
+        case .different: "Different Voice"
+        }
+    }
+}
+
+/// First-Person Narrator settings (Narrator + Two Voices plus the "I" character). The
+/// narrator chooses each part; nil fields take the defaults below.
+public struct FirstPersonSettings: Codable, Hashable, Sendable {
+    /// nil: Variant of Narrator.
+    public var voice: FirstPersonVoice?
+    /// Variant of Narrator's shade. nil: a little higher, a bit quicker.
+    public var shade: Shade?
+    /// The "I" character's voice reads the narration too. nil: no, the narrator does.
+    public var readsNarration: Bool?
+    /// Their thoughts in their voice. nil: yes; false: the narrator reads them.
+    public var voicesThoughts: Bool?
+    /// Books with more than one "I": chapter → the character telling it. Chapters not
+    /// listed use the book's point-of-view character.
+    public var chapterNarrators: [UUID: UUID]?
+
+    public init() {}
+
+    public static let defaultShade = Shade(pitch: 1, pace: 1)
+    public var voiceMode: FirstPersonVoice { voice ?? .variant }
+    public var variantShade: Shade { shade ?? Self.defaultShade }
+}
+
+public enum FirstPersonRules {
+    /// Who says "I" in a chapter: its own narrator, else the book's.
+    public static func teller(ofChapter chapter: UUID?, settings: ProjectSettings) -> UUID? {
+        if let chapter, let id = settings.firstPerson?.chapterNarrators?[chapter] { return id }
+        return settings.povCharacterID
+    }
+
+    /// Everyone who tells part of the book.
+    public static func tellers(_ settings: ProjectSettings) -> Set<UUID> {
+        var all = Set(settings.firstPerson?.chapterNarrators?.values.map { $0 } ?? [])
+        if let pov = settings.povCharacterID { all.insert(pov) }
+        return all
     }
 }
 
@@ -237,6 +294,11 @@ public enum CastingStyleRules {
         case .shared:
             if let r = c.role { return r }
             return (gender ?? .other).role
+        case .firstPerson:
+            // The "I" character: the voice app works out per line (FirstPersonRules).
+            if FirstPersonRules.tellers(settings).contains(c.id) { return .own }
+            if let r = c.role { return r }
+            return (gender ?? .other).role
         case .fullCast:
             if let r = c.role { return r }
             if c.isMain == true || !anyMainMarked { return .own }
@@ -256,7 +318,7 @@ public enum CastingStyleRules {
     /// Narrator + Two Voices, and in Full Cast when minor characters go by gender.
     public static func sharedRolesNeeded(_ s: ProjectSettings) -> [VoiceRole] {
         switch s.castingStyle {
-        case .shared: VoiceRole.sharedRoles
+        case .shared, .firstPerson: VoiceRole.sharedRoles
         case .fullCast where s.minorVoices == .byGender: VoiceRole.sharedRoles
         default: []
         }

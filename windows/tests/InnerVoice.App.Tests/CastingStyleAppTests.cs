@@ -164,6 +164,59 @@ public class CastingStyleAppTests
         w.Close();
     }
 
+    /// First-Person Narrator: the options on the Cast and Voices pages change the book (one
+    /// undo step each), the Voices page lists the "I" character first, and the Cast page splits
+    /// into Prominent and Minor Characters.
+    [AvaloniaFact]
+    public void FirstPersonOptionsAndCastSections()
+    {
+        var doc = ProjectDocument.Unsaved(TestApp.Sample());
+        var mara = doc.Project.Characters.First(c => c.Name.StartsWith("Mara"));
+        var w = new ProjectWindow(doc) { Width = 1280, Height = 820 };
+        w.Show();
+        doc.SetCastingStyle(CastingStyle.FirstPerson);
+        doc.SetPointOfView(mara.Id);
+        w.Workspace.Go(PageKind.Cast);
+        Pump();
+        var cast = (CastPage)w.FindPage(PageKind.Cast)!;
+        var texts = cast.GetLogicalDescendants().OfType<Avalonia.Controls.TextBlock>().Select(t => t.Text).ToList();
+        Assert.Contains("“I” Character", texts);
+        Assert.Contains("Prominent Characters", texts);
+        // The sections follow the rule (at least 3% of the dialogue and 5 lines).
+        var groups = CastProminence.Groups(doc.Project, doc.Index, doc.Project.Characters);
+        foreach (var g in groups) Assert.Contains(g.Title, texts);
+
+        // Their Voice: Same as Narrator, one undo step.
+        var voice = cast.GetLogicalDescendants().OfType<Avalonia.Controls.ComboBox>()
+            .First(b => b.ItemsSource is IEnumerable<string> items && items.Contains(FirstPersonVoice.Same.Title()));
+        Assert.Equal(FirstPersonVoice.Variant.Title(), (voice.ItemsSource as IList<string>)![voice.SelectedIndex]);
+        voice.SelectedIndex = 0;
+        Assert.Equal(FirstPersonVoice.Same, doc.Project.Settings.FirstPerson?.Voice);
+        doc.Undo();
+        Assert.Null(doc.Project.Settings.FirstPerson?.Voice);
+        Pump();
+        var reads = cast.GetLogicalDescendants().OfType<Avalonia.Controls.CheckBox>().First(c => c.Content as string == "Their voice reads the narration");
+        reads.IsChecked = true;
+        Assert.True(doc.Project.Settings.FirstPerson?.ReadsNarration);
+        doc.SetChapterNarrator(doc.Project.Chapters[0].Id, doc.Project.Characters.First(c => c.Id != mara.Id).Id);
+        Assert.Equal(2, FirstPersonRules.Tellers(doc.Project.Settings).Count);
+        doc.Undo();
+        Assert.Null(doc.Project.Settings.FirstPerson?.ChapterNarrators);
+
+        // The Voices page: the "I" character first, and the options with the narrator.
+        w.Workspace.Go(PageKind.Voices);
+        Pump();
+        var voices = (VoicesPage)w.FindPage(PageKind.Voices)!;
+        texts = voices.GetLogicalDescendants().OfType<Avalonia.Controls.TextBlock>().Select(t => t.Text).ToList();
+        Assert.Contains("FIRST-PERSON CHARACTER", texts);
+        Assert.Contains("First-Person Narrator", texts);
+        voices.Show(new VoiceTarget.Character(mara.Id));
+        Pump();
+        texts = voices.GetLogicalDescendants().OfType<Avalonia.Controls.TextBlock>().Select(t => t.Text).ToList();
+        Assert.Contains(texts, t => t?.Contains("tells the story in the narrator’s voice, shaded") == true);
+        w.Close();
+    }
+
     [AvaloniaFact]
     public void Pages()
     {
@@ -199,6 +252,13 @@ public class CastingStyleAppTests
             Shot("Manuscript-JustMe");
             w.Workspace.Go(PageKind.Teleprompter);
             Shot("Teleprompter-JustMe");
+            doc.SetCastingStyle(CastingStyle.FirstPerson);
+            doc.SetPointOfView(doc.Project.Characters.First(c => c.Name.StartsWith("Mara")).Id);
+            w.Workspace.SelectedCharacter = null;
+            w.Workspace.Go(PageKind.Cast);
+            Shot("Cast-FirstPerson");
+            w.Workspace.Go(PageKind.Voices);
+            Shot("Voices-FirstPerson");
             w.Close();
         }
     }

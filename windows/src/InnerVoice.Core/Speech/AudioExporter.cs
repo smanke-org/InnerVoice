@@ -113,20 +113,34 @@ public static class AudioExporter
     public static TimeSpan RetryWait { get; set; } = TimeSpan.FromSeconds(1);
 
     /// ElevenLabs answers "busy" (HTTP 429) when too many requests run at once (another app,
-    /// or a smaller plan): wait and try again, up to five times, rather than stopping the export.
+    /// or a smaller plan), and Gemini TTS when a per-minute limit is reached or Google is
+    /// overloaded: wait and try again rather than stopping the export. ElevenLabs tries five
+    /// more times; Gemini waits as long as Google asks and tries for about three minutes
+    /// (its limits are per minute), as on the Mac.
     public static async Task<float[]> RenderWithRetry(SpeechRenderer renderer, SpeechRequest request, CancellationToken ct)
     {
         var wait = RetryWait;
+        int tries = request.Choice.Engine == VoiceEngine.Gemini ? 8 : 5;
         for (int attempt = 0; ; attempt++)
         {
             try { return await renderer.Render(request, ct).ConfigureAwait(false); }
-            catch (SpeechException e) when (e.Busy && attempt < 5)
+            catch (SpeechException e) when (e.Busy && attempt < tries)
             {
-                await Task.Delay(wait, ct).ConfigureAwait(false);
+                // Gemini TTS: the app's GeminiPace holds the next try until Google's wait is over
+                // and spaces the lines to the key's limit, so a short pause is enough (the Mac's).
+                var delay = request.Choice.Engine == VoiceEngine.Gemini ? (wait < TimeSpan.FromSeconds(4) ? wait : TimeSpan.FromSeconds(4))
+                    : e.RetryAfter is { } after && after > wait ? after : wait;
+                if (delay > MaxRetryWait) delay = MaxRetryWait;
+                if (request.Choice.Engine == VoiceEngine.Gemini) Log?.Invoke($"export: Gemini TTS busy, trying again (attempt {attempt + 1})");
+                await Task.Delay(delay, ct).ConfigureAwait(false);
                 wait *= 2;
+                if (wait > TimeSpan.FromSeconds(60)) wait = TimeSpan.FromSeconds(60);
             }
         }
     }
+
+    /// The longest single wait for a busy engine (what Google asks for is capped here).
+    public static TimeSpan MaxRetryWait { get; set; } = TimeSpan.FromSeconds(90);
 
     /// What an export would cost on ElevenLabs: the characters of its ElevenLabs lines not in
     /// the audio cache (ElevenLabs charges about a credit a character), and how many lines

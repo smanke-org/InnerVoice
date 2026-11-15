@@ -310,6 +310,35 @@ public class VoiceTests
         Assert.Equal("m2", (string?)json["men"]!["apple"]!["choice"]!["voiceID"]);
     }
 
+    /// Casting on its own (switching engines and back) keeps each engine's narrator and shared
+    /// voices as they were, automatic ones too, even when the engine's voice list has changed.
+    [Fact]
+    public void AutomaticNarratorAndRolesStayPerEngine()
+    {
+        var p = new Project { Title = "T" };
+        p.Settings.CastingStyle = CastingStyle.Shared;
+        VoiceCasting.Cast(p, new BookIndex(p), VoiceEngine.Apple, Catalog);
+        var narrator = p.Settings.NarratorVoice(VoiceEngine.Apple)?.Choice.VoiceID;
+        var men = p.Settings.RoleVoice(VoiceRole.Men, VoiceEngine.Apple)?.Choice.VoiceID;
+        Assert.NotNull(narrator);
+        Assert.NotNull(men);
+        Assert.Equal(VoiceSource.Auto, p.Settings.NarratorVoice(VoiceEngine.Apple)?.Source);
+        // The list now ranks other voices first (as ElevenLabs' list can change between fetches).
+        var changed = Catalog.Select(v => v with { Quality = 5 - v.Quality })
+            .Append(new VoiceInfo(VoiceEngine.Apple, "m3", "Other Man", Gender.Male, Accent: "American", Quality: 4)).ToList();
+        VoiceCasting.Cast(p, new BookIndex(p), VoiceEngine.Apple, changed, keepNarratorAndRoles: true);
+        Assert.Equal(narrator, p.Settings.NarratorVoice(VoiceEngine.Apple)?.Choice.VoiceID);
+        Assert.Equal(men, p.Settings.RoleVoice(VoiceRole.Men, VoiceEngine.Apple)?.Choice.VoiceID);
+        // Without it (Cast Voices Again), they're decided again.
+        VoiceCasting.Cast(p, new BookIndex(p), VoiceEngine.Apple, changed);
+        Assert.Equal("m3", p.Settings.RoleVoice(VoiceRole.Men, VoiceEngine.Apple)?.Choice.VoiceID);
+        // A missing role is still filled.
+        p.Settings.SetRoleVoice(null, VoiceRole.Women, VoiceEngine.Apple);
+        VoiceCasting.Cast(p, new BookIndex(p), VoiceEngine.Apple, changed, keepNarratorAndRoles: true);
+        Assert.NotNull(p.Settings.RoleVoice(VoiceRole.Women, VoiceEngine.Apple));
+        Assert.Equal("m3", p.Settings.RoleVoice(VoiceRole.Men, VoiceEngine.Apple)?.Choice.VoiceID);
+    }
+
     [Fact]
     public void OnlyStylesThatShareVoicesCastThem()
     {

@@ -141,4 +141,49 @@ public enum GeminiTTS {
               let e = root["error"] as? [String: Any] else { return nil }
         return ((e["message"] as? String) ?? "", (e["status"] as? String) ?? "")
     }
+
+    /// How long Google asks to wait before trying again: the RetryInfo detail of a 429
+    /// ({"@type": "…google.rpc.RetryInfo", "retryDelay": "27s"}). nil when it doesn't say.
+    public static func retryDelay(_ data: Data) -> Double? {
+        for d in details(data) where (d["@type"] as? String)?.hasSuffix("RetryInfo") == true {
+            if let s = d["retryDelay"] as? String, s.hasSuffix("s"), let v = Double(s.dropLast()), v >= 0 { return v }
+        }
+        return nil
+    }
+
+    /// A 429 for a daily limit (QuotaFailure with a "…PerDay…" quota), which waiting a
+    /// minute won't fix. Per-minute limits are only "busy".
+    public static func isDailyQuota(_ data: Data) -> Bool {
+        details(data).contains { d in
+            ((d["violations"] as? [[String: Any]]) ?? []).contains { v in
+                ((v["quotaId"] as? String) ?? "").localizedCaseInsensitiveContains("PerDay")
+            }
+        }
+    }
+
+    /// The per-minute request limit a 429 names (QuotaFailure's "quotaValue" for a
+    /// "…PerMinute…" quota), so requests can be spaced to fit it. nil when it doesn't say.
+    public static func perMinuteLimit(_ data: Data) -> Int? {
+        for d in details(data) {
+            for v in (d["violations"] as? [[String: Any]]) ?? [] {
+                guard ((v["quotaId"] as? String) ?? "").localizedCaseInsensitiveContains("PerMinute") else { continue }
+                if let n = (v["quotaValue"] as? String).flatMap(Int.init) ?? (v["quotaValue"] as? Int), n > 0 { return n }
+            }
+        }
+        return nil
+    }
+
+    /// A 429 that waiting won't fix: a daily quota, or "quota" with no time to wait.
+    public static func isOutOfQuota(_ data: Data) -> Bool {
+        if isDailyQuota(data) { return true }
+        let message = errorMessage(data)?.message ?? ""
+        return message.localizedCaseInsensitiveContains("quota") && retryDelay(data) == nil
+            && !message.localizedCaseInsensitiveContains("per minute")
+    }
+
+    private static func details(_ data: Data) -> [[String: Any]] {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let e = root["error"] as? [String: Any] else { return [] }
+        return (e["details"] as? [[String: Any]]) ?? []
+    }
 }

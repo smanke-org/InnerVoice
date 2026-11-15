@@ -215,18 +215,30 @@ public sealed class AudioExportWindow : Window
         creditsRun?.Cancel();
         var run = creditsRun = new CancellationTokenSource();
         var resolver = VoiceSetup.Resolver(document);
-        var parts = AudioExporter.Parts(document.Project, document.Index, chapters.Picked, Narration, Recaps, perChapter, resolver,
-                                        oneCharacter ? characterID ?? AudioExporter.NarratorOnly : null);
-        CreditsEstimate = Estimate(parts, resolver, run.Token);
+        // The whole book's lines are worked out off the UI thread too (the window is modal, so
+        // the book doesn't change meanwhile), after a short pause so a run of clicks makes one
+        // estimate, as on the Mac.
+        var (project, index, picked, narration, recaps, perChapterNow) = (document.Project, document.Index, chapters.Picked.ToList(), Narration, Recaps, perChapter);
+        Guid? only = oneCharacter ? characterID ?? AudioExporter.NarratorOnly : null;
+        CreditsEstimate = Estimate(() => AudioExporter.Parts(project, index, picked, narration, recaps, perChapterNow, resolver, only), resolver, run.Token);
     }
 
-    async Task Estimate(List<AudioPart> parts, VoiceResolver resolver, CancellationToken ct)
+    /// The pause before an estimate starts. Tests set it to zero.
+    public static TimeSpan EstimateDelay { get; set; } = TimeSpan.FromMilliseconds(250);
+
+    async Task Estimate(Func<List<AudioPart>> makeParts, VoiceResolver resolver, CancellationToken ct)
     {
         try
         {
+            if (EstimateDelay > TimeSpan.Zero) await Task.Delay(EstimateDelay, ct);
             var renderer = SpeechRenderer.Shared;
-            var (needed, lines) = await Task.Run(() => AudioExporter.CreditsNeeded(parts, resolver, renderer, ct), ct);
-            var (gemini, _) = await Task.Run(() => AudioExporter.CloudCharacters(parts, resolver, VoiceEngine.Gemini, renderer, ct), ct);
+            var (needed, lines, gemini) = await Task.Run(() =>
+            {
+                var parts = makeParts();
+                var (n, l) = AudioExporter.CreditsNeeded(parts, resolver, renderer, ct);
+                var (g, _) = AudioExporter.CloudCharacters(parts, resolver, VoiceEngine.Gemini, renderer, ct);
+                return (n, l, g);
+            }, ct);
             if (ct.IsCancellationRequested) return;
             geminiCharacters = gemini;
             credits = (needed, lines, creditsLeft);
@@ -396,6 +408,15 @@ public sealed class AudioExportWindow : Window
         double spoken = 0;
         var stats = new AudioExportStats();
         SlowedLines = 0;
+        // While Google makes us wait, say so: the bar stands still for up to a minute.
+        string progressText = "";
+        var waits = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        waits.Tick += (_, _) =>
+        {
+            var note = GeminiPace.Shared.SecondsWaiting() is { } s ? $"\nWaiting {s} s for Google’s per-minute limit on Gemini TTS…" : "";
+            if (running is not null && progressText.Length > 0) status.Text = progressText + note;
+        };
+        waits.Start();
         try
         {
             var files = await Task.Run(() => AudioExporter.Write(parts, folder, format, resolver, encoder: AudioEncoders.M4a, stem: stem,
@@ -403,7 +424,7 @@ public sealed class AudioExportWindow : Window
                 progress: (done, total, what) => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                 {
                     bar.Value = total == 0 ? 1 : (double)done / total;
-                    status.Text = what.Length == 0 ? "Finishing…" : $"Reading {what} ({done:N0} of {total:N0})…";
+                    status.Text = progressText = what.Length == 0 ? "Finishing…" : $"Reading {what} ({done:N0} of {total:N0})…";
                 }),
                 ct: source.Token, stats: stats));
             SlowedLines = stats.SlowedLines;
@@ -426,6 +447,7 @@ public sealed class AudioExportWindow : Window
         }
         finally
         {
+            waits.Stop();
             Activity.Record(ActivityKey.SecondsExported, (int)Math.Round(spoken));
             running = null;
             creditsKey = null;   // the lines it made are no longer owed

@@ -171,6 +171,57 @@ public static class GeminiTTS
         return null;
     }
 
+    /// How long Google asks to wait before trying again: the RetryInfo detail of a 429
+    /// ({"@type": "…google.rpc.RetryInfo", "retryDelay": "27s"}). null when it doesn't say.
+    public static double? RetryDelay(byte[] data)
+    {
+        foreach (var d in Details(data))
+            if (Str(d, "@type")?.EndsWith("RetryInfo", StringComparison.Ordinal) == true && Str(d, "retryDelay") is { } s && s.EndsWith('s')
+                && double.TryParse(s[..^1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) && v >= 0)
+                return v;
+        return null;
+    }
+
+    /// A 429 for a daily limit (QuotaFailure with a "…PerDay…" quota), which waiting a
+    /// minute won't fix. Per-minute limits are only "busy".
+    public static bool IsDailyQuota(byte[] data) => Details(data).Any(d =>
+        d["violations"] is JsonArray vs && vs.OfType<JsonObject>().Any(v => Str(v, "quotaId")?.Contains("PerDay", StringComparison.OrdinalIgnoreCase) == true));
+
+    /// The per-minute request limit a 429 names (QuotaFailure's "quotaValue" for a
+    /// "…PerMinute…" quota), so requests can be spaced to fit it. null when it doesn't say.
+    public static int? PerMinuteLimit(byte[] data)
+    {
+        foreach (var d in Details(data))
+            if (d["violations"] is JsonArray vs)
+                foreach (var v in vs.OfType<JsonObject>())
+                {
+                    if (Str(v, "quotaId")?.Contains("PerMinute", StringComparison.OrdinalIgnoreCase) != true) continue;
+                    if (v["quotaValue"] is JsonValue q && (q.TryGetValue<string>(out var s) && int.TryParse(s, out var n) || q.TryGetValue<int>(out n)) && n > 0)
+                        return n;
+                }
+        return null;
+    }
+
+    /// A 429 that waiting won't fix: a daily quota, or "quota" with no time to wait.
+    public static bool IsOutOfQuota(byte[] data)
+    {
+        if (IsDailyQuota(data)) return true;
+        var message = ErrorMessage(data)?.Message ?? "";
+        return message.Contains("quota", StringComparison.OrdinalIgnoreCase) && RetryDelay(data) is null
+            && !message.Contains("per minute", StringComparison.OrdinalIgnoreCase);
+    }
+
+    static IEnumerable<JsonObject> Details(byte[] data)
+    {
+        try
+        {
+            if (JsonNode.Parse(data) is JsonObject root && root["error"] is JsonObject e && e["details"] is JsonArray a)
+                return a.OfType<JsonObject>().ToList();
+        }
+        catch (JsonException) { }
+        return [];
+    }
+
     static string? Str(JsonObject o, string k) => o[k] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
 
     static byte[]? TryBase64(string s)

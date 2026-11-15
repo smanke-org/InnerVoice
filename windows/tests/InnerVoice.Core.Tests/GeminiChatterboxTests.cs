@@ -101,6 +101,24 @@ public class GeminiTTSTests
         Assert.Null(GeminiTTS.ErrorMessage("not json"u8.ToArray()));
     }
 
+    /// A per-minute limit is "busy" (wait as long as Google says); a daily quota isn't (the Mac's test).
+    [Fact]
+    public void RateLimitsWaitDailyQuotaStops()
+    {
+        var perMinute = Encoding.UTF8.GetBytes("""{"error":{"code":429,"message":"You exceeded your current quota. Quota exceeded for metric: generate_requests_per_model, limit: 10","status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaMetric":"generativelanguage.googleapis.com/generate_requests_per_model","quotaId":"GenerateRequestsPerMinutePerProjectPerModel","quotaValue":"10"}]},{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"27.5s"}]}}""");
+        Assert.Equal(27.5, GeminiTTS.RetryDelay(perMinute));
+        Assert.Equal(10, GeminiTTS.PerMinuteLimit(perMinute));
+        Assert.False(GeminiTTS.IsOutOfQuota(perMinute));
+        var daily = Encoding.UTF8.GetBytes("""{"error":{"code":429,"message":"Quota exceeded.","status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaId":"GenerateRequestsPerDayPerProjectPerModel"}]},{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"3600s"}]}}""");
+        Assert.True(GeminiTTS.IsOutOfQuota(daily));
+        Assert.Null(GeminiTTS.PerMinuteLimit(daily));
+        var bare = Encoding.UTF8.GetBytes("""{"error":{"code":429,"message":"Resource has been exhausted (e.g. check quota).","status":"RESOURCE_EXHAUSTED"}}""");
+        Assert.True(GeminiTTS.IsOutOfQuota(bare));
+        Assert.Null(GeminiTTS.RetryDelay(bare));
+        Assert.False(GeminiTTS.IsOutOfQuota(Encoding.UTF8.GetBytes("""{"error":{"code":503,"message":"The model is overloaded.","status":"UNAVAILABLE"}}""")));
+        Assert.Null(GeminiTTS.RetryDelay("not json"u8.ToArray()));
+    }
+
     [Fact]
     public void CostsPerSecondAndThePriceRise()
     {

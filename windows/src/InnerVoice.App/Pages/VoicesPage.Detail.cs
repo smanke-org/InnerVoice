@@ -95,6 +95,8 @@ public sealed partial class VoicesPage
         if (narration != VoiceRole.Narrator)
             column.Children.Add(Ui.Caption($"In this book the {narration.VoiceCaption().ToLowerInvariant()} reads the narration (Casting Style). The voice below is used only if you change that.", TextWrapping.Wrap));
         if (p.Settings.CastingStyle == CastingStyle.Shared) column.Children.Add(NarrationRoleBox());
+        if (p.Settings.CastingStyle == CastingStyle.FirstPerson)
+            column.Children.Add(Ui.Card(Ui.Column(Look.Sm, Ui.Headline("First-Person Narrator"), FirstPersonOptions.Build(Document, narration: false)), Look.Md));
         VoiceSection(column, p.Settings.NarratorVoice(engine), null, choice => Document.SetVoice(choice, null), sameAsNarrator: false);
     }
 
@@ -131,6 +133,16 @@ public sealed partial class VoicesPage
             column.Children.Add(Ui.Row(Look.Sm,
                 Ui.Button($"Show {reader.VoiceTitle()}", () => Show(new VoiceTarget.Role(reader))),
                 Ui.Button($"Give {c.FirstName} a Voice of Their Own", () => Document.SetRole(id, VoiceRole.Own))));
+        }
+        else if (p.Settings.CastingStyle == CastingStyle.FirstPerson && FirstPersonRules.Tellers(p.Settings).Contains(c.Id))
+        {
+            var mode = p.Settings.FirstPerson?.VoiceMode ?? FirstPersonVoice.Variant;
+            column.Children.Add(Ui.Column(Look.Sm,
+                Ui.Caption(mode == FirstPersonVoice.Different
+                    ? $"{c.FirstName} tells the story in a voice of their own."
+                    : $"{c.FirstName} tells the story in the narrator’s voice{(mode == FirstPersonVoice.Variant ? ", shaded" : "")}. Change it under Casting Style.", TextWrapping.Wrap),
+                Ui.Button("Show Casting Style", () => Show(VoiceTarget.Narrator))));
+            VoiceSection(column, c.Voice(engine), c, choice => Document.SetVoice(choice, id), sameAsNarrator: true);
         }
         else
         {

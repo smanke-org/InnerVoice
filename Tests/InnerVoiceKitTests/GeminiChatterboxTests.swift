@@ -77,6 +77,20 @@ struct GeminiTTSTests {
         #expect(GeminiTTS.errorMessage(err)?.message == "API key not valid.")
     }
 
+    /// A per-minute limit is "busy" (wait as long as Google says); a daily quota isn't.
+    @Test func rateLimitsWaitDailyQuotaStops() {
+        let perMinute = Data(#"{"error":{"code":429,"message":"You exceeded your current quota. Quota exceeded for metric: generate_requests_per_model, limit: 10","status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaMetric":"generativelanguage.googleapis.com/generate_requests_per_model","quotaId":"GenerateRequestsPerMinutePerProjectPerModel","quotaValue":"10"}]},{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"27.5s"}]}}"#.utf8)
+        #expect(GeminiTTS.retryDelay(perMinute) == 27.5)
+        #expect(GeminiTTS.perMinuteLimit(perMinute) == 10)
+        #expect(!GeminiTTS.isOutOfQuota(perMinute))
+        let daily = Data(#"{"error":{"code":429,"message":"Quota exceeded.","status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaId":"GenerateRequestsPerDayPerProjectPerModel"}]},{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"3600s"}]}}"#.utf8)
+        #expect(GeminiTTS.isOutOfQuota(daily))
+        #expect(GeminiTTS.perMinuteLimit(daily) == nil)
+        let bare = Data(#"{"error":{"code":429,"message":"Resource has been exhausted (e.g. check quota).","status":"RESOURCE_EXHAUSTED"}}"#.utf8)
+        #expect(GeminiTTS.isOutOfQuota(bare) && GeminiTTS.retryDelay(bare) == nil)
+        #expect(!GeminiTTS.isOutOfQuota(Data(#"{"error":{"code":503,"message":"The model is overloaded.","status":"UNAVAILABLE"}}"#.utf8)))
+    }
+
     @Test func costsPerSecondAndThePriceRise() {
         let late2026 = DateComponents(calendar: Calendar(identifier: .gregorian), timeZone: TimeZone(identifier: "UTC"), year: 2026, month: 12, day: 1).date!
         let early2027 = DateComponents(calendar: Calendar(identifier: .gregorian), timeZone: TimeZone(identifier: "UTC"), year: 2027, month: 1, day: 2).date!

@@ -190,7 +190,7 @@ final class TaggingController {
                 let needs = document.project.linesNeedingYou
                 // "she said" after a new character's lines picks their color family.
                 document.recolorAutomatic()
-                VoiceCastingRun.castIfNeeded(document: document)
+                VoiceCastingRun.castIfNeeded(document: document, recastUnsure: true)
                 if model is ClaudeTextModel, document.project.settings.reviewsCloudAI {
                     let items = AIReview.items(before: changed, project: document.project)
                     if !items.isEmpty {
@@ -404,7 +404,7 @@ final class TaggingController {
                 ActivityStore.shared.record(ActivityKey.facts, count: added)
                 // Summaries say who sounds like what: recolor and cast the ones that were unsure.
                 document.recolorAutomatic()
-                VoiceCastingRun.castIfNeeded(document: document)
+                VoiceCastingRun.castIfNeeded(document: document, recastUnsure: true)
                 let touched = max(notesWritten, briefsWritten)
                 let notes = touched == 0 ? "" : (cast.count == 1 ? " Voice notes updated" + (briefsWritten > 0 ? ", with a voice brief." : ".") : " Voice notes updated for \(touched) characters" + (briefsWritten > 0 ? ", with voice briefs." : "."))
                     + (touched == 0 ? "" : " Voices casting picked may change; edit a character’s voice notes to fine-tune how they sound.")

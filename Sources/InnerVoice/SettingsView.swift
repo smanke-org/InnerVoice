@@ -2,7 +2,7 @@ import InnerVoiceKit
 import SwiftUI
 
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case general, manuscript, ai, voices, pronunciations, recording, appearance, activity
+    case general, manuscript, ai, voices, pronunciations, recording, activity
 
     var id: String { rawValue }
 
@@ -14,7 +14,6 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .voices: "Voices"
         case .pronunciations: "Pronunciations"
         case .recording: "Teleprompter"
-        case .appearance: "Accent"
         case .activity: "Activity"
         }
     }
@@ -27,7 +26,6 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .voices: "person.wave.2"
         case .pronunciations: "character.bubble"
         case .recording: "text.alignleft"
-        case .appearance: "paintpalette"
         case .activity: "chart.bar"
         }
     }

@@ -13,7 +13,7 @@ public static class PageKinds
         PageKind.Cast => "Cast",
         PageKind.Index => "Index",
         PageKind.Teleprompter => "Teleprompter",
-        PageKind.Review => "Review",
+        PageKind.Review => "Review Tagging",
         PageKind.Voices => "Voices",
         PageKind.Pronunciations => "Pronunciations",
         _ => "Revisions",

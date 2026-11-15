@@ -613,13 +613,15 @@ public static class VoiceCasting
     /// Casts every character with lines who has no voice the narrator chose, and the
     /// narrator if they have none. Main characters choose first. Characters in `keep` keep
     /// the voice they have, like the narrator's choices; `keepExisting` keeps every voice there
-    /// is (the narrator's and the roles' too) and only fills what's missing. Returns how many
-    /// characters got a voice.
+    /// is (the narrator's and the roles' too) and only fills what's missing.
+    /// `keepNarratorAndRoles` keeps the narrator's and the shared roles' voices whatever `keep`
+    /// holds (casting on its own never changes them, so each engine's stay as they were).
+    /// Returns how many characters got a voice.
     public static int Cast(Project project, BookIndex index, VoiceEngine engine, IReadOnlyList<VoiceInfo> voices, IReadOnlySet<Guid>? keep = null,
-                           bool keepExisting = false)
+                           bool keepExisting = false, bool keepNarratorAndRoles = false)
     {
         keep ??= new HashSet<Guid>();
-        bool keeping = keepExisting || keep.Count > 0;
+        bool keeping = keepExisting || keep.Count > 0 || keepNarratorAndRoles;
         bool Kept(BookCharacter c) => c.Voice(engine) is { } v && (v.Source == VoiceSource.User || keepExisting || keep.Contains(c.Id));
         int LinesOf(Guid id) => index.StatsFor(id)?.Lines ?? 0;
         HashSet<int> ChaptersOf(Guid id) => index.StatsFor(id)?.Chapters ?? [];

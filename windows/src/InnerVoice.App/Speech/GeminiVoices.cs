@@ -25,6 +25,59 @@ public static class GeminiErrors
     public static string Server(int code, string message) => $"Gemini TTS couldn’t make the audio ({code}){(message.Length == 0 ? "" : ": " + message)}.";
 }
 
+/// Spaces Gemini TTS requests to fit the key's per-minute limit (the Mac's GeminiPace). Before
+/// the first "busy" every request goes at once; after it, everyone waits out Google's delay
+/// together and then one request starts every 60 / limit seconds (the limit from Google's
+/// reply, or a guess that grows with each refusal), so lines come steadily instead of in
+/// bursts that get refused. Kept for the app's run.
+public sealed class GeminiPace
+{
+    public static GeminiPace Shared { get; } = new();
+    readonly Lock gate = new();
+    DateTime next = DateTime.MinValue;
+    DateTime? waitingUntil;
+
+    /// Seconds between request starts; 0 until Google first says busy.
+    public double Interval { get; private set; }
+
+    public async Task WaitTurn(CancellationToken ct)
+    {
+        TimeSpan delay;
+        lock (gate)
+        {
+            var now = DateTime.UtcNow;
+            var slot = next > now ? next : now;
+            next = slot + TimeSpan.FromSeconds(Interval);
+            delay = slot - now;
+        }
+        if (delay > TimeSpan.Zero) await Task.Delay(delay, ct);
+    }
+
+    public void Limited(int? perMinute, double? retryAfter)
+    {
+        lock (gate)
+        {
+            Interval = perMinute is { } n ? Math.Max(Interval, 60.0 / n * 1.05) : Math.Min(30, Math.Max(2, Interval * 1.5));
+            var resume = DateTime.UtcNow + TimeSpan.FromSeconds(Math.Min(90, retryAfter ?? Interval));
+            if (resume > next) next = resume;
+            waitingUntil = resume;
+        }
+        SpeechLog.Write($"Gemini TTS: per-minute limit {perMinute?.ToString() ?? "unknown"}; one request every {Interval:0.0} s");
+    }
+
+    /// Seconds left of the wait Google asked for, or null.
+    public int? SecondsWaiting()
+    {
+        lock (gate)
+        {
+            if (waitingUntil is not { } until) return null;
+            var left = until - DateTime.UtcNow;
+            if (left <= TimeSpan.Zero) { waitingUntil = null; return null; }
+            return (int)left.TotalSeconds + 1;
+        }
+    }
+}
+
 public sealed class GeminiVoices : IVoiceEngine
 {
     public static GeminiVoices Shared { get; } = new();
@@ -171,6 +224,8 @@ public sealed class GeminiVoices : IVoiceEngine
             };
             http.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
             http.Headers.Add("x-goog-api-key", k);
+            // Google limits requests per minute: take a turn, spaced to fit the limit once known.
+            await GeminiPace.Shared.WaitTurn(ct);
             var data = await Send(http, ct);
             byte[] pcm;
             try { pcm = GeminiTTS.Pcm16FromWavOrRaw(GeminiTTS.AudioFromResponse(data)); }
@@ -213,13 +268,15 @@ public sealed class GeminiVoices : IVoiceEngine
         using (response)
         {
             var data = await response.Content.ReadAsByteArrayAsync(ct);
-            if (!response.IsSuccessStatusCode) throw Failure((int)response.StatusCode, data);
+            if ((int)response.StatusCode == 429)
+                GeminiPace.Shared.Limited(GeminiTTS.PerMinuteLimit(data), GeminiTTS.RetryDelay(data) ?? response.Headers.RetryAfter?.Delta?.TotalSeconds);
+            if (!response.IsSuccessStatusCode) throw Failure((int)response.StatusCode, data, response.Headers.RetryAfter?.Delta);
             return data;
         }
     }
 
     /// Google's error, in words for the narrator.
-    public static SpeechException Failure(int code, byte[] data)
+    public static SpeechException Failure(int code, byte[] data, TimeSpan? retryAfter = null)
     {
         var e = GeminiTTS.ErrorMessage(data);
         var message = e?.Message ?? System.Text.Encoding.UTF8.GetString(data.AsSpan(0, Math.Min(300, data.Length)));
@@ -230,10 +287,12 @@ public sealed class GeminiVoices : IVoiceEngine
             400 when message.Contains("API key", StringComparison.OrdinalIgnoreCase) => GeminiErrors.BadKey,
             401 => GeminiErrors.BadKey,
             403 when status == "PERMISSION_DENIED" => GeminiErrors.BadKey,
-            429 => message.Contains("quota", StringComparison.OrdinalIgnoreCase) ? GeminiErrors.OutOfQuota : GeminiErrors.Busy,
+            // A per-minute limit only needs a wait (Google says how long); a daily one doesn't pass.
+            429 => GeminiTTS.IsOutOfQuota(data) ? GeminiErrors.OutOfQuota : GeminiErrors.Busy,
             >= 500 and < 600 => GeminiErrors.Busy,
             _ => GeminiErrors.Server(code, message),
         };
-        return new SpeechException(text) { Busy = text == GeminiErrors.Busy };
+        var delay = GeminiTTS.RetryDelay(data) is { } s ? TimeSpan.FromSeconds(s) : retryAfter;
+        return new SpeechException(text) { Busy = text == GeminiErrors.Busy, RetryAfter = text == GeminiErrors.Busy ? delay : null };
     }
 }

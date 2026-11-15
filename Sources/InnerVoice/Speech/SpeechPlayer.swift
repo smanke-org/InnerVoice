@@ -4,7 +4,7 @@ import Observation
 
 /// Which voice says each segment of a project, on the project's engine: the character's
 /// cast voice, or the narrator's for narration and lines nobody is cast for.
-struct VoiceResolver {
+struct VoiceResolver: Sendable {
     var engine: VoiceEngine
     var characters: [UUID: VoiceChoice]
     var narrator: VoiceChoice?
@@ -39,6 +39,19 @@ struct VoiceResolver {
                 }
             }
         }
+        // First-Person Narrator: the "I" character speaks in the narrator's voice (Same,
+        // Variant) or their own (Different). Which chapter a paragraph is in decides who "I" is.
+        if project.settings.castingStyle == .firstPerson {
+            let fp = project.settings.firstPerson ?? FirstPersonSettings()
+            firstPerson = fp
+            tellers = FirstPersonRules.tellers(project.settings)
+            bookTeller = project.settings.povCharacterID
+            chapterTellers = fp.chapterNarrators ?? [:]
+            if !chapterTellers.isEmpty {
+                for ch in project.chapters { for p in ch.paragraphs { chapterOf[p.id] = ch.id } }
+            }
+            if fp.voiceMode != .different { for id in tellers { map[id] = nil } }
+        }
         characters = map
         cloudAllowed = Set(VoiceEngine.engines.filter { $0.isCloud && project.settings.allowsCloud($0) })
         usageBook = project.usageKey
@@ -49,7 +62,7 @@ struct VoiceResolver {
         let n = project.settings.narratorVoice(for: e)
         if let n, n.source == .user, usable.contains(n.choice.engine) {
             narrator = n.choice
-        } else if let pov = Self.povNarrator(project: project, engine: e), let v = map[pov.id] {
+        } else if project.settings.castingStyle != .firstPerson, let pov = Self.povNarrator(project: project, engine: e), let v = map[pov.id] {
             narrator = v
         } else if let n, usable.contains(n.choice.engine) {
             narrator = n.choice
@@ -69,6 +82,32 @@ struct VoiceResolver {
         }
     }
 
+    /// First-Person Narrator, when the book uses it.
+    var firstPerson: FirstPersonSettings?
+    var tellers: Set<UUID> = []
+    var bookTeller: UUID?
+    var chapterTellers: [UUID: UUID] = [:]
+    var chapterOf: [UUID: UUID] = [:]
+
+    /// Who says "I" where this segment is.
+    nonisolated func teller(of segment: SpeechSegment) -> UUID? {
+        if let ch = chapterOf[segment.paragraphID], let id = chapterTellers[ch] { return id }
+        return bookTeller
+    }
+
+    /// Narration the "I" character reads (First-Person Narrator, "reads the narration" on).
+    nonisolated private func tellerNarrating(_ segment: SpeechSegment) -> UUID? {
+        guard let fp = firstPerson, fp.readsNarration == true, segment.lineID == nil, segment.speakerID == nil,
+              segment.source != nil else { return nil }
+        return teller(of: segment)
+    }
+
+    /// The "I" character's thought the narrator reads plainly (their thoughts toggle off).
+    nonisolated private func narratorReadsThought(_ segment: SpeechSegment) -> Bool {
+        guard let fp = firstPerson, fp.voicesThoughts == false, segment.kind == .thought, let id = segment.speakerID else { return false }
+        return tellers.contains(id)
+    }
+
     /// Casting Style shades for characters the narrator plays, by character.
     var shades: [UUID: Shade] = [:]
     /// An audition of a shade (Voices page): every line of it is said with this shade.
@@ -76,7 +115,14 @@ struct VoiceResolver {
 
     /// The shade a segment is said with: the speaker's, when the narrator's voice says their
     /// spoken or thought line (not narration, and not letters the narrator reads out).
-    func shade(for segment: SpeechSegment, choice: VoiceChoice) -> Shade? {
+    nonisolated func shade(for segment: SpeechSegment, choice: VoiceChoice) -> Shade? {
+        if let fp = firstPerson, choice == narrator {
+            if tellerNarrating(segment) != nil { return fp.voiceMode == .variant ? fp.variantShade : nil }
+            if narratorReadsThought(segment) { return nil }
+            if let id = segment.speakerID, tellers.contains(id), segment.lineID != nil, segment.kind != .written {
+                return auditionShade ?? (fp.voiceMode == .variant ? fp.variantShade : nil)
+            }
+        }
         guard segment.lineID != nil, segment.kind != .written else { return nil }
         if let auditionShade { return auditionShade }
         guard let id = segment.speakerID, choice == narrator else { return nil }
@@ -108,6 +154,8 @@ struct VoiceResolver {
     static func povNarrator(project: Project, engine: VoiceEngine? = nil) -> BookCharacter? {
         let e = engine ?? project.engineInUse
         if project.settings.narratorVoice(for: e)?.source == .user { return nil }
+        // First-Person Narrator keeps the narrator's voice; its own settings decide the rest.
+        if project.settings.castingStyle == .firstPerson { return nil }
         guard let pov = project.character(project.settings.povCharacterID), let v = pov.voice(for: e)?.choice,
               !v.isNarrator, EngineSwitches.shared.usable(v.engine), project.settings.allowsCloud(v.engine) else { return nil }
         return pov
@@ -129,15 +177,20 @@ struct VoiceResolver {
         }
     }
 
-    func choice(for segment: SpeechSegment) -> VoiceChoice? {
+    nonisolated func choice(for segment: SpeechSegment) -> VoiceChoice? {
         if segment.lineID != nil, segment.kind == .written, writtenByNarrator { return narrator }
+        if let t = tellerNarrating(segment) {
+            if let c = characters[t], !c.isNarrator, usable.contains(c.engine) { return c }
+            return narrator
+        }
+        if narratorReadsThought(segment) { return narrator }
         // "Same as Narrator", and a voice from an engine that's turned off or not downloaded,
         // use the narrator's voice.
         if let id = segment.speakerID, let c = characters[id], !c.isNarrator, usable.contains(c.engine) { return c }
         return narrator
     }
 
-    func request(for segment: SpeechSegment) -> SpeechRequest? {
+    nonisolated func request(for segment: SpeechSegment) -> SpeechRequest? {
         guard let choice = choice(for: segment) else { return nil }
         return SpeechRequest(text: segment.text, choice: choice, tone: segment.speakerID == nil && segment.lineID == nil ? .neutral : segment.tone,
                              kind: segment.lineID == nil ? nil : segment.kind, sound: segment.sound, cloudAllowed: cloudAllowed.contains(choice.engine),

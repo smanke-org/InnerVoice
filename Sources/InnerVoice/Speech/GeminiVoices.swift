@@ -121,7 +121,12 @@ final class GeminiVoices {
             req.setValue(key, forHTTPHeaderField: "x-goog-api-key")
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             req.httpBody = GeminiTTS.requestBody(text: piece, voice: request.choice.voiceID, style: style, model: model)
+            // Google limits requests per minute: take a turn, spaced to fit the limit once known.
+            try await GeminiPace.shared.waitTurn()
             let (data, response) = try await send(req)
+            if let http = response as? HTTPURLResponse, http.statusCode == 429 {
+                await GeminiPace.shared.limited(perMinute: GeminiTTS.perMinuteLimit(data), retryAfter: GeminiTTS.retryDelay(data) ?? Self.retryAfter(http))
+            }
             try Self.throwIfFailed(response, data)
             let pcm: Data
             do {
@@ -159,6 +164,11 @@ final class GeminiVoices {
         }
     }
 
+    /// The Retry-After header in seconds, when Google sends one.
+    static func retryAfter(_ http: HTTPURLResponse) -> Double? {
+        http.value(forHTTPHeaderField: "Retry-After").flatMap(Double.init)
+    }
+
     static func throwIfFailed(_ response: URLResponse, _ data: Data) throws {
         guard let http = response as? HTTPURLResponse else { throw GeminiError.server(0, "") }
         guard !(200..<300).contains(http.statusCode) else { return }
@@ -168,15 +178,61 @@ final class GeminiVoices {
         switch http.statusCode {
         case 400 where message.localizedCaseInsensitiveContains("API key"), 401: throw GeminiError.badKey
         case 403 where status == "PERMISSION_DENIED": throw GeminiError.badKey
-        case 429: throw message.localizedCaseInsensitiveContains("quota") ? GeminiError.outOfQuota : GeminiError.busy
-        case 500..<600: throw GeminiError.busy
+        // A per-minute limit only needs a wait (Google says how long); a daily one doesn't pass.
+        case 429: throw GeminiTTS.isOutOfQuota(data) ? GeminiError.outOfQuota : GeminiError.busy(retryAfter: GeminiTTS.retryDelay(data) ?? retryAfter(http))
+        case 500..<600: throw GeminiError.busy(retryAfter: retryAfter(http))
         default: throw GeminiError.server(http.statusCode, message)
         }
     }
 }
 
+/// Spaces Gemini TTS requests to fit the key's per-minute limit. Before the first "busy" every
+/// request goes at once; after it, everyone waits out Google's delay together and then one
+/// request starts every 60 / limit seconds (the limit from Google's reply, or a guess that
+/// grows with each refusal), so lines come steadily instead of in bursts that get refused.
+/// Kept for the app's run: a key's limit doesn't change often.
+actor GeminiPace {
+    static let shared = GeminiPace()
+
+    /// Seconds between request starts; 0 until Google first says busy.
+    private(set) var interval: Double = 0
+    private var next = ContinuousClock.now
+    /// When the current wait for Google ends (for the export's status line).
+    private(set) var waitingUntil: ContinuousClock.Instant?
+
+    func waitTurn() async throws {
+        let now = ContinuousClock.now
+        let slot = max(now, next)
+        next = slot + .seconds(interval)
+        if slot > now { try await Task.sleep(until: slot, clock: .continuous) }
+    }
+
+    func limited(perMinute: Int?, retryAfter: Double?) {
+        if let perMinute {
+            interval = max(interval, 60 / Double(perMinute) * 1.05)
+        } else {
+            interval = min(30, max(2, interval * 1.5))
+        }
+        let resume = ContinuousClock.now + .seconds(min(90, retryAfter ?? interval))
+        if resume > next { next = resume }
+        waitingUntil = resume
+        SpeechLog.write("Gemini TTS: per-minute limit \(perMinute.map(String.init) ?? "unknown"); one request every \(String(format: "%.1f", interval)) s")
+    }
+
+    /// Seconds left of the wait Google asked for, or nil.
+    func secondsWaiting() -> Int? {
+        guard let until = waitingUntil else { return nil }
+        let left = until - ContinuousClock.now
+        guard left > .zero else { waitingUntil = nil; return nil }
+        return Int(left.components.seconds) + 1
+    }
+}
+
 enum GeminiError: LocalizedError, Equatable {
-    case bookNotAllowed, badKey, outOfQuota, busy, offline
+    case bookNotAllowed, badKey, outOfQuota, offline
+    /// Too many requests for now, or Google overloaded: try again after `retryAfter` seconds
+    /// (when Google says). Export Audio waits and tries again.
+    case busy(retryAfter: Double?)
     case noAudio(String?)
     case server(Int, String)
 

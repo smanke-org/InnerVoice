@@ -20,7 +20,7 @@ public enum GuidedStep: String, CaseIterable, Sendable, Identifiable {
         switch self {
         case .manuscript: "Manuscript"
         case .speakers: "Speakers"
-        case .review: "Review"
+        case .review: "Review Tagging"
         case .characters: "Characters"
         case .voices: "Voices"
         case .listen: "Listen"

@@ -165,9 +165,9 @@ public static class AgentCommands
                 ProjectParam,
             ],
         },
-        new("casting style", "Show or change the book's Casting Style: one-voice (One Voice, or Just Me when narrating), shared (Narrator + Two Voices, or Three Narrators) or full-cast. Changing it keeps every voice and narrator. Returns `castingStyle` and who reads each character (`readers`).", "innervoice casting style shared --json") {
+        new("casting style", "Show or change the book's Casting Style: one-voice (One Voice, or Just Me when narrating), shared (Narrator + Two Voices, or Three Narrators), first-person (First-Person Narrator: Narrator + Two Voices plus the book's “I” character) or full-cast. Changing it keeps every voice and narrator. Returns `castingStyle` and who reads each character (`readers`).", "innervoice casting style shared --json") {
             Params = [
-                new Param("style", Positional: true, Help: "one-voice, shared or full-cast (leave out to show the current one)"),
+                new Param("style", Positional: true, Help: "one-voice, shared, first-person or full-cast (leave out to show the current one)"),
                 ProjectParam,
             ],
         },

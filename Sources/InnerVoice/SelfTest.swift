@@ -88,6 +88,35 @@ enum SelfTest {
                 }
                 undo.undo()
             }
+            // First-Person Narrator: the "I" character as Same, Variant or Different.
+            if let mara = doc.project.characters.first(where: { $0.name.hasPrefix("Mara") }), let maraVoice = VoiceCatalog.appleVoices().last?.choice,
+               let line = segs.first(where: { $0.speakerID == mara.id && $0.kind != .written }),
+               let narr = segs.first(where: { $0.speakerID == nil && $0.lineID == nil && $0.source != nil }) {
+                func with(_ body: @escaping (inout FirstPersonSettings) -> Void) -> VoiceResolver {
+                    doc.change("FP", undoManager: undo) { p in
+                        p.settings.castingStyle = .firstPerson
+                        p.settings.povCharacterID = mara.id
+                        p.settings.voiceEngine = .apple
+                        if let i = p.characters.firstIndex(where: { $0.id == mara.id }) { p.characters[i].setVoice(CastVoice(choice: maraVoice, confidence: 1, source: .user), for: .apple) }
+                        var f = FirstPersonSettings(); body(&f); p.settings.firstPerson = f
+                    }
+                    defer { undo.undo() }
+                    return VoiceResolver(project: doc.project)
+                }
+                var r = with { $0.voice = .same }
+                check("First-Person Same: the “I” character speaks in the narrator's voice, unshaded",
+                      r.choice(for: line) == r.narrator && r.shade(for: line, choice: r.narrator!) == nil)
+                r = with { $0.voice = .variant }
+                check("First-Person Variant: the narrator's voice, shaded", r.choice(for: line) == r.narrator && r.shade(for: line, choice: r.narrator!) == FirstPersonSettings.defaultShade)
+                check("First-Person: the narrator keeps the narration by default", r.choice(for: narr) == r.narrator && r.shade(for: narr, choice: r.narrator!) == nil)
+                r = with { $0.voice = .different; $0.readsNarration = true }
+                check("First-Person Different: their own voice for their lines", r.choice(for: line) == maraVoice)
+                check("First-Person: their voice reads the narration when chosen", r.choice(for: narr) == maraVoice)
+                if let thought = segs.first(where: { $0.speakerID == mara.id && $0.kind == .thought }) {
+                    r = with { $0.voice = .different; $0.voicesThoughts = false }
+                    check("First-Person: thoughts toggle off gives them to the narrator", r.choice(for: thought) == r.narrator)
+                }
+            }
         }
 
         // Casting Style (docs/CASTING-STYLE.md): who reads each character, and nothing lost.

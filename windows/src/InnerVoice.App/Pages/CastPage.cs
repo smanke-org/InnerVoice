@@ -123,9 +123,19 @@ public sealed partial class CastPage : Page
         }
         else
         {
-            var wrap = new WrapPanel { Margin = new Thickness(Look.Xl), ItemSpacing = Look.Lg, LineSpacing = Look.Lg };
-            foreach (var ch in shown) wrap.Children.Add(Card(ch));
-            column.Children.Add(wrap);
+            // Prominent Characters (at least 3% of the dialogue, and 5 lines), then Minor Characters.
+            var groups = CastProminence.Groups(p, index, shown);
+            shownOrder = groups.SelectMany(g => g.Members).Select(x => x.Id).ToList();
+            var sections = new StackPanel { Spacing = Look.Lg, Margin = new Thickness(Look.Xl) };
+            foreach (var (title, members) in groups)
+            {
+                sections.Children.Add(Ui.Row(Look.Sm, Ui.Text(title, 17, FontWeight.SemiBold),
+                    Ui.Text($"{members.Count}", 17, brush: Look.Brush(Look.SecondaryInk))));
+                var wrap = new WrapPanel { ItemSpacing = Look.Lg, LineSpacing = Look.Lg };
+                foreach (var ch in members) wrap.Children.Add(Card(ch));
+                sections.Children.Add(wrap);
+            }
+            column.Children.Add(sections);
         }
         var pickedNow = shownOrder.Where(picked.Contains).ToList();
         if (pickedBar is not null) { listDock.Children.Remove(pickedBar); pickedBar = null; }

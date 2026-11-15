@@ -486,6 +486,8 @@ public sealed class ProjectSettings : ModelObject
     /// True when the narrator turned off "Use This PC's Pronunciations" for this book; null
     /// (older files, and the usual case) is on (PronunciationLists.cs).
     public bool? ComputerPronunciationsOff { get; set; }
+    /// First-Person Narrator: how the "I" character sounds. null: the defaults.
+    public FirstPersonSettings? FirstPerson { get; set; }
 
     [JsonIgnore] public bool UsesComputerPronunciations
     {
@@ -542,7 +544,7 @@ public sealed class ProjectSettings : ModelObject
         VoiceEngine = VoiceEngine, NarratorVoices = CastVoice.CopyMap(NarratorVoices), CloudVoicesAllowed = CloudVoicesAllowed,
         GoogleVoicesAllowed = GoogleVoicesAllowed,
         RoleVoices = RoleVoices?.ToDictionary(kv => kv.Key, kv => CastVoice.CopyMap(kv.Value)!),
-        ComputerPronunciationsOff = ComputerPronunciationsOff, Extra = CopyExtra(),
+        ComputerPronunciationsOff = ComputerPronunciationsOff, FirstPerson = FirstPerson?.Copy(), Extra = CopyExtra(),
     };
 }
 

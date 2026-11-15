@@ -27,6 +27,43 @@ public static class CastingStyleActions
     public static void SetNarratorGender(this ProjectDocument d, CharacterGender? gender) =>
         d.UpdateSettings("Set Your Voice", s => s.NarratorGender = gender);
 
+    /// First-Person Narrator: the "I" character (the book's point-of-view character).
+    public static void SetPointOfView(this ProjectDocument d, Guid? id)
+    {
+        if (id == d.Project.Settings.PovCharacterID) return;
+        d.UpdateSettings("Set Point of View", s => s.PovCharacterID = id);
+    }
+
+    /// One First-Person Narrator change, one undo step (the Mac's FirstPersonOptions.update).
+    public static void UpdateFirstPerson(this ProjectDocument d, string name, Action<FirstPersonSettings> edit) =>
+        d.UpdateSettings(name, s =>
+        {
+            var f = s.FirstPerson?.Copy() ?? new FirstPersonSettings();
+            edit(f);
+            s.FirstPerson = f;
+        });
+
+    public static void SetFirstPersonVoice(this ProjectDocument d, FirstPersonVoice voice) =>
+        d.UpdateFirstPerson("Change First-Person Voice", f => f.Voice = voice);
+
+    public static void SetFirstPersonShade(this ProjectDocument d, int pitch, int pace) =>
+        d.UpdateFirstPerson("Change First-Person Variant", f => f.Shade = Shade.Make(pitch, pace, f.VariantShade.Words));
+
+    public static void SetFirstPersonReadsNarration(this ProjectDocument d, bool on) =>
+        d.UpdateFirstPerson("Change Who Reads the Narration", f => f.ReadsNarration = on ? true : null);
+
+    public static void SetFirstPersonVoicesThoughts(this ProjectDocument d, bool on) =>
+        d.UpdateFirstPerson("Change Who Reads Thoughts", f => f.VoicesThoughts = on ? null : false);
+
+    /// Who tells a chapter; null: the book's "I" character.
+    public static void SetChapterNarrator(this ProjectDocument d, Guid chapter, Guid? character) =>
+        d.UpdateFirstPerson("Change Chapter Narrator", f =>
+        {
+            var map = f.ChapterNarrators ?? [];
+            if (character is { } c) map[chapter] = c; else map.Remove(chapter);
+            f.ChapterNarrators = map.Count == 0 ? null : map;
+        });
+
     public static void SetRole(this ProjectDocument d, Guid id, VoiceRole? role) =>
         d.UpdateCharacter(id, "Change Who Reads", c => c.Role = role);
 

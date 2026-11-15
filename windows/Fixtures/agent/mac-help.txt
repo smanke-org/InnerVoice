@@ -18,7 +18,7 @@ and --project <name or path> where it works on one project (default: the frontmo
   characters merge                Make two characters one, as Merge does in Cast: every line and fact of FROM moves to TO, and FROM's names become TO's aliases.
   characters rename               Rename a character, as editing the name on its Cast page does.
   characters color                Change a character's color in the manuscript.
-  casting style                   Show or change the book's Casting Style: one-voice (One Voice, or Just Me when narrating), shared (Narrator + Two Voices, or Three Narrators) or full-cast.
+  casting style                   Show or change the book's Casting Style: one-voice (One Voice, or Just Me when narrating), shared (Narrator + Two Voices, or Three Narrators), first-person (First-Person Narrator: Narrator + Two Voices plus the book's “I” character) or full-cast.
   characters gender               Set a character's gender: male, female, other, or auto (what the book says).
   characters main                 Mark a character as a main character (yes), not main (no), or neither (auto).
   characters read-by              Choose who reads a character under the Casting Style: narrator, men, women, other, own (a voice or narrator of their own), or auto (the style decides).

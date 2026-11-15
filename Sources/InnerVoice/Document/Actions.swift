@@ -158,6 +158,10 @@ import SwiftUI
             p.characters[ti] = target
             for i in p.lines.indices where p.lines[i].speakerID == from { p.lines[i].speakerID = into }
             if p.settings.povCharacterID == from { p.settings.povCharacterID = into }
+            if var map = p.settings.firstPerson?.chapterNarrators {
+                for (k, v) in map where v == from { map[k] = into }
+                p.settings.firstPerson?.chapterNarrators = map
+            }
             p.characters.remove(at: fi)
         }
     }
@@ -171,6 +175,10 @@ import SwiftUI
                 p.lines[i].confidence = 0
             }
             if p.settings.povCharacterID == id { p.settings.povCharacterID = nil }
+            if var map = p.settings.firstPerson?.chapterNarrators {
+                map = map.filter { $0.value != id }
+                p.settings.firstPerson?.chapterNarrators = map.isEmpty ? nil : map
+            }
             p.characters.removeAll { $0.id == id }
         }
     }
@@ -208,7 +216,7 @@ final class Workspace {
             case .index: "Index"
             case .pronunciations: "Pronunciations"
             case .teleprompter: "Teleprompter"
-            case .review: "Review"
+            case .review: "Review Tagging"
             case .revisions: "Revisions"
             }
         }

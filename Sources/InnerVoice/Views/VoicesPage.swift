@@ -132,6 +132,12 @@ struct VoicesPage: View {
             for r in VoiceRole.sharedRoles { out.append(Group(id: r.rawValue, title: r.title, role: r, characters: reading(r))) }
             out.append(Group(id: "own", title: "Own Voice", role: nil, characters: reading(.own)))
             out.append(Group(id: "narrator", title: "Read by the Narrator", role: nil, characters: reading(.narrator)))
+        case .firstPerson:
+            let tellers = FirstPersonRules.tellers(project.settings)
+            out.append(Group(id: "firstPerson", title: "First-Person Character", role: nil, characters: shown.filter { tellers.contains($0.id) }))
+            for r in VoiceRole.sharedRoles { out.append(Group(id: r.rawValue, title: r.title, role: r, characters: reading(r))) }
+            out.append(Group(id: "own", title: "Own Voice", role: nil, characters: reading(.own).filter { !tellers.contains($0.id) }))
+            out.append(Group(id: "narrator", title: "Read by the Narrator", role: nil, characters: reading(.narrator)))
         case .fullCast:
             out.append(Group(id: "own", title: anyMain ? "Main Characters" : "Cast", role: nil, characters: reading(.own)))
             out.append(Group(id: "narrator", title: "Read by the Narrator", role: nil, characters: reading(.narrator)))
@@ -273,6 +279,8 @@ struct CastingStyleHeader: View {
                     Button("Set Up Narrators") { document.setUpThreeNarrators(undoManager: undoManager) }
                         .help("Add a narrator for the narration, the men and the women. Rename them in Narrators.")
                 }
+            case .firstPerson:
+                FirstPersonOptions(document: document, narration: narration)
             case .fullCast:
                 Picker("Minor", selection: Binding(get: { settings.minorVoices ?? .narrator }, set: { document.setMinorVoices($0, undoManager: undoManager) })) {
                     Text(narration ? "The Narrator" : "Narrator’s Voice").tag(MinorVoices.narrator)
@@ -482,7 +490,12 @@ struct VoiceTargetDetail: View {
     private func readBy(_ c: BookCharacter, reader: VoiceRole) -> some View {
         let style = document.project.settings.castingStyle
         VStack(alignment: .leading, spacing: Space.sm) {
-            if reader == .own {
+            if style == .firstPerson, FirstPersonRules.tellers(document.project.settings).contains(c.id) {
+                let mode = document.project.settings.firstPerson?.voiceMode ?? .variant
+                Label(mode == .different ? "\(c.firstName) tells the story in a voice of their own."
+                                         : "\(c.firstName) tells the story in the narrator’s voice\(mode == .variant ? ", shaded" : ""). Change it under Casting Style.",
+                      systemImage: "person.bubble")
+            } else if reader == .own {
                 Label("\(c.firstName) has a voice of their own\(c.role == .own ? ", as you chose" : "").", systemImage: "person.wave.2")
             } else {
                 Label("Read in the \(reader.voiceCaption.lowercased())\(c.role == nil ? "" : ", as you chose").", systemImage: "person.2")
