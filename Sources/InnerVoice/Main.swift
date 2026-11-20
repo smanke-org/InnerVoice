@@ -41,7 +41,11 @@ enum AgentDemo {
                     doc.updateChangeCount(.changeCleared)
                     doc.close()
                 }
-                exit(0)
+                // _exit, not exit: exit runs llama.cpp's static destructors, and with a model
+                // still loaded ggml_metal_rsets_free asserts and aborts ("quit unexpectedly").
+                // A normal quit unloads the model in applicationWillTerminate first; this path
+                // has nothing else to flush (test runs save no projects or preferences).
+                _exit(0)
             }
         }
         source.resume()
