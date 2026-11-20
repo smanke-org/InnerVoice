@@ -1836,6 +1836,10 @@ enum SelfTest {
         print("LIVE \(manager.selectionName): \(right)/\(total) lines right (\(Int(score * 100))%) in \(Int(seconds)) s")
         for w in wrong { print("  wrong: \(w)") }
         check("live model tags most sample lines right", score >= 0.6, "\(Int(score * 100))%")
+        // Every character is someone the book names (Gemma 4 26B A4B once made up "L12", "Hattter").
+        let book = p.chapters.flatMap(\.paragraphs).map(\.text).joined(separator: "\n")
+        let invented = p.characters.filter { !AttributionPrompt.isNamed($0.name, in: book) }.map(\.name)
+        check("live model makes up no characters", invented.isEmpty, invented.joined(separator: ", "))
         // Tones: the AI read the lines the words left open.
         let byAI = p.lines.filter { $0.toneSource == .ai }
         let counts = Dictionary(grouping: p.lines.compactMap(\.tone), by: { $0 }).mapValues(\.count)

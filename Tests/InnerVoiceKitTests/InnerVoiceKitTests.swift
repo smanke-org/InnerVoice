@@ -180,7 +180,7 @@ private func tempDir() -> URL {
 }
 
 @Test func applyingRepliesNeverTouchesTheNarratorsLines() {
-    var p = ProjectBuilder.make(from: book(["“Who's there?”", "“Me.”"]), fileName: "t")
+    var p = ProjectBuilder.make(from: book(["Ann and the Ghost waited.", "“Who's there?”", "“Me.”"]), fileName: "t")
     let chunk = AttributionPrompt.chunks(project: p, index: BookIndex(p), chapterIndex: 0)[0]
     let mine = chunk.labels["L1"]!
     let i = p.lines.firstIndex { $0.id == mine }!
@@ -190,6 +190,68 @@ private func tempDir() -> URL {
                              AttributionReply(id: "L2", speaker: "Ann", kind: "spoken", confidence: 80)], chunk: chunk, to: &p)
     #expect(p.lines[i].speakerID == nil)
     #expect(p.characters.map(\.name) == ["Ann"])
+}
+
+@Test func madeUpSpeakersNeverJoinTheCast() {
+    // What Gemma 4 26B A4B answered for Alice in Wonderland: line labels, glued and misspelled names.
+    var p = ProjectBuilder.make(from: book([
+        "Alice sat with the Hatter and the March Hare, and the Dormouse slept between them.",
+        "“Have some wine,” the March Hare said in an encouraging tone.",
+        "“I don't see any wine,” she remarked.",
+        "“There isn't any.”", "“Then it wasn't very civil of you to offer it.”", "“Your hair wants cutting.”",
+        "“Twinkle, twinkle.”", "“Wake up!”",
+    ]), fileName: "t")
+    let chunk = AttributionPrompt.chunks(project: p, index: BookIndex(p), chapterIndex: 0)[0]
+    let ids = chunk.order
+    #expect(ids.count >= 6)
+    let names = ["L12", "LAlice", "Hattter", "Dorm4ouse", "L5", "The Queen", "Alice"]
+    let replies = zip(ids, names).map { AttributionReply(id: $0, speaker: $1, kind: "spoken", confidence: 90) }
+    AttributionPrompt.apply(replies, chunk: chunk, to: &p)
+    let cast = Set(p.characters.map(\.name))
+    for bad in ["L12", "LAlice", "Hattter", "Dorm4ouse", "L5", "The Queen", "Queen"] { #expect(!cast.contains(bad)) }
+    #expect(cast.contains("Alice"))
+    // The lines with a made-up speaker are left for the narrator: Who's Speaking?
+    for (label, name) in zip(ids, names) where name != "Alice" {
+        #expect(p.lines.first { $0.id == chunk.labels[label] }?.speakerID == nil)
+    }
+    // A misspelling of someone in the cast never becomes a second character either.
+    #expect(AttributionPrompt.isNamed("Hatter", in: chunk.passage))
+    #expect(AttributionPrompt.isNamed("the Hatter", in: chunk.passage))
+    #expect(AttributionPrompt.isNamed("March Hare", in: chunk.passage))
+    #expect(!AttributionPrompt.isNamed("L1", in: "L1 L2"))
+}
+
+@Test func speakerGrammarOnlyAllowsNamesFromTheBook() {
+    let p = ProjectBuilder.make(from: book(["Alice looked at the Dormouse.", "“Wake up!” said Alice.", "“Who's there?”", "“Me.”"]), fileName: "t")
+    let chunk = AttributionPrompt.chunks(project: p, index: BookIndex(p), chapterIndex: 0)[0]
+    let g = chunk.grammar
+    // One answer per label, in order, with the label fixed.
+    for label in chunk.order { #expect(g.contains("\\\"\(label)\\\"")) }
+    #expect(chunk.order == chunk.order.sorted { Int($0.dropFirst())! < Int($1.dropFirst())! })
+    // Speakers come from the cast and the passage's capitalized words, never free text.
+    #expect(g.contains("speaker ::= \"\\\"?\\\"\" | \"\\\"\" name \"\\\"\""))
+    #expect(g.contains("cast ::= ") && g.contains("\"Alice\""))
+    #expect(g.contains("word ::= ") && g.contains("\"Dormouse\""))
+    #expect(!g.contains("string ::="))
+    #expect(!chunk.passageWords.contains("L1"))
+}
+
+@Test func nonsenseFactsAreDropped() {
+    var p = ProjectBuilder.make(from: book(["The Hatter was arguing, as usual, about the time.", "“No room!” cried the Hatter."]), fileName: "t")
+    let hatter = p.characters.first { $0.name.contains("Hatter") } ?? {
+        p.characters.append(BookCharacter(name: "Hatter", colorHex: "#3366CC")); return p.characters.last!
+    }()
+    let chunk = SummaryPrompt.chunks(for: hatter, project: p, index: BookIndex(p))[0]
+    let added = SummaryPrompt.merge([
+        FactReply(kind: "personality", text: "text-based/nonsensicalical-of-the-moment-of-text", paragraph: "P1", quote: "arguing"),
+        FactReply(kind: "personality", text: "arguing/controversial-looking", paragraph: "P1", quote: "was arguing"),
+        FactReply(kind: "personality", text: "Argumentative", paragraph: "P1", quote: ""),
+        FactReply(kind: "personality", text: "Quick to argue", paragraph: "P1", quote: "was arguing, as usual"),
+    ], chunk: chunk, characterID: hatter.id, into: &p, index: BookIndex(p))
+    #expect(added == 1)
+    #expect(p.character(hatter.id)?.facts.map(\.text) == ["Quick to argue"])
+    #expect(SummaryPrompt.looksLikeNote("Matter-of-fact, a little sly"))
+    #expect(SummaryPrompt.grammar.contains("label ::= \"\\\"P\""))
 }
 
 @Test func factsNeedTheirQuote() {

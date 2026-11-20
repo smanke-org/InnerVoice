@@ -553,3 +553,71 @@ public class SpeakerNameCleanupTests
     [InlineData("Pip (the boy)", "Pip")]
     public void CleansNames(string raw, string expected) => Assert.Equal(expected, InnerVoice.Core.AI.AttributionPrompt.CleanName(raw));
 }
+
+/// Ports of madeUpSpeakersNeverJoinTheCast, speakerGrammarOnlyAllowsNamesFromTheBook and
+/// nonsenseFactsAreDropped: what Gemma 4 26B A4B made up for Alice in Wonderland.
+public class MadeUpAnswerTests
+{
+    static ImportedBook Book(params string[] paragraphs) =>
+        new("Test", "", [new Chapter("Chapter 1", paragraphs.Select(t => new Paragraph(t, ParagraphStyle.Body, null)).ToList())]);
+
+    [Fact]
+    public void MadeUpSpeakersNeverJoinTheCast()
+    {
+        var p = ProjectBuilder.Make(Book(
+            "Alice sat with the Hatter and the March Hare, and the Dormouse slept between them.",
+            "“Have some wine,” the March Hare said in an encouraging tone.",
+            "“I don't see any wine,” she remarked.",
+            "“There isn't any.”", "“Then it wasn't very civil of you to offer it.”", "“Your hair wants cutting.”",
+            "“Twinkle, twinkle.”", "“Wake up!”"), "t");
+        var chunk = InnerVoice.Core.AI.AttributionPrompt.Chunks(p, new BookIndex(p), 0)[0];
+        Assert.True(chunk.Order.Count >= 6);
+        string[] names = ["L12", "LAlice", "Hattter", "Dorm4ouse", "L5", "The Queen", "Alice"];
+        var replies = chunk.Order.Zip(names).Select(z => new InnerVoice.Core.AI.AttributionReply { Id = z.First, Speaker = z.Second, Kind = "spoken", Confidence = 90 }).ToList();
+        InnerVoice.Core.AI.AttributionPrompt.Apply(replies, chunk, p);
+        var cast = p.Characters.Select(c => c.Name).ToHashSet();
+        foreach (var bad in new[] { "L12", "LAlice", "Hattter", "Dorm4ouse", "L5", "The Queen", "Queen" }) Assert.DoesNotContain(bad, cast);
+        Assert.Contains("Alice", cast);
+        foreach (var (label, name) in chunk.Order.Zip(names).Where(z => z.Second != "Alice"))
+            Assert.Null(p.Lines.First(l => l.Id == chunk.Labels[label]).SpeakerID);
+        Assert.True(InnerVoice.Core.AI.AttributionPrompt.IsNamed("Hatter", chunk.Passage));
+        Assert.True(InnerVoice.Core.AI.AttributionPrompt.IsNamed("the Hatter", chunk.Passage));
+        Assert.True(InnerVoice.Core.AI.AttributionPrompt.IsNamed("March Hare", chunk.Passage));
+        Assert.False(InnerVoice.Core.AI.AttributionPrompt.IsNamed("L1", "L1 L2"));
+    }
+
+    [Fact]
+    public void SpeakerGrammarOnlyAllowsNamesFromTheBook()
+    {
+        var p = ProjectBuilder.Make(Book("Alice looked at the Dormouse.", "“Wake up!” said Alice.", "“Who's there?”", "“Me.”"), "t");
+        var chunk = InnerVoice.Core.AI.AttributionPrompt.Chunks(p, new BookIndex(p), 0)[0];
+        var g = chunk.Grammar;
+        foreach (var label in chunk.Order) Assert.Contains($"\\\"{label}\\\"", g);
+        Assert.Contains("speaker ::= \"\\\"?\\\"\" | \"\\\"\" name \"\\\"\"", g);
+        Assert.Contains("cast ::= ", g);
+        Assert.Contains("\"Alice\"", g);
+        Assert.Contains("word ::= ", g);
+        Assert.Contains("\"Dormouse\"", g);
+        Assert.DoesNotContain("string ::=", g);
+        Assert.DoesNotContain("L1", chunk.PassageWords);
+    }
+
+    [Fact]
+    public void NonsenseFactsAreDropped()
+    {
+        var p = ProjectBuilder.Make(Book("The Hatter was arguing, as usual, about the time.", "“No room!” cried the Hatter."), "t");
+        var hatter = p.Characters.FirstOrDefault(c => c.Name.Contains("Hatter"));
+        if (hatter is null) { hatter = new BookCharacter("Hatter", "#3366CC"); p.Characters.Add(hatter); }
+        var chunk = InnerVoice.Core.AI.SummaryPrompt.Chunks(hatter, p, new BookIndex(p))[0];
+        int added = InnerVoice.Core.AI.SummaryPrompt.Merge([
+            new() { Kind = "personality", Text = "text-based/nonsensicalical-of-the-moment-of-text", Paragraph = "P1", Quote = "arguing" },
+            new() { Kind = "personality", Text = "arguing/controversial-looking", Paragraph = "P1", Quote = "was arguing" },
+            new() { Kind = "personality", Text = "Argumentative", Paragraph = "P1", Quote = "" },
+            new() { Kind = "personality", Text = "Quick to argue", Paragraph = "P1", Quote = "was arguing, as usual" },
+        ], chunk, hatter.Id, p, new BookIndex(p));
+        Assert.Equal(1, added);
+        Assert.Equal(new List<string> { "Quick to argue" }, p.Character(hatter.Id)!.Facts.Select(f => f.Text).ToList());
+        Assert.True(InnerVoice.Core.AI.SummaryPrompt.LooksLikeNote("Matter-of-fact, a little sly"));
+        Assert.Contains("label ::= \"\\\"P\"", InnerVoice.Core.AI.SummaryPrompt.Grammar);
+    }
+}

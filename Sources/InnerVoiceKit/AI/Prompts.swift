@@ -7,6 +7,32 @@ public struct AttributionChunk: Sendable {
     public var labels: [String: UUID]
     public var messages: [ChatMessage]
     public var words: Int
+    /// The labels in reading order.
+    public var order: [String] = []
+    /// The passage's own text, without the tags: a new character's name must be written here.
+    public var passage: String = ""
+    /// Every name the model may answer with: the cast's names and aliases, and the capitalized
+    /// words of the passage (joined into names of up to three words by the grammar).
+    public var castNames: [String] = []
+    public var passageWords: [String] = []
+
+    /// A grammar that needs one answer for every label, in order, and only lets the speaker be
+    /// a cast name, a name made of the passage's capitalized words, or "?". Without it, Gemma 4
+    /// 26B A4B answered with labels ("L12"), glued or misspelled names ("LAlice", "Dorm4ouse").
+    public var grammar: String {
+        let items = order.map { "\"{\" ws \"\\\"id\\\"\" ws \":\" ws \"\\\"\($0)\\\"\" ws \",\" ws rest" }
+        var g = #"root ::= "{" ws "\"lines\"" ws ":" ws "[" ws "# + items.joined(separator: #" ws "," ws "#) + #" ws "]" ws "}""# + "\n"
+        g += AttributionPrompt.grammarTail
+        let cast = castNames.filter(AttributionPrompt.grammarSafe).map(AttributionPrompt.literal)
+        let words = passageWords.filter(AttributionPrompt.grammarSafe).map(AttributionPrompt.literal)
+        var name: [String] = []
+        if !cast.isEmpty { name.append("cast") }
+        if !words.isEmpty { name.append(#"word ( " " word ){0,2}"#) }
+        g += "name ::= " + (name.isEmpty ? #""?""# : name.joined(separator: " | ")) + "\n"
+        if !cast.isEmpty { g += "cast ::= " + cast.joined(separator: " | ") + "\n" }
+        if !words.isEmpty { g += "word ::= " + words.joined(separator: " | ") + "\n" }
+        return g
+    }
 }
 
 /// One answer from the model about one line.
@@ -35,7 +61,8 @@ public enum AttributionPrompt {
     pronoun ("he said"), the speaker is usually the person doing something in the sentence just \
     before the line.
     Always name the most likely speaker. When you are not sure, still name your best guess and \
-    give it a low confidence; the narrator checks every low-confidence line.
+    give it a low confidence; the narrator checks every low-confidence line. A speaker is always \
+    a character's name, spelled as in the character list or the passage, never a tag like L4.
     Answer with JSON only.
     """
 
@@ -82,7 +109,9 @@ public enum AttributionPrompt {
         var order: [String] = []
         var passage = ""
         var hintLines: [String] = []
+        var plain = ""
         for p in chapter.paragraphs[range] {
+            plain += p.text + "\n\n"
             let lineIdx = (index.linesByParagraph[p.id] ?? []).sorted { project.lines[$0].range.location > project.lines[$1].range.location }
             let text = NSMutableString(string: p.text)
             // Insert tags from the end so earlier offsets stay valid.
@@ -129,14 +158,57 @@ public enum AttributionPrompt {
         user += "\nPassage from “\(chapter.title)”:\n\n" + result.trimmingCharacters(in: .whitespacesAndNewlines) + "\n\n"
         user += """
         For each of \(order.joined(separator: ", ")): give the speaker's name exactly as in the character list, \
-        or a new name if the passage names someone not in the list. If the passage doesn't make it certain, \
-        give the most likely speaker with a confidence under 50. Use "?" only when no one in the passage could \
-        have said it. kind is spoken, thought or written. confidence is 0 to 100.
+        or a new name only if the passage writes that name and the person is not in the list. If the passage \
+        doesn't make it certain, give the most likely speaker with a confidence under 50. Use "?" only when no \
+        one in the passage could have said it. kind is spoken, thought or written. confidence is 0 to 100.
         Reply as {"lines":[{"id":"L1","speaker":"Name","kind":"spoken","confidence":90}]}
         """
+        let cast = project.characters.flatMap { [$0.name] + $0.aliases }
         return AttributionChunk(chapterIndex: chapterIndex, labels: labels,
-                                messages: [ChatMessage(.system, system), ChatMessage(.user, user)], words: words)
+                                messages: [ChatMessage(.system, system), ChatMessage(.user, user)], words: words,
+                                order: order, passage: plain, castNames: Array(Set(cast)).sorted(),
+                                passageWords: capitalizedWords(plain))
     }
+
+    /// The capitalized words of a passage (and the usual titles), the pieces a new name is made of.
+    static func capitalizedWords(_ text: String) -> [String] {
+        let pattern = try! NSRegularExpression(pattern: "\\p{Lu}[\\p{L}\\p{M}]*(?:[’'\\-][\\p{L}\\p{M}]+)*")
+        let ns = text as NSString
+        var words = Set(pattern.matches(in: text, range: NSRange(location: 0, length: ns.length)).map { ns.substring(with: $0.range) })
+        words.formUnion(Names.titles)
+        return words.filter { $0.count >= 1 }.sorted()
+    }
+
+    /// Whether `rawName`, the model's answer for a speaker no one in the cast goes by, is a
+    /// name written in the passage: every word of it appears there, and it isn't a line label.
+    /// Gemma 4 26B A4B made up "L12", "LAlice", "Hattter" and "Dorm4ouse"; none of them pass.
+    public static func isNamed(_ rawName: String, in passage: String, labels: [String: UUID] = [:]) -> Bool {
+        let name = rawName.trimmingCharacters(in: CharacterSet(charactersIn: " ,.’'"))
+            .replacingOccurrences(of: "[’']s$", with: "", options: .regularExpression)
+        if labels[name] != nil || name.range(of: "^L\\d+$", options: .regularExpression) != nil { return false }
+        let words = name.split(separator: " ").map(String.init)
+        guard !words.isEmpty, words.allSatisfy({ $0.contains(where: \.isLetter) }) else { return false }
+        let lower = passage.lowercased()
+        return words.allSatisfy { w in
+            Names.titles.contains(w) || RuleAttribution.containsWord(passage, w) || RuleAttribution.containsWord(lower, w.lowercased())
+        }
+    }
+
+    /// What follows each answer's id in the grammar.
+    static let grammarTail = #"""
+    rest ::= "\"speaker\"" ws ":" ws speaker ws "," ws "\"kind\"" ws ":" ws kind ws "," ws "\"confidence\"" ws ":" ws number ws "}"
+    speaker ::= "\"?\"" | "\"" name "\""
+    kind ::= "\"spoken\"" | "\"thought\"" | "\"written\""
+    number ::= [0-9] [0-9]? [0-9]?
+    ws ::= [ ]?
+
+    """#
+
+    static func grammarSafe(_ s: String) -> Bool {
+        !s.isEmpty && !s.contains("\"") && !s.contains("\\") && !s.contains("\n")
+    }
+
+    static func literal(_ s: String) -> String { "\"" + s + "\"" }
 
     static func castList(_ project: Project) -> String {
         let cast = project.characters.prefix(40).map { c -> String in
@@ -179,7 +251,13 @@ public enum AttributionPrompt {
             let name = reply.speaker.trimmingCharacters(in: .whitespacesAndNewlines)
             let unknown = ["?", "", "unknown", "none", "n/a", "narrator", "unclear", "nobody", "spoken", "thought", "written"].contains(name.lowercased())
             var speaker: UUID? = nil
-            if !unknown { speaker = RuleAttribution.resolve(name, in: &project, create: true) }
+            if !unknown {
+                // Someone in the cast, or a new character only when the passage writes the name.
+                speaker = RuleAttribution.resolve(name, in: &project, create: false)
+                if speaker == nil, isNamed(name, in: chunk.passage, labels: chunk.labels) {
+                    speaker = RuleAttribution.resolve(name, in: &project, create: true)
+                }
+            }
             var confidence = min(1, max(0, (reply.confidence ?? 60) / 100))
             let old = project.lines[i]
             // The rules and the model agreeing is worth more than either alone.
@@ -272,11 +350,22 @@ public enum SummaryPrompt {
 
     public static let grammar = #"""
     root ::= "{" ws "\"facts\"" ws ":" ws "[" ws ( item ( ws "," ws item )* )? ws "]" ws "}"
-    item ::= "{" ws "\"kind\"" ws ":" ws kind ws "," ws "\"text\"" ws ":" ws string ws "," ws "\"paragraph\"" ws ":" ws string ws "," ws "\"quote\"" ws ":" ws string ws "}"
+    item ::= "{" ws "\"kind\"" ws ":" ws kind ws "," ws "\"text\"" ws ":" ws note ws "," ws "\"paragraph\"" ws ":" ws label ws "," ws "\"quote\"" ws ":" ws quote ws "}"
     kind ::= "\"age\"" | "\"gender\"" | "\"accent\"" | "\"voice\"" | "\"appearance\"" | "\"personality\"" | "\"history\"" | "\"relationships\"" | "\"other\""
-    string ::= "\"" ( [^"\\\n] | "\\" ["\\/bfnrt] )* "\""
+    note ::= "\"" [^"\\\n/{}] [^"\\\n/{}]* "\""
+    label ::= "\"P" [0-9] [0-9]? [0-9]? "\""
+    quote ::= "\"" ( [^"\\\n] | "\\" ["\\/bfnrt] ) ( [^"\\\n] | "\\" ["\\/bfnrt] )* "\""
     ws ::= [ ]?
     """#
+
+    /// Whether a fact's text reads like a note for the narrator. Gemma 4 26B A4B wrote
+    /// "text-based/nonsensicalical-of-the-moment-of-text" and "arguing/controversial-looking".
+    public static func looksLikeNote(_ text: String) -> Bool {
+        guard text.contains(where: \.isLetter), text.count < 240,
+              !text.contains("/"), !text.contains("{"), !text.contains("}") else { return false }
+        // Words strung together with hyphens past "matter-of-fact".
+        return !text.split(whereSeparator: \.isWhitespace).contains { $0.filter { $0 == "-" }.count > 3 }
+    }
 
     public static func parse(_ text: String) -> [FactReply]? {
         struct Wrapper: Codable { var facts: [FactReply] }
@@ -297,12 +386,14 @@ public enum SummaryPrompt {
         for reply in replies {
             let text = reply.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 .trimmingCharacters(in: CharacterSet(charactersIn: ";/ "))
-            guard text.contains(where: \.isLetter), text.count < 240 else { continue }
+            guard looksLikeNote(text) else { continue }
             let kind = FactKind(rawValue: reply.kind.lowercased()) ?? .other
             var source: UUID? = reply.paragraph.flatMap { chunk.labels[$0.trimmingCharacters(in: .whitespaces)] }
             let quote = (reply.quote ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            // A fact without the book's words for it is the model's own idea.
+            guard quote.contains(where: \.isLetter) else { continue }
             if let id = source, let p = project.paragraph(id, index: index) {
-                if !quote.isEmpty, !TextMatch.supports(paragraph: p.text, quote: quote) {
+                if !TextMatch.supports(paragraph: p.text, quote: quote) {
                     // Maybe the model cited the wrong label; look in the other passages.
                     source = chunk.labels.values.first { id in
                         project.paragraph(id, index: index).map { TextMatch.supports(paragraph: $0.text, quote: quote) } ?? false

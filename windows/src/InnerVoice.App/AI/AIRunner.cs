@@ -95,7 +95,7 @@ public sealed partial class AIRunner(ProjectDocument document)
                     List<AttributionReply>? replies = null;
                     for (int attempt = 0; attempt < 2 && replies is null; attempt++)
                     {
-                        var text = await model.Complete(chunk.Messages, AttributionPrompt.Grammar, maxTokens, ct: ct);
+                        var text = await model.Complete(chunk.Messages, chunk.Grammar, maxTokens, ct: ct);
                         replies = AttributionPrompt.Parse(text);
                     }
                     if (replies is not null)

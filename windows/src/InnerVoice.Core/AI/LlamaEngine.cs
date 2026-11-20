@@ -227,7 +227,12 @@ public sealed unsafe class LlamaEngine : IDisposable
             var g = LlamaNative.SamplerInitGrammar(vocab, grammar, "root");
             if (g != 0) LlamaNative.SamplerChainAdd(chain, g);
         }
-        LlamaNative.SamplerChainAdd(chain, LlamaNative.SamplerInitPenalties(LlamaNative.VocabNTokens(vocab), 64, 1.1f, 0, 0));
+        // No repetition penalty under a grammar: JSON answers repeat their keys and the cast's
+        // names by design, and at temperature 0.1 a 1.1 penalty pushed Gemma 4 26B A4B off a
+        // name it had just written into whatever else the grammar allowed ("Hattter",
+        // "Dorm4ouse", "L12" as a speaker, nonsense facts).
+        if (grammar is null)
+            LlamaNative.SamplerChainAdd(chain, LlamaNative.SamplerInitPenalties(LlamaNative.VocabNTokens(vocab), 64, 1.1f, 0, 0));
         if (s.Temperature <= 0)
         {
             LlamaNative.SamplerChainAdd(chain, LlamaNative.SamplerInitGreedy());

@@ -9,7 +9,39 @@ using System.Text.RegularExpressions;
 namespace InnerVoice.Core.AI;
 
 /// A piece of a chapter sent to the model to decide who speaks the marked lines.
-public sealed record AttributionChunk(int ChapterIndex, Dictionary<string, Guid> Labels, List<ChatMessage> Messages, int Words);
+public sealed record AttributionChunk(int ChapterIndex, Dictionary<string, Guid> Labels, List<ChatMessage> Messages, int Words)
+{
+    /// The labels in reading order.
+    public List<string> Order { get; init; } = [];
+    /// The passage's own text, without the tags: a new character's name must be written here.
+    public string Passage { get; init; } = "";
+    /// Every name the model may answer with: the cast's names and aliases, and the capitalized
+    /// words of the passage (joined into names of up to three words by the grammar).
+    public List<string> CastNames { get; init; } = [];
+    public List<string> PassageWords { get; init; } = [];
+
+    /// A grammar that needs one answer for every label, in order, and only lets the speaker be
+    /// a cast name, a name made of the passage's capitalized words, or "?". Without it, Gemma 4
+    /// 26B A4B answered with labels ("L12"), glued or misspelled names ("LAlice", "Dorm4ouse").
+    public string Grammar
+    {
+        get
+        {
+            var items = Order.Select(l => $"\"{{\" ws \"\\\"id\\\"\" ws \":\" ws \"\\\"{l}\\\"\" ws \",\" ws rest");
+            var g = "root ::= \"{\" ws \"\\\"lines\\\"\" ws \":\" ws \"[\" ws " + string.Join(" ws \",\" ws ", items) + " ws \"]\" ws \"}\"\n";
+            g += AttributionPrompt.GrammarTail;
+            var cast = CastNames.Where(AttributionPrompt.GrammarSafe).Select(AttributionPrompt.Literal).ToList();
+            var words = PassageWords.Where(AttributionPrompt.GrammarSafe).Select(AttributionPrompt.Literal).ToList();
+            var name = new List<string>();
+            if (cast.Count > 0) name.Add("cast");
+            if (words.Count > 0) name.Add("word ( \" \" word ){0,2}");
+            g += "name ::= " + (name.Count == 0 ? "\"?\"" : string.Join(" | ", name)) + "\n";
+            if (cast.Count > 0) g += "cast ::= " + string.Join(" | ", cast) + "\n";
+            if (words.Count > 0) g += "word ::= " + string.Join(" | ", words) + "\n";
+            return g;
+        }
+    }
+}
 
 /// One answer from the model about one line.
 public sealed class AttributionReply
@@ -43,7 +75,7 @@ public static class AttributionPrompt
 {
     public const string System = "You help an audiobook narrator prepare a novel. You read a passage and decide who speaks, thinks or writes each marked line, so the narrator knows which voice to use.\n" +
         "Marked lines start with a tag like {L4} just before the line. Lines that are already known start with the speaker's name, like {Tom}. Use the speech tags (\"she said\"), who is in the scene, who was addressed, and the turn-taking of the conversation. When the tag is only a pronoun (\"he said\"), the speaker is usually the person doing something in the sentence just before the line.\n" +
-        "Always name the most likely speaker. When you are not sure, still name your best guess and give it a low confidence; the narrator checks every low-confidence line.\n" +
+        "Always name the most likely speaker. When you are not sure, still name your best guess and give it a low confidence; the narrator checks every low-confidence line. A speaker is always a character's name, spelled as in the character list or the passage, never a tag like L4.\n" +
         "Answer with JSON only.";
 
     /// Lines the model still needs to decide: not the narrator's and not a clear "said Tom".
@@ -94,9 +126,11 @@ public static class AttributionPrompt
         var order = new List<string>();
         var passage = new StringBuilder();
         var hintLines = new List<string>();
+        var plain = new StringBuilder();
         for (int k = from; k < to; k++)
         {
             var p = chapter.Paragraphs[k];
+            plain.Append(p.Text).Append("\n\n");
             var lineIdx = index.LinesIn(p.Id).OrderByDescending(i => project.Lines[i].Range.Location).ToList();
             var text = new StringBuilder(p.Text);
             // Insert tags from the end so earlier offsets stay valid.
@@ -137,12 +171,55 @@ public static class AttributionPrompt
         if (hintLines.Count > 0) user.Append("Hints: " + string.Join("; ", hintLines) + "\n");
         user.Append($"\nPassage from “{chapter.Title}”:\n\n" + result.ToString().Trim() + "\n\n");
         user.Append($"For each of {string.Join(", ", order)}: give the speaker's name exactly as in the character list, " +
-                    "or a new name if the passage names someone not in the list. If the passage doesn't make it certain, " +
-                    "give the most likely speaker with a confidence under 50. Use \"?\" only when no one in the passage could " +
-                    "have said it. kind is spoken, thought or written. confidence is 0 to 100.\n" +
+                    "or a new name only if the passage writes that name and the person is not in the list. If the passage " +
+                    "doesn't make it certain, give the most likely speaker with a confidence under 50. Use \"?\" only when no " +
+                    "one in the passage could have said it. kind is spoken, thought or written. confidence is 0 to 100.\n" +
                     "Reply as {\"lines\":[{\"id\":\"L1\",\"speaker\":\"Name\",\"kind\":\"spoken\",\"confidence\":90}]}");
-        return new AttributionChunk(chapterIndex, labels, [new(ChatRole.System, System), new(ChatRole.User, user.ToString())], words);
+        var cast = project.Characters.SelectMany(c => new[] { c.Name }.Concat(c.Aliases)).Distinct().OrderBy(n => n, StringComparer.Ordinal).ToList();
+        return new AttributionChunk(chapterIndex, labels, [new(ChatRole.System, System), new(ChatRole.User, user.ToString())], words)
+        {
+            Order = order, Passage = plain.ToString(), CastNames = cast, PassageWords = CapitalizedWords(plain.ToString()),
+        };
     }
+
+    static readonly Regex Capitalized = new(@"\p{Lu}[\p{L}\p{M}]*(?:[’'\-][\p{L}\p{M}]+)*", RegexOptions.CultureInvariant);
+
+    /// The capitalized words of a passage (and the usual titles), the pieces a new name is made of.
+    internal static List<string> CapitalizedWords(string text)
+    {
+        var words = Capitalized.Matches(text).Select(m => m.Value).ToHashSet();
+        words.UnionWith(Names.Titles);
+        return words.OrderBy(w => w, StringComparer.Ordinal).ToList();
+    }
+
+    static readonly Regex LabelName = new(@"^L\d+$", RegexOptions.CultureInvariant);
+
+    /// Whether `rawName`, the model's answer for a speaker no one in the cast goes by, is a
+    /// name written in the passage: every word of it appears there, and it isn't a line label.
+    /// Gemma 4 26B A4B made up "L12", "LAlice", "Hattter" and "Dorm4ouse"; none of them pass.
+    public static bool IsNamed(string rawName, string passage, IReadOnlyDictionary<string, Guid>? labels = null)
+    {
+        var name = Regex.Replace(rawName.Trim(' ', ',', '.', '’', '\''), "[’']s$", "");
+        if ((labels?.ContainsKey(name) ?? false) || LabelName.IsMatch(name)) return false;
+        var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length == 0 || !words.All(w => w.Any(char.IsLetter))) return false;
+        var lower = passage.ToLowerInvariant();
+        return words.All(w => Names.Titles.Contains(w) || RuleAttribution.ContainsWord(passage, w) || RuleAttribution.ContainsWord(lower, w.ToLowerInvariant()));
+    }
+
+    /// What follows each answer's id in the grammar.
+    internal const string GrammarTail = """
+        rest ::= "\"speaker\"" ws ":" ws speaker ws "," ws "\"kind\"" ws ":" ws kind ws "," ws "\"confidence\"" ws ":" ws number ws "}"
+        speaker ::= "\"?\"" | "\"" name "\""
+        kind ::= "\"spoken\"" | "\"thought\"" | "\"written\""
+        number ::= [0-9] [0-9]? [0-9]?
+        ws ::= [ ]?
+
+        """;
+
+    internal static bool GrammarSafe(string s) => s.Length > 0 && !s.Contains('"') && !s.Contains('\\') && !s.Contains('\n');
+
+    internal static string Literal(string s) => "\"" + s + "\"";
 
     static string CastList(Project project)
     {
@@ -198,7 +275,13 @@ public static class AttributionPrompt
             var old = project.Lines[i];
             before.Add(old.Copy());
             var name = CleanName(reply.Speaker);
-            Guid? speaker = Unknown.Contains(name.ToLowerInvariant()) ? null : RuleAttribution.Resolve(name, project, create: true);
+            Guid? speaker = null;
+            if (!Unknown.Contains(name.ToLowerInvariant()))
+            {
+                // Someone in the cast, or a new character only when the passage writes the name.
+                speaker = RuleAttribution.Resolve(name, project, create: false);
+                if (speaker is null && IsNamed(name, chunk.Passage, chunk.Labels)) speaker = RuleAttribution.Resolve(name, project, create: true);
+            }
             double confidence = Math.Min(1, Math.Max(0, (reply.Confidence ?? 60) / 100));
             // The rules and the model agreeing is worth more than either alone.
             if (speaker is { } s && old.SpeakerID == s && old.Source != AssignmentSource.None) confidence = Math.Max(confidence, Math.Min(0.97, old.Confidence + 0.2));
@@ -280,11 +363,22 @@ public static class SummaryPrompt
 
     public const string Grammar = """
         root ::= "{" ws "\"facts\"" ws ":" ws "[" ws ( item ( ws "," ws item )* )? ws "]" ws "}"
-        item ::= "{" ws "\"kind\"" ws ":" ws kind ws "," ws "\"text\"" ws ":" ws string ws "," ws "\"paragraph\"" ws ":" ws string ws "," ws "\"quote\"" ws ":" ws string ws "}"
+        item ::= "{" ws "\"kind\"" ws ":" ws kind ws "," ws "\"text\"" ws ":" ws note ws "," ws "\"paragraph\"" ws ":" ws label ws "," ws "\"quote\"" ws ":" ws quote ws "}"
         kind ::= "\"age\"" | "\"gender\"" | "\"accent\"" | "\"voice\"" | "\"appearance\"" | "\"personality\"" | "\"history\"" | "\"relationships\"" | "\"other\""
-        string ::= "\"" ( [^"\\\n] | "\\" ["\\/bfnrt] )* "\""
+        note ::= "\"" [^"\\\n/{}] [^"\\\n/{}]* "\""
+        label ::= "\"P" [0-9] [0-9]? [0-9]? "\""
+        quote ::= "\"" ( [^"\\\n] | "\\" ["\\/bfnrt] ) ( [^"\\\n] | "\\" ["\\/bfnrt] )* "\""
         ws ::= [ ]?
         """;
+
+    /// Whether a fact's text reads like a note for the narrator. Gemma 4 26B A4B wrote
+    /// "text-based/nonsensicalical-of-the-moment-of-text" and "arguing/controversial-looking".
+    public static bool LooksLikeNote(string text)
+    {
+        if (!text.Any(char.IsLetter) || text.Length >= 240 || text.Contains('/') || text.Contains('{') || text.Contains('}')) return false;
+        // Words strung together with hyphens past "matter-of-fact".
+        return !text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Any(w => w.Count(c => c == '-') > 3);
+    }
 
     sealed class Wrapper { [JsonPropertyName("facts")] public List<FactReply>? Facts { get; set; } }
 
@@ -305,13 +399,15 @@ public static class SummaryPrompt
         foreach (var reply in replies)
         {
             var text = reply.Text.Trim().Trim(';', '/', ' ');
-            if (!text.Any(char.IsLetter) || text.Length >= 240) continue;
+            if (!LooksLikeNote(text)) continue;
             var kind = Enum.TryParse<FactKind>(reply.Kind, true, out var k) ? k : FactKind.Other;
             Guid? source = reply.Paragraph is { } label && chunk.Labels.TryGetValue(label.Trim(), out var src) ? src : null;
             var quote = (reply.Quote ?? "").Trim();
+            // A fact without the book's words for it is the model's own idea.
+            if (!quote.Any(char.IsLetter)) continue;
             if (source is { } sid && project.Paragraph(sid, index) is { } p)
             {
-                if (quote.Length > 0 && !TextMatch.Supports(p.Text, quote))
+                if (!TextMatch.Supports(p.Text, quote))
                 {
                     // Maybe the model cited the wrong label; look in the other passages.
                     source = chunk.Labels.Values.Cast<Guid?>().FirstOrDefault(id => project.Paragraph(id!.Value, index) is { } q && TextMatch.Supports(q.Text, quote));

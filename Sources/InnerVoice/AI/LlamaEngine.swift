@@ -218,7 +218,13 @@ nonisolated final class LlamaEngine: @unchecked Sendable {
         if let grammar, let g = llama_sampler_init_grammar(vocab, grammar, "root") {
             llama_sampler_chain_add(chain, g)
         }
-        llama_sampler_chain_add(chain, llama_sampler_init_penalties(llama_vocab_n_tokens(vocab), 64, 1.1, 0, 0))
+        // No repetition penalty under a grammar: JSON answers repeat their keys and the cast's
+        // names by design, and at temperature 0.1 a 1.1 penalty pushed Gemma 4 26B A4B off a
+        // name it had just written into whatever else the grammar allowed ("Hattter",
+        // "Dorm4ouse", "L12" as a speaker, nonsense facts).
+        if grammar == nil {
+            llama_sampler_chain_add(chain, llama_sampler_init_penalties(llama_vocab_n_tokens(vocab), 64, 1.1, 0, 0))
+        }
         if s.temperature <= 0 {
             llama_sampler_chain_add(chain, llama_sampler_init_greedy())
         } else {

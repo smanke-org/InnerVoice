@@ -132,7 +132,7 @@ final class TaggingController {
                         let maxTokens = 40 + chunk.labels.count * 34
                         var replies: [AttributionReply]? = nil
                         for attempt in 0..<2 where replies == nil {
-                            let text = try await model.complete(chunk.messages, grammar: AttributionPrompt.grammar, maxTokens: maxTokens)
+                            let text = try await model.complete(chunk.messages, grammar: chunk.grammar, maxTokens: maxTokens)
                             try Task.checkCancellation()
                             replies = AttributionPrompt.parse(text)
                             if replies == nil, attempt == 0 {
