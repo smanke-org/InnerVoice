@@ -152,7 +152,7 @@ struct StatusBanners: View {
                 banner(symbol: "exclamationmark.triangle.fill", tint: .orange) {
                     Text(failure)
                 } actions: {
-                    Button("Choose Model…") { workspace.showModelSheet = true }
+                    Button("Choose Model…") { workspace.modelSheetJob = .choose; workspace.showModelSheet = true }
                     Button("Dismiss") { tagging.failure = nil }
                 }
             } else if let finished = tagging.finished {
@@ -208,15 +208,32 @@ struct StatusBanners: View {
 enum TagCommand {
     static func run(document: InnerVoiceDocument, workspace: Workspace, undoManager: UndoManager?) {
         guard ModelManager.shared.isReady else {
+            workspace.modelSheetJob = .tagSpeakers
             workspace.showModelSheet = true
             return
         }
         document.tagging.tagSpeakers(undoManager: undoManager)
     }
 
+    /// The model sheet's answer: start the job that opened it (Cancel starts nothing).
+    static func modelChosen(_ ready: Bool, document: InnerVoiceDocument, workspace: Workspace, undoManager: UndoManager?) {
+        guard ready else {
+            if workspace.modelSheetJob == .tagSpeakers { workspace.afterTagging = nil }
+            return
+        }
+        switch workspace.modelSheetJob {
+        case .tagSpeakers: run(document: document, workspace: workspace, undoManager: undoManager)
+        case .summaries(let only): summaries(document: document, workspace: workspace, undoManager: undoManager, only: only, modelChosen: true)
+        case .choose: break
+        }
+    }
+
+    /// Build Summaries asks which model to use every time (the one in Settings is picked,
+    /// ready to confirm); `modelChosen` is the answer coming back from that sheet.
     static func summaries(document: InnerVoiceDocument, workspace: Workspace, undoManager: UndoManager?, only: [UUID]? = nil,
-                          confirmed: Bool = false) {
-        guard ModelManager.shared.isReady else {
+                          confirmed: Bool = false, modelChosen: Bool = false) {
+        guard modelChosen, ModelManager.shared.isReady else {
+            workspace.modelSheetJob = .summaries(only: only)
             workspace.showModelSheet = true
             return
         }

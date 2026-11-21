@@ -276,7 +276,7 @@ struct BookCommands: Commands {
                     }))
                 .disabled(focus == nil)
             }
-            Button("Choose Model…") { focus?.workspace.showModelSheet = true }
+            Button("Choose Model…") { focus?.workspace.modelSheetJob = .choose; focus?.workspace.showModelSheet = true }
                 .disabled(focus == nil)
             ClaudeMenu(focus: focus, running: running)
             if focus?.document.project.settings.cloudTextAllowed != nil {
@@ -422,7 +422,7 @@ struct ClaudeMenu: View {
     var body: some View {
         Menu("Claude (Cloud)") {
             if !ClaudeAccount.shared.isSetUp {
-                Button("Set Up Claude…") { focus?.workspace.showModelSheet = true }
+                Button("Set Up Claude…") { focus?.workspace.modelSheetJob = .choose; focus?.workspace.showModelSheet = true }
                     .disabled(focus == nil)
                 Divider()
             }

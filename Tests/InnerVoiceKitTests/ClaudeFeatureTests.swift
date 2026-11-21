@@ -280,6 +280,14 @@ private func texts(_ p: Project) -> [String] {
     var both = p
     #expect(ToneRemoval(automatic: true, narrator: true).apply(to: &both) == 3)
     #expect(ToneRemoval.counts(in: both) == (automatic: 0, narrator: 0))
+    // Keeping Sarcastic: the other tones go, Sarcastic stays, and the book still counts as tagged.
+    var kept = p
+    kept.lines[2].tone = .sarcastic
+    #expect(ToneRemoval.toneCounts(in: kept) == [.excited: 1, .sad: 1, .sarcastic: 1])
+    #expect(ToneRemoval(automatic: true, narrator: true, keep: [.sarcastic]).apply(to: &kept) == 2)
+    #expect(kept.lines[2].tone == .sarcastic && kept.lines[0].tone == nil && kept.lines[1].tone == nil)
+    #expect(kept.tonesTagged != nil)
+    #expect(ToneRemoval(automatic: true, narrator: false, keep: [.neutral]).keep.isEmpty)
 }
 
 @Test func findMatchesEveryPlaceIgnoringCaseAndQuotes() {

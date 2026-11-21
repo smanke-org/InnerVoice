@@ -313,6 +313,8 @@ final class Workspace {
     var showInspector = true
     var showExport = false
     var showModelSheet = false
+    /// What the model sheet's button does: Tag Speakers, Build Summaries, or just keep the choice.
+    var modelSheetJob: ModelSheetJob = .choose
     /// The paragraph the teleprompter shows (it starts where this book was left off).
     var teleprompterParagraph: UUID?
     /// Opens Assign To on this line (menu commands, snapshots).
@@ -369,3 +371,13 @@ extension NSColor {
 
     static var attention: NSColor { NSColor(hexString: CharacterPalette.attentionHex) }
 }
+
+/// Why the model sheet is up: its button names the job and starts it.
+enum ModelSheetJob: Equatable {
+    case tagSpeakers
+    /// Build Summaries for the whole cast (nil) or a few characters.
+    case summaries(only: [UUID]?)
+    /// Book › Choose Model…: picking is all.
+    case choose
+}
+

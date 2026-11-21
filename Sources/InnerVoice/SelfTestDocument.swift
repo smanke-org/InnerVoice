@@ -80,6 +80,41 @@ extension SelfTest {
         try? FileManager.default.removeItem(at: dir)
     }
 
+    /// Build Summaries asks for a model every time, with the one in use ready to confirm,
+    /// and confirming starts Build Summaries (it used to start Tag Speakers, or nothing).
+    static func modelQuestionChecks() async {
+        let doc = InnerVoiceDocument(project: SeedData.project())
+        let workspace = Workspace()
+        let manager = ModelManager.shared
+        let before = manager.selection
+        TagCommand.summaries(document: doc, workspace: workspace, undoManager: nil)
+        check("Build Summaries asks which model to use", workspace.showModelSheet && workspace.modelSheetJob == .summaries(only: nil))
+        workspace.showModelSheet = false
+        TagCommand.modelChosen(false, document: doc, workspace: workspace, undoManager: nil)
+        check("Cancel in the model question starts nothing", !doc.tagging.isRunning)
+        if let id = manager.downloaded.sorted().first {
+            manager.selection = "catalog:" + id
+            TagCommand.modelChosen(true, document: doc, workspace: workspace, undoManager: nil)
+            // A book read before asks "Analyze the Whole Cast Again?" first; either way it's Build Summaries.
+            check("confirming the model goes on to Build Summaries, not Tag Speakers",
+                  doc.tagging.status?.job == .summaries || (workspace.askAnalyzeCastAgain && !doc.tagging.isRunning),
+                  "job \(String(describing: doc.tagging.status?.job)), ask again \(workspace.askAnalyzeCastAgain)")
+            if workspace.askAnalyzeCastAgain {
+                TagCommand.summaries(document: doc, workspace: workspace, undoManager: nil, confirmed: true, modelChosen: true)
+                check("Analyze Again after the model question starts Build Summaries", doc.tagging.status?.job == .summaries,
+                      "\(String(describing: doc.tagging.status?.job))")
+            }
+            doc.tagging.stop()
+            for _ in 0..<50 where doc.tagging.isRunning { try? await Task.sleep(for: .milliseconds(100)) }
+        } else {
+            print("SKIP confirming the model starts Build Summaries: no model downloaded on this Mac")
+        }
+        workspace.modelSheetJob = .choose
+        TagCommand.modelChosen(true, document: doc, workspace: workspace, undoManager: nil)
+        check("Choose Model… only picks", !doc.tagging.isRunning)
+        manager.selection = before
+    }
+
     final class Flag: @unchecked Sendable { var value = false }
     final class Done: @unchecked Sendable {
         let call: () -> Void

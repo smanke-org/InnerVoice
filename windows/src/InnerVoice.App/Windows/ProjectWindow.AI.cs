@@ -118,9 +118,11 @@ public sealed partial class ProjectWindow
         }
     }
 
-    /// `only`: these characters; the agent's `summaries start --character`.
-    public async Task BuildSummaries(IReadOnlyCollection<Guid>? only = null)
+    /// `only`: these characters; the agent's `summaries start --character`. `ask`: the narrator
+    /// clicked, so ask which model to use (the agent never asks).
+    public async Task BuildSummaries(IReadOnlyCollection<Guid>? only = null, bool ask = true)
     {
+        if (ask && !await AskSummariesModel()) return;
         if (!await EnsureModel() || !await ClaudeAllowed("Build Summaries", () => CostEstimator.BuildSummaries(Document.Project, only?.Count ?? Document.Project.Characters.Count))) return;
         await Runner.BuildSummaries(only);
     }
@@ -154,6 +156,27 @@ public sealed partial class ProjectWindow
             $"This sends {what} to Anthropic (Cloud). {estimate.Sentence(modelID)}", action, "Don't show the estimate again");
         if (ok && skip) AppSettings.Update(s => s.SkipClaudeCostQuestion = true);
         return ok;
+    }
+
+    /// Build Summaries asks which model to use every time, with the one in Settings › AI first,
+    /// ready to confirm (the Mac's ModelSheet). Picking another changes it in Settings too.
+    async Task<bool> AskSummariesModel()
+    {
+        var m = ModelManager.Shared;
+        var options = new List<(string Label, string Selection)>();
+        if (m.IsReady) options.Add(($"Use {m.SelectionName} (in use)", m.Selection));
+        foreach (var c in ModelCatalog.All.Where(c => m.Downloaded.Contains(c.Id) && "catalog:" + c.Id != m.Selection))
+            options.Add(($"Use {c.Name}", "catalog:" + c.Id));
+        var labels = options.Select(o => o.Label).Append("Choose in Settings…").ToArray();
+        var message = m.IsReady
+            ? $"In use: {m.SelectionName}. Keep it, or pick another (it changes in Settings › AI too)."
+            : $"{m.SelectionName} isn't ready yet. Pick a downloaded model, or choose one in Settings › AI.";
+        int i = await Dialogs.Choose(this, "Choose a Model for Build Summaries", message, labels,
+                                     defaultIndex: options.Count > 0 ? 0 : labels.Length - 1, stacked: true);
+        if (i < 0) return false;
+        if (i == options.Count) { SettingsWindow.Show(this, "AI"); return false; }
+        m.Selection = options[i].Selection;
+        return true;
     }
 
     /// No model yet: say so and open Settings › AI.

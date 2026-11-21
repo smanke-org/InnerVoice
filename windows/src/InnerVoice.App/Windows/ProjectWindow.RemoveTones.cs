@@ -1,5 +1,5 @@
 // Book > Remove Tones…, the Mac's Speech/RemoveTones.swift: clears tones by who set them,
-// as one undoable change.
+// keeping any tones the narrator checks, as one undoable change.
 
 using Avalonia;
 using Avalonia.Controls;
@@ -37,6 +37,12 @@ public sealed partial class ProjectWindow
         };
         var auto = new CheckBox { Content = $"Tones from Tag Speakers ({automatic:N0} lines)", IsChecked = automatic > 0, IsEnabled = automatic > 0 };
         var own = new CheckBox { Content = $"Tones you set yourself ({narrator:N0} lines)", IsChecked = false, IsEnabled = narrator > 0 };
+        // The tones in this book, each with a Keep box: kept tones stay on their lines.
+        var toneCounts = ToneRemoval.ToneCounts(Document.Project);
+        var keepBoxes = Enum.GetValues<Tone>().Where(t => t != Tone.Neutral && toneCounts.GetValueOrDefault(t) > 0)
+            .Select(t => new CheckBox { Content = $"{t} ({toneCounts[t]:N0})", Tag = t, IsChecked = false }).ToList();
+        var keepGrid = new WrapPanel { Orientation = Orientation.Horizontal };
+        foreach (var b in keepBoxes) { b.Width = 170; keepGrid.Children.Add(b); }
         var remove = new Button { Content = "Remove Tones" };
         remove.Classes.Add("danger");
         var cancel = new Button { Content = "Cancel", IsCancel = true, IsDefault = true };
@@ -44,7 +50,12 @@ public sealed partial class ProjectWindow
         auto.IsCheckedChanged += (_, _) => Update();
         own.IsCheckedChanged += (_, _) => Update();
         Update();
-        remove.Click += (_, _) => { result = new ToneRemoval(auto.IsChecked == true, own.IsChecked == true); dialog.Close(); };
+        remove.Click += (_, _) =>
+        {
+            result = new ToneRemoval(auto.IsChecked == true, own.IsChecked == true,
+                                     keepBoxes.Where(b => b.IsChecked == true).Select(b => (Tone)b.Tag!));
+            dialog.Close();
+        };
         cancel.Click += (_, _) => dialog.Close();
         var buttons = Ui.Row(Look.Sm, cancel, remove);
         buttons.HorizontalAlignment = HorizontalAlignment.Right;
@@ -58,6 +69,11 @@ public sealed partial class ProjectWindow
                         "Tones you remove from your own choices can't be tagged back; you'd set them again by hand.\n\n" +
                         "You can undo this with Edit › Undo while the book is open.", 13, wrap: Avalonia.Media.TextWrapping.Wrap),
                 new StackPanel { Spacing = 6, Children = { auto, own } },
+                keepBoxes.Count == 0 ? new Panel() : new StackPanel
+                {
+                    Spacing = 4,
+                    Children = { Ui.Text("Keep these tones (checked tones stay on their lines):", 12), keepGrid },
+                },
                 buttons,
             },
         };

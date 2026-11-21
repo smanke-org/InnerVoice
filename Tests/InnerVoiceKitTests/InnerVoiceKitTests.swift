@@ -839,6 +839,26 @@ private let appleVoices = [
     // Tom: no gender known, so casting is unsure and asks.
     #expect(p.voiceNeedsYou(p.characters.first { $0.name == "Tom Hale" }!))
     #expect(p.settings.narratorVoice(for: .apple) != nil)
+    // Shared styles read Tom in a shared voice: only Full Cast asks for a voice of his own.
+    let hale = p.characters.first { $0.name == "Tom Hale" }!
+    for style in [CastingStyle.oneVoice, .shared] {
+        var s = p
+        s.settings.castingStyle = style
+        #expect(!s.voiceNeedsYou(hale), "\(style)")
+    }
+    var full = p
+    full.settings.castingStyle = .fullCast
+    #expect(full.voiceNeedsYou(hale))
+    var mine = p
+    mine.settings.castingStyle = .oneVoice
+    if let i = mine.characterIndex(hale.id) { mine.characters[i].role = .own }
+    #expect(mine.voiceNeedsYou(mine.character(hale.id)!))
+    // The shared voices themselves still need choosing.
+    var shared = p
+    shared.settings.castingStyle = .shared
+    #expect(shared.sharedVoicesMissing(engine: .apple) == 3)
+    shared.settings.castingStyle = .oneVoice
+    #expect(shared.sharedVoicesMissing(engine: .apple) == 0)
 }
 
 @Test func castingKeepsTheNarratorsChoice() {

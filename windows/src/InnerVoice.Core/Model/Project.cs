@@ -627,9 +627,24 @@ public sealed class Project : ModelObject
         line.Tone is not null && line.ToneSource != Core.ToneSource.User && (line.ToneConfidence ?? 0) < Settings.UnsureBelow;
 
     /// A character's voice needs the narrator when casting was unsure of it, or found none.
+    /// The voices the Casting Style shares that aren't chosen yet on this engine: the narrator's,
+    /// and the men's, women's and other voice where the style reads characters by gender.
+    public int SharedVoicesMissing(VoiceEngine engine)
+    {
+        if (VoicesCast is null || Settings.CastingStyle is null) return 0;
+        int missing = Settings.NarratorVoice(engine) is null ? 1 : 0;
+        missing += CastingStyleRules.SharedRolesNeeded(Settings).Count(r => Settings.RoleVoice(r, engine) is null);
+        return missing;
+    }
+
     public bool VoiceNeedsYou(BookCharacter character, VoiceEngine? engine = null)
     {
         if (VoicesCast is null) return false;
+        // One Voice and Narrator + Two Voices read most characters in the narrator's or a
+        // shared voice: only their gender matters (Gender to Review), not a voice of their own.
+        if (Settings.CastingStyle is not null
+            && CastingStyleRules.Role(character, Settings, null, CastingStyleRules.AnyMainMarked(this)) != VoiceRole.Own)
+            return false;
         if (character.Voice(engine ?? Settings.Engine) is not { } v) return true;
         return v.Source != VoiceSource.User && v.Confidence < Settings.UnsureBelow;
     }

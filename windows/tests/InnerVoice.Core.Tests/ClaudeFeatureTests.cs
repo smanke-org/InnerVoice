@@ -319,6 +319,15 @@ public class ClaudeFeatureTests
         var both = p.Copy();
         Assert.Equal(3, new ToneRemoval(true, true).Apply(both));
         Assert.Equal((0, 0), ToneRemoval.Counts(both));
+        // Keeping Sarcastic: the other tones go, Sarcastic stays, and the book still counts as tagged.
+        var kept = p.Copy();
+        kept.Lines[2].Tone = Tone.Sarcastic;
+        var counts = ToneRemoval.ToneCounts(kept);
+        Assert.Equal(1, counts[Tone.Excited]); Assert.Equal(1, counts[Tone.Sad]); Assert.Equal(1, counts[Tone.Sarcastic]);
+        Assert.Equal(2, new ToneRemoval(true, true, [Tone.Sarcastic]).Apply(kept));
+        Assert.True(kept.Lines[2].Tone == Tone.Sarcastic && kept.Lines[0].Tone is null && kept.Lines[1].Tone is null);
+        Assert.NotNull(kept.TonesTagged);
+        Assert.Empty(new ToneRemoval(true, false, [Tone.Neutral]).Keep);
     }
 
     [Fact]

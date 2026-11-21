@@ -520,7 +520,7 @@ public static partial class AgentHandlers
             RequireModel();
             if (w.ExistingRunner?.IsRunning == true) throw AgentError.Busy($"{Name(w)} is already {JobWords(w)}. Wait, or run `innervoice tag stop`");
             List<Guid>? only = args.String("character") is { } name ? [Character(name, d).Id] : null;
-            _ = w.BuildSummaries(only);
+            _ = w.BuildSummaries(only, ask: false);
             return TaggingJSON(w);
         });
     }

@@ -218,7 +218,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
             .heading("How each line is said"),
             .text("Every line also gets a tone: neutral, excited, confused, sad, angry, whispered, scared, tender or sarcastic. \"She snapped\" is angry and \"he whispered\" is a whisper; Tag Speakers asks the AI about the rest, with the paragraphs around each line. Tones the AI isn't sure of wait in Review › Unsure Tones, where 1 to 9 pick a tone and Space plays the line."),
             .text("Change a tone yourself from the inspector or by right-clicking a line. Tag Speakers never changes a tone you set."),
-            .text("If the AI gave the book more feeling than you want, Book › Remove Tones… clears tones across the whole manuscript. Choose the tones from Tag Speakers, the tones you set yourself, or both. Lines without a tone are read evenly; getting tones back means running Tag Speakers again, which takes a while, so it asks first. Edit › Undo puts them back while the book is open."),
+            .text("If the AI gave the book more feeling than you want, Book › Remove Tones… clears tones across the whole manuscript. Choose the tones from Tag Speakers, the tones you set yourself, or both, and check any tone you want to keep (Sarcastic, say, when the others are too dramatic): kept tones stay on their lines. Lines without a tone are read evenly; getting tones back means running Tag Speakers again, which takes a while, so it asks first. Edit › Undo puts them back while the book is open."),
             .heading("Listening"),
             .keys([
                 ("⌥Space", "Play the selected line in its character's voice"),
@@ -282,7 +282,7 @@ enum HelpTopic: String, CaseIterable, Identifiable, Hashable {
         case .castAndSummaries: [
             .text("Cast shows every character as a card, with their color, line and word counts, first appearance and narrator. Click a card or its name to open that character’s page and read their summary."),
             .heading("Summaries"),
-            .text("Build Summaries has the AI read the text around each character and fill in what the book says: age, gender, accent, voice, personality, history and relationships. Each fact has a source, such as \"Ch 3 ¶12\". Click it to see that paragraph in the manuscript."),
+            .text("Build Summaries first asks which model to use, with the one chosen in Settings › AI already picked: click Build Summaries to keep it, or pick another (that changes it in Settings too). Then it has the AI read the text around each character and fill in what the book says: age, gender, accent, voice, personality, history and relationships. Each fact has a source, such as \"Ch 3 ¶12\". Click it to see that paragraph in the manuscript."),
             .text("Build Summaries in the Cast toolbar (⇧⌘B) does every character in one go. On a character's page, Build Summary does just that character; click its arrow and choose Build Everyone's Summaries to do them all from there."),
             .text("While it reads, a bar shows how far it is with the character it's reading, named below the bar; for the whole cast there's a second bar for the run (\"Character 3 of 12\"). Stop keeps what it has found. Running it for the whole cast again asks first, because new notes can change the voices casting picked."),
             .heading("Voice briefs"),

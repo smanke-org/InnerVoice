@@ -535,6 +535,14 @@ enum Snapshot {
                     capture(w, "\(dir)/project-type-style-click3-\(mode).png")
                     w.close()
                 }
+                if wants("remove-tones"), let q = RemoveTones.question(for: document.project), let w = window() {
+                    q.keepBoxes.first { $0.identifier?.rawValue == Tone.sarcastic.rawValue }?.state = .on
+                    q.alert.beginSheetModal(for: w) { _ in }
+                    try? await Task.sleep(for: .seconds(1))
+                    capture(w, "\(dir)/remove-tones-\(mode).png", includePopovers: true)
+                    w.endSheet(q.alert.window)
+                    try? await Task.sleep(for: .seconds(0.4))
+                }
                 await shot("project-settings") { workspace.showProjectSettings = true }
                 workspace.showProjectSettings = false
                 try? await Task.sleep(for: .seconds(0.5))

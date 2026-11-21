@@ -618,8 +618,24 @@ public struct Project: Codable, Hashable, Sendable {
     /// A character's voice needs the narrator when casting was unsure of it, or found none.
     public func voiceNeedsYou(_ character: BookCharacter, engine: VoiceEngine? = nil) -> Bool {
         guard voicesCast != nil else { return false }
+        // One Voice and Narrator + Two Voices read most characters in the narrator's or a
+        // shared voice: only their gender matters (Gender to Review), not a voice of their own.
+        if settings.castingStyle != nil,
+           CastingStyleRules.role(for: character, settings: settings, gender: nil,
+                                  anyMainMarked: CastingStyleRules.anyMainMarked(self)) != .own {
+            return false
+        }
         guard let v = character.voice(for: engine ?? settings.engine) else { return true }
         return v.source != .user && v.confidence < settings.unsureBelow
+    }
+
+    /// The voices the Casting Style shares that aren't chosen yet on this engine: the narrator's,
+    /// and the men's, women's and other voice where the style reads characters by gender.
+    public func sharedVoicesMissing(engine: VoiceEngine) -> Int {
+        guard voicesCast != nil, settings.castingStyle != nil else { return 0 }
+        var missing = settings.narratorVoice(for: engine) == nil ? 1 : 0
+        missing += CastingStyleRules.sharedRolesNeeded(settings).filter { settings.roleVoice($0, for: engine) == nil }.count
+        return missing
     }
 
     /// Lines without any assignment yet (what Tag Speakers still has to do).

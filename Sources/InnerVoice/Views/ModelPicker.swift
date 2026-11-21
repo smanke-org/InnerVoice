@@ -216,28 +216,52 @@ struct Meter: View {
     }
 }
 
-/// Shown the first time Tag Speakers runs without a model.
+/// Picks the model for a job: Build Summaries asks every time, with the model chosen in
+/// Settings › AI already picked so one click confirms it; Tag Speakers asks when no model
+/// is ready; Book › Choose Model… just picks. Picking here changes it in Settings too.
 struct ModelSheet: View {
+    var job: ModelSheetJob = .tagSpeakers
     var done: (Bool) -> Void
     @State private var manager = ModelManager.shared
 
+    private var jobName: String? {
+        switch job {
+        case .tagSpeakers: "Tag Speakers"
+        case .summaries: "Build Summaries"
+        case .choose: nil
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Space.lg) {
-            Text("Choose a Model for Tag Speakers").font(.title2.weight(.semibold))
-            Text("InnerVoice reads your book with an AI model that runs on this Mac. Pick one to download; the one marked Best for this Mac balances accuracy and speed for your memory.")
+            Text(jobName.map { "Choose a Model for \($0)" } ?? "Choose a Model").font(.title2.weight(.semibold))
+            Text("InnerVoice reads your book with the model you pick. The one in use is checked: keep it, or pick another (it changes in Settings › AI too). On-device models keep the book on this Mac; the one marked Best for this Mac balances accuracy and speed for your memory.")
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: Space.sm) {
+                Image(systemName: manager.isReady ? "checkmark.circle.fill" : "exclamationmark.circle")
+                    .foregroundStyle(manager.isReady ? Color.green : Color.orange)
+                Text(manager.isReady ? "In use: \(manager.selectionName)" : "\(manager.selectionName) isn’t ready yet: download it, set it up, or pick another.")
+                    .font(.callout.weight(.medium))
+            }
+            .accessibilityElement(children: .combine)
             ScrollView {
                 ModelPicker().padding(.vertical, Space.xs)
             }
             .frame(minHeight: 360, maxHeight: 520)
             HStack {
                 Spacer()
-                Button("Cancel") { done(false) }.keyboardShortcut(.cancelAction)
-                Button("Tag Speakers") { done(true) }
-                    .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!manager.isReady)
+                if let jobName {
+                    Button("Cancel") { done(false) }.keyboardShortcut(.cancelAction)
+                    Button(jobName) { done(true) }
+                        .keyboardShortcut(.defaultAction)
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!manager.isReady)
+                } else {
+                    Button("Done") { done(false) }
+                        .keyboardShortcut(.defaultAction)
+                        .buttonStyle(.borderedProminent)
+                }
             }
         }
         .padding(Space.xl)

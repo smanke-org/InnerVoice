@@ -35,7 +35,7 @@ struct GuidedStepsBar: View {
         let speaking = p.characters.filter { (document.index.stats[$0.id]?.lines ?? 0) > 0 }
         let engine = p.engineInUse
         return GuidedSteps(project: p, narration: !p.showsVoices, speaking: speaking.count,
-                           voicesNeeded: speaking.filter { p.voiceNeedsYou($0, engine: engine) }.count)
+                           voicesNeeded: speaking.filter { p.voiceNeedsYou($0, engine: engine) }.count + p.sharedVoicesMissing(engine: engine))
     }
 
     // MARK: The steps

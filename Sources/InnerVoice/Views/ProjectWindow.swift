@@ -38,10 +38,12 @@ struct ProjectWindow: View {
         .remembersWindowFrame(book: document.project.isEmpty ? "" : document.project.usageKey)
         .focusedSceneValue(\.project, ProjectFocus(document: document, workspace: workspace, undoManager: undoManager))
         .sheet(isPresented: $workspace.showModelSheet) {
-            ModelSheet { ready in
+            ModelSheet(job: workspace.modelSheetJob) { ready in
                 workspace.showModelSheet = false
-                if !ready { workspace.afterTagging = nil }
-                if ready { TagCommand.run(document: document, workspace: workspace, undoManager: undoManager) }
+                // After the sheet is gone, so a second question (Analyze Again?) can show.
+                DispatchQueue.main.async {
+                    TagCommand.modelChosen(ready, document: document, workspace: workspace, undoManager: undoManager)
+                }
             }
         }
         .sheet(isPresented: $workspace.showExport) {
@@ -61,7 +63,7 @@ struct ProjectWindow: View {
         }
         .alert("Analyze the Whole Cast Again?", isPresented: $workspace.askAnalyzeCastAgain) {
             Button("Analyze Again") {
-                TagCommand.summaries(document: document, workspace: workspace, undoManager: undoManager, confirmed: true)
+                TagCommand.summaries(document: document, workspace: workspace, undoManager: undoManager, confirmed: true, modelChosen: true)
             }
             Button("Cancel", role: .cancel) {}
         } message: {

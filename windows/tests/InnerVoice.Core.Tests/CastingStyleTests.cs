@@ -131,4 +131,27 @@ public class CastingStyleTests
         Assert.Null(plain["settings"]!["castingStyle"]);
         Assert.Null(plain["characters"]![0]!["isMain"]);
     }
+
+    [Fact]
+    public void SharedStylesAskOnlyFullCastForVoicesOfTheirOwn()
+    {
+        var p = new Project { VoicesCast = AppleDate.Now };
+        var tom = new BookCharacter { Name = "Tom Hale" };
+        p.Characters.Add(tom);
+        foreach (var style in new[] { CastingStyle.OneVoice, CastingStyle.Shared })
+        {
+            p.Settings.CastingStyle = style;
+            Assert.False(p.VoiceNeedsYou(tom, VoiceEngine.Apple));
+        }
+        p.Settings.CastingStyle = CastingStyle.FullCast;
+        Assert.True(p.VoiceNeedsYou(tom, VoiceEngine.Apple));
+        p.Settings.CastingStyle = CastingStyle.OneVoice;
+        tom.Role = VoiceRole.Own;
+        Assert.True(p.VoiceNeedsYou(tom, VoiceEngine.Apple));
+        // The shared voices themselves still need choosing.
+        p.Settings.CastingStyle = CastingStyle.Shared;
+        Assert.Equal(4, p.SharedVoicesMissing(VoiceEngine.Apple));
+        p.Settings.CastingStyle = CastingStyle.OneVoice;
+        Assert.Equal(1, p.SharedVoicesMissing(VoiceEngine.Apple));
+    }
 }
