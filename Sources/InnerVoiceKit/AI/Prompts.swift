@@ -360,11 +360,32 @@ public enum SummaryPrompt {
 
     /// Whether a fact's text reads like a note for the narrator. Gemma 4 26B A4B wrote
     /// "text-based/nonsensicalical-of-the-moment-of-text" and "arguing/controversial-looking".
+    /// After the 1.1.2 fix it still wrote "P33" (a label), "text" and "paramount-text-voice".
     public static func looksLikeNote(_ text: String) -> Bool {
         guard text.contains(where: \.isLetter), text.count < 240,
               !text.contains("/"), !text.contains("{"), !text.contains("}") else { return false }
-        // Words strung together with hyphens past "matter-of-fact".
-        return !text.split(whereSeparator: \.isWhitespace).contains { $0.filter { $0 == "-" }.count > 3 }
+        let lower = text.lowercased()
+        // A paragraph label, or a word from the reply's own JSON, instead of a note.
+        if lower.range(of: #"^p\d+$"#, options: .regularExpression) != nil { return false }
+        if schemaWords.contains(lower) || FactKind(rawValue: lower) != nil { return false }
+        let tokens = lower.split(whereSeparator: \.isWhitespace)
+        return !tokens.contains { token in
+            let parts = token.split(separator: "-")
+            // Words strung together with hyphens past "matter-of-fact", or a hyphen chain
+            // built from the JSON's keys.
+            return parts.count > 4 || (parts.count > 1 && parts.contains { schemaWords.contains(String($0)) })
+        }
+    }
+
+    static let schemaWords: Set<String> = ["text", "quote", "kind", "paragraph", "label", "note", "source", "facts"]
+
+    /// Whether a fact's text fits its kind. A gender fact must name one ("female",
+    /// "a young man"); Gemma filed "replying to the baby" and "paramount-age" under gender.
+    public static func fits(_ text: String, kind: FactKind) -> Bool {
+        guard kind == .gender else { return true }
+        if VoiceCasting.gender(in: text) != nil { return true }
+        let lower = text.lowercased()
+        return ["nonbinary", "non-binary", "genderless", "agender", "genderfluid"].contains { lower.contains($0) }
     }
 
     public static func parse(_ text: String) -> [FactReply]? {
@@ -388,6 +409,7 @@ public enum SummaryPrompt {
                 .trimmingCharacters(in: CharacterSet(charactersIn: ";/ "))
             guard looksLikeNote(text) else { continue }
             let kind = FactKind(rawValue: reply.kind.lowercased()) ?? .other
+            guard fits(text, kind: kind) else { continue }
             var source: UUID? = reply.paragraph.flatMap { chunk.labels[$0.trimmingCharacters(in: .whitespaces)] }
             let quote = (reply.quote ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             // A fact without the book's words for it is the model's own idea.

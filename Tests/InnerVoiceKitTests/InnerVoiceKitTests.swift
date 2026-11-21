@@ -247,10 +247,20 @@ private func tempDir() -> URL {
         FactReply(kind: "personality", text: "arguing/controversial-looking", paragraph: "P1", quote: "was arguing"),
         FactReply(kind: "personality", text: "Argumentative", paragraph: "P1", quote: ""),
         FactReply(kind: "personality", text: "Quick to argue", paragraph: "P1", quote: "was arguing, as usual"),
+        // Seen live from Gemma 4 26B A4B after the 1.1.2 fix: a label, a JSON key, a chain of
+        // keys, and a gender fact that names no gender.
+        FactReply(kind: "gender", text: "P33", paragraph: "P1", quote: "The Hatter was arguing"),
+        FactReply(kind: "personality", text: "text", paragraph: "P1", quote: "arguing"),
+        FactReply(kind: "gender", text: "paramount-text-voice", paragraph: "P1", quote: "the Hatter"),
+        FactReply(kind: "gender", text: "replying to the baby", paragraph: "P1", quote: "about the time"),
+        FactReply(kind: "gender", text: "male", paragraph: "P1", quote: "The Hatter was arguing"),
     ], chunk: chunk, characterID: hatter.id, into: &p, index: BookIndex(p))
-    #expect(added == 1)
-    #expect(p.character(hatter.id)?.facts.map(\.text) == ["Quick to argue"])
+    #expect(added == 2)
+    #expect(p.character(hatter.id)?.facts.map(\.text) == ["Quick to argue", "male"])
     #expect(SummaryPrompt.looksLikeNote("Matter-of-fact, a little sly"))
+    #expect(SummaryPrompt.looksLikeNote("Middle-aged, well-spoken"))
+    #expect(SummaryPrompt.fits("a young woman", kind: .gender))
+    #expect(!SummaryPrompt.fits("paramount-age", kind: .gender))
     #expect(SummaryPrompt.grammar.contains("label ::= \"\\\"P\""))
 }
 

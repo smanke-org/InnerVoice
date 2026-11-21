@@ -614,10 +614,20 @@ public class MadeUpAnswerTests
             new() { Kind = "personality", Text = "arguing/controversial-looking", Paragraph = "P1", Quote = "was arguing" },
             new() { Kind = "personality", Text = "Argumentative", Paragraph = "P1", Quote = "" },
             new() { Kind = "personality", Text = "Quick to argue", Paragraph = "P1", Quote = "was arguing, as usual" },
+            // Seen live from Gemma 4 26B A4B after the 1.1.2 fix: a label, a JSON key, a chain of
+            // keys, and a gender fact that names no gender.
+            new() { Kind = "gender", Text = "P33", Paragraph = "P1", Quote = "The Hatter was arguing" },
+            new() { Kind = "personality", Text = "text", Paragraph = "P1", Quote = "arguing" },
+            new() { Kind = "gender", Text = "paramount-text-voice", Paragraph = "P1", Quote = "the Hatter" },
+            new() { Kind = "gender", Text = "replying to the baby", Paragraph = "P1", Quote = "about the time" },
+            new() { Kind = "gender", Text = "male", Paragraph = "P1", Quote = "The Hatter was arguing" },
         ], chunk, hatter.Id, p, new BookIndex(p));
-        Assert.Equal(1, added);
-        Assert.Equal(new List<string> { "Quick to argue" }, p.Character(hatter.Id)!.Facts.Select(f => f.Text).ToList());
+        Assert.Equal(2, added);
+        Assert.Equal(new List<string> { "Quick to argue", "male" }, p.Character(hatter.Id)!.Facts.Select(f => f.Text).ToList());
         Assert.True(InnerVoice.Core.AI.SummaryPrompt.LooksLikeNote("Matter-of-fact, a little sly"));
+        Assert.True(InnerVoice.Core.AI.SummaryPrompt.LooksLikeNote("Middle-aged, well-spoken"));
+        Assert.True(InnerVoice.Core.AI.SummaryPrompt.Fits("a young woman", FactKind.Gender));
+        Assert.False(InnerVoice.Core.AI.SummaryPrompt.Fits("paramount-age", FactKind.Gender));
         Assert.Contains("label ::= \"\\\"P\"", InnerVoice.Core.AI.SummaryPrompt.Grammar);
     }
 }

@@ -373,11 +373,33 @@ public static class SummaryPrompt
 
     /// Whether a fact's text reads like a note for the narrator. Gemma 4 26B A4B wrote
     /// "text-based/nonsensicalical-of-the-moment-of-text" and "arguing/controversial-looking".
+    /// After the 1.1.2 fix it still wrote "P33" (a label), "text" and "paramount-text-voice".
     public static bool LooksLikeNote(string text)
     {
         if (!text.Any(char.IsLetter) || text.Length >= 240 || text.Contains('/') || text.Contains('{') || text.Contains('}')) return false;
-        // Words strung together with hyphens past "matter-of-fact".
-        return !text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Any(w => w.Count(c => c == '-') > 3);
+        var lower = text.ToLowerInvariant();
+        // A paragraph label, or a word from the reply's own JSON, instead of a note.
+        if (Regex.IsMatch(lower, @"^p\d+$")) return false;
+        if (SchemaWords.Contains(lower) || Enum.GetNames<FactKind>().Any(n => n.Equals(lower, StringComparison.OrdinalIgnoreCase))) return false;
+        // Words strung together with hyphens past "matter-of-fact", or a hyphen chain built
+        // from the JSON's keys.
+        return !lower.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Any(token =>
+        {
+            var parts = token.Split('-', StringSplitOptions.RemoveEmptyEntries);
+            return parts.Length > 4 || (parts.Length > 1 && parts.Any(SchemaWords.Contains));
+        });
+    }
+
+    static readonly HashSet<string> SchemaWords = ["text", "quote", "kind", "paragraph", "label", "note", "source", "facts"];
+
+    /// Whether a fact's text fits its kind. A gender fact must name one ("female",
+    /// "a young man"); Gemma filed "replying to the baby" and "paramount-age" under gender.
+    public static bool Fits(string text, FactKind kind)
+    {
+        if (kind != FactKind.Gender) return true;
+        if (GenderReader.GenderIn(text) is not null) return true;
+        var lower = text.ToLowerInvariant();
+        return new[] { "nonbinary", "non-binary", "genderless", "agender", "genderfluid" }.Any(lower.Contains);
     }
 
     sealed class Wrapper { [JsonPropertyName("facts")] public List<FactReply>? Facts { get; set; } }
@@ -401,6 +423,7 @@ public static class SummaryPrompt
             var text = reply.Text.Trim().Trim(';', '/', ' ');
             if (!LooksLikeNote(text)) continue;
             var kind = Enum.TryParse<FactKind>(reply.Kind, true, out var k) ? k : FactKind.Other;
+            if (!Fits(text, kind)) continue;
             Guid? source = reply.Paragraph is { } label && chunk.Labels.TryGetValue(label.Trim(), out var src) ? src : null;
             var quote = (reply.Quote ?? "").Trim();
             // A fact without the book's words for it is the model's own idea.
