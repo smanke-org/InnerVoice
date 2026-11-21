@@ -33,6 +33,16 @@ extension Workspace.Page {
 /// with AI voices goes on to a short guided setup: choose an engine, then Tag Speakers reads
 /// speakers and tones, voices are cast, and the project opens on the Voices page.
 struct ProjectTypeSheet: View {
+    /// INNERVOICE_ASK_PROJECT_TYPE=1 on a Debug test copy asks like the real app does, so
+    /// the ask-on-open path can be checked (test runs don't ask otherwise).
+    static var askInTestRun: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.environment["INNERVOICE_ASK_PROJECT_TYPE"] == "1"
+        #else
+        false
+        #endif
+    }
+
     @ObservedObject var document: InnerVoiceDocument
     @Bindable var workspace: Workspace
     @Environment(\.undoManager) private var undoManager
@@ -90,11 +100,24 @@ struct ProjectTypeSheet: View {
             HStack {
                 HelpButton(topic: .gettingStarted)
                 Spacer()
+                notNowButton
                 Button("Continue") { step = 1 }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
             }
         }
+    }
+
+    /// Closes the question without choosing; the book shows everything until it's answered,
+    /// and asks again the next time it opens.
+    private var notNowButton: some View {
+        Button("Not Now") {
+            player?.stop()
+            workspace.projectTypeLater = true
+            workspace.showProjectType = false
+        }
+        .keyboardShortcut(.cancelAction)
+        .help("Close without choosing. InnerVoice asks again the next time you open this book, or choose any time in Book › Project Settings.")
     }
 
     // MARK: Guided setup for AI voices
@@ -251,6 +274,7 @@ extension ProjectTypeSheet {
                 Text(narration ? "You can change it later on the Cast page." : "You can change it later on the Voices page.")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
+                notNowButton
                 if !existing { Button("Back") { step = 0 } }
                 Button(existing || narration ? "Done" : "Continue") {
                     if existing || narration { finish(guided: false) } else { step = 2 }
@@ -601,5 +625,38 @@ struct BookStatsSheet: View {
 
     private func row(_ label: String, _ value: String) -> some View {
         LabeledContent(label) { Text(value).monospacedDigit().foregroundStyle(.secondary) }
+    }
+}
+
+/// Calls back whenever its window becomes key (after a short settle), so the project window
+/// can ask a question that was lost: on 2026-11-21 a book made with File › New from
+/// Manuscript never showed "What is this project for?" until it was reopened.
+struct KeyWindowProbe: NSViewRepresentable {
+    let becameKey: (NSWindow) -> Void
+
+    func makeNSView(context: Context) -> Probe { Probe(becameKey: becameKey) }
+    func updateNSView(_ probe: Probe, context: Context) { probe.becameKey = becameKey }
+
+    final class Probe: NSView {
+        var becameKey: (NSWindow) -> Void
+        init(becameKey: @escaping (NSWindow) -> Void) {
+            self.becameKey = becameKey
+            super.init(frame: .zero)
+        }
+        required init?(coder: NSCoder) { fatalError() }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            NotificationCenter.default.removeObserver(self)
+            guard let window else { return }
+            NotificationCenter.default.addObserver(self, selector: #selector(key), name: NSWindow.didBecomeKeyNotification, object: window)
+        }
+
+        @objc private func key(_ note: Notification) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+                guard let self, let window = self.window else { return }
+                self.becameKey(window)
+            }
+        }
     }
 }

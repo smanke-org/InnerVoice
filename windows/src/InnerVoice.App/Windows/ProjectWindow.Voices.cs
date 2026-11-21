@@ -155,7 +155,10 @@ public sealed class ProjectTypeWindow : Window
             Close();
         }, primary: true);
         go.IsDefault = true;
-        var buttons = Ui.Row(Look.Sm, go);
+        // Not Now (Esc) closes without choosing; the book asks again the next time it opens.
+        var later = Ui.Button("Not Now", Close, tip: "Close without choosing. InnerVoice asks again the next time you open this book.");
+        later.IsCancel = true;
+        var buttons = Ui.Row(Look.Sm, later, go);
         buttons.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right;
         column.Children.Add(buttons);
         Content = column;

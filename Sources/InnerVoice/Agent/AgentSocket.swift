@@ -105,6 +105,15 @@ nonisolated enum AgentSocket {
     /// Sends one request and returns the reply. Starts the app when it is
     /// not running, unless `launch` is false.
     static func send(_ request: Data, launch: Bool) throws -> Data {
+        #if !DEBUG
+        // A Release build ignores APP_STORE and APP_AGENT_SOCKET, so a script that set them to
+        // reach a test copy would talk to the person's real app instead (2026-11-21: a test run
+        // opened two Alice projects in the real app). Refuse rather than guess.
+        let env = ProcessInfo.processInfo.environment
+        if ["APP_STORE", "APP_AGENT_SOCKET"].contains(where: { !(env[$0] ?? "").isEmpty }) {
+            throw AgentError.unavailable("APP_STORE or APP_AGENT_SOCKET is set, but this is a Release build of InnerVoice, which only talks to the real app. Use a Debug build (./build.sh --debug) for test copies, or unset them to work with the real app")
+        }
+        #endif
         if let reply = try? exchange(request) { return reply }
         guard launch else { throw AgentError.unavailable("InnerVoice is not running. Open it, or leave out --no-launch") }
         #if DEBUG

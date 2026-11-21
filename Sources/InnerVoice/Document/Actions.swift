@@ -283,6 +283,8 @@ final class Workspace {
     var askCloudService: VoiceEngine = .elevenlabs
     /// "What is this project for?" (asked once per project).
     var showProjectType = false
+    /// Not Now was clicked: this window doesn't ask again; the book asks the next time it opens.
+    var projectTypeLater = false
     var showProjectSettings = false
     var showBookStats = false
     /// Use Voices from Another Project (a book earlier in the series).

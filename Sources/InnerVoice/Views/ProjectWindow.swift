@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 struct ProjectWindow: View {
     private func askProjectTypeIfNeeded() {
         // The project type, then the Casting Style (books made before it are asked once).
-        guard !SystemHooks.isTestRun, !document.project.isEmpty,
+        guard !SystemHooks.isTestRun || ProjectTypeSheet.askInTestRun, !workspace.projectTypeLater, !document.project.isEmpty,
               document.project.settings.purpose == nil || document.project.settings.castingStyle == nil else { return }
         workspace.showProjectType = true
     }
@@ -85,6 +85,17 @@ struct ProjectWindow: View {
         // Asked once per project, new or made before the question existed. Test runs don't
         // ask (snapshots show the sheet on purpose).
         .onAppear { askProjectTypeIfNeeded(); askMixedEngineIfNeeded() }
+        // Safety net: if the question was lost (its flag set but no sheet on the window),
+        // ask again when the window becomes key. Other sheets are left alone.
+        .background(KeyWindowProbe { window in
+            guard window.attachedSheet == nil, window.isVisible else { return }
+            if workspace.showProjectType {
+                workspace.showProjectType = false
+                DispatchQueue.main.async { askProjectTypeIfNeeded() }
+            } else {
+                askProjectTypeIfNeeded()
+            }
+        })
         .confirmationDialog("Choose One Voice Engine for This Book", isPresented: $askMixedEngine, titleVisibility: .visible) {
             ForEach(EngineSwitches.shared.choices) { e in
                 Button(e.isCloud ? "\(e.title) (Cloud)" : e.title) {
