@@ -131,6 +131,8 @@ struct ProjectWindow: View {
             OpenProjects.register(document, workspace: workspace, undoManager: undoManager, fileURL: fileURL)
         }
         .onChange(of: undoManager) { OpenProjects.register(document, workspace: workspace, undoManager: undoManager, fileURL: fileURL) }
+        // A reload from disk (the file changed under the window) brings a new document.
+        .onChange(of: ObjectIdentifier(document)) { OpenProjects.register(document, workspace: workspace, undoManager: undoManager, fileURL: fileURL) }
         .onDisappear { OpenProjects.unregister(workspace) }
         .noInitialFocus()
     }

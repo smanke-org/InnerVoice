@@ -20,6 +20,7 @@ enum SelfTest {
         Task {
             try? await Task.sleep(for: .seconds(0.3))
             await run()
+            await documentFileChecks()
             print(failures == 0 ? "SELFTEST PASS \(count) checks" : "SELFTEST FAIL \(failures) of \(count) checks")
             exitCode = failures == 0 ? 0 : 1
             for doc in NSDocumentController.shared.documents { doc.updateChangeCount(.changeCleared); doc.close() }

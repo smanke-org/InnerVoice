@@ -112,6 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // The narrator's pause settings, before any script is made.
         _ = PauseStore.shared
         AppState.launched = true
+        RevertRetry.install()
         AutoSave.start()
         RecentProjects.shared.refresh()
         NotificationCenter.default.addObserver(forName: NSWindow.didBecomeMainNotification, object: nil, queue: .main) { _ in
