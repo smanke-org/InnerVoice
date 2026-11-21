@@ -20,7 +20,12 @@ enum CloudInUse {
         return engine == .gemini || (engine == .mixed && EngineSwitches.shared.isOn(.gemini))
     }
 
-    @MainActor static func any(_ project: Project) -> Bool { claude() || elevenLabs(project) || gemini(project) }
+    @MainActor static func speechify(_ project: Project) -> Bool {
+        guard project.showsVoices, project.settings.speechifyVoicesAllowed != nil, SpeechifyVoices.shared.isSetUp else { return false }
+        return project.engineInUse == .speechify
+    }
+
+    @MainActor static func any(_ project: Project) -> Bool { claude() || elevenLabs(project) || gemini(project) || speechify(project) }
 }
 
 /// The toolbar's Usage button: tokens, cost and what's left for each cloud model, in a popover.
@@ -52,10 +57,11 @@ struct CloudUsageView: View {
         let showClaude = CloudInUse.claude() || used.contains(.claude)
         let showEleven = CloudInUse.elevenLabs(project) || used.contains(.elevenlabs)
         let showGemini = CloudInUse.gemini(project) || used.contains(.google)
+        let showSpeechify = CloudInUse.speechify(project) || used.contains(.speechify)
         let records = store.records.filter {
-            ($0.service == .claude && showClaude) || ($0.service == .elevenlabs && showEleven) || ($0.service == .google && showGemini)
+            ($0.service == .claude && showClaude) || ($0.service == .elevenlabs && showEleven) || ($0.service == .google && showGemini) || ($0.service == .speechify && showSpeechify)
         }
-        let services = [showClaude ? "Anthropic" : nil, showEleven ? "ElevenLabs" : nil, showGemini ? "Google" : nil].compactMap { $0 }
+        let services = [showClaude ? "Anthropic" : nil, showEleven ? "ElevenLabs" : nil, showGemini ? "Google" : nil, showSpeechify ? "Speechify" : nil].compactMap { $0 }
         let totals = CloudUsage.totals(records, book: book)
         let days = CloudUsage.byDay(records, book: book)
         let currentClaude = ModelManager.shared.selection.hasPrefix("claude:") ? String(ModelManager.shared.selection.dropFirst(7)) : nil
@@ -140,6 +146,20 @@ struct CloudUsageView: View {
                 }
             }
 
+            if showSpeechify {
+                section("Speechify", systemImage: "waveform") {
+                    let sp = totals.filter { $0.service == .speechify }
+                    if sp.isEmpty { empty("No Speechify voices made yet" + (allBooks ? "." : " for this book.")) }
+                    ForEach(sp, id: \.model) { t in
+                        modelRow(name: t.model, current: true,
+                                 lines: [("Characters", t.characters), ("Seconds of audio", Int(t.audioSeconds ?? 0)), ("Requests", t.requests)], cost: nil)
+                    }
+                    Text("Characters are what Speechify billed. Your plan’s allowance is on the Speechify API platform.")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
             if !days.isEmpty {
                 // Tokens and characters on separate charts: a day of Claude's millions of
                 // tokens would flatten the voices' characters to nothing.
@@ -188,6 +208,7 @@ struct CloudUsageView: View {
         case .claude: ClaudeAccount.shared.name(of: r.model)
         case .elevenlabs: "ElevenLabs (\(r.model))"
         case .google: "Gemini (\(r.model))"
+        case .speechify: "Speechify (\(r.model))"
         }
     }
 

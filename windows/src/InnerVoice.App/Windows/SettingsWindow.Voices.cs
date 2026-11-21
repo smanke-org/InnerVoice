@@ -14,7 +14,7 @@ using InnerVoice.Core.Speech.Neural;
 namespace InnerVoice.App.Windows;
 
 /// Settings › Voices, the Mac's VoicesSettings: Table Read, Pauses (with Try It), the engines
-/// (Windows Voices, the voice models, ElevenLabs and Gemini TTS marked Cloud), Cloned Voices,
+/// (Windows Voices, the voice models, ElevenLabs, Gemini TTS and Speechify marked Cloud), Cloned Voices,
 /// and the saved audio.
 public sealed partial class SettingsWindow
 {
@@ -161,14 +161,27 @@ public sealed partial class SettingsWindow
         return pill;
     }
 
-    /// The orange Cloud mark for a cloud voice engine's company ("ElevenLabs", "Google").
-    public static Border CompanyCloudBadge(string company) => company == "ElevenLabs" ? ElevenLabsCloudBadge() : GoogleCloudBadge();
+    /// The orange Cloud mark for a cloud voice engine's company ("ElevenLabs", "Google", "Speechify").
+    public static Border CompanyCloudBadge(string company) => company switch
+    {
+        "ElevenLabs" => ElevenLabsCloudBadge(),
+        "Speechify" => SpeechifyCloudBadge(),
+        _ => GoogleCloudBadge(),
+    };
 
     /// The orange Cloud mark wherever Gemini TTS appears.
     public static Border GoogleCloudBadge()
     {
         var pill = Ui.Pill("Cloud", Look.Retake);
         ToolTip.SetTip(pill, "Made on Google’s computers, not this PC");
+        return pill;
+    }
+
+    /// The orange Cloud mark wherever Speechify appears.
+    public static Border SpeechifyCloudBadge()
+    {
+        var pill = Ui.Pill("Cloud", Look.Retake);
+        ToolTip.SetTip(pill, "Made on Speechify’s computers, not this PC");
         return pill;
     }
 
@@ -316,7 +329,8 @@ public sealed partial class SettingsWindow
 
         col.Children.Add(ElevenLabsRow());
         col.Children.Add(GeminiRow());
-        col.Children.Add(Note("Windows Voices, Pocket TTS, Qwen3-TTS, Chatterbox and Orpheus run on this PC; downloading them is the only time they use the internet. ElevenLabs and Gemini TTS are different: they make their voices in the cloud, so the text they speak is sent to ElevenLabs or Google, and each book asks first, for each company. Each book speaks with one engine: its previews, table reads and exports all use it."));
+        col.Children.Add(SpeechifyRow());
+        col.Children.Add(Note("Windows Voices, Pocket TTS, Qwen3-TTS, Chatterbox and Orpheus run on this PC; downloading them is the only time they use the internet. ElevenLabs, Gemini TTS and Speechify are different: they make their voices in the cloud, so the text they speak is sent to ElevenLabs, Google or Speechify, and each book asks first, for each company. Each book speaks with one engine: its previews, table reads and exports all use it."));
         return col;
     }
 

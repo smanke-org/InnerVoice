@@ -84,7 +84,7 @@ public static class VoiceHardwareCheck
             why = $"The graphics card ({hw.GpuName}) has {hw.GpuMemoryGB:0.#} GB of video memory; {name} works best with {card:0} GB or more. Expect lines to come slower than they play.";
         else
             why = $"This PC has {hw.MemoryGB} GB of memory; {name} works best with {pack?.RecommendedMemoryGB ?? RecommendedMemoryGB} GB or more. Expect lines to come slower than they play.";
-        return why + " Windows Voices are fast on any PC, and ElevenLabs and Gemini TTS run in the cloud.";
+        return why + " Windows Voices are fast on any PC, and ElevenLabs, Gemini TTS and Speechify run in the cloud.";
     }
 
     static string Pace(VoiceEngine e)

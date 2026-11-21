@@ -48,6 +48,9 @@ public enum VoiceEngine
     /// speech tokenizer and speaker encoder come from Alibaba research, so it's labeled like
     /// Qwen3-TTS.
     Chatterbox,
+    /// Speechify's API, in the cloud: sends text to Speechify. Off until the narrator sets it
+    /// up, and each book must allow it (`ProjectSettings.SpeechifyVoicesAllowed`).
+    Speechify,
     /// Not an engine itself: each character can have a voice from any engine that's on. A
     /// voice's own `VoiceChoice.Engine` is always a real one.
     Mixed,
@@ -125,7 +128,7 @@ public static class Tones
 public static class VoiceEngines
 {
     /// The engines that make sound (everything but Mixed).
-    public static readonly VoiceEngine[] Engines = [VoiceEngine.Apple, VoiceEngine.Pocket, VoiceEngine.Qwen, VoiceEngine.Chatterbox, VoiceEngine.Orpheus, VoiceEngine.Elevenlabs, VoiceEngine.Gemini];
+    public static readonly VoiceEngine[] Engines = [VoiceEngine.Apple, VoiceEngine.Pocket, VoiceEngine.Qwen, VoiceEngine.Chatterbox, VoiceEngine.Orpheus, VoiceEngine.Elevenlabs, VoiceEngine.Gemini, VoiceEngine.Speechify];
 
     /// The engine a raw value in a file means: a known one, anything else as Mixed (as the
     /// Mac's `VoiceEngine.init(from:)`).
@@ -133,20 +136,21 @@ public static class VoiceEngines
         Parse(raw) is { } e && raw == e.Raw() ? e : VoiceEngine.Mixed;
 
     /// The raw value stored in the file ("apple", "pocket", "qwen", "chatterbox", "orpheus",
-    /// "elevenlabs", "gemini", "mixed").
+    /// "elevenlabs", "gemini", "speechify", "mixed").
     public static string Raw(this VoiceEngine e) => e.ToString().ToLowerInvariant();
 
     public static VoiceEngine? Parse(string? raw) =>
         Enum.TryParse<VoiceEngine>(raw, ignoreCase: true, out var e) && Enum.IsDefined(e) && !int.TryParse(raw, out _) ? e : null;
 
     /// Sends the book's text to a company's servers to make the audio.
-    public static bool IsCloud(this VoiceEngine e) => e is VoiceEngine.Elevenlabs or VoiceEngine.Gemini;
+    public static bool IsCloud(this VoiceEngine e) => e is VoiceEngine.Elevenlabs or VoiceEngine.Gemini or VoiceEngine.Speechify;
 
-    /// The company a cloud engine sends text to ("ElevenLabs", "Google"); null on this PC.
+    /// The company a cloud engine sends text to ("ElevenLabs", "Google", "Speechify"); null on this PC.
     public static string? CloudCompany(this VoiceEngine e) => e switch
     {
         VoiceEngine.Elevenlabs => "ElevenLabs",
         VoiceEngine.Gemini => "Google",
+        VoiceEngine.Speechify => "Speechify",
         _ => null,
     };
 
@@ -164,6 +168,7 @@ public static class VoiceEngines
         VoiceEngine.Elevenlabs => "ElevenLabs",
         VoiceEngine.Gemini => "Gemini TTS",
         VoiceEngine.Chatterbox => "Chatterbox",
+        VoiceEngine.Speechify => "Speechify",
         _ => "Mix Engines",
     };
 

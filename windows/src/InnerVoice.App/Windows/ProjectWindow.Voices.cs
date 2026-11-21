@@ -48,6 +48,8 @@ public sealed partial class ProjectWindow
             p => p.ShowsVoices && p.Settings.CloudVoicesAllowed is not null));
         book.Items.Add(Typed(Item("Stop Sending This Book to Google", null, () => Document.SetCloudAllowed(VoiceEngine.Gemini, false)),
             p => p.ShowsVoices && p.Settings.GoogleVoicesAllowed is not null));
+        book.Items.Add(Typed(Item("Stop Sending This Book to Speechify", null, () => Document.SetCloudAllowed(VoiceEngine.Speechify, false)),
+            p => p.ShowsVoices && p.Settings.SpeechifyVoicesAllowed is not null));
         book.SubmenuOpened += (_, _) => voicesSeparator.IsVisible = Document.Project.ShowsVoices;
         VoicesPage.OpenCloneVoice ??= (page, id) => (TopLevel.GetTopLevel(page) as ProjectWindow)?.CloneVoice(id);
         SpeechPlayer.Shared.Changed += ShowPlayFailure;

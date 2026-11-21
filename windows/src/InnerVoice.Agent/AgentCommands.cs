@@ -130,7 +130,7 @@ public static class AgentCommands
                 ProjectParam,
             ],
         },
-        new("characters list", "List the cast, most lines first. Returns `characters` (id, name, aliases, color, lines, words, firstLine, chapters, facts, narrator, showInIndex, voice: engine apple, pocket, qwen, chatterbox, orpheus, elevenlabs or gemini, name, source, confidence, needsYou).", "innervoice characters list --json") {
+        new("characters list", "List the cast, most lines first. Returns `characters` (id, name, aliases, color, lines, words, firstLine, chapters, facts, narrator, showInIndex, voice: engine apple, pocket, qwen, chatterbox, orpheus, elevenlabs, gemini or speechify, name, source, confidence, needsYou).", "innervoice characters list --json") {
             ReadOnly = true,
             Params = [
                 ProjectParam,

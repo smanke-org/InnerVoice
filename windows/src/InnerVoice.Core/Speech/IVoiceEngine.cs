@@ -6,6 +6,7 @@
 //   apple       Windows' built-in voices (App/Speech/WindowsVoices.cs; the Mac's Apple voices)
 //   elevenlabs  ElevenLabs, in the cloud (App/Speech/ElevenLabs.cs)
 //   gemini      Google's Gemini TTS, in the cloud (App/Speech/GeminiVoices.cs)
+//   speechify   Speechify, in the cloud (App/Speech/SpeechifyVoices.cs)
 //   pocket      Pocket TTS through ONNX Runtime (Speech/Neural)
 //   qwen        Qwen3-TTS through ONNX Runtime (Speech/Neural)
 //   chatterbox  Chatterbox through ONNX Runtime (Speech/Neural)
@@ -28,8 +29,8 @@ public sealed record SpeechRequest
     public LineKind? Kind { get; init; }
     /// A sigh or laugh from the speech tag (Orpheus, ElevenLabs and Gemini TTS).
     public VocalSound? Sound { get; init; }
-    /// The book allows its text to go to this request's cloud engine (that company: ElevenLabs
-    /// or Google). Not part of the cache key.
+    /// The book allows its text to go to this request's cloud engine (that company: ElevenLabs,
+    /// Google or Speechify). Not part of the cache key.
     public bool CloudAllowed { get; init; }
     /// Casting Style: how the narrator's voice changes for the character saying this (pitch
     /// in semitones, pace in steps). null or neutral: the voice as it is.

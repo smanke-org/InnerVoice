@@ -421,6 +421,7 @@ struct SpeechStatusBar: View {
         case .pocket?, .qwen?, .chatterbox?, .orpheus?: "Getting \(player.preparingEngine!.title) ready… The first line takes a few seconds."
         case .elevenlabs?: "Sending the line to ElevenLabs…"
         case .gemini?: "Sending the line to Google…"
+        case .speechify?: "Sending the line to Speechify…"
         default: "Making the audio…"
         }
     }

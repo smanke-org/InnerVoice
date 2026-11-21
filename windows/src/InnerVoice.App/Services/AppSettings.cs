@@ -69,6 +69,11 @@ public sealed class AppSettings
     public DateTime? GeminiConsent { get; set; }
     /// The Gemini TTS model ("gemini-3.8-flash-tts" or the Flash-Lite one); null: Flash.
     public string? GeminiModel { get; set; }
+    /// When the narrator agreed to send book text to Speechify (the key is in Credential Manager).
+    public DateTime? SpeechifyConsent { get; set; }
+    /// Speechify's voice list as last fetched (each page of GET /v1/voices, as sent), so the
+    /// Voices page shows it without asking.
+    public List<string>? SpeechifyVoicePages { get; set; }
     /// Export Audio's last choices.
     public string? ExportAudioFormat { get; set; }
     public bool ExportAudioSeparateVoices { get; set; }

@@ -60,7 +60,7 @@ nonisolated struct VoicePack: Sendable {
 
     static func pack(for engine: VoiceEngine) -> VoicePack? {
         switch engine {
-        case .apple, .mixed, .elevenlabs, .gemini: nil
+        case .apple, .mixed, .elevenlabs, .gemini, .speechify: nil
         case .orpheus: orpheus
         case .pocket: pocket
         case .qwen: qwen
@@ -123,6 +123,7 @@ final class VoiceModelManager {
         _ = revision
         if engine == .elevenlabs { return ElevenLabs.shared.isSetUp }
         if engine == .gemini { return GeminiVoices.shared.isSetUp }
+        if engine == .speechify { return SpeechifyVoices.shared.isSetUp }
         if engine == .apple || engine == .mixed { return true }
         // Checking lists the model folders on disk, and views ask on every redraw: the answer
         // is kept until a pack is downloaded or removed (`revision` changes).

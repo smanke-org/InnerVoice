@@ -436,6 +436,8 @@ public struct ProjectSettings: Codable, Hashable, Sendable {
     /// When the narrator allowed this book's text to be sent to Google for Gemini TTS
     /// voices. nil: never sent. Separate from ElevenLabs: each company gets its own yes.
     public var googleVoicesAllowed: Date?
+    /// When the narrator allowed this book's text to be sent to Speechify. nil: never sent.
+    public var speechifyVoicesAllowed: Date?
     /// When the narrator allowed this book's text to be sent to Claude (Anthropic's cloud
     /// model) for the AI features. nil: never sent.
     public var cloudTextAllowed: Date?
@@ -491,12 +493,13 @@ public struct ProjectSettings: Codable, Hashable, Sendable {
         switch engine {
         case .elevenlabs: cloudVoicesAllowed != nil
         case .gemini: googleVoicesAllowed != nil
+        case .speechify: speechifyVoicesAllowed != nil
         default: true
         }
     }
 
     /// Whether any cloud voice engine may get this book's text.
-    public var allowsAnyCloudVoices: Bool { cloudVoicesAllowed != nil || googleVoicesAllowed != nil }
+    public var allowsAnyCloudVoices: Bool { cloudVoicesAllowed != nil || googleVoicesAllowed != nil || speechifyVoicesAllowed != nil }
 
     public func narratorVoice(for engine: VoiceEngine) -> CastVoice? { narratorVoices?[engine.rawValue] }
 

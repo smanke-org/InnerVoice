@@ -102,6 +102,7 @@ public enum ActivityKey {
     public static let voicesKept = "voicesKept", voicesChanged = "voicesChanged"
     public static let elevenLabsCharacters = "elevenLabsCharacters", voicesCloned = "voicesCloned"
     public static let geminiCharacters = "geminiCharacters"
+    public static let speechifyCharacters = "speechifyCharacters"
     // Per model
     public static func aiKept(_ model: String) -> String { "aiKept|" + model }
     public static func aiChanged(_ model: String) -> String { "aiChanged|" + model }

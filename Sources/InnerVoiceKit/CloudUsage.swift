@@ -2,7 +2,7 @@ import Foundation
 
 /// What the cloud services used, per day, book and model: numbers only, never book text.
 public struct CloudUsageRecord: Codable, Hashable, Sendable {
-    public enum Service: String, Codable, Sendable { case claude, elevenlabs, google }
+    public enum Service: String, Codable, Sendable { case claude, elevenlabs, google, speechify }
 
     /// "yyyy-MM-dd" in the Mac's time zone.
     public var day: String
@@ -14,7 +14,7 @@ public struct CloudUsageRecord: Codable, Hashable, Sendable {
     public var outputTokens = 0
     public var cacheReadTokens = 0
     public var cacheWriteTokens = 0
-    /// ElevenLabs bills by characters.
+    /// ElevenLabs and Speechify bill by characters.
     public var characters = 0
     /// Gemini TTS bills by seconds of audio made (25 output tokens a second). Optional so
     /// records saved before it existed still read.

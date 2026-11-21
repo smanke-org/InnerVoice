@@ -92,7 +92,8 @@ public sealed class EngineSwitches
     };
 
     /// A voice when nothing is cast yet: the best system voice, Orpheus's first, Pocket TTS's or
-    /// Chatterbox's own voice, Qwen3-TTS's narrator preset, or Gemini's first.
+    /// Chatterbox's own voice, Qwen3-TTS's narrator preset, or Gemini's first (Speechify's first
+    /// fetched voice comes through the registry, like ElevenLabs').
     public VoiceChoice? Fallback(VoiceEngine engine) => engine switch
     {
         VoiceEngine.Orpheus => new VoiceChoice(VoiceEngine.Orpheus, "tara"),

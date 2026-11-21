@@ -47,7 +47,7 @@ enum ModelSpeech {
             try Task.checkCancellation()
             if n > 0 { samples += gap }
             switch engine {
-            case .apple, .mixed, .elevenlabs, .gemini: throw SpeechError.engineUnavailable(engine)
+            case .apple, .mixed, .elevenlabs, .gemini, .speechify: throw SpeechError.engineUnavailable(engine)
             case .chatterbox:
                 // Same clips as Pocket TTS; a shade and casting's age pitch shift the clip.
                 let semitones = (request.shade?.pitch ?? 0) + PocketVoice.semitones(pitch: request.choice.pitch)
@@ -447,7 +447,7 @@ actor MLXSpeech {
         case .pocket: pocketModel = nil
         case .qwen: qwenDesignModel = nil; qwenCloneModel = nil
         case .chatterbox: chatterboxModel = nil
-        case .apple, .mixed, .elevenlabs, .gemini: break
+        case .apple, .mixed, .elevenlabs, .gemini, .speechify: break
         }
         Memory.clearCache()
     }
@@ -461,7 +461,7 @@ actor MLXSpeech {
                 case .pocket: _ = try await loadPocket()
                 case .qwen: _ = try await loadQwenClone(); _ = try await loadQwenDesign()
                 case .chatterbox: _ = try await loadChatterbox()
-                case .apple, .mixed, .elevenlabs, .gemini: break
+                case .apple, .mixed, .elevenlabs, .gemini, .speechify: break
                 }
             } catch {
                 SpeechLog.write("loading \(engine.rawValue) failed: \(error)")

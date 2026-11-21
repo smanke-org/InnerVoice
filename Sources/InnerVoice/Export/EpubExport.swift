@@ -143,6 +143,11 @@ struct EpubExportSheet: View {
                     .font(.callout)
                     .foregroundStyle(.orange)
             }
+            if document.project.settings.speechifyVoicesAllowed != nil, document.project.engineInUse == .speechify {
+                Label("Speechify voices are made in the cloud: exporting sends the text they speak to Speechify, counted against your Speechify API plan.", systemImage: "icloud.and.arrow.up")
+                    .font(.callout)
+                    .foregroundStyle(.orange)
+            }
             Form {
                 Section("Chapters") { chapterList }
             }

@@ -173,6 +173,7 @@ struct VoiceResolver: Sendable {
         case .chatterbox: VoiceInfo.chatterbox.first?.choice
         case .elevenlabs: ElevenLabs.shared.voices.first?.choice
         case .gemini: GeminiVoices.shared.voices.first?.choice
+        case .speechify: SpeechifyVoices.shared.voices.first?.choice
         case .mixed: EngineSwitches.shared.enabled.first.flatMap { $0 == .mixed ? nil : fallback($0) }
         }
     }

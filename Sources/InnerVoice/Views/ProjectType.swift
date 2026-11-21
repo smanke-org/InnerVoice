@@ -204,6 +204,7 @@ struct ProjectTypeSheet: View {
         case .chatterbox: "Ten stock voices and the voices you clone, acted in each tone with its emotion setting."
         case .elevenlabs: "Natural voices in the cloud, from your ElevenLabs account."
         case .gemini: "Thirty voices in the cloud from Google, directed in plain words for each tone. Your own Gemini API key."
+        case .speechify: "Speechify’s voices in the cloud. Your own Speechify API key (the API has a free monthly allowance)."
         case .mixed: ""
         }
     }

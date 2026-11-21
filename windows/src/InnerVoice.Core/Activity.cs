@@ -85,6 +85,7 @@ public static class ActivityKey
     public const string VoicesKept = "voicesKept", VoicesChanged = "voicesChanged";
     public const string ElevenLabsCharacters = "elevenLabsCharacters", VoicesCloned = "voicesCloned";
     public const string GeminiCharacters = "geminiCharacters";
+    public const string SpeechifyCharacters = "speechifyCharacters";
     public static string AiKept(string model) => "aiKept|" + model;
     public static string AiChanged(string model) => "aiChanged|" + model;
 

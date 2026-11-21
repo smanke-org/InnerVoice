@@ -1,5 +1,5 @@
 // The Mac's Speech/CloudGate.swift: a book whose engine is a cloud one (ElevenLabs, Gemini
-// TTS) speaks only once the book allows its text to go to that company.
+// TTS, Speechify) speaks only once the book allows its text to go to that company.
 
 using Avalonia;
 using InnerVoice.App.Document;

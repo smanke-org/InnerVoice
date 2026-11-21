@@ -139,6 +139,7 @@ final class SpeechRenderer {
         case .pocket, .qwen, .chatterbox, .orpheus: buffer = try await ModelSpeech.render(request)
         case .elevenlabs: buffer = try await ElevenLabs.shared.render(request, allowed: request.cloudAllowed)
         case .gemini: buffer = try await GeminiVoices.shared.render(request, allowed: request.cloudAllowed)
+        case .speechify: buffer = try await SpeechifyVoices.shared.render(request, allowed: request.cloudAllowed)
         case .mixed: throw SpeechError.engineUnavailable(.mixed)
         }
         // Shading: Apple's voices did it themselves; Pocket TTS shifted the clip it cloned
@@ -157,8 +158,8 @@ final class SpeechRenderer {
             let tone = PocketDelivery.for(request.tone, narration: request.kind == nil)
             let rate = (request.choice.rate ?? 1) * ShadeAudio.paceRate(s.pace) * tone.rate
             if abs(rate - 1) > 0.001 { buffer = try ShadeAudio.apply(buffer, semitones: 0, rate: rate) }
-        case .gemini:
-            // Gemini has no speed or pitch setting: the shade and the narrator's speed are
+        case .gemini, .speechify:
+            // Gemini and Speechify have no speed or pitch setting: the shade and the narrator's speed are
             // applied to the finished audio.
             let rate = request.choice.rate ?? 1
             if s.pitch != 0 || s.pace != 0 || abs(rate - 1) > 0.001 {

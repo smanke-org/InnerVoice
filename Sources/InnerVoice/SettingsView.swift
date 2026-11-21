@@ -225,10 +225,11 @@ struct VoicesSettings: View {
             VoicePackRow(pack: .orpheus)
             ElevenLabsRow()
             GeminiRow()
+            SpeechifyRow()
         } header: {
             Text("Engines")
         } footer: {
-            Text("Apple Voices, Pocket TTS, Qwen3-TTS, Chatterbox and Orpheus run on this Mac; downloading them is the only time they use the internet. ElevenLabs and Gemini TTS are different: they make their voices in the cloud, so the text they speak is sent to ElevenLabs or Google, and each book asks first, for each company. Each book speaks with one engine: its previews, table reads and exports all use it.")
+            Text("Apple Voices, Pocket TTS, Qwen3-TTS, Chatterbox and Orpheus run on this Mac; downloading them is the only time they use the internet. ElevenLabs, Gemini TTS and Speechify are different: they make their voices in the cloud, so the text they speak is sent to ElevenLabs, Google or Speechify, and each book asks first, for each company. Each book speaks with one engine: its previews, table reads and exports all use it.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

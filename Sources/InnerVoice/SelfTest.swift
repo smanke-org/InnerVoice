@@ -1794,6 +1794,7 @@ enum SelfTest {
         if ProcessInfo.processInfo.environment["APP_SELFTEST_DOWNLOAD"] != nil { await voiceDownload() }
         await elevenLabs(doc, undo: undo)
         await gemini(doc, undo: undo)
+        await speechify(doc, undo: undo)
         await localClones(doc, undo: undo)
         redrawCost(doc)
         await links()

@@ -45,7 +45,19 @@ public static class CloudInUse
         return engine == VoiceEngine.Gemini || (engine == VoiceEngine.Mixed && EngineSwitches.Shared.IsOn(VoiceEngine.Gemini));
     }
 
-    public static bool Any(Project project) => Claude() || ElevenLabs(project) || Gemini(project);
+    /// Whether Speechify is set up (a key and the narrator's yes); the engine sets this.
+    public static Func<bool> SpeechifySetUp { get; set; } = () => false;
+
+    /// The book shows voices and allows Speechify, Speechify is set up, and it's the book's
+    /// engine or one of Mix Engines'.
+    public static bool Speechify(Project project)
+    {
+        if (!project.ShowsVoices || project.Settings.SpeechifyVoicesAllowed is null || !SpeechifySetUp()) return false;
+        var engine = Speech.VoiceSetup.EngineInUse(project);
+        return engine == VoiceEngine.Speechify || (engine == VoiceEngine.Mixed && EngineSwitches.Shared.IsOn(VoiceEngine.Speechify));
+    }
+
+    public static bool Any(Project project) => Claude() || ElevenLabs(project) || Gemini(project) || Speechify(project);
 }
 
 /// The toolbar's Cloud Usage popover: for each cloud model, tokens in and out (characters for
@@ -73,22 +85,23 @@ public sealed class CloudUsageView : UserControl
 
     /// Which services show: each one while it's in use, and always once it has usage here
     /// (this book, or every book): an engine switched off later still cost what it cost.
-    public static (bool Claude, bool ElevenLabs, bool Gemini) Shown(Project project, string? book, IEnumerable<CloudUsageRecord> records)
+    public static (bool Claude, bool ElevenLabs, bool Gemini, bool Speechify) Shown(Project project, string? book, IEnumerable<CloudUsageRecord> records)
     {
         var used = records.Where(r => book is null || r.Book == book).Select(r => r.Service).ToHashSet();
         return (CloudInUse.Claude() || used.Contains(CloudService.Claude),
                 CloudInUse.ElevenLabs(project) || used.Contains(CloudService.Elevenlabs),
-                CloudInUse.Gemini(project) || used.Contains(CloudService.Google));
+                CloudInUse.Gemini(project) || used.Contains(CloudService.Google),
+                CloudInUse.Speechify(project) || used.Contains(CloudService.Speechify));
     }
 
     void Build()
     {
         var book = allBooks ? null : project.UsageKey();
-        var (showClaude, showEleven, showGemini) = Shown(project, book, CloudUsageStore.Shared.Records);
+        var (showClaude, showEleven, showGemini, showSpeechify) = Shown(project, book, CloudUsageStore.Shared.Records);
         var records = CloudUsageStore.Shared.Records
             .Where(r => (r.Service == CloudService.Claude && showClaude) || (r.Service == CloudService.Elevenlabs && showEleven)
-                        || (r.Service == CloudService.Google && showGemini)).ToList();
-        var services = new[] { showClaude ? "Anthropic" : null, showEleven ? "ElevenLabs" : null, showGemini ? "Google" : null }.OfType<string>().ToList();
+                        || (r.Service == CloudService.Google && showGemini) || (r.Service == CloudService.Speechify && showSpeechify)).ToList();
+        var services = new[] { showClaude ? "Anthropic" : null, showEleven ? "ElevenLabs" : null, showGemini ? "Google" : null, showSpeechify ? "Speechify" : null }.OfType<string>().ToList();
         var totals = CloudUsage.Totals(records, book);
         var days = CloudUsage.ByDay(records, book);
         var mm = ModelManager.Shared;
@@ -164,6 +177,18 @@ public sealed class CloudUsageView : UserControl
             panel.Children.Add(Section("Gemini TTS", col));
         }
 
+        if (showSpeechify)
+        {
+            var sp = totals.Where(t => t.Service == CloudService.Speechify).ToList();
+            var col = new StackPanel { Spacing = Look.Sm };
+            if (sp.Count == 0) col.Children.Add(Empty("No Speechify voices made yet" + (allBooks ? "." : " for this book.")));
+            foreach (var t in sp)
+                col.Children.Add(ModelRow(t.Model, true,
+                    [("Characters", t.Characters), ("Seconds of audio", (long)(t.AudioSeconds ?? 0)), ("Requests", t.Requests)], null));
+            col.Children.Add(Ui.Caption("Characters are what Speechify billed. Your plan’s allowance is on the Speechify API platform.", TextWrapping.Wrap));
+            panel.Children.Add(Section("Speechify", col));
+        }
+
         if (days.Count > 0)
         {
             // One color per model, the same in every chart, with one legend above them.
@@ -212,6 +237,7 @@ public sealed class CloudUsageView : UserControl
     {
         CloudService.Claude => ClaudeAccount.Shared.NameOf(r.Model),
         CloudService.Elevenlabs => $"ElevenLabs ({r.Model})",
+        CloudService.Speechify => $"Speechify ({r.Model})",
         _ => $"Gemini ({r.Model})",
     };
 

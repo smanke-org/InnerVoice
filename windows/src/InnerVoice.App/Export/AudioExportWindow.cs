@@ -102,6 +102,8 @@ public sealed class AudioExportWindow : Window
             content.Children.Add(Ui.Caption("☁ ElevenLabs voices are made in the cloud: exporting sends the text they speak to ElevenLabs, and uses your plan’s credits.", TextWrapping.Wrap));
         if (GeminiNoteShown(project))
             content.Children.Add(Ui.Caption(GeminiNote, TextWrapping.Wrap));
+        if (SpeechifyNoteShown(project))
+            content.Children.Add(Ui.Caption(SpeechifyNote, TextWrapping.Wrap));
         (creditsPanel.Parent as Panel)?.Children.Remove(creditsPanel);
         content.Children.Add(creditsPanel);
 
@@ -199,12 +201,13 @@ public sealed class AudioExportWindow : Window
     /// back; no book text is sent.
     void EstimateCredits()
     {
-        if (!ElevenLabsEngine.Shared.IsSetUp && !GeminiVoices.Shared.IsSetUp)
+        if (!ElevenLabsEngine.Shared.IsSetUp && !GeminiVoices.Shared.IsSetUp && !SpeechifyVoices.Shared.IsSetUp)
         {
             creditsRun?.Cancel();
             creditsKey = null;
             credits = null;
             geminiCharacters = 0;
+            speechifyCharacters = 0;
             ShowCredits();
             return;
         }
@@ -232,15 +235,17 @@ public sealed class AudioExportWindow : Window
         {
             if (EstimateDelay > TimeSpan.Zero) await Task.Delay(EstimateDelay, ct);
             var renderer = SpeechRenderer.Shared;
-            var (needed, lines, gemini) = await Task.Run(() =>
+            var (needed, lines, gemini, speechify) = await Task.Run(() =>
             {
                 var parts = makeParts();
                 var (n, l) = AudioExporter.CreditsNeeded(parts, resolver, renderer, ct);
                 var (g, _) = AudioExporter.CloudCharacters(parts, resolver, VoiceEngine.Gemini, renderer, ct);
-                return (n, l, g);
+                var (sp, _) = AudioExporter.CloudCharacters(parts, resolver, VoiceEngine.Speechify, renderer, ct);
+                return (n, l, g, sp);
             }, ct);
             if (ct.IsCancellationRequested) return;
             geminiCharacters = gemini;
+            speechifyCharacters = speechify;
             credits = (needed, lines, creditsLeft);
             ShowCredits();
             if (!ElevenLabsEngine.Shared.IsSetUp || needed == 0 || creditsLeft is not null) return;
@@ -274,9 +279,28 @@ public sealed class AudioExportWindow : Window
             && (engine == VoiceEngine.Gemini || (engine == VoiceEngine.Mixed && EngineSwitches.Shared.IsOn(VoiceEngine.Gemini)));
     }
 
+    /// The Speechify export note (the Mac's words), shown while the book allows Speechify and
+    /// speaks with it or mixes it in. Export EPUB with Audio shows it too.
+    public const string SpeechifyNote = "☁ Speechify voices are made in the cloud: exporting sends the text they speak to Speechify, counted against your Speechify API plan.";
+
+    public static bool SpeechifyNoteShown(Project project)
+    {
+        var engine = project.EngineInUse();
+        return project.Settings.SpeechifyVoicesAllowed is not null
+            && (engine == VoiceEngine.Speechify || (engine == VoiceEngine.Mixed && EngineSwitches.Shared.IsOn(VoiceEngine.Speechify)));
+    }
+
     /// Characters of Gemini TTS lines this export would send (for the cost estimate).
     long geminiCharacters;
     public long GeminiCharacters => geminiCharacters;
+
+    /// Characters of Speechify lines this export would send (Speechify bills by character).
+    long speechifyCharacters;
+    public long SpeechifyCharacters => speechifyCharacters;
+
+    /// The Speechify estimate's words (the Mac's): characters and dollars at the pay-as-you-go price.
+    public static string SpeechifyCostText(long characters) =>
+        $"About {characters:N0} Speechify characters for the lines not made yet: about {SpeechifyTTS.EstimatedDollars(characters).ToString("C2", System.Globalization.CultureInfo.GetCultureInfo("en-US"))} at Speechify’s pay-as-you-go price, less whatever your plan’s monthly allowance still covers.";
 
     /// The Gemini TTS estimate's words: dollars at Google's paid-tier prices for the model in use.
     public static string GeminiCostText(long characters, GeminiModel model) =>
@@ -294,6 +318,8 @@ public sealed class AudioExportWindow : Window
         }
         if (geminiCharacters > 0)
             creditsPanel.Children.Add(Ui.Text(GeminiCostText(geminiCharacters, GeminiVoices.Shared.Model), 12, brush: Look.Brush(Look.SecondaryInk), wrap: TextWrapping.Wrap));
+        if (speechifyCharacters > 0)
+            creditsPanel.Children.Add(Ui.Text(SpeechifyCostText(speechifyCharacters), 12, brush: Look.Brush(Look.SecondaryInk), wrap: TextWrapping.Wrap));
         creditsPanel.IsVisible = creditsPanel.Children.Count > 0;
     }
 
@@ -330,13 +356,16 @@ public sealed class AudioExportWindow : Window
     /// The question before an export that spends money (the Mac's top of `export()`): how
     /// many chapters, and what the lines not made yet cost. null when nothing is paid.
     public static (string Title, string Message, string Action)? PaidQuestion(int count, bool everyChapter, string? onlyChapter,
-                                                                             long geminiCharacters, GeminiModel model, long credits)
+                                                                             long geminiCharacters, GeminiModel model, long credits,
+                                                                             long speechifyCharacters = 0)
     {
-        if (geminiCharacters <= 0 && credits <= 0) return null;
+        if (geminiCharacters <= 0 && credits <= 0 && speechifyCharacters <= 0) return null;
         var costs = new List<string>();
         if (geminiCharacters > 0)
             costs.Add($"about {(GeminiTTS.EstimatedSeconds(geminiCharacters) * model.DollarsPerSecond()).ToString("C2", System.Globalization.CultureInfo.GetCultureInfo("en-US"))} of Gemini TTS");
         if (credits > 0) costs.Add($"about {credits:N0} ElevenLabs credits");
+        if (speechifyCharacters > 0)
+            costs.Add($"about {speechifyCharacters:N0} Speechify characters (about {SpeechifyTTS.EstimatedDollars(speechifyCharacters).ToString("C2", System.Globalization.CultureInfo.GetCultureInfo("en-US"))} beyond your plan’s allowance)");
         var chapters = count == 1 ? "1 Chapter" : $"{count:N0} Chapters";
         var title = everyChapter && count > 1 ? $"Export the Whole Book ({count:N0} Chapters)?" : $"Export {chapters}?";
         var message = $"This uses {string.Join(" and ", costs)} for the lines not made yet."
@@ -351,7 +380,7 @@ public sealed class AudioExportWindow : Window
         // Cancel is the default button, so a stray Enter never starts a costly export.
         var picked = chapters.Picked;
         if (PaidQuestion(picked.Count, chapters.EveryChapter, picked.Count == 1 ? AudioExporter.ChapterTitle(document.Project, picked[0]) : null,
-                         geminiCharacters, GeminiVoices.Shared.Model, credits?.Needed ?? 0) is { } paid
+                         geminiCharacters, GeminiVoices.Shared.Model, credits?.Needed ?? 0, speechifyCharacters) is { } paid
             && !await Dialogs.Confirm(this, paid.Title, paid.Message, paid.Action, destructive: false, cancelIsDefault: true))
             return;
         if (credits is { Left: { } left } c && c.Needed > left

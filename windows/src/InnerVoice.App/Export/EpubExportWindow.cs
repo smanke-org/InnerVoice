@@ -57,6 +57,8 @@ public sealed class EpubExportWindow : Window
             content.Children.Add(Ui.Caption("☁ ElevenLabs voices are made in the cloud: exporting sends the text they speak to ElevenLabs, and uses your plan’s credits.", TextWrapping.Wrap));
         if (AudioExportWindow.GeminiNoteShown(project))
             content.Children.Add(Ui.Caption(AudioExportWindow.GeminiNote, TextWrapping.Wrap));
+        if (AudioExportWindow.SpeechifyNoteShown(project))
+            content.Children.Add(Ui.Caption(AudioExportWindow.SpeechifyNote, TextWrapping.Wrap));
         // EPUB audio is M4A: without Windows' AAC encoder there's no book to make.
         if (AudioEncoders.M4a is null)
             content.Children.Add(Ui.Text("An EPUB with audio needs M4A. " + AudioEncoders.NoM4a, 13, brush: Look.Brush(Look.Retake), wrap: TextWrapping.Wrap));

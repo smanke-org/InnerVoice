@@ -60,7 +60,7 @@ public sealed partial class VoicesPage
             yield return Notice(e.NotReadyReason ?? $"{engine.Title()} isn’t downloaded yet, so these voices can’t be heard.");
         // Each cloud engine's company separately (the Mac's CloudNotice): a reminder and a way
         // to stop while it's in use, or a way to include it in the mix.
-        foreach (var service in new[] { VoiceEngine.Elevenlabs, VoiceEngine.Gemini })
+        foreach (var service in new[] { VoiceEngine.Elevenlabs, VoiceEngine.Gemini, VoiceEngine.Speechify })
         {
             var company = service.CloudCompany()!;
             bool allowed = p.Settings.AllowsCloud(service), on = EngineSwitches.Shared.IsOn(service);

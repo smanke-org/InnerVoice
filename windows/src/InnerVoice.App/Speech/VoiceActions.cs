@@ -26,6 +26,7 @@ public static class VoiceSetup
         VoiceEngineRegistry.Register(new WindowsVoices());
         ElevenLabsEngine.Register();
         GeminiVoices.Register();
+        SpeechifyVoices.Register();
         // Pocket TTS, Qwen3-TTS, Chatterbox and Orpheus on ONNX Runtime (DirectML or the CPU). Test runs keep
         // their models, samples and clones in temporary folders, never the narrator's own.
         VoicePacks.Folder = AppPaths.IsTestRun ? Path.Combine(Path.GetTempPath(), "InnerVoice Voice Models (test)") : Path.Combine(AppPaths.Support, "Voice Models");
@@ -153,7 +154,12 @@ public static class VoiceActions
         document.Change(allowed ? $"Allow {company}" : $"Stop Sending to {company}", p =>
         {
             var date = allowed ? AppleDate.Now : (AppleDate?)null;
-            if (engine == VoiceEngine.Gemini) p.Settings.GoogleVoicesAllowed = date; else p.Settings.CloudVoicesAllowed = date;
+            switch (engine)
+            {
+                case VoiceEngine.Gemini: p.Settings.GoogleVoicesAllowed = date; break;
+                case VoiceEngine.Speechify: p.Settings.SpeechifyVoicesAllowed = date; break;
+                default: p.Settings.CloudVoicesAllowed = date; break;
+            }
         });
         if (allowed) VoiceCastingRun.CastIfNeeded(document);
     }

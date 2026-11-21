@@ -1205,7 +1205,7 @@ struct CloudNotice: View {
 
     var body: some View {
         VStack(spacing: Space.sm) {
-            ForEach([VoiceEngine.elevenlabs, .gemini], id: \.self) { notice(for: $0) }
+            ForEach([VoiceEngine.elevenlabs, .gemini, .speechify], id: \.self) { notice(for: $0) }
         }
     }
 

@@ -104,6 +104,9 @@ public enum VoiceEngine: String, Codable, CaseIterable, Identifiable, Sendable {
     /// speech tokenizer and speaker encoder come from Alibaba research, so it's labeled
     /// like Qwen3-TTS.
     case chatterbox
+    /// Speechify's API, in the cloud: sends text to Speechify. Off until the narrator sets it
+    /// up, and each book must allow it (`ProjectSettings.speechifyVoicesAllowed`).
+    case speechify
     /// Not an engine itself: each character can have a voice from any engine that's on.
     /// A voice's own `VoiceChoice.engine` is always a real one.
     case mixed
@@ -116,10 +119,10 @@ public enum VoiceEngine: String, Codable, CaseIterable, Identifiable, Sendable {
     }
 
     /// The engines that make sound (everything but `.mixed`).
-    public static let engines: [VoiceEngine] = [.apple, .pocket, .qwen, .chatterbox, .orpheus, .elevenlabs, .gemini]
+    public static let engines: [VoiceEngine] = [.apple, .pocket, .qwen, .chatterbox, .orpheus, .elevenlabs, .gemini, .speechify]
 
     /// Sends the book's text to a company's servers to make the audio.
-    public var isCloud: Bool { self == .elevenlabs || self == .gemini }
+    public var isCloud: Bool { self == .elevenlabs || self == .gemini || self == .speechify }
 
     public var title: String {
         switch self {
@@ -130,6 +133,7 @@ public enum VoiceEngine: String, Codable, CaseIterable, Identifiable, Sendable {
         case .elevenlabs: "ElevenLabs"
         case .gemini: "Gemini TTS"
         case .chatterbox: "Chatterbox"
+        case .speechify: "Speechify"
         case .mixed: "Mix Engines"
         }
     }
@@ -139,6 +143,7 @@ public enum VoiceEngine: String, Codable, CaseIterable, Identifiable, Sendable {
         switch self {
         case .elevenlabs: "ElevenLabs"
         case .gemini: "Google"
+        case .speechify: "Speechify"
         default: nil
         }
     }

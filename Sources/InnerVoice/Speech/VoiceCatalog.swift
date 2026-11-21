@@ -100,6 +100,7 @@ enum VoiceCatalog {
         case .chatterbox: LocalClones.shared.voices(on: .chatterbox) + VoiceInfo.chatterbox
         case .elevenlabs: ElevenLabs.shared.voices
         case .gemini: GeminiVoices.shared.voices
+        case .speechify: SpeechifyVoices.shared.voices
         // Every engine that's on and ready, best first within each.
         case .mixed: VoiceEngine.engines.filter { EngineSwitches.shared.usable($0) && (!$0.isCloud || project?.settings.allowsCloud($0) == true) }
             .flatMap { voices(for: $0) }
@@ -122,6 +123,7 @@ enum VoiceCatalog {
             ?? VoiceInfo.chatterbox.first { $0.voiceID == choice.voiceID }
         case .elevenlabs: ElevenLabs.shared.voices.first { $0.voiceID == choice.voiceID }
         case .gemini: GeminiVoices.shared.voices.first { $0.voiceID == choice.voiceID }
+        case .speechify: SpeechifyVoices.shared.voices.first { $0.voiceID == choice.voiceID }
         case .mixed: nil
         }
     }

@@ -42,6 +42,7 @@ final class EngineSwitches {
         case .mixed: return false
         case .elevenlabs: return ElevenLabs.shared.isSetUp
         case .gemini: return GeminiVoices.shared.isSetUp
+        case .speechify: return SpeechifyVoices.shared.isSetUp
         default: return true
         }
     }

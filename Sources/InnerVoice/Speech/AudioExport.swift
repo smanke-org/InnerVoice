@@ -213,6 +213,9 @@ enum AudioExporter {
                 // lines to the key's limit, so a short pause is enough here.
                 SpeechLog.write("export: Gemini TTS busy, trying again (attempt \(attempt + 1))")
                 try await Task.sleep(for: .seconds(min(wait, 4)))
+            } catch SpeechifyError.busy(let after) where attempt < 8 {
+                SpeechLog.write("export: Speechify busy, trying again (attempt \(attempt + 1))")
+                try await Task.sleep(for: .seconds(min(after ?? wait, 30)))
             }
             attempt += 1
             wait = min(wait * 2, 60)
@@ -269,6 +272,8 @@ struct AudioExportSheet: View {
     @State private var credits: (needed: Int, lines: Int, left: Int?)?
     /// Characters of Gemini TTS lines this export would send (for a cost estimate).
     @State private var geminiCharacters: Int?
+    /// Characters of Speechify lines this export would send (Speechify bills by character).
+    @State private var speechifyCharacters: Int?
 
     /// The engines this book's voices use, for the Export Speed pickers.
     private var speedEngines: [VoiceEngine] {
@@ -363,6 +368,11 @@ struct AudioExportSheet: View {
                     .font(.callout)
                     .foregroundStyle(.orange)
             }
+            if document.project.settings.speechifyVoicesAllowed != nil, document.project.engineInUse == .speechify {
+                Label("Speechify voices are made in the cloud: exporting sends the text they speak to Speechify, counted against your Speechify API plan.", systemImage: "icloud.and.arrow.up")
+                    .font(.callout)
+                    .foregroundStyle(.orange)
+            }
             if let credits, credits.needed > 0 {
                 creditsNote(credits)
             }
@@ -371,6 +381,13 @@ struct AudioExportSheet: View {
                 Label("About \(dollars.formatted(.currency(code: "USD"))) of Gemini TTS for the lines not made yet, at Google’s paid-tier prices.", systemImage: "creditcard")
                     .font(.callout)
                     .foregroundStyle(.secondary)
+            }
+            if let speechifyCharacters, speechifyCharacters > 0 {
+                let dollars = SpeechifyTTS.estimatedDollars(characters: speechifyCharacters)
+                Label("About \(speechifyCharacters.formatted()) Speechify characters for the lines not made yet: about \(dollars.formatted(.currency(code: "USD"))) at Speechify’s pay-as-you-go price, less whatever your plan’s monthly allowance still covers.", systemImage: "creditcard")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Form {
                 Picker("Export", selection: $scope) {
@@ -531,7 +548,9 @@ struct AudioExportSheet: View {
     /// charges about a credit a character), then asks ElevenLabs what the plan has left.
     /// Only the plan's numbers come back; no book text is sent.
     private func estimateCredits() async {
-        guard ElevenLabs.shared.isSetUp || GeminiVoices.shared.isSetUp else { credits = nil; geminiCharacters = nil; return }
+        guard ElevenLabs.shared.isSetUp || GeminiVoices.shared.isSetUp || SpeechifyVoices.shared.isSetUp else {
+            credits = nil; geminiCharacters = nil; speechifyCharacters = nil; return
+        }
         // Settle first: a run of clicks makes one estimate, not one each.
         try? await Task.sleep(for: .milliseconds(250))
         if Task.isCancelled { return }
@@ -540,23 +559,26 @@ struct AudioExportSheet: View {
         let spec = spec
         let resolver = VoiceResolver(project: document.project, index: document.index)
         let folder = SpeechRenderer.shared.cacheFolder
-        let work = Task.detached(priority: .userInitiated) { () -> (needed: Int, lines: Int, gemini: Int)? in
-            var needed = 0, lines = 0, gemini = 0
+        let work = Task.detached(priority: .userInitiated) { () -> (needed: Int, lines: Int, gemini: Int, speechify: Int)? in
+            var needed = 0, lines = 0, gemini = 0, speechify = 0
             for (n, seg) in spec.parts(resolver: resolver).flatMap(\.segments).enumerated() {
                 if n % 200 == 0, Task.isCancelled { return nil }
                 guard let r = resolver.request(for: seg), r.choice.engine.isCloud, r.cloudAllowed,
                       !FileManager.default.fileExists(atPath: folder.appending(path: r.cacheKey + ".caf").path) else { continue }
                 let count = r.text.trimmingCharacters(in: .whitespacesAndNewlines).count
                 if r.choice.engine == .gemini { gemini += count; continue }
+                if r.choice.engine == .speechify { speechify += count; continue }
+                guard r.choice.engine == .elevenlabs else { continue }
                 needed += count
                 lines += 1
             }
-            return (needed, lines, gemini)
+            return (needed, lines, gemini, speechify)
         }
-        guard let (needed, lines, gemini) = await withTaskCancellationHandler(operation: { await work.value }, onCancel: { work.cancel() }),
+        guard let (needed, lines, gemini, speechify) = await withTaskCancellationHandler(operation: { await work.value }, onCancel: { work.cancel() }),
               !Task.isCancelled else { return }
         geminiCharacters = gemini
-        guard ElevenLabs.shared.isSetUp else { credits = nil; return }
+        speechifyCharacters = speechify
+        guard ElevenLabs.shared.isSetUp, needed > 0 else { credits = nil; return }
         credits = (needed, lines, credits?.left)
         guard needed > 0, credits?.left == nil, let account = try? await ElevenLabs.shared.account(), !Task.isCancelled else { return }
         credits = (needed, lines, max(0, account.limit - account.used))
@@ -568,7 +590,8 @@ struct AudioExportSheet: View {
         // Cancel is the default button, so a stray Return never starts a costly export.
         let paidCredits = credits?.needed ?? 0
         let paidGemini = geminiCharacters ?? 0
-        if paidCredits > 0 || paidGemini > 0 {
+        let paidSpeechify = speechifyCharacters ?? 0
+        if paidCredits > 0 || paidGemini > 0 || paidSpeechify > 0 {
             let count = picked.count
             var costs: [String] = []
             if paidGemini > 0 {
@@ -576,6 +599,10 @@ struct AudioExportSheet: View {
                 costs.append("about \(dollars.formatted(.currency(code: "USD"))) of Gemini TTS")
             }
             if paidCredits > 0 { costs.append("about \(paidCredits.formatted()) ElevenLabs credits") }
+            if paidSpeechify > 0 {
+                let dollars = SpeechifyTTS.estimatedDollars(characters: paidSpeechify)
+                costs.append("about \(paidSpeechify.formatted()) Speechify characters (about \(dollars.formatted(.currency(code: "USD"))) beyond your plan’s allowance)")
+            }
             let alert = NSAlert()
             alert.messageText = everyChapter && count > 1
                 ? "Export the Whole Book (\(count.formatted()) Chapters)?"

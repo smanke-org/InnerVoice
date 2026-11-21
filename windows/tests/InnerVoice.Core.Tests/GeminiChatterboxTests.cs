@@ -169,7 +169,7 @@ public class GeminiTTSTests
         Assert.Equal("ElevenLabs", VoiceEngine.Elevenlabs.CloudCompany());
         Assert.True(!VoiceEngine.Chatterbox.IsCloud() && VoiceEngine.Chatterbox.HasChineseOrigin() && VoiceEngine.Qwen.HasChineseOrigin());
         Assert.False(VoiceEngine.Pocket.HasChineseOrigin());
-        Assert.Equal(["apple", "pocket", "qwen", "chatterbox", "orpheus", "elevenlabs", "gemini"], VoiceEngines.Engines.Select(e => e.Raw()));
+        Assert.Equal(["apple", "pocket", "qwen", "chatterbox", "orpheus", "elevenlabs", "gemini", "speechify"], VoiceEngines.Engines.Select(e => e.Raw()));
     }
 
     /// Projects move between the Mac and a PC: Google's permission is saved as the Mac's

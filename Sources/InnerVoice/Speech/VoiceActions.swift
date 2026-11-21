@@ -54,7 +54,11 @@ import SwiftUI
         guard let company = engine.cloudCompany else { return }
         updateSettings(allowed ? "Allow \(company)" : "Stop Sending to \(company)", undoManager: undoManager) {
             let date: Date? = allowed ? .now : nil
-            if engine == .gemini { $0.googleVoicesAllowed = date } else { $0.cloudVoicesAllowed = date }
+            switch engine {
+            case .gemini: $0.googleVoicesAllowed = date
+            case .speechify: $0.speechifyVoicesAllowed = date
+            default: $0.cloudVoicesAllowed = date
+            }
         }
         if allowed { VoiceCastingRun.castIfNeeded(document: self) }
     }

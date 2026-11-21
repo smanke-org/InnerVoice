@@ -116,6 +116,7 @@ public class PocketTests
         Assert.Equal(VoiceEngine.Qwen, System.Text.Json.JsonSerializer.Deserialize<VoiceEngine>("\"qwen\""));
         Assert.Equal(VoiceEngine.Chatterbox, System.Text.Json.JsonSerializer.Deserialize<VoiceEngine>("\"chatterbox\""));
         Assert.Equal("\"gemini\"", System.Text.Json.JsonSerializer.Serialize(VoiceEngine.Gemini, ProjectJson.Options));
+        Assert.Equal("\"speechify\"", System.Text.Json.JsonSerializer.Serialize(VoiceEngine.Speechify, ProjectJson.Options));
         Assert.Equal("\"chatterbox\"", System.Text.Json.JsonSerializer.Serialize(VoiceEngine.Chatterbox, ProjectJson.Options));
         // A whole project with an engine from the future still opens.
         var p = ProjectJson.Decode(System.Text.Encoding.UTF8.GetBytes(System.Text.Encoding.UTF8.GetString(File.ReadAllBytes(Fixtures.PathOf("legacy-qwen.json"))).Replace("\"voiceEngine\":\"qwen\"", "\"voiceEngine\":\"hologram\"")));
