@@ -249,9 +249,14 @@ struct ProjectWindow: View {
                 Button("Stop", systemImage: "stop.circle") { document.tagging.stop() }
                     .help("Stop the AI; what it has done so far is kept (⌘.)")
             } else {
-                Button("Tag Speakers", systemImage: "sparkles") {
+                Button {
                     TagCommand.run(document: document, workspace: workspace, undoManager: undoManager)
+                } label: {
+                    Label("Tag Speakers", systemImage: "sparkles")
+                        .labelStyle(.titleAndIcon)
                 }
+                .buttonStyle(.borderedProminent)
+                .tint(.accentColor)
                 .help("Use the on-device AI to find who speaks each line (⇧⌘T)")
             }
         }
