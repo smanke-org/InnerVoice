@@ -128,16 +128,46 @@ public sealed class GeminiVoices : IVoiceEngine
 
     // MARK: Setup
 
-    /// Flash or Flash-Lite (Settings › Voices); Flash unless the narrator picks otherwise.
-    public GeminiModel Model
+    /// The model ID the narrator chose (Settings › Voices); Flash until they pick another. A
+    /// refresh never changes it. Newer models Google lists can be chosen too.
+    public string ModelID
     {
-        get => AppPaths.IsTestRun ? testModel : GeminiTTS.ModelFrom(AppSettings.Current.GeminiModel) ?? GeminiModel.Flash;
+        get => AppPaths.IsTestRun ? testModel.Raw() : AppSettings.Current.GeminiModel ?? GeminiModel.Flash.Raw();
         set
         {
-            if (AppPaths.IsTestRun) testModel = value;
-            else AppSettings.Update(s => s.GeminiModel = value.Raw());
+            if (AppPaths.IsTestRun) testModel = GeminiTTS.ModelFrom(value) ?? GeminiModel.Flash;
+            else AppSettings.Update(s => s.GeminiModel = value);
             Notify();
         }
+    }
+
+    /// The chosen model's prices (a newer model is priced like its closest known one).
+    public GeminiModel Model
+    {
+        get => GeminiTTS.PricingFor(ModelID);
+        set => ModelID = value.Raw();
+    }
+
+    /// Google's TTS model IDs: the two known ones until a refresh lists them, plus the chosen one.
+    public IReadOnlyList<string> ModelIDs
+    {
+        get
+        {
+            var listed = ServiceCatalogs.Shared.State(CatalogService.Gemini).Models;
+            var all = listed.Count > 0 ? listed.ToList() : Enum.GetValues<GeminiModel>().Select(m => m.Raw()).ToList();
+            if (!all.Contains(ModelID)) all.Add(ModelID);
+            return all;
+        }
+    }
+
+    /// Lists Google's text-to-speech models (sends no text from the book).
+    public async Task<List<string>> FetchModels(CancellationToken ct = default)
+    {
+        var k = ApiKey ?? throw SpeechException.EngineUnavailable(VoiceEngine.Gemini);
+        using var http = new HttpRequestMessage(HttpMethod.Get, GeminiTTS.Host + "models?pageSize=1000");
+        http.Headers.Add("x-goog-api-key", k);
+        var data = await Send(http, ct);
+        return ServiceCatalog.GeminiTTSModels(data) ?? throw new SpeechException("Google’s model list couldn’t be read.");
     }
 
     /// The narrator's yes to sending text to Google. Test runs keep it in memory.
@@ -212,7 +242,7 @@ public sealed class GeminiVoices : IVoiceEngine
     {
         if (!request.CloudAllowed) throw new SpeechException(GeminiErrors.BookNotAllowed);
         if (!IsSetUp || ApiKey is not { } k) throw SpeechException.EngineUnavailable(VoiceEngine.Gemini);
-        var model = Model;
+        var model = ModelID;
         var style = request.Kind is null ? null : GeminiTTS.Style(request.Tone, request.Kind, request.Delivery);
         var pieces = new List<float[]>();
         foreach (var piece in ElevenLabsEngine.Chunks(TextFor(request), 1500).Where(p => Tags.Replace(p, "").Any(char.IsLetterOrDigit)))
@@ -233,7 +263,7 @@ public sealed class GeminiVoices : IVoiceEngine
             int count = piece.Length;
             double seconds = pcm.Length / 2 / 24_000.0;
             var book = request.UsageBook ?? "";
-            var raw = model.Raw();
+            var raw = model;
             Dispatcher.UIThread.Post(() =>
             {
                 Activity.Record(ActivityKey.GeminiCharacters, count);

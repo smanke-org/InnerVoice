@@ -136,7 +136,7 @@ struct CloudUsageView: View {
                     let g = totals.filter { $0.service == .google }
                     if g.isEmpty { empty("No Gemini voices made yet" + (allBooks ? "." : " for this book.")) }
                     ForEach(g, id: \.model) { t in
-                        modelRow(name: t.model, current: t.model == GeminiVoices.shared.model.rawValue,
+                        modelRow(name: t.model, current: t.model == GeminiVoices.shared.modelID,
                                  lines: [("Characters", t.characters), ("Seconds of audio", Int(t.audioSeconds ?? 0)), ("Requests", t.requests)],
                                  cost: t.cost.map { $0.formatted(.currency(code: "USD").precision(.fractionLength(2...4))) } ?? "Price not known")
                     }

@@ -13,6 +13,18 @@ public enum GeminiTTS {
         case flashLite = "gemini-3.8-flash-lite-tts"
 
         public var id: String { rawValue }
+
+        /// The known model for an ID, or the one whose prices stand in for a newer model
+        /// Google lists (Flash-Lite for "lite" models, else Flash).
+        public static func pricing(for id: String) -> Model {
+            Model(rawValue: id) ?? (id.contains("lite") ? .flashLite : .flash)
+        }
+
+        /// A readable name for any TTS model ID.
+        public static func title(for id: String) -> String {
+            Model(rawValue: id)?.title ?? id
+        }
+
         public var title: String {
             switch self {
             case .flash: "Gemini 3.8 Flash TTS (most expressive)"
@@ -85,10 +97,15 @@ public enum GeminiTTS {
 
     /// The request body for one piece of text in one voice: WAV back (24 kHz mono 16-bit).
     public static func requestBody(text: String, voice: String, style: String?, model: Model) -> Data {
+        requestBody(text: text, voice: voice, style: style, modelID: model.rawValue)
+    }
+
+    /// The same, for any model ID Google lists (newer models the app doesn't know by name).
+    public static func requestBody(text: String, voice: String, style: String?, modelID: String) -> Data {
         var content: [String: Any] = ["type": "text", "text": text]
         if let style { content["annotations"] = [["type": "speech_metadata", "style": style]] }
         let body: [String: Any] = [
-            "model": model.rawValue,
+            "model": modelID,
             "input": [["type": "user_input", "content": [content]]],
             "response_format": ["type": "audio"],
             "generation_config": ["speech_config": [["voice": voice]]],

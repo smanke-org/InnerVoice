@@ -233,6 +233,7 @@ struct VoicesSettings: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+        ServiceCatalogSection()
         LocalClonesSection()
         if ElevenLabs.shared.isSetUp, EngineSwitches.shared.isOn(.elevenlabs) {
             ClonedVoicesSection()
@@ -301,8 +302,9 @@ struct ElevenLabsModelPicker: View {
         LabeledContent {
             HStack(spacing: Space.sm) {
                 Picker("ElevenLabs model", selection: Binding(get: { eleven.model.id }, set: { eleven.setModel($0) })) {
+                    let fresh = Set(ServiceCatalogs.shared.state(.elevenlabs).newModels)
                     ForEach(eleven.models) { m in
-                        Text("\(m.name) — \(m.rateText)").tag(m.id)
+                        Text("\(m.name) — \(m.rateText)" + (fresh.contains(m.id) ? " — New" : "")).tag(m.id)
                     }
                     if !eleven.models.contains(where: { $0.id == eleven.model.id }) {
                         Text(eleven.model.name).tag(eleven.model.id)

@@ -114,6 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppState.launched = true
         RevertRetry.install()
         AutoSave.start()
+        ServiceCatalogs.shared.start()
         RecentProjects.shared.refresh()
         NotificationCenter.default.addObserver(forName: NSWindow.didBecomeMainNotification, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { RecentProjects.shared.refresh() }

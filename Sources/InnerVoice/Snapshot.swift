@@ -257,6 +257,18 @@ enum Snapshot {
                 document.tagging.debugSummaries(nil)
                 if let main = document.project.characters.max(by: { (document.index.stats[$0.id]?.lines ?? 0) < (document.index.stats[$1.id]?.lines ?? 0) }) {
                     await shot("character-detail", settle: 1.2) { workspace.page = .cast; workspace.castPath = [main.id] }
+                    if wants("book-counts") {
+                        for mode in ["light", "dark"] {
+                            NSApp.appearance = NSAppearance(named: mode == "light" ? .aqua : .darkAqua)
+                            let host = NSHostingController(rootView: BookCountsPopover(document: document, workspace: workspace, shown: .constant(true)))
+                            let w = NSWindow(contentViewController: host)
+                            w.styleMask = [.titled]
+                            w.makeKeyAndOrderFront(nil)
+                            try? await Task.sleep(for: .seconds(1.0))
+                            capture(w, "\(dir)/book-counts-\(mode).png")
+                            w.close()
+                        }
+                    }
                     if wants("character-physical"), let tom = document.project.characters.first(where: { $0.physical != nil }) {
                         let key = "character.physical.expanded", was = UserDefaults.standard.object(forKey: key)
                         UserDefaults.standard.set(true, forKey: key)

@@ -31,19 +31,47 @@ final class GeminiVoices {
 
     var voices: [VoiceInfo] { GeminiTTS.voices }
 
-    /// Flash or Flash-Lite (Settings › Voices); Flash unless the narrator picks otherwise.
-    var model: GeminiTTS.Model {
+    /// The model ID the narrator chose (Settings › Voices); Flash until they pick another.
+    /// A refresh never changes it. Newer models Google lists can be chosen too.
+    var modelID: String {
         get {
             _ = revision
-            if SystemHooks.isTestRun { return testModel }
-            return UserDefaults.standard.string(forKey: Self.modelKey).flatMap(GeminiTTS.Model.init) ?? .flash
+            if SystemHooks.isTestRun { return testModelID }
+            return UserDefaults.standard.string(forKey: Self.modelKey) ?? GeminiTTS.Model.flash.rawValue
         }
         set {
-            if SystemHooks.isTestRun { testModel = newValue } else { UserDefaults.standard.set(newValue.rawValue, forKey: Self.modelKey) }
+            if SystemHooks.isTestRun { testModelID = newValue } else { UserDefaults.standard.set(newValue, forKey: Self.modelKey) }
             revision += 1
         }
     }
-    @ObservationIgnored private var testModel: GeminiTTS.Model = .flash
+    @ObservationIgnored private var testModelID = GeminiTTS.Model.flash.rawValue
+
+    /// The chosen model's prices (a newer model is priced like its closest known one).
+    var model: GeminiTTS.Model {
+        get { GeminiTTS.Model.pricing(for: modelID) }
+        set { modelID = newValue.rawValue }
+    }
+
+    /// Google's TTS model IDs: the two known ones plus any newer ones the last refresh found.
+    var modelIDs: [String] {
+        let listed = ServiceCatalogs.shared.state(.gemini).models
+        let known = GeminiTTS.Model.allCases.map(\.rawValue)
+        var all = listed.isEmpty ? known : listed
+        if !all.contains(modelID) { all.append(modelID) }
+        return all
+    }
+
+    /// Lists Google's text-to-speech models (sends no text from the book).
+    func fetchModels() async throws -> [String] {
+        guard let key = apiKey else { throw SpeechError.engineUnavailable(.gemini) }
+        var req = URLRequest(url: GeminiTTS.host.appending(path: "models").appending(queryItems: [URLQueryItem(name: "pageSize", value: "1000")]))
+        req.timeoutInterval = 30
+        req.setValue(key, forHTTPHeaderField: "x-goog-api-key")
+        let (data, response) = try await send(req)
+        try Self.throwIfFailed(response, data)
+        guard let ids = ServiceCatalog.geminiTTSModels(data) else { throw GeminiError.server(0, "Unreadable model list") }
+        return ids
+    }
 
     // MARK: Setup
 
@@ -120,7 +148,7 @@ final class GeminiVoices {
             req.timeoutInterval = 120
             req.setValue(key, forHTTPHeaderField: "x-goog-api-key")
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            req.httpBody = GeminiTTS.requestBody(text: piece, voice: request.choice.voiceID, style: style, model: model)
+            req.httpBody = GeminiTTS.requestBody(text: piece, voice: request.choice.voiceID, style: style, modelID: modelID)
             // Google limits requests per minute: take a turn, spaced to fit the limit once known.
             try await GeminiPace.shared.waitTurn()
             let (data, response) = try await send(req)

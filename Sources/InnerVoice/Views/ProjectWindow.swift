@@ -194,10 +194,10 @@ struct ProjectWindow: View {
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
-        ToolbarItem(placement: .navigation) {
+        ToolbarItem {
             BookCountsButton(document: document, workspace: workspace)
         }
-        .sharedBackgroundVisibility(.hidden)
+        ToolbarSpacer(.flexible)
         if workspace.page == .manuscript {
             ToolbarItem {
                 Picker("Color Style", selection: Binding(

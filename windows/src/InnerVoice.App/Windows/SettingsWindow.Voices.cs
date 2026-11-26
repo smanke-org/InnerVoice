@@ -330,6 +330,7 @@ public sealed partial class SettingsWindow
         col.Children.Add(ElevenLabsRow());
         col.Children.Add(GeminiRow());
         col.Children.Add(SpeechifyRow());
+        if (CatalogsCard() is { } catalogsCard) col.Children.Add(catalogsCard);
         col.Children.Add(Note("Windows Voices, Pocket TTS, Qwen3-TTS, Chatterbox and Orpheus run on this PC; downloading them is the only time they use the internet. ElevenLabs, Gemini TTS and Speechify are different: they make their voices in the cloud, so the text they speak is sent to ElevenLabs, Google or Speechify, and each book asks first, for each company. Each book speaks with one engine: its previews, table reads and exports all use it."));
         return col;
     }
@@ -370,7 +371,8 @@ public sealed partial class SettingsWindow
         var models = eleven.Models.ToList();
         var current = eleven.CurrentModel;
         if (!models.Any(m => m.Id == current.Id)) models.Add(current);
-        var box = new ComboBox { ItemsSource = models.Select(m => $"{m.Name} — {m.RateText}").ToList(), Width = 360 };
+        var fresh = ServiceCatalogs.Shared.State(CatalogService.Elevenlabs).NewModels;
+        var box = new ComboBox { ItemsSource = models.Select(m => $"{m.Name} — {m.RateText}" + (fresh.Contains(m.Id) ? " — New" : "")).ToList(), Width = 360 };
         box.SelectedIndex = models.FindIndex(m => m.Id == current.Id);
         box.SelectionChanged += (_, _) =>
         {

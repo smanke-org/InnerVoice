@@ -31,11 +31,12 @@ public sealed partial class SettingsWindow
         col.Children.Add(actions);
         if (gemini.IsSetUp && EngineSwitches.Shared.IsOn(VoiceEngine.Gemini))
         {
-            var models = Enum.GetValues<GeminiModel>();
-            var box = new ComboBox { ItemsSource = models.Select(m => m.Title()).ToList(), Width = 320 };
-            box.SelectedIndex = Array.IndexOf(models, gemini.Model);
-            box.SelectionChanged += (_, _) => { if (box.SelectedIndex >= 0 && models[box.SelectedIndex] != gemini.Model) gemini.Model = models[box.SelectedIndex]; };
-            ToolTip.SetTip(box, "Flash acts the tones best. Flash-Lite costs about two thirds as much.");
+            var models = gemini.ModelIDs.ToList();
+            var fresh = ServiceCatalogs.Shared.State(CatalogService.Gemini).NewModels;
+            var box = new ComboBox { ItemsSource = models.Select(id => GeminiTTS.TitleFor(id) + (fresh.Contains(id) ? " — New" : "")).ToList(), Width = 320 };
+            box.SelectedIndex = models.IndexOf(gemini.ModelID);
+            box.SelectionChanged += (_, _) => { if (box.SelectedIndex >= 0 && models[box.SelectedIndex] != gemini.ModelID) gemini.ModelID = models[box.SelectedIndex]; };
+            ToolTip.SetTip(box, "Flash acts the tones best. Flash-Lite costs about two thirds as much. Newer models Google adds appear here after a refresh; their cost is estimated from the closest known model.");
             col.Children.Add(WideRow("Gemini model", box));
         }
         return Ui.Card(col, Look.Md);

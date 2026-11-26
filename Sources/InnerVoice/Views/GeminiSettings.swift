@@ -28,10 +28,13 @@ struct GeminiRow: View {
         }
         .sheet(isPresented: $showSetup) { GeminiSetupSheet(isPresented: $showSetup) }
         if gemini.isSetUp, EngineSwitches.shared.isOn(.gemini) {
-            Picker("Gemini model", selection: Binding(get: { gemini.model }, set: { gemini.model = $0 })) {
-                ForEach(GeminiTTS.Model.allCases) { Text($0.title).tag($0) }
+            let fresh = Set(ServiceCatalogs.shared.state(.gemini).newModels)
+            Picker("Gemini model", selection: Binding(get: { gemini.modelID }, set: { gemini.modelID = $0 })) {
+                ForEach(gemini.modelIDs, id: \.self) { id in
+                    Text(GeminiTTS.Model.title(for: id) + (fresh.contains(id) ? " — New" : "")).tag(id)
+                }
             }
-            .help("Flash acts the tones best. Flash-Lite costs about two thirds as much.")
+            .help("Flash acts the tones best. Flash-Lite costs about two thirds as much. Newer models Google adds appear here after a refresh; their cost is estimated from the closest known model.")
         }
     }
 }

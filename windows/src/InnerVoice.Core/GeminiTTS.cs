@@ -30,6 +30,14 @@ public static class GeminiTTS
         _ => "Gemini 3.8 Flash-Lite TTS (lower cost)",
     };
 
+    /// The known model whose prices stand in for any listed model ID (Flash-Lite for "lite"
+    /// models, else Flash).
+    public static GeminiModel PricingFor(string id) =>
+        ModelFrom(id) ?? (id.Contains("lite", StringComparison.Ordinal) ? GeminiModel.FlashLite : GeminiModel.Flash);
+
+    /// A readable name for any TTS model ID.
+    public static string TitleFor(string id) => ModelFrom(id)?.Title() ?? id;
+
     public static GeminiModel? ModelFrom(string? raw) =>
         Enum.GetValues<GeminiModel>().Cast<GeminiModel?>().FirstOrDefault(m => m!.Value.Raw() == raw);
 
@@ -95,7 +103,11 @@ public static class GeminiTTS
 
     /// The request body for one piece of text in one voice: WAV back (24 kHz mono 16-bit).
     /// Keys sorted like the Mac's (JSONSerialization .sortedKeys), so both send the same bytes.
-    public static byte[] RequestBody(string text, string voice, string? style, GeminiModel model)
+    public static byte[] RequestBody(string text, string voice, string? style, GeminiModel model) =>
+        RequestBody(text, voice, style, model.Raw());
+
+    /// The same, for any model ID Google lists (newer models the app doesn't know by name).
+    public static byte[] RequestBody(string text, string voice, string? style, string modelID)
     {
         var content = new JsonObject();
         if (style is not null)
@@ -106,7 +118,7 @@ public static class GeminiTTS
         {
             ["generation_config"] = new JsonObject { ["speech_config"] = new JsonArray(new JsonObject { ["voice"] = voice }) },
             ["input"] = new JsonArray(new JsonObject { ["content"] = new JsonArray(content), ["type"] = "user_input" }),
-            ["model"] = model.Raw(),
+            ["model"] = modelID,
             ["response_format"] = new JsonObject { ["type"] = "audio" },
             ["store"] = false,
         };
