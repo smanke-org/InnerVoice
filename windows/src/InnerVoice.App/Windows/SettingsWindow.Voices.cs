@@ -348,13 +348,50 @@ public sealed partial class SettingsWindow
             if (!refreshedElevenLabsVoices)
             {
                 refreshedElevenLabsVoices = true;
-                if (!AppPaths.IsTestRun || ElevenLabsEngine.TestHttp is not null) _ = RefreshElevenLabsVoices();
+                if (!AppPaths.IsTestRun || ElevenLabsEngine.TestHttp is not null) { _ = RefreshElevenLabsVoices(); _ = RefreshElevenLabsModels(); }
             }
         }
         else actions.Children.Add(Ui.Button("Set Up…", () => _ = ElevenLabsSetupDialog().ShowDialog(this),
             tip: "Connect your ElevenLabs account. Its voices are made in the cloud."));
         col.Children.Add(actions);
+        if (eleven.IsSetUp) col.Children.Add(ElevenLabsModelPicker());
         return Ui.Card(col, Look.Md);
+    }
+
+    /// The last "unable to get the models" message, kept across the window's rebuilds.
+    static string? elevenLabsModelsFailure;
+
+    /// Settings › Voices › ElevenLabs: which model speaks, with what each costs. The list
+    /// comes from the account, so new models appear without an update (the Mac's
+    /// ElevenLabsModelPicker).
+    Control ElevenLabsModelPicker()
+    {
+        var eleven = ElevenLabsEngine.Shared;
+        var models = eleven.Models.ToList();
+        var current = eleven.CurrentModel;
+        if (!models.Any(m => m.Id == current.Id)) models.Add(current);
+        var box = new ComboBox { ItemsSource = models.Select(m => $"{m.Name} — {m.RateText}").ToList(), Width = 360 };
+        box.SelectedIndex = models.FindIndex(m => m.Id == current.Id);
+        box.SelectionChanged += (_, _) =>
+        {
+            if (box.SelectedIndex >= 0 && models[box.SelectedIndex].Id != eleven.CurrentModel.Id) eleven.SetModel(models[box.SelectedIndex].Id);
+        };
+        ToolTip.SetTip(box, "Which ElevenLabs model speaks. Your account's own list, with what each costs.");
+        var refresh = Ui.Button("Refresh", () => _ = RefreshElevenLabsModels(),
+            tip: "Get the list of models from your ElevenLabs account again");
+        var row = Ui.Row(Look.Sm, box, refresh);
+        var col = Ui.Column(Look.Xs, WideRow("ElevenLabs model", row),
+            Note($"{current.Detail}. About {current.Credits(500_000):N0} credits for a 90,000-word novel; each book’s Export Audio shows its own estimate. "
+                 + "Changing the model makes lines again the next time they play, using credits."
+                 + (current.SupportsAudioTags ? "" : " This model doesn’t understand tones, sounds or delivery hints, so they’re left out.")));
+        if (elevenLabsModelsFailure is { } failure) col.Children.Add(Ui.Text(failure, 12, brush: Look.Brush(Look.Attention), wrap: TextWrapping.Wrap));
+        return col;
+    }
+
+    static async Task RefreshElevenLabsModels()
+    {
+        try { await ElevenLabsEngine.Shared.RefreshModels(); elevenLabsModelsFailure = null; }
+        catch (Exception e) { elevenLabsModelsFailure = $"Unable to get the model list: {e.Message}"; ElevenLabsEngine.Shared.NotifyChanged(); }
     }
 
     static async Task RefreshElevenLabsVoices()

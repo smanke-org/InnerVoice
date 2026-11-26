@@ -42,7 +42,8 @@ public sealed class ElevenLabsEngine : IVoiceEngine
 
     public static void Register() => VoiceEngineRegistry.Register(Shared);
 
-    public const string Model = "eleven_v4";
+    /// The default text-to-speech model (the narrator can choose another: `ModelID`).
+    public const string Model = ElevenLabsModel.DefaultId;
     public const string DesignModel = "eleven_ttv_v3";
     /// ElevenLabs takes a description of 20 to 1,000 characters.
     public const int DesignLimit = 1000;
@@ -69,6 +70,8 @@ public sealed class ElevenLabsEngine : IVoiceEngine
         : RealHttp;
 
     readonly Lock gate = new();
+    List<ElevenLabsModel> models = [.. ElevenLabsModel.Known];
+    string? testModelID;
     List<VoiceInfo> voices = [];
     string? key;
     bool keyRead;
@@ -76,6 +79,8 @@ public sealed class ElevenLabsEngine : IVoiceEngine
     ElevenLabsEngine()
     {
         if (!AppPaths.IsTestRun && AppSettings.Current.ElevenLabsVoices is { } saved) voices = Sort(saved.Select(FromCache));
+        if (!AppPaths.IsTestRun && AppSettings.Current.ElevenLabsModels is { Count: > 0 } savedModels) models = savedModels;
+        ElevenLabsModel.ActiveId = ModelID;
         CloudInUseHook();
     }
 
@@ -101,6 +106,43 @@ public sealed class ElevenLabsEngine : IVoiceEngine
     public IReadOnlyList<VoiceInfo> Clones => Voices.Where(v => v.Cloned).ToList();
 
     public VoiceInfo? Info(VoiceChoice choice) => Voices.FirstOrDefault(v => v.VoiceID == choice.VoiceID);
+
+    // MARK: Model
+
+    /// The model the narrator chose (Settings › Voices › ElevenLabs); Eleven v4 until then.
+    /// Test runs keep it in memory and never touch the narrator's settings.
+    public string ModelID => (AppPaths.IsTestRun ? testModelID : AppSettings.Current.ElevenLabsModelID) ?? ElevenLabsModel.DefaultId;
+
+    /// The account's text-to-speech models, newest first (`ElevenLabsModel.Known` until fetched).
+    public IReadOnlyList<ElevenLabsModel> Models
+    {
+        get { lock (gate) return models; }
+    }
+
+    /// The chosen model: from the list, else a known one, else just its id.
+    public ElevenLabsModel CurrentModel => ModelFor(ModelID);
+
+    ElevenLabsModel ModelFor(string id) =>
+        Models.FirstOrDefault(m => m.Id == id) ?? ElevenLabsModel.Known.FirstOrDefault(m => m.Id == id) ?? new ElevenLabsModel(id, id);
+
+    public void SetModel(string id)
+    {
+        if (AppPaths.IsTestRun) testModelID = id;
+        else AppSettings.Update(s => s.ElevenLabsModelID = id == ElevenLabsModel.DefaultId ? null : id);
+        ElevenLabsModel.ActiveId = id;
+        Notify();
+    }
+
+    /// Fetches the account's models and their credit rates. Sends no text from the book.
+    public async Task RefreshModels(CancellationToken ct = default)
+    {
+        var k = ApiKey ?? throw SpeechException.EngineUnavailable(VoiceEngine.Elevenlabs);
+        var bytes = await Raw(HttpMethod.Get, "/v1/models", k, null, ct);
+        if (ElevenLabsModel.Parse(bytes) is not { } list) return;
+        lock (gate) models = list;
+        if (!AppPaths.IsTestRun) AppSettings.Update(s => s.ElevenLabsModels = list);
+        Notify();
+    }
 
     // MARK: Setup
 
@@ -169,6 +211,9 @@ public sealed class ElevenLabsEngine : IVoiceEngine
 
     /// Voice Design is offered the same way (it also uses credits and a voice slot).
     public static bool DesignOffered(Project p) => CloningOffered(p);
+
+    /// Asks open windows to redraw (Settings after a failed model fetch).
+    public void NotifyChanged() => Notify();
 
     void Notify() => Dispatcher.UIThread.Post(() => Changed?.Invoke());
 
@@ -273,8 +318,9 @@ public sealed class ElevenLabsEngine : IVoiceEngine
     /// What ElevenLabs is sent: the text, with v4 audio tags for the tone (with the line's
     /// delivery hint in the same bracket, "[sad, barely audible]") and any sound the speech
     /// tag asks for.
-    public static string TextFor(SpeechRequest request)
+    public static string TextFor(SpeechRequest request, bool allowTags = true)
     {
+        if (!allowTags) return request.Text;
         var tags = new List<string>();
         if (request.Kind is not null && DeliveryPrompt.AudioTag(request.Tone, request.Delivery) is { } tag) tags.Add(tag);
         if (request.Sound is { } sound) tags.Add(sound.AudioTag());
@@ -337,18 +383,20 @@ public sealed class ElevenLabsEngine : IVoiceEngine
         if (!request.CloudAllowed) throw new SpeechException(ElevenLabsErrors.BookNotAllowed);
         if (!IsSetUp || ApiKey is not { } k) throw SpeechException.EngineUnavailable(VoiceEngine.Elevenlabs);
         var pieces = new List<float[]>();
-        foreach (var piece in Chunks(TextFor(request)).Where(HasWords))
+        var model = CurrentModel;
+        foreach (var piece in Chunks(TextFor(request, model.SupportsAudioTags), Math.Min(2000, model.MaxCharacters)).Where(HasWords))
         {
             ct.ThrowIfCancellationRequested();
-            var body = new JsonObject { ["text"] = piece, ["model_id"] = Model, ["seed"] = Seed(piece + request.Choice.VoiceID) };
+            var body = new JsonObject { ["text"] = piece, ["model_id"] = model.Id, ["seed"] = Seed(piece + request.Choice.VoiceID) };
             if (request.Choice.Rate is { } rate && rate != 1) body["voice_settings"] = new JsonObject { ["speed"] = Math.Clamp(rate, 0.7, 1.2) };
             var bytes = await SendForBytes($"/v1/text-to-speech/{Uri.EscapeDataString(request.Choice.VoiceID)}?output_format=pcm_24000", k, body, ct);
             int count = piece.Length;
             var book = request.UsageBook ?? "";
+            var modelId = model.Id;
             Dispatcher.UIThread.Post(() =>
             {
                 Activity.Record(ActivityKey.ElevenLabsCharacters, count);
-                CloudUsageStore.Shared.Add(CloudUsageRecord.ElevenLabs(book, Model, count));
+                CloudUsageStore.Shared.Add(CloudUsageRecord.ElevenLabs(book, modelId, count));
             });
             pieces.Add(Pcm16(bytes));
         }

@@ -19,6 +19,8 @@ namespace InnerVoice.App.Tests;
 [Collection("Model choice")]
 public class ElevenLabsAppTests
 {
+    const string ModelsJson = """[{"model_id":"eleven_flash_v2_5","name":"Eleven Flash v2.5","can_do_text_to_speech":true,"model_rates":{"character_cost_multiplier":0.5}},{"model_id":"eleven_v4","name":"Eleven v4","can_do_text_to_speech":true,"model_rates":{"character_cost_multiplier":1.0}}]""";
+
     sealed class FakeElevenLabs : HttpMessageHandler
     {
         public List<(HttpMethod Method, string Path, string Body)> Sent { get; } = [];
@@ -50,6 +52,7 @@ public class ElevenLabsAppTests
             else if (path == "/v1/voices/add") json = """{"voice_id":"clone2"}""";
             else if (path == "/v1/text-to-voice/design") json = """{"previews":[{"generated_voice_id":"gen1"}]}""";
             else if (path == "/v1/text-to-voice") json = """{"voice_id":"designed1"}""";
+            else if (path == "/v1/models") json = ModelsJson;
             else json = "{}";
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
         }
@@ -276,6 +279,47 @@ public class ElevenLabsAppTests
             try { Directory.Delete(cache, true); } catch { }
             eleven.Disconnect();
             ElevenLabsEngine.TestHttp = null;
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task TheModelChoiceChangesWhatIsSentAndTheCacheKey()
+    {
+        var fake = Start();
+        var eleven = ElevenLabsEngine.Shared;
+        try
+        {
+            eleven.Save("xi-test-key", consent: true);
+            await eleven.RefreshModels();
+            Assert.Equal(["eleven_flash_v2_5", "eleven_v4"], eleven.Models.Select(m => m.Id).Order());
+            Assert.Single(fake.Sent, s => s.Path == "/v1/models");
+            Assert.Equal(ElevenLabsModel.DefaultId, eleven.ModelID);
+            var v4Key = Request(true).CacheKey;
+            // Flash: the plain line (no tags) under its own cache key, with half the credits.
+            eleven.SetModel("eleven_flash_v2_5");
+            Assert.False(eleven.CurrentModel.SupportsAudioTags);
+            Assert.Equal(0.5, eleven.CurrentModel.CreditsPerCharacter);
+            var flashText = ElevenLabsEngine.TextFor(Request(true), eleven.CurrentModel.SupportsAudioTags);
+            Assert.DoesNotContain("[", flashText);
+            Assert.NotEqual(v4Key, Request(true).CacheKey);
+            await eleven.Render(Request(true), default);
+            Pump();
+            var json = JsonNode.Parse(Assert.Single(fake.Sent, s => s.Path.StartsWith("/v1/text-to-speech")).Body)!;
+            Assert.Equal("eleven_flash_v2_5", (string?)json["model_id"]);
+            Assert.Equal("Not here.", (string?)json["text"]);
+            Assert.Contains(CloudUsageStore.Shared.Records, r => r.Service == CloudService.Elevenlabs && r.Model == "eleven_flash_v2_5");
+            // Eleven v4 keeps the key it always had.
+            eleven.SetModel(ElevenLabsModel.DefaultId);
+            Assert.Equal(v4Key, Request(true).CacheKey);
+            Assert.Equal("About 5 ElevenLabs credits (Eleven Flash v2.5) for 1 line not made yet.",
+                         Export.AudioExportWindow.CreditsText(5, 1, null, "Eleven Flash v2.5").Line);
+        }
+        finally
+        {
+            eleven.SetModel(ElevenLabsModel.DefaultId);
+            eleven.Disconnect();
+            ElevenLabsEngine.TestHttp = null;
+            Pump();
         }
     }
 

@@ -41,7 +41,7 @@ public sealed partial class ProjectWindow : Window
         UpdateTitle();
 
         var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), Margin = new Thickness(Look.Xl, Look.Md) };
-        header.Children.Add(Ui.Column(0, title, subtitle));
+        header.Children.Add(Ui.Column(0, Ui.Row(0, title, BookCountsButton()), subtitle));
         Grid.SetColumn(toolbarHost, 1);
         toolbarHost.VerticalAlignment = VerticalAlignment.Center;
         header.Children.Add(toolbarHost);
@@ -169,6 +169,7 @@ public sealed partial class ProjectWindow : Window
         subtitle.Text = current.Subtitle;
         toolbarHost.Content = current.Toolbar;
         RefreshCloudUsageButton();
+        RefreshBookCounts();
         BuildSidebar();
         RefreshSteps();
     }

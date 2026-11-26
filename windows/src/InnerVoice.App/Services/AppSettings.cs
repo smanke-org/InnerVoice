@@ -64,6 +64,10 @@ public sealed class AppSettings
     public DateTime? ElevenLabsConsent { get; set; }
     /// ElevenLabs' voice list as last fetched, so the Voices page shows it without asking.
     public List<CachedVoice>? ElevenLabsVoices { get; set; }
+    /// The ElevenLabs text-to-speech model the narrator chose; null: Eleven v4.
+    public string? ElevenLabsModelID { get; set; }
+    /// ElevenLabs' model list (with credit rates) as last fetched, so Settings shows it without asking.
+    public List<InnerVoice.Core.ElevenLabsModel>? ElevenLabsModels { get; set; }
     /// When the narrator agreed to send book text to Google for Gemini TTS (the key is in
     /// Credential Manager).
     public DateTime? GeminiConsent { get; set; }

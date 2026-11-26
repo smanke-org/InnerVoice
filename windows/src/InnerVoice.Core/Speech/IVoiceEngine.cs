@@ -55,6 +55,8 @@ public sealed record SpeechRequest
             };
             if (Choice.Engine is VoiceEngine.Orpheus or VoiceEngine.Elevenlabs or VoiceEngine.Gemini && Sound is { } s) parts.Add(s.Raw());
             if (Choice.Engine is VoiceEngine.Elevenlabs or VoiceEngine.Gemini && Delivery is { } d) parts.Add($"delivery {d}");
+            // Another ElevenLabs model sounds different; Eleven v4 keeps the key it always had.
+            if (Choice.Engine == VoiceEngine.Elevenlabs && ElevenLabsModel.ActiveId != ElevenLabsModel.DefaultId) parts.Add($"model {ElevenLabsModel.ActiveId}");
             // Unshaded audio keeps the key it always had, so the cache stays warm.
             if (IsShaded) parts.Add($"shade {Shade!.Pitch} {Shade.Pace}");
             var hash = SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\u001F', parts)));

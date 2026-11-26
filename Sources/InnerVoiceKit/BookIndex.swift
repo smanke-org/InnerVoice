@@ -23,14 +23,24 @@ public struct BookIndex: Sendable {
     public let lineIndexByID: [UUID: Int]
     public let stats: [UUID: CharacterStats]
     public let totalLines: Int
+    /// The book's words (scene breaks left out), shown beside its name.
+    public let bookWords: Int
+    /// The characters a cloud voice would be sent for the whole book (letters, numbers,
+    /// spaces and punctuation, as ElevenLabs, Speechify and Google count them; headings
+    /// in, scene breaks out). Shown beside the book's name, with what it would cost.
+    public let billableCharacters: Int
 
     public init(_ project: Project) {
         var positions: [UUID: Position] = [:]
-        var g = 0
+        var g = 0, words = 0, billable = 0
         for (c, chapter) in project.chapters.enumerated() {
             for (p, paragraph) in chapter.paragraphs.enumerated() {
                 positions[paragraph.id] = Position(chapter: c, paragraph: p, global: g)
                 g += 1
+                if paragraph.style != .sceneBreak {
+                    words += Words.count(paragraph.text)
+                    billable += paragraph.text.trimmingCharacters(in: .whitespacesAndNewlines).unicodeScalars.count
+                }
             }
         }
         var byParagraph: [UUID: [Int]] = [:]
@@ -54,6 +64,8 @@ public struct BookIndex: Sendable {
         self.lineIndexByID = byID
         self.stats = stats
         self.totalLines = project.lines.count
+        self.bookWords = words
+        self.billableCharacters = billable
     }
 
     /// "Ch 3 ¶12" (1-based), the way references read everywhere in the app.

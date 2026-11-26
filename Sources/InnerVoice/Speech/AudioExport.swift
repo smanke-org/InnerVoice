@@ -528,7 +528,7 @@ struct AudioExportSheet: View {
     private func creditsNote(_ c: (needed: Int, lines: Int, left: Int?)) -> some View {
         let short = c.left.map { c.needed > $0 } ?? false
         return VStack(alignment: .leading, spacing: 2) {
-            Label("About \(c.needed.formatted()) ElevenLabs credits for \(c.lines.formatted()) " + (c.lines == 1 ? "line" : "lines") + " not made yet"
+            Label("About \(c.needed.formatted()) ElevenLabs credits (\(ElevenLabs.shared.model.name)) for \(c.lines.formatted()) " + (c.lines == 1 ? "line" : "lines") + " not made yet"
                   + (c.left.map { ". Your plan has \($0.formatted()) left." } ?? "."), systemImage: "creditcard")
             if short {
                 Text("That’s more than your plan has left: the export would stop when the credits run out. Lines already made aren’t charged again, so you could export fewer chapters now and the rest later.")
@@ -579,9 +579,11 @@ struct AudioExportSheet: View {
         geminiCharacters = gemini
         speechifyCharacters = speechify
         guard ElevenLabs.shared.isSetUp, needed > 0 else { credits = nil; return }
-        credits = (needed, lines, credits?.left)
-        guard needed > 0, credits?.left == nil, let account = try? await ElevenLabs.shared.account(), !Task.isCancelled else { return }
-        credits = (needed, lines, max(0, account.limit - account.used))
+        // Credits per character depend on the model (Flash and Turbo cost half).
+        let cost = ElevenLabs.shared.model.credits(characters: needed)
+        credits = (cost, lines, credits?.left)
+        guard cost > 0, credits?.left == nil, let account = try? await ElevenLabs.shared.account(), !Task.isCancelled else { return }
+        credits = (cost, lines, max(0, account.limit - account.used))
     }
 
     private func export() {

@@ -27,6 +27,8 @@ struct SpeechRequest: Hashable, Sendable {
                      tone.rawValue, kind?.rawValue ?? "narration", text]
         if [.orpheus, .elevenlabs, .gemini].contains(choice.engine), let sound { parts.append(sound.rawValue) }
         if choice.engine == .elevenlabs || choice.engine == .gemini, let delivery { parts.append("delivery \(delivery)") }
+        // Another ElevenLabs model sounds different; Eleven v4 keeps the key it always had.
+        if choice.engine == .elevenlabs, ElevenLabs.modelID != ElevenLabsModel.defaultID { parts.append("model \(ElevenLabs.modelID)") }
         // Unshaded audio keeps the key it always had, so the cache stays warm.
         if let shade, shade.pitch != 0 || shade.pace != 0 { parts.append("shade \(shade.pitch) \(shade.pace)") }
         return SHA256.hash(data: Data(parts.joined(separator: "\u{1F}").utf8)).map { String(format: "%02x", $0) }.joined()

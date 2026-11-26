@@ -246,6 +246,8 @@ public sealed class AudioExportWindow : Window
             if (ct.IsCancellationRequested) return;
             geminiCharacters = gemini;
             speechifyCharacters = speechify;
+            // Credits per character depend on the model (Flash and Turbo cost half).
+            needed = ElevenLabsEngine.Shared.CurrentModel.Credits(needed);
             credits = (needed, lines, creditsLeft);
             ShowCredits();
             if (!ElevenLabsEngine.Shared.IsSetUp || needed == 0 || creditsLeft is not null) return;
@@ -262,8 +264,8 @@ public sealed class AudioExportWindow : Window
     }
 
     /// The estimate's words: the line, and the warning when the plan has too few left.
-    public static (string Line, string? Warning) CreditsText(long needed, int lines, long? left) =>
-        ($"About {needed:N0} ElevenLabs credits for {lines:N0} {(lines == 1 ? "line" : "lines")} not made yet" + (left is { } l ? $". Your plan has {l:N0} left." : "."),
+    public static (string Line, string? Warning) CreditsText(long needed, int lines, long? left, string? model = null) =>
+        ($"About {needed:N0} ElevenLabs credits{(model is null ? "" : $" ({model})")} for {lines:N0} {(lines == 1 ? "line" : "lines")} not made yet" + (left is { } l ? $". Your plan has {l:N0} left." : "."),
          left is { } have && needed > have
              ? "That’s more than your plan has left: the export would stop when the credits run out. Lines already made aren’t charged again, so you could export fewer chapters now and the rest later."
              : null);
@@ -311,7 +313,7 @@ public sealed class AudioExportWindow : Window
         creditsPanel.Children.Clear();
         if (credits is { Needed: > 0 } c)
         {
-            var (line, warning) = CreditsText(c.Needed, c.Lines, c.Left);
+            var (line, warning) = CreditsText(c.Needed, c.Lines, c.Left, ElevenLabsEngine.Shared.CurrentModel.Name);
             var brush = Look.Brush(warning is null ? Look.SecondaryInk : Look.Attention);
             creditsPanel.Children.Add(Ui.Text(line, 12, brush: brush, wrap: TextWrapping.Wrap));
             if (warning is not null) creditsPanel.Children.Add(Ui.Text(warning, 12, brush: brush, wrap: TextWrapping.Wrap));

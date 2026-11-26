@@ -139,8 +139,17 @@ extension SelfTest {
             var cloud = local
             cloud?.choice = VoiceChoice(engine: .elevenlabs, voiceID: "v1")
             cloud?.delivery = seg.delivery
-            let text = cloud.map(ElevenLabs.text(for:)) ?? ""
+            let text = cloud.map { ElevenLabs.text(for: $0) } ?? ""
             check("ElevenLabs gets the hint as an audio tag with the tone", text.contains("barely audible]") && text.hasPrefix("["), text)
+            if let cloud {
+                let v4Key = cloud.cacheKey
+                ElevenLabs.shared.setModel("eleven_flash_v2_5")
+                let flashText = ElevenLabs.text(for: cloud, tags: ElevenLabs.shared.model.supportsAudioTags)
+                check("an ElevenLabs model without audio tags gets the plain line, made again under its own cache key",
+                      !flashText.contains("[") && cloud.cacheKey != v4Key, flashText)
+                ElevenLabs.shared.setModel(ElevenLabsModel.defaultID)
+                check("Eleven v4 keeps the cache key it always had", cloud.cacheKey == v4Key)
+            }
         } else {
             check("a hinted line is spoken", false)
         }

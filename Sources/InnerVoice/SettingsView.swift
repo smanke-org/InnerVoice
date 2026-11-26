@@ -283,6 +283,56 @@ struct ElevenLabsRow: View {
             Text("Natural voices made on ElevenLabs’ servers. The text they speak is sent to ElevenLabs, and uses your plan’s credits.")
         }
         .sheet(isPresented: $showSetup) { ElevenLabsSetupSheet(isPresented: $showSetup) }
+        if eleven.isSetUp { ElevenLabsModelPicker() }
+    }
+}
+
+/// Settings › Voices › ElevenLabs: which model speaks, with what each costs. The list comes
+/// from the account, so new models appear without an update.
+struct ElevenLabsModelPicker: View {
+    private var eleven: ElevenLabs { .shared }
+    @State private var refreshing = false
+    @State private var failure: String?
+
+    /// A typical 90,000-word novel, as ElevenLabs counts it.
+    static let novelCharacters = 500_000
+
+    var body: some View {
+        LabeledContent {
+            HStack(spacing: Space.sm) {
+                Picker("ElevenLabs model", selection: Binding(get: { eleven.model.id }, set: { eleven.setModel($0) })) {
+                    ForEach(eleven.models) { m in
+                        Text("\(m.name) — \(m.rateText)").tag(m.id)
+                    }
+                    if !eleven.models.contains(where: { $0.id == eleven.model.id }) {
+                        Text(eleven.model.name).tag(eleven.model.id)
+                    }
+                }
+                .labelsHidden()
+                .fixedSize()
+                Button {
+                    Task { await refresh() }
+                } label: {
+                    if refreshing { ProgressView().controlSize(.small) } else { Image(systemName: "arrow.clockwise") }
+                }
+                .buttonStyle(.borderless)
+                .help("Get the list of models from your ElevenLabs account again")
+            }
+        } label: {
+            Text("Model")
+            let m = eleven.model
+            Text("\(m.detail). About \(m.credits(characters: Self.novelCharacters).formatted()) credits for a 90,000-word novel; each book’s Export Audio shows its own estimate. Changing the model makes lines again the next time they play, using credits."
+                 + (m.supportsAudioTags ? "" : " This model doesn’t understand tones, sounds or delivery hints, so they’re left out."))
+            if let failure { Text(failure).foregroundStyle(Color(nsColor: .attention)) }
+        }
+        .task { if !SystemHooks.isTestRun { await refresh() } }
+    }
+
+    private func refresh() async {
+        refreshing = true
+        defer { refreshing = false }
+        do { try await eleven.refreshModels(); failure = nil }
+        catch { failure = "Unable to get the model list: \(error.localizedDescription)" }
     }
 }
 

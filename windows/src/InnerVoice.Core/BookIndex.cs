@@ -26,6 +26,12 @@ public sealed class BookIndex
     public IReadOnlyDictionary<Guid, int> LineIndexByID { get; }
     public IReadOnlyDictionary<Guid, CharacterStats> Stats { get; }
     public int TotalLines { get; }
+    /// The book's words (scene breaks left out), shown beside its name.
+    public int BookWords { get; }
+    /// The characters a cloud voice would be sent for the whole book (letters, numbers,
+    /// spaces and punctuation, as ElevenLabs, Speechify and Google count them; headings
+    /// in, scene breaks out). Counted in Unicode scalars, like the Mac.
+    public int BillableCharacters { get; }
 
     public static readonly BookIndex Empty = new(new Project());
 
@@ -33,7 +39,7 @@ public sealed class BookIndex
     {
         var positions = new Dictionary<Guid, Position>();
         var paragraphs = new Dictionary<Guid, Paragraph>();
-        int g = 0;
+        int g = 0, words = 0, billable = 0;
         for (int c = 0; c < project.Chapters.Count; c++)
         {
             var chapter = project.Chapters[c];
@@ -42,6 +48,11 @@ public sealed class BookIndex
                 var para = chapter.Paragraphs[p];
                 positions[para.Id] = new Position(c, p, g++);
                 paragraphs.TryAdd(para.Id, para);
+                if (para.Style != ParagraphStyle.SceneBreak)
+                {
+                    words += Words.Count(para.Text);
+                    billable += para.Text.Trim().EnumerateRunes().Count();
+                }
             }
         }
         var byParagraph = new Dictionary<Guid, List<int>>();
@@ -67,6 +78,8 @@ public sealed class BookIndex
         LineIndexByID = byID;
         Stats = stats;
         TotalLines = project.Lines.Count;
+        BookWords = words;
+        BillableCharacters = billable;
     }
 
     public CharacterStats? StatsFor(Guid id) => Stats.TryGetValue(id, out var s) ? s : null;

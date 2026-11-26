@@ -13,7 +13,46 @@ import Security
 final class ElevenLabs {
     static let shared = ElevenLabs()
 
-    static let model = "eleven_v4"
+    nonisolated private static let modelKey = "elevenlabs.model"
+    private static let modelsKey = "elevenlabs.models"
+    /// Test runs choose a model in memory and never touch the person's settings.
+    nonisolated(unsafe) static var testModelID: String?
+
+    /// The model the narrator chose (Settings › Voices › ElevenLabs); Eleven v4 until then.
+    /// Read off the main actor too (cache keys), so it lives in UserDefaults.
+    nonisolated static var modelID: String {
+        if SystemHooks.isTestRun { return testModelID ?? ElevenLabsModel.defaultID }
+        return UserDefaults.standard.string(forKey: modelKey) ?? ElevenLabsModel.defaultID
+    }
+
+    /// The account's text-to-speech models, newest first (`ElevenLabsModel.known` until fetched).
+    private(set) var models: [ElevenLabsModel] = ElevenLabsModel.known
+    /// Bumped when the model changes, so views redraw.
+    private(set) var modelRevision = 0
+
+    var model: ElevenLabsModel {
+        _ = modelRevision
+        let id = Self.modelID
+        return models.first { $0.id == id } ?? ElevenLabsModel.known.first { $0.id == id }
+            ?? ElevenLabsModel(id: id, name: id)
+    }
+
+    func setModel(_ id: String) {
+        if SystemHooks.isTestRun { Self.testModelID = id } else { UserDefaults.standard.set(id, forKey: Self.modelKey) }
+        modelRevision += 1
+    }
+
+    /// Fetches the account's models and their credit rates. Sends no text from the book.
+    func refreshModels() async throws {
+        guard let key = apiKey else { throw SpeechError.engineUnavailable(.elevenlabs) }
+        var req = URLRequest(url: Self.host.appending(path: "v1/models"))
+        req.setValue(key, forHTTPHeaderField: "xi-api-key")
+        let (data, response) = try await send(req)
+        try Self.throwIfFailed(response, data)
+        guard let list = ElevenLabsModel.parse(data) else { return }
+        models = list
+        if !SystemHooks.isTestRun, let saved = try? JSONEncoder().encode(list) { UserDefaults.standard.set(saved, forKey: Self.modelsKey) }
+    }
     static let host = URL(string: "https://api.elevenlabs.io")!
     static let keysPage = URL(string: "https://elevenlabs.io/app/settings/api-keys")!
     static let signUpPage = URL(string: "https://elevenlabs.io/sign-up")!
@@ -36,6 +75,10 @@ final class ElevenLabs {
     @ObservationIgnored private var testKey: String?
 
     private init() {
+        if !SystemHooks.isTestRun, let data = UserDefaults.standard.data(forKey: Self.modelsKey),
+           let saved = try? JSONDecoder().decode([ElevenLabsModel].self, from: data), !saved.isEmpty {
+            models = saved
+        }
         if let data = UserDefaults.standard.data(forKey: Self.voicesKey), !SystemHooks.isTestRun,
            let saved = try? JSONDecoder().decode([SavedVoice].self, from: data) {
             voices = saved.map(\.info)
@@ -391,7 +434,8 @@ final class ElevenLabs {
     /// What ElevenLabs is sent: the text, with v4 audio tags for the tone (with the line's
     /// delivery hint in the same bracket, "[sad, barely audible]") and any sound the speech
     /// tag asks for.
-    static func text(for request: SpeechRequest) -> String {
+    static func text(for request: SpeechRequest, tags allowTags: Bool = true) -> String {
+        guard allowTags else { return request.text }
         var tags: [String] = []
         if request.kind != nil, let tag = DeliveryPrompt.audioTag(tone: request.tone, delivery: request.delivery) { tags.append(tag) }
         if let sound = request.sound { tags.append(sound.audioTag) }
@@ -405,7 +449,8 @@ final class ElevenLabs {
         guard let key = apiKey, consented != nil else { throw SpeechError.engineUnavailable(.elevenlabs) }
         var pieces: [Data] = []
         let gapCount = Int(SpeechAudio.format.sampleRate * 0.18)
-        for piece in ModelSpeech.chunks(Self.text(for: request), limit: 2000) where Self.hasWords(piece.replacingOccurrences(of: #"\[[^\]]*\]"#, with: "", options: .regularExpression)) {
+        let model = self.model
+        for piece in ModelSpeech.chunks(Self.text(for: request, tags: model.supportsAudioTags), limit: min(2000, model.maxCharacters)) where Self.hasWords(piece.replacingOccurrences(of: #"\[[^\]]*\]"#, with: "", options: .regularExpression)) {
             try Task.checkCancellation()
             var c = URLComponents(url: Self.host.appending(path: "v1/text-to-speech/\(request.choice.voiceID)"), resolvingAgainstBaseURL: false)!
             c.queryItems = [URLQueryItem(name: "output_format", value: "pcm_24000")]
@@ -414,13 +459,13 @@ final class ElevenLabs {
             req.timeoutInterval = 90
             req.setValue(key, forHTTPHeaderField: "xi-api-key")
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            var body: [String: Any] = ["text": piece, "model_id": Self.model, "seed": Self.seed(piece + request.choice.voiceID)]
+            var body: [String: Any] = ["text": piece, "model_id": model.id, "seed": Self.seed(piece + request.choice.voiceID)]
             if let rate = request.choice.rate, rate != 1 { body["voice_settings"] = ["speed": min(1.2, max(0.7, rate))] }
             req.httpBody = try JSONSerialization.data(withJSONObject: body)
             let (data, response) = try await send(req)
             try Self.throwIfFailed(response, data)
             ActivityStore.shared.record(ActivityKey.elevenLabsCharacters, count: piece.count)
-            var usage = CloudUsageRecord(day: CloudUsageRecord.day(), book: request.usageBook ?? "", service: .elevenlabs, model: Self.model)
+            var usage = CloudUsageRecord(day: CloudUsageRecord.day(), book: request.usageBook ?? "", service: .elevenlabs, model: model.id)
             usage.characters = piece.count
             usage.requests = 1
             CloudUsageStore.shared.add(usage)
