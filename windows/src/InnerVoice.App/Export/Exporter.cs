@@ -20,11 +20,11 @@ namespace InnerVoice.App.Export;
 /// as PDF, Word or CSV.
 public static class Exporter
 {
-    public enum Kind { NarratorScript, Manuscript, Cast, Pronunciations }
+    public enum Kind { NarratorScript, Manuscript, Cast, Pronunciations, Profiles }
 
-    public enum Format { Pdf, Word, Csv }
+    public enum Format { Pdf, Word, Csv, Markdown }
 
-    public static readonly Kind[] Kinds = [Kind.NarratorScript, Kind.Manuscript, Kind.Cast, Kind.Pronunciations];
+    public static readonly Kind[] Kinds = [Kind.NarratorScript, Kind.Manuscript, Kind.Cast, Kind.Pronunciations, Kind.Profiles];
 
     /// What File › Export… offers for the project type, as on the Mac: Narrator Scripts
     /// belong to narration; the pronunciation guide to every book (Pronunciations is in every type).
@@ -36,6 +36,7 @@ public static class Exporter
         Kind.NarratorScript => "Narrator Script",
         Kind.Manuscript => "Tagged Manuscript",
         Kind.Cast => "Cast List",
+        Kind.Profiles => "Character Profiles",
         _ => "Pronunciation Guide",
     };
 
@@ -44,12 +45,14 @@ public static class Exporter
         Kind.NarratorScript => "One narrator's lines, each with the cue line before it, and their characters' summaries.",
         Kind.Manuscript => "The whole book with colors and initials, and a character key. For printing or reading on an iPad.",
         Kind.Cast => "Every character with their summary, voice notes, narrator and line counts.",
+        Kind.Profiles => "Every character’s physical description, changes during the story, continuity to check, and summary. For the author.",
         _ => "Every term with how to say it and your notes.",
     };
 
     public static Format[] Formats(Kind k) => k switch
     {
         Kind.NarratorScript or Kind.Manuscript => [Format.Pdf, Format.Word],
+        Kind.Profiles => [Format.Pdf, Format.Word, Format.Markdown],
         _ => [Format.Pdf, Format.Word, Format.Csv],
     };
 
@@ -57,6 +60,7 @@ public static class Exporter
     {
         Format.Pdf => "PDF",
         Format.Word => "Word",
+        Format.Markdown => "Markdown",
         _ => "CSV",
     };
 
@@ -64,6 +68,7 @@ public static class Exporter
     {
         Format.Pdf => "pdf",
         Format.Word => "docx",
+        Format.Markdown => "md",
         _ => "csv",
     };
 
@@ -203,6 +208,11 @@ public static class Exporter
                 foreach (var c in project.Characters.OrderByDescending(c => Lines(index, c.Id)))
                     output.AddRange(CharacterBlock(c, document));
                 break;
+            case Kind.Profiles:
+                output.Add(Text(project.Title, H1, Weight.Bold, spacing: 4));
+                output.Add(Text("Character Profiles", H2, Weight.SemiBold, gray, spacing: 16));
+                output.AddRange(Profiles(CharacterProfiles.Markdown(project, index)));
+                break;
             case Kind.Pronunciations:
                 output.Add(Text(project.Title, H1, Weight.Bold, spacing: 4));
                 output.Add(Text("Pronunciation Guide", H2, Weight.SemiBold, gray, spacing: 16));
@@ -216,6 +226,22 @@ public static class Exporter
                     if (p.Notes.Length > 0) output.Add(Text(p.Notes, Small, color: gray, spacing: 8, indent: 12));
                 }
                 break;
+        }
+        return output;
+    }
+
+    /// The profiles' Markdown as styled text (headings, bullets, bold labels, italics dropped).
+    static List<Para> Profiles(string md)
+    {
+        var output = new List<Para>();
+        foreach (var raw in md.Split('\n').Skip(2))
+        {
+            var line = raw.Replace("**", "").Replace(" *(inferred)*", " (inferred)");
+            if (line.StartsWith('*') && line.EndsWith('*') && line.Length >= 2) line = line[1..^1];
+            if (line.StartsWith("### ")) output.Add(Text(line[4..], H3, Weight.SemiBold, spacing: 3));
+            else if (line.StartsWith("## ")) output.Add(Text(line[3..], H2, Weight.SemiBold, spacing: 4));
+            else if (line.StartsWith("- ")) output.Add(Text("•  " + line[2..], Body, spacing: 2, indent: 12));
+            else if (line.Length > 0) output.Add(Text(line, Body, spacing: 6));
         }
         return output;
     }
@@ -290,6 +316,9 @@ public static class Exporter
             case Format.Csv:
                 // UTF-8 with a byte order mark, so Excel on Windows reads accents.
                 File.WriteAllText(path, Csv(o, document), new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+                break;
+            case Format.Markdown:
+                File.WriteAllText(path, CharacterProfiles.Markdown(document.Project, document.Index), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
                 break;
             case Format.Word:
                 Word(Build(o, document), document.Project.Title, path);

@@ -101,7 +101,7 @@ public static class CostEstimator
     }
 
     /// Build Summaries for `characters` characters: up to four passages of the book about
-    /// each (about 2,700 words in all), then a voice brief.
+    /// each (about 2,700 words in all), then a voice brief and a physical description.
     public static CostEstimate BuildSummaries(Project project, int characters, int passageWords = 2500)
     {
         int paragraphs = Math.Max(1, project.Chapters.Sum(c => c.Paragraphs.Count));
@@ -109,8 +109,9 @@ public static class CostEstimator
         double wordsEach = Math.Min(passageWords + 200, perParagraph * 48);
         int readEach = Tokens((int)wordsEach) + Tokens(SummaryPrompt.System) + 150;
         int briefEach = Tokens(VoiceBriefPrompt.System) + 900;
-        int input = characters * (readEach + briefEach);
-        int output = characters * (700 + 260);
+        int profileEach = Tokens(PhysicalProfilePrompt.System) + 700;
+        int input = characters * (readEach + briefEach + profileEach);
+        int output = characters * (700 + 260 + 500);
         return new CostEstimate(input, (int)(output * Thinking));
     }
 }

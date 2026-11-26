@@ -78,6 +78,9 @@ public class ExportTests
                             Assert.Contains(kind == Exporter.Kind.Manuscript ? "Character key" : kind.Title(), body);
                             break;
                         }
+                        case Exporter.Format.Markdown:
+                            Assert.StartsWith("# Character Profiles", File.ReadAllText(path));
+                            break;
                         case Exporter.Format.Csv:
                         {
                             var bytes = File.ReadAllBytes(path);

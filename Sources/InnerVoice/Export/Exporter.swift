@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 /// as PDF, Word or CSV.
 enum Exporter {
     enum Kind: String, CaseIterable, Identifiable {
-        case narratorScript, manuscript, cast, pronunciations
+        case narratorScript, manuscript, cast, pronunciations, profiles
         var id: String { rawValue }
         var title: String {
             switch self {
@@ -15,6 +15,7 @@ enum Exporter {
             case .manuscript: "Tagged Manuscript"
             case .cast: "Cast List"
             case .pronunciations: "Pronunciation Guide"
+            case .profiles: "Character Profiles"
             }
         }
         var detail: String {
@@ -23,24 +24,27 @@ enum Exporter {
             case .manuscript: "The whole book with colors and initials, and a character key. For printing or reading on an iPad."
             case .cast: "Every character with their summary, voice notes, narrator and line counts."
             case .pronunciations: "Every term with how to say it and your notes."
+            case .profiles: "Every character’s physical description, changes during the story, continuity to check, and summary. For the author."
             }
         }
         var formats: [Format] {
             switch self {
             case .narratorScript, .manuscript: [.pdf, .word]
             case .cast, .pronunciations: [.pdf, .word, .csv]
+            case .profiles: [.pdf, .word, .markdown]
             }
         }
     }
 
     enum Format: String, CaseIterable, Identifiable {
-        case pdf = "PDF", word = "Word", csv = "CSV"
+        case pdf = "PDF", word = "Word", csv = "CSV", markdown = "Markdown"
         var id: String { rawValue }
         var type: UTType {
             switch self {
             case .pdf: .pdf
             case .word: UTType(filenameExtension: "docx") ?? .data
             case .csv: .commaSeparatedText
+            case .markdown: UTType(filenameExtension: "md") ?? .plainText
             }
         }
     }
@@ -162,6 +166,24 @@ enum Exporter {
                 out.append(s)
                 if !p.notes.isEmpty { out.append(text(p.notes, small, color: gray, spacing: 8, indent: 12)) }
             }
+        case .profiles:
+            out.append(text(project.title, h1, spacing: 4))
+            out.append(text("Character Profiles", h2, color: gray, spacing: 16))
+            out.append(profiles(CharacterProfiles.markdown(project, index: index)))
+        }
+        return out
+    }
+
+    /// The profiles' Markdown as styled text (headings, bullets, bold labels, italics dropped).
+    static func profiles(_ md: String) -> NSAttributedString {
+        let out = NSMutableAttributedString()
+        for raw in md.components(separatedBy: "\n").dropFirst(2) {
+            var line = raw.replacingOccurrences(of: "**", with: "").replacingOccurrences(of: " *(inferred)*", with: " (inferred)")
+            if line.hasPrefix("*"), line.hasSuffix("*") { line = String(line.dropFirst().dropLast()) }
+            if line.hasPrefix("### ") { out.append(text(String(line.dropFirst(4)), h3, spacing: 3)) }
+            else if line.hasPrefix("## ") { out.append(text(String(line.dropFirst(3)), h2, spacing: 4)) }
+            else if line.hasPrefix("- ") { out.append(text("•  " + line.dropFirst(2), body, spacing: 2, indent: 12)) }
+            else if !line.isEmpty { out.append(text(line, body, spacing: 6)) }
         }
         return out
     }
@@ -198,6 +220,8 @@ enum Exporter {
         switch o.format {
         case .csv:
             try csv(o, document: document).data(using: .utf8)!.write(to: url)
+        case .markdown:
+            try Data(CharacterProfiles.markdown(document.project, index: document.index).utf8).write(to: url)
         case .word:
             let a = build(o, document: document)
             let data = try a.data(from: NSRange(location: 0, length: a.length), documentAttributes: [.documentType: NSAttributedString.DocumentType.officeOpenXML])

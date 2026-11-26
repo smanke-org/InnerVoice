@@ -231,6 +231,7 @@ public sealed partial class CastPage : Page
         col.Children.Add(NotesField(c, voice: true));
         col.Children.Add(Ui.Headline("Notes"));
         col.Children.Add(NotesField(c, voice: false));
+        col.Children.Add(PhysicalSection(c));
         return Ui.Scroll(col);
     }
 

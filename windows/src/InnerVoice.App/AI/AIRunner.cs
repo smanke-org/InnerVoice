@@ -214,10 +214,10 @@ public sealed partial class AIRunner(ProjectDocument document)
 
     // MARK: Build Summaries
 
-    sealed record SavedSummary(List<Fact> Facts, string Notes, string? FromBook, string? Brief);
+    sealed record SavedSummary(List<Fact> Facts, string Notes, string? FromBook, string? Brief, PhysicalProfile? Physical, PhysicalProfile? PhysicalGenerated);
 
     static Dictionary<Guid, SavedSummary> Snapshot(Project p) =>
-        p.Characters.ToDictionary(c => c.Id, c => new SavedSummary(c.Facts.ConvertAll(f => f.Copy()), c.VoiceNotes, c.VoiceNotesFromBook, c.VoiceBriefGenerated));
+        p.Characters.ToDictionary(c => c.Id, c => new SavedSummary(c.Facts.ConvertAll(f => f.Copy()), c.VoiceNotes, c.VoiceNotesFromBook, c.VoiceBriefGenerated, c.Physical?.Copy(), c.PhysicalGenerated?.Copy()));
 
     public async Task BuildSummaries(IReadOnlyCollection<Guid>? only = null)
     {
@@ -228,7 +228,7 @@ public sealed partial class AIRunner(ProjectDocument document)
         cts = new CancellationTokenSource();
         var ct = cts.Token;
         var before = Snapshot(document.Project);
-        int added = 0, notesWritten = 0, briefsWritten = 0;
+        int added = 0, notesWritten = 0, briefsWritten = 0, profilesWritten = 0;
         try
         {
             var model = await ModelManager.Shared.Model(bookAllowed: document.Project.Settings.CloudTextAllowed is not null, book: document.Project.UsageKey());
@@ -283,18 +283,38 @@ public sealed partial class AIRunner(ProjectDocument document)
                 if (VoiceBriefPrompt.Parse(text) is { } brief)
                     document.ApplyQuietly(p => { if (p.Character(character.Id) is { } c && brief.Merge(c)) briefsWritten++; });
             }
+            // Physical descriptions: for the author's character profiles (not narration).
+            var described = cast.Where(c => document.Project.Character(c.Id) is { } cur && PhysicalProfilePrompt.Wanted(cur)).ToList();
+            for (int m = 0; m < described.Count; m++)
+            {
+                ct.ThrowIfCancellationRequested();
+                var character = described[m];
+                Set(new Status(Job.Summaries, 0.99, $"Describing how {character.Name} looks ({m + 1} of {described.Count})…",
+                    character.Name, 0, m + 1, described.Count, "Writing physical descriptions"));
+                if (document.Project.Character(character.Id) is not { } current || PhysicalProfile.IsEdited(current)) continue;
+                var messages = PhysicalProfilePrompt.Messages(current, document.Project, document.Index);
+                int mm = m;
+                var text = await model.Complete(messages, PhysicalProfilePrompt.Grammar, 900, f =>
+                    Update(s => s.Phase == "Writing physical descriptions" && s.CharacterNumber == mm + 1
+                        ? s with { CharacterProgress = Math.Max(s.CharacterProgress, f) }
+                        : s), ct);
+                Update(s => s with { CharacterProgress = 1 });
+                if (PhysicalProfilePrompt.Parse(text, document.Project.Chapters.Count) is { } profile)
+                    document.ApplyQuietly(p => { if (p.Character(character.Id) is { } c && PhysicalProfile.Put(profile, c)) profilesWritten++; });
+            }
             if (only is null) document.ApplyQuietly(p => p.SummariesBuilt = AppleDate.Now);
             Activity.Record(ActivityKey.Facts, added);
             _ = document.RecolorAutomaticAsync();
             // Voice Notes and facts shape casting: voices it was unsure of are decided again.
             Speech.VoiceCastingRun.CastIfNeeded(document, recastUnsure: true);
-            Finished = $"Found {added:N0} facts" + (briefsWritten > 0 ? $" and wrote {briefsWritten} voice briefs." : ".");
+            Finished = $"Found {added:N0} facts" + (briefsWritten > 0 ? $" and wrote {briefsWritten} voice briefs" : "")
+                + (profilesWritten > 0 ? (briefsWritten > 0 ? " and " : " and wrote ") + (profilesWritten == 1 ? "one physical description" : $"{profilesWritten} physical descriptions") : "") + ".";
         }
         catch (OperationCanceledException) { Finished = "Stopped. Summaries so far are kept."; }
         catch (Exception e) { Failure = e.Message; }
         finally
         {
-            if (added > 0 || notesWritten > 0 || briefsWritten > 0)
+            if (added > 0 || notesWritten > 0 || briefsWritten > 0 || profilesWritten > 0)
                 document.RegisterRunUndo("Build Summaries", p =>
                 {
                     foreach (var c in p.Characters)
@@ -304,6 +324,8 @@ public sealed partial class AIRunner(ProjectDocument document)
                         c.VoiceNotes = s.Notes;
                         c.VoiceNotesFromBook = s.FromBook;
                         c.VoiceBriefGenerated = s.Brief;
+                        c.Physical = s.Physical?.Copy();
+                        c.PhysicalGenerated = s.PhysicalGenerated?.Copy();
                     }
                 });
             Set(null);

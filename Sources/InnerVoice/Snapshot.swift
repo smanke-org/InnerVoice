@@ -257,6 +257,22 @@ enum Snapshot {
                 document.tagging.debugSummaries(nil)
                 if let main = document.project.characters.max(by: { (document.index.stats[$0.id]?.lines ?? 0) < (document.index.stats[$1.id]?.lines ?? 0) }) {
                     await shot("character-detail", settle: 1.2) { workspace.page = .cast; workspace.castPath = [main.id] }
+                    if wants("character-physical"), let tom = document.project.characters.first(where: { $0.physical != nil }) {
+                        let key = "character.physical.expanded", was = UserDefaults.standard.object(forKey: key)
+                        UserDefaults.standard.set(true, forKey: key)
+                        for mode in ["light", "dark"] {
+                            NSApp.appearance = NSAppearance(named: mode == "light" ? .aqua : .darkAqua)
+                            let host = NSHostingController(rootView: ScrollView { PhysicalProfileSection(document: document, character: tom).padding(20) }
+                                .frame(width: 720, height: 820))
+                            let w = NSWindow(contentViewController: host)
+                            w.styleMask = [.titled]
+                            w.makeKeyAndOrderFront(nil)
+                            try? await Task.sleep(for: .seconds(1.5))
+                            capture(w, "\(dir)/character-physical-\(mode).png")
+                            w.close()
+                        }
+                        UserDefaults.standard.set(was, forKey: key)
+                    }
                     await shot("character-analyzing", settle: 1.2) {
                         workspace.page = .cast; workspace.castPath = [main.id]
                         document.tagging.debugSummaries(main.name, character: 0.75, overall: 0.75)

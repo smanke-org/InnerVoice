@@ -63,6 +63,7 @@ Calm, clear, encouraging. Talk to the narrator as "you". Say "click".
 | The Clip | On This Mac: the first 15 seconds of speech a cloned voice is learned from, with the words it says | sample, reference |
 | Use Voices from Another Project | Copy voices (and optionally Voice Notes, narrator voice, engine) from an earlier book in a series, after matching its characters to this book's | import cast, series voices, voice transfer |
 | Voice brief | The AI's casting note in Voice Notes: pitch, pace, texture, attitude, and the contrast with scene partners | voice profile, direction |
+| Physical Description | A character's looks, field by field, with Inferred labels, Changes During the Story and Continuity to Check; for author profiles, not narration | appearance profile, physical profile |
 | Uses parts developed in China | The label on Chatterbox (CosyVoice and 3D-Speaker parts from Alibaba); it still runs only on the Mac, like Qwen3-TTS's "Developed in China" | Chinese model |
 | Cloud | Marks what sends text off the Mac: ElevenLabs and Gemini TTS (voices) and Claude (the cloud model) | online, remote |
 | Send This Book to ElevenLabs / Google | The per-book permission before any of its text goes to that company (each asks separately); Stop Sending This Book ends it | consent, opt in |

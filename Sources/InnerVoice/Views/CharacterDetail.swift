@@ -22,6 +22,7 @@ struct CharacterDetail: View {
                     if document.project.showsVoices { voice(c) }
                     summary(c)
                     notes(c)
+                    PhysicalProfileSection(document: document, character: c)
                     sampleLines(c)
                 }
                 .padding(Space.margin)

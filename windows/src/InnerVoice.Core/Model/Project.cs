@@ -272,6 +272,12 @@ public sealed class BookCharacter : ModelObject
     public string? VoiceNotesFromBook { get; set; }
     /// The "Voice brief:" block the AI last wrote into `VoiceNotes`.
     public string? VoiceBriefGenerated { get; set; }
+    /// What they look like (`PhysicalProfile`), for the author's character profiles; not used
+    /// for narration. null: none yet.
+    public PhysicalProfile? Physical { get; set; }
+    /// The profile Build Summaries last wrote, so a later run replaces it only while the
+    /// narrator hasn't edited it.
+    public PhysicalProfile? PhysicalGenerated { get; set; }
     /// Casting Style (docs/CASTING-STYLE.md): the narrator's choice of gender; null is what
     /// the book says.
     public CharacterGender? Gender { get; set; }
@@ -372,7 +378,7 @@ public sealed class BookCharacter : ModelObject
         Id = Id, Name = Name, Aliases = [.. Aliases], ColorHex = ColorHex, ColorChosen = ColorChosen,
         Facts = Facts.ConvertAll(f => f.Copy()), Notes = Notes, VoiceNotes = VoiceNotes, NarratorID = NarratorID,
         ShowInIndex = ShowInIndex, Pinned = Pinned, VoiceNotesFromBook = VoiceNotesFromBook,
-        VoiceBriefGenerated = VoiceBriefGenerated, Gender = Gender, IsMain = IsMain, Role = Role, Shade = Shade?.Copy(),
+        VoiceBriefGenerated = VoiceBriefGenerated, Physical = Physical?.Copy(), PhysicalGenerated = PhysicalGenerated?.Copy(), Gender = Gender, IsMain = IsMain, Role = Role, Shade = Shade?.Copy(),
         Voices = CastVoice.CopyMap(Voices), Extra = CopyExtra(),
     };
 }

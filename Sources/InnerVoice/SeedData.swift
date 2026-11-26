@@ -136,6 +136,16 @@ enum SeedData {
         if let i = project.characterIndex(tom) {
             project.characters[i].voiceNotes = "Low and slow, chest voice, Highland lilt on the vowels"
             project.characters[i].aliases = ["Tom"]
+            var looks = PhysicalProfile(summary: "A broad, weathered man in his fifties with a gray-flecked beard and a fisherman's hands.", summaryInferred: true)
+            looks.set(.age, .init(text: "Fifties", inferred: true))
+            looks.set(.build, .init(text: "Broad-shouldered, heavy hands"))
+            looks.set(.hair, .init(text: "Dark, gray-flecked beard"))
+            looks.set(.eyes, .init(text: "Gray"))
+            looks.set(.clothing, .init(text: "Oilskin coat and sea boots", inferred: true))
+            looks.changes = [.init(chapter: 1, field: .marks, text: "A rope burn across his left palm")]
+            looks.flags = [.init(field: .eyes, text: "Gray in chapter 1, brown in chapter 2")]
+            project.characters[i].physical = looks
+            project.characters[i].physicalGenerated = looks
         }
         if let i = project.characterIndex(mara) { project.characters[i].aliases = ["Mara", "Miss Quinn"] }
         if let i = project.characterIndex(edda) { project.characters[i].aliases = ["Doctor Voss", "the doctor"] }

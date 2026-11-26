@@ -316,6 +316,7 @@ final class TaggingController {
             var added = 0
             var notesWritten = 0
             var briefsWritten = 0
+            var profilesWritten = 0
             defer {
                 self.status = nil
                 self.model = nil
@@ -399,6 +400,31 @@ final class TaggingController {
                         Self.log("unparseable voice brief (\(text.count) characters): \(text.replacingOccurrences(of: "\n", with: "⏎").prefix(300))")
                     }
                 }
+                // Physical descriptions: for the author's character profiles (not narration).
+                let described = cast.filter { c in document.project.character(c.id).map(PhysicalProfilePrompt.wanted) ?? false }
+                for (m, character) in described.enumerated() {
+                    try Task.checkCancellation()
+                    self.status = Status(job: .summaries, progress: 0.99,
+                                         message: "Describing how \(character.name) looks (\(m + 1) of \(described.count))…",
+                                         character: character.name, characterProgress: 0, characterNumber: m + 1, characterCount: described.count,
+                                         phase: "Writing physical descriptions")
+                    guard let current = document.project.character(character.id), !PhysicalProfile.isEdited(current) else { continue }
+                    let messages = PhysicalProfilePrompt.messages(for: current, project: document.project, index: document.index)
+                    let text = try await model.complete(messages, grammar: PhysicalProfilePrompt.grammar, maxTokens: 900) { [weak self] f in
+                        Task { @MainActor in
+                            guard let self, self.status?.phase == "Writing physical descriptions", self.status?.characterNumber == m + 1 else { return }
+                            self.status?.characterProgress = max(self.status?.characterProgress ?? 0, f)
+                        }
+                    }
+                    self.status?.characterProgress = 1
+                    if let profile = PhysicalProfilePrompt.parse(text, chapters: document.project.chapters.count) {
+                        document.applyQuietly { p in
+                            if let i = p.characterIndex(character.id), PhysicalProfile.put(profile, into: &p.characters[i]) { profilesWritten += 1 }
+                        }
+                    } else {
+                        Self.log("unparseable physical profile (\(text.count) characters): \(text.replacingOccurrences(of: "\n", with: "⏎").prefix(300))")
+                    }
+                }
                 // Only a run over the whole cast counts as "analyzed the cast".
                 if only == nil { document.applyQuietly { $0.summariesBuilt = .now } }
                 ActivityStore.shared.record(ActivityKey.facts, count: added)
@@ -408,6 +434,7 @@ final class TaggingController {
                 let touched = max(notesWritten, briefsWritten)
                 let notes = touched == 0 ? "" : (cast.count == 1 ? " Voice notes updated" + (briefsWritten > 0 ? ", with a voice brief." : ".") : " Voice notes updated for \(touched) characters" + (briefsWritten > 0 ? ", with voice briefs." : "."))
                     + (touched == 0 ? "" : " Voices casting picked may change; edit a character’s voice notes to fine-tune how they sound.")
+                    + (profilesWritten == 0 ? "" : (profilesWritten == 1 ? " One physical description written." : " \(profilesWritten) physical descriptions written."))
                 self.finished = (added == 0 ? "No new facts found." : (cast.count == 1 ? "Added \(added) facts to \(cast[0].firstName)’s summary." : "Added \(added) facts to the cast’s summaries.")) + notes
             } catch {
                 if Task.isCancelled || error is CancellationError {

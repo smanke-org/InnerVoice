@@ -108,15 +108,16 @@ public enum CostEstimator {
     }
 
     /// Build Summaries for `characters` characters: up to four passages of the book about
-    /// each (about 2,700 words in all), then a voice brief.
+    /// each (about 2,700 words in all), then a voice brief and a physical description.
     public static func buildSummaries(project: Project, characters: Int, passageWords: Int = 2500) -> CostEstimate {
         let paragraphs = max(1, project.chapters.reduce(0) { $0 + $1.paragraphs.count })
         let perParagraph = Double(project.wordCount) / Double(paragraphs)
         let wordsEach = min(Double(passageWords + 200), perParagraph * 48)
         let readEach = tokens(words: Int(wordsEach)) + tokens(SummaryPrompt.system) + 150
         let briefEach = tokens(VoiceBriefPrompt.system) + 900
-        let input = characters * (readEach + briefEach)
-        let output = characters * (700 + 260)
+        let profileEach = tokens(PhysicalProfilePrompt.system) + 700
+        let input = characters * (readEach + briefEach + profileEach)
+        let output = characters * (700 + 260 + 500)
         return CostEstimate(inputTokens: input, outputTokens: Int(Double(output) * thinking))
     }
 }

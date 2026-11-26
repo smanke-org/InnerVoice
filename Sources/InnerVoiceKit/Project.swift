@@ -207,6 +207,12 @@ public struct BookCharacter: Codable, Identifiable, Hashable, Sendable {
     /// The "Voice brief:" block the AI last wrote into `voiceNotes` (same rule: replaced only
     /// while the narrator hasn't edited it).
     public var voiceBriefGenerated: String?
+    /// What they look like (`PhysicalProfile`), for the author's character profiles; not
+    /// used for narration. nil: none yet.
+    public var physical: PhysicalProfile?
+    /// The profile Build Summaries last wrote, so a later run replaces it only while the
+    /// narrator hasn't edited it.
+    public var physicalGenerated: PhysicalProfile?
     /// The narrator's choice of gender (Male, Female or Other). nil: what the book says
     /// (`VoiceCasting.profile`). Casting Style sorts by it; colors and casting follow it too.
     public var gender: CharacterGender?
